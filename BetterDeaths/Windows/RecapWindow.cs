@@ -42,6 +42,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const uint AllRecordedPullDuties = uint.MaxValue;
     private const string CurrentChangelogVersion = "0.1.0.71";
     private const float LeadUpHistorySeconds = 10.0f;
+    private const float PullBodyIndent = 8.0f;
+    private const float DeathDetailIndent = 8.0f;
+    private const float SectionBodyIndent = 8.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
 
     private sealed record HpHistoryDisplayRow(
@@ -89,6 +92,22 @@ public sealed class RecapWindow : Window, IDisposable
         uint SourceMaxHp,
         uint DerivedCurrentHp,
         uint DerivedShieldHp);
+
+    private readonly struct ImGuiIndentScope : IDisposable
+    {
+        private readonly float width;
+
+        public ImGuiIndentScope(float width)
+        {
+            this.width = width;
+            ImGui.Indent(width);
+        }
+
+        public void Dispose()
+        {
+            ImGui.Unindent(width);
+        }
+    }
 
     public RecapWindow(Plugin plugin) : base("Better Deaths###BetterDeaths")
     {
@@ -188,6 +207,7 @@ public sealed class RecapWindow : Window, IDisposable
         var deaths = GetExampleDeaths();
         ImGui.TextUnformatted("Example pull - Dancing Mad - Timer 11:54");
         ImGui.TextDisabled("Names are redacted into static party-role labels.");
+        using var examplePullIndent = new ImGuiIndentScope(PullBodyIndent);
         DrawDeathTimeline(deaths, "ExamplePull");
         ImGui.Separator();
         DrawDeathDetails(deaths, "ExamplePull");
@@ -211,6 +231,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TextDisabled("This pull is saved in Recorded pulls and will stay here until the next pull starts.");
         }
 
+        using var currentPullIndent = new ImGuiIndentScope(PullBodyIndent);
         DrawCurrentPullContent("Current");
     }
 
@@ -395,11 +416,10 @@ public sealed class RecapWindow : Window, IDisposable
                 continue;
             }
 
-            ImGui.Indent(12.0f);
+            using var recordedPullIndent = new ImGuiIndentScope(PullBodyIndent);
             ImGui.TextDisabled($"{snapshot.Reason} - {FormatLocalClockTime(snapshot.CapturedAtUtc)}");
             DrawDeathTimeline(snapshot.Deaths, $"Pull{pullId}");
             DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}");
-            ImGui.Unindent(12.0f);
         }
 
         collapseRecordedPullsRequested = false;
@@ -860,6 +880,7 @@ public sealed class RecapWindow : Window, IDisposable
                 clearPendingDeathSelection = true;
             }
 
+            using var deathDetailIndent = new ImGuiIndentScope(DeathDetailIndent);
             DrawCauseSummary(death);
             var deathId = $"{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}";
             ImGui.Separator();
@@ -887,6 +908,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCauseSummary(PartyDeathRecord death)
     {
         ImGui.TextUnformatted("Player death information");
+        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         var causeEvents = GetTimelineCauseEvents(death);
         var summaryRow = GetLeadUpSummaryRow(death);
         if (summaryRow is not null)
@@ -1101,6 +1123,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawExtraMitigationContext(PartyDeathRecord death, string idSuffix)
     {
         ImGui.TextUnformatted("Extra mitigation context");
+        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         DrawStatusSnapshot(GetSelectedPlayerStatuses(death), $"{idSuffix}AtDeath");
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnLikelyHit(death, idSuffix);
@@ -1116,6 +1139,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP history is sampled about every half second while alive; event rows show captured actions at their actual timestamps.");
         ImGui.TextColored(LeadUpGoldColor, "Event-row HP uses the HP captured with that event when available; otherwise it falls back to the latest prior HP sample.");
         ImGui.TextColored(LeadUpGoldColor, "If a following HP sample is stale after a captured hit, Better Deaths shows the derived post-hit HP with a tooltip.");
@@ -2450,8 +2474,8 @@ public sealed class RecapWindow : Window, IDisposable
         var textColor = new Vector4(1.0f, 0.88f, 0.58f, 1.0f);
 
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        ImGui.TextWrapped("Hi! Nainai here~ I realy appreciate you using Better Deaths. I made this as a personal passion project because I always felt I wanted a little more from the tools I was using..");
-        ImGui.TextWrapped("It is not perfect, and it is definitely still growing, but I am putting a lot of love and care into it.");
+        ImGui.TextWrapped("Hi! Nainai here~ I really appreciate you using Better Deaths. I made this as a personal passion project because I always needed and wanted a little more from the tools available..");
+        ImGui.TextWrapped("It's not perfect, and it is definitely still growing and getting better every day, but I can promise I am putting a lot of love and care into it every day until it's perfect!");
         ImGui.TextWrapped("Thank you for trying it out, and I hope it helps your prog even a little <3");
         ImGui.PopStyleColor();
     }

@@ -65,7 +65,7 @@ public sealed class Plugin : IDalamudPlugin
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
     {
-        WriteIndented = true,
+        WriteIndented = false,
         PropertyNameCaseInsensitive = true,
     };
     private static readonly Regex SharedKnownDeathPostRegex = new(
@@ -2098,11 +2098,15 @@ public sealed class Plugin : IDalamudPlugin
         try
         {
             Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
-            CreateRecordedPullHistoryRollingBackup();
-
             var json = JsonSerializer.Serialize(
                 new RecordedPullHistoryFile(RecordedPullHistorySchemaVersion, recordedPulls),
                 RecordedPullHistoryJsonOptions);
+            if (!RecordedPullHistoryNeedsWrite(json))
+            {
+                return;
+            }
+
+            CreateRecordedPullHistoryRollingBackup();
             File.WriteAllText(RecordedPullHistoryTempPath, json);
 
             if (File.Exists(RecordedPullHistoryPath))
@@ -2119,6 +2123,25 @@ public sealed class Plugin : IDalamudPlugin
         catch (Exception ex)
         {
             Log.Warning(ex, "Could not save Better Deaths recorded pull history.");
+        }
+    }
+
+    private static bool RecordedPullHistoryNeedsWrite(string json)
+    {
+        try
+        {
+            if (!File.Exists(RecordedPullHistoryPath))
+            {
+                return true;
+            }
+
+            var existingJson = File.ReadAllText(RecordedPullHistoryPath);
+            return !string.Equals(existingJson, json, StringComparison.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not compare Better Deaths recorded pull history before saving.");
+            return true;
         }
     }
 
