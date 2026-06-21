@@ -41,6 +41,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float CurrentPullWidgetBackgroundOpacity { get; set; } = 1.0f;
 
+    public float WidgetIconSize { get; set; } = 20.0f;
+
     public WidgetPlayerNameDisplayMode WidgetPlayerNameDisplayMode { get; set; } = WidgetPlayerNameDisplayMode.FullName;
 
     public bool RemoveChatBranding { get; set; }

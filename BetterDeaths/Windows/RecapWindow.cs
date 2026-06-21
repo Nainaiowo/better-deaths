@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.72";
+    private const string CurrentChangelogVersion = "0.1.0.73";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -61,6 +61,8 @@ public sealed class RecapWindow : Window, IDisposable
         string SourceName,
         string ActionName,
         StatusSnapshot Status);
+
+    private sealed record WidgetMitStatus(StatusSnapshot Status, string Category, string SourceName);
 
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
@@ -289,30 +291,35 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCurrentPullWidgetDeathTable(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix)
     {
-        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
-        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, 2.6f);
-        DrawCenteredTableHeader("#", "Time", "Player", "Cause");
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Mits", ImGuiTableColumnFlags.WidthStretch, 1.6f);
+        DrawCenteredTableHeader("Time", "Player", "Cause", "Overkill", "Mits");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
         {
             var death = orderedDeaths[i];
+            var selection = DeathDisplaySelector.Select(death);
+            var causeEvents = GetTimelineCauseEvents(selection);
             ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            DrawCenteredText((i + 1).ToString());
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
             ImGui.TableNextColumn();
             DrawWidgetPlayerCell(death);
             ImGui.TableNextColumn();
-            DrawWidgetCauseSummary(GetTimelineCauseEvents(death));
+            DrawWidgetCauseSummary(causeEvents);
+            ImGui.TableNextColumn();
+            DrawWidgetOverkillSummary(selection);
+            ImGui.TableNextColumn();
+            DrawWidgetMitsCell(death, selection);
         }
 
         ImGui.EndTable();
@@ -323,7 +330,7 @@ public sealed class RecapWindow : Window, IDisposable
         var iconId = GetClassJobIconId(death.ClassJobId);
         var displayName = FormatWidgetPlayerName(death.MemberName);
         var tooltip = $"Full name: {death.MemberName}\nInitials: {FormatPlayerInitials(death.MemberName)}";
-        var iconSize = Math.Clamp(configuration.ActionIconSize, 12.0f, 48.0f);
+        var iconSize = GetWidgetIconSize();
         var textWidth = ImGui.CalcTextSize(displayName).X;
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var groupWidth = iconId == 0
@@ -747,7 +754,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(PartyDeathRecord death)
     {
-        return DeathDisplaySelector.Select(death).Events
+        return GetTimelineCauseEvents(DeathDisplaySelector.Select(death));
+    }
+
+    private static IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(DeathDisplaySelection selection)
+    {
+        return selection.Events
             .Where(IsLikelyDeathCauseEvent)
             .ToList();
     }
@@ -804,18 +816,162 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
         if (damageEvents.Count > 1)
         {
-            return $"{damageEvents.Count} hits | {FormatAmount(totalDamage)} total";
+            return $"{damageEvents.Count} hits | {FormatWidgetAmount(totalDamage)} total";
         }
 
         if (causeEvents.Count > 1 && totalDamage > 0)
         {
-            return $"{causeEvents.Count} events | {FormatAmount(totalDamage)} damage";
+            return $"{causeEvents.Count} events | {FormatWidgetAmount(totalDamage)} damage";
         }
 
         var cause = causeEvents[0];
         return cause.Kind == DeathEventKind.Status
             ? $"{cause.ActionName} from {cause.SourceName}"
-            : $"{FormatAmount(cause.Amount)} {cause.ActionName}";
+            : $"{FormatWidgetAmount(cause.Amount)} {cause.ActionName}";
+    }
+
+    private static void DrawWidgetOverkillSummary(DeathDisplaySelection selection)
+    {
+        var incomingDamage = GetIncomingDamageAmount(selection.Events);
+        if (incomingDamage is null || selection.Snapshot is null)
+        {
+            DrawCenteredText("-", DisabledColor);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("No incoming damage and pre-hit HP snapshot were available for this death.");
+            }
+
+            return;
+        }
+
+        var snapshot = selection.Snapshot;
+        var overkillAmount = CalculateOverkillAmount(snapshot.CurrentHp, snapshot.ShieldHp, incomingDamage);
+        DrawCenteredText(
+            FormatWidgetAmount(overkillAmount),
+            overkillAmount > 0 ? OverkillColor : DisabledColor);
+
+        if (ImGui.IsItemHovered())
+        {
+            var effectiveHp = (ulong)snapshot.CurrentHp + snapshot.ShieldHp;
+            ImGui.SetTooltip(
+                $"Incoming damage: {incomingDamage.Value:N0}\n" +
+                $"HP plus shields before hit: {effectiveHp:N0}\n" +
+                $"Overkill: {overkillAmount:N0}");
+        }
+    }
+
+    private void DrawWidgetMitsCell(PartyDeathRecord death, DeathDisplaySelection selection)
+    {
+        var statuses = GetWidgetMitStatuses(death, selection);
+        if (statuses.Count == 0)
+        {
+            DrawCenteredText("-", DisabledColor);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("No player mitigations/debuffs or boss damage-down debuffs were captured for this death.");
+            }
+
+            return;
+        }
+
+        DrawWidgetMitIcons(statuses);
+    }
+
+    private IReadOnlyList<WidgetMitStatus> GetWidgetMitStatuses(PartyDeathRecord death, DeathDisplaySelection selection)
+    {
+        var playerStatuses = plugin
+            .GetRelevantPlayerStatusesForDisplay(selection.Snapshot?.Statuses ?? death.StatusesAtDeath)
+            .Select(status => new WidgetMitStatus(status, "Player", string.Empty));
+        var bossStatuses = selection.Events
+            .SelectMany(combatEvent => Plugin.GetBossMitigationStatusesForDisplay(combatEvent.SourceStatuses)
+                .Select(status => new WidgetMitStatus(status, "Boss", combatEvent.SourceName)));
+
+        return playerStatuses
+            .Concat(bossStatuses)
+            .GroupBy(status => (status.Category, status.SourceName, status.Status.Id, status.Status.IconId, status.Status.SourceId))
+            .Select(group => group
+                .OrderBy(status => status.Status.RemainingTime <= 0.0f ? float.MaxValue : status.Status.RemainingTime)
+                .First())
+            .OrderBy(status => status.Category == "Boss" ? 1 : 0)
+            .ThenBy(status => status.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(status => status.Status.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(status => status.Status.Id)
+            .ToList();
+    }
+
+    private void DrawWidgetMitIcons(IReadOnlyList<WidgetMitStatus> statuses)
+    {
+        var iconSize = GetWidgetIconSize();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var availableWidth = MathF.Max(iconSize, ImGui.GetContentRegionAvail().X);
+        var rows = new List<List<WidgetMitStatus>>();
+        var rowWidths = new List<float>();
+        var currentRow = new List<WidgetMitStatus>();
+        var currentRowWidth = 0.0f;
+
+        foreach (var status in statuses)
+        {
+            if (currentRow.Count > 0 && currentRowWidth + spacing + iconSize > availableWidth)
+            {
+                rows.Add(currentRow);
+                rowWidths.Add(currentRowWidth);
+                currentRow = [];
+                currentRowWidth = 0.0f;
+            }
+
+            if (currentRow.Count > 0)
+            {
+                currentRowWidth += spacing;
+            }
+
+            currentRow.Add(status);
+            currentRowWidth += iconSize;
+        }
+
+        if (currentRow.Count > 0)
+        {
+            rows.Add(currentRow);
+            rowWidths.Add(currentRowWidth);
+        }
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            CenterNextItem(rowWidths[rowIndex]);
+            var row = rows[rowIndex];
+            for (var statusIndex = 0; statusIndex < row.Count; statusIndex++)
+            {
+                if (statusIndex > 0)
+                {
+                    ImGui.SameLine();
+                }
+
+                var status = row[statusIndex];
+                var tooltipPrefix = status.Category == "Boss" && !string.IsNullOrWhiteSpace(status.SourceName)
+                    ? $"{status.Category} ({status.SourceName})"
+                    : status.Category;
+                DrawGameIcon(
+                    status.Status.IconId,
+                    iconSize,
+                    $"{tooltipPrefix}: {FormatStatusCompact(status.Status)}");
+            }
+        }
+    }
+
+    private static string FormatWidgetAmount(ulong amount)
+    {
+        if (amount >= 1_000_000)
+        {
+            return $"{TruncateToOneDecimal(amount / 1_000_000.0):0.#}m";
+        }
+
+        return amount >= 1_000
+            ? $"{TruncateToOneDecimal(amount / 1_000.0):0.#}k"
+            : amount.ToString("N0");
+    }
+
+    private static double TruncateToOneDecimal(double value)
+    {
+        return Math.Truncate(value * 10.0) / 10.0;
     }
 
     private static Vector4 GetWidgetCauseColor(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -1125,7 +1281,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("Extra mitigation context");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        DrawStatusSnapshot(GetSelectedPlayerStatuses(death), $"{idSuffix}AtDeath");
+        DrawStatusSnapshot(plugin.GetRelevantPlayerStatusesForDisplay(GetSelectedPlayerStatuses(death)), $"{idSuffix}AtDeath");
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnLikelyHit(death, idSuffix);
     }
@@ -2001,7 +2157,7 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.SetIconSize(iconSize);
         }
 
-        DrawSettingsTooltip("Controls the size of action and status icons in death timelines, details, examples, and Better Deaths lead-up tables.");
+        DrawSettingsTooltip("Controls non-widget action and status icons in death timelines, details, examples, and Better Deaths lead-up tables. Use the Widget tab for Current Pull widget icons.");
 
         ImGui.Separator();
         DrawSettingsInfoLine("KO state", "A captured character has transitioned into death.");
@@ -2071,6 +2227,19 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("Controls only the Current Pull widget background. Text, icons, tables, and HP bars stay fully visible. The lower limit keeps enough contrast over gameplay.");
+
+        var widgetIconSize = GetWidgetIconSize();
+        if (ImGui.SliderFloat(
+            "Widget icon size",
+            ref widgetIconSize,
+            Plugin.MinWidgetIconSize,
+            Plugin.MaxWidgetIconSize,
+            "%.0f px"))
+        {
+            plugin.SetWidgetIconSize(widgetIconSize);
+        }
+
+        DrawSettingsTooltip("Controls only the Current Pull widget job and mitigation/debuff icon sizes.");
 
         var widgetNameMode = configuration.WidgetPlayerNameDisplayMode;
         ImGui.SetNextItemWidth(185.0f);
@@ -2143,6 +2312,14 @@ public sealed class RecapWindow : Window, IDisposable
                 : configuration.CurrentPullWidgetBackgroundOpacity,
             Plugin.CurrentPullWidgetMinBackgroundOpacity,
             Plugin.CurrentPullWidgetMaxBackgroundOpacity);
+    }
+
+    private float GetWidgetIconSize()
+    {
+        return Math.Clamp(
+            configuration.WidgetIconSize <= 0.0f ? 20.0f : configuration.WidgetIconSize,
+            Plugin.MinWidgetIconSize,
+            Plugin.MaxWidgetIconSize);
     }
 
     private static void DrawSettingsInfoLine(string term, string explanation)
@@ -2318,6 +2495,19 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.73");
+        ImGui.TextDisabled("Improved Current Pull widget readability.");
+        DrawBreathingGoldBullet("Current Pull widget now includes an Overkill column.");
+        DrawBreathingGoldBullet("Current Pull widget now includes a Mits column with player mitigation/debuff and boss damage-down icons.");
+        DrawBreathingGoldBullet("Widget cause and overkill numbers now use compact values like 3k, 186.9k, and 1.3m.");
+        ImGui.BulletText("Removed the widget # column to make room for mitigation icons while keeping deaths ordered by time.");
+        ImGui.BulletText("Widget mitigation icons wrap inside the Mits column and have their own icon-size slider.");
+        ImGui.BulletText("Multi-hit chat posts now summarize total damage in one recap line.");
+        ImGui.BulletText("Shared recap recognition now supports the new multi-hit chat summary format.");
+        ImGui.BulletText("Duplicate mitigation/debuff status snapshots are now collapsed in recap details, lead-up tables, widgets, and chat posts.");
+        ImGui.BulletText("Older saved pulls also benefit from the duplicate status cleanup when they are displayed.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.72");
         ImGui.TextDisabled("Improved responsive layout and reduced background overhead.");
         ImGui.TextColored(LeadUpGoldColor, "Preparation for public beta testing. Lots of behind-the-scenes optimizations were made.");

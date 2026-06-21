@@ -58,6 +58,8 @@ public sealed class Plugin : IDalamudPlugin
     private const int MaxCombatLogEventsPerMember = 80;
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
+    public const float MinWidgetIconSize = 12.0f;
+    public const float MaxWidgetIconSize = 32.0f;
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan FatalSequenceEndBuffer = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
@@ -70,13 +72,16 @@ public sealed class Plugin : IDalamudPlugin
         PropertyNameCaseInsensitive = true,
     };
     private static readonly Regex SharedKnownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+from\s+(?<action>.+?)\s+by\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+from\s+(?<action>.+?)\s+by\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex SharedMultiHitDeathPostRegex = new(
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\s+by\s+(?<hits>\d+)\s+hits\s+from\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedStatusDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.\s+HP before hit unavailable\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.\s+HP before hit unavailable\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
@@ -502,6 +507,12 @@ public sealed class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetWidgetIconSize(float size)
+    {
+        Configuration.WidgetIconSize = Math.Clamp(size, MinWidgetIconSize, MaxWidgetIconSize);
+        SaveConfiguration();
+    }
+
     public void SetRecentEventSeconds(int seconds)
     {
         Configuration.RecentEventSeconds = Math.Clamp(seconds, 5, 60);
@@ -565,10 +576,16 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         RememberOwnSharedDeathPost(death);
-        QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatCauseLine(causeEvents[0], selection.Snapshot)}");
-        for (var i = 1; i < causeEvents.Count; i++)
+        var damageEvents = causeEvents
+            .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+            .ToList();
+        if (damageEvents.Count > 1)
         {
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}Likely cause {i + 1}/{causeEvents.Count}: {FormatDeathChatCauseLine(causeEvents[i], selection.Snapshot)}");
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatMultiHitLine(damageEvents, selection.Snapshot)}");
+        }
+        else
+        {
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatCauseLine(causeEvents[0], selection.Snapshot)}");
         }
 
         QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
@@ -589,7 +606,7 @@ public sealed class Plugin : IDalamudPlugin
     private static string FormatDeathStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
     {
         var groups = new List<string>();
-        var defenses = GetPrimaryDisplayStatusSnapshot(death, selection)
+        var defenses = GetRelevantDeathStatuses(GetPrimaryDisplayStatusSnapshot(death, selection))
             .Where(IsDefensiveStatus)
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
@@ -606,7 +623,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private static string FormatPlayerDebuffStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
     {
-        var debuffs = GetPrimaryDisplayStatusSnapshot(death, selection)
+        var debuffs = GetRelevantDeathStatuses(GetPrimaryDisplayStatusSnapshot(death, selection))
             .Where(IsPlayerDebuffStatus)
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
@@ -669,14 +686,20 @@ public sealed class Plugin : IDalamudPlugin
     private void NormalizeIconSizeConfiguration()
     {
         var iconSize = Math.Clamp(MathF.Max(Configuration.ActionIconSize, Configuration.StatusIconSize), 12.0f, 48.0f);
+        var widgetIconSize = Math.Clamp(
+            Configuration.WidgetIconSize <= 0.0f ? 20.0f : Configuration.WidgetIconSize,
+            MinWidgetIconSize,
+            MaxWidgetIconSize);
         if (MathF.Abs(Configuration.ActionIconSize - iconSize) <= 0.01f &&
-            MathF.Abs(Configuration.StatusIconSize - iconSize) <= 0.01f)
+            MathF.Abs(Configuration.StatusIconSize - iconSize) <= 0.01f &&
+            MathF.Abs(Configuration.WidgetIconSize - widgetIconSize) <= 0.01f)
         {
             return;
         }
 
         Configuration.ActionIconSize = iconSize;
         Configuration.StatusIconSize = iconSize;
+        Configuration.WidgetIconSize = widgetIconSize;
         SaveConfiguration();
     }
 
@@ -2358,10 +2381,10 @@ public sealed class Plugin : IDalamudPlugin
         return [];
     }
 
-    private IReadOnlyList<StatusSnapshot> GetRelevantDeathStatuses(IEnumerable<StatusSnapshot> statuses)
+    private static IReadOnlyList<StatusSnapshot> GetRelevantDeathStatuses(IEnumerable<StatusSnapshot> statuses)
     {
-        return statuses
-            .Where(IsRelevantDeathStatus)
+        return PipeDeduplicateStatusSnapshots(statuses
+                .Where(IsRelevantDeathStatus))
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
             .ToList();
@@ -2384,11 +2407,21 @@ public sealed class Plugin : IDalamudPlugin
 
     private static IReadOnlyList<StatusSnapshot> GetBossMitigationStatuses(IEnumerable<StatusSnapshot> statuses)
     {
-        return statuses
-            .Where(IsBossMitigationStatus)
+        return PipeDeduplicateStatusSnapshots(statuses
+                .Where(IsBossMitigationStatus))
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
             .ToList();
+    }
+
+    private static IEnumerable<StatusSnapshot> PipeDeduplicateStatusSnapshots(IEnumerable<StatusSnapshot> statuses)
+    {
+        return statuses
+            .GroupBy(status => (status.Id, status.IconId, status.SourceId))
+            .Select(group => group
+                .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
+                .ThenBy(status => status.StackCount)
+                .First());
     }
 
     private static bool IsRelevantDeathStatus(StatusSnapshot status)
@@ -2666,6 +2699,26 @@ public sealed class Plugin : IDalamudPlugin
             : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}. HP before hit: {FormatEffectiveHp(currentHp, shieldHp, maxHp)}.";
     }
 
+    private static string FormatDeathChatMultiHitLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
+    {
+        var currentHp = snapshot?.CurrentHp ?? damageEvents[0].CurrentHp;
+        var shieldHp = snapshot?.ShieldHp ?? damageEvents[0].ShieldHp;
+        var maxHp = snapshot?.MaxHp ?? damageEvents[0].MaxHp;
+        var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
+        var sourceName = GetSharedDamageSourceName(damageEvents);
+        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}. HP before hit: {FormatEffectiveHp(currentHp, shieldHp, maxHp)}.";
+    }
+
+    private static string GetSharedDamageSourceName(IReadOnlyList<CombatEventRecord> damageEvents)
+    {
+        var sourceNames = damageEvents
+            .Select(cause => cause.SourceName)
+            .Where(sourceName => !string.IsNullOrWhiteSpace(sourceName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return sourceNames.Count == 1 ? sourceNames[0] : "multiple targets";
+    }
+
     private static string FormatHp(uint currentHp, uint shieldHp, uint maxHp)
     {
         var effectiveHp = (ulong)currentHp + shieldHp;
@@ -2767,26 +2820,61 @@ public sealed class Plugin : IDalamudPlugin
                 string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
         }
 
+        if (post.HitCount is { } hitCount)
+        {
+            var damageEvents = causeEvents
+                .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+                .ToList();
+            var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
+            if (damageEvents.Count != hitCount || totalDamage != post.Amount.Value)
+            {
+                return false;
+            }
+
+            return post.SourceName is null ||
+                damageEvents.All(cause => string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
+        }
+
         return causeEvents.Any(cause =>
-            post.Amount == cause.Amount &&
+            post.Amount.Value == cause.Amount &&
             string.Equals(cause.ActionName, post.ActionName, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static SharedDeathPost BuildSharedDeathPost(PartyDeathRecord death)
     {
-        return GetDisplayCauseEvents(death).FirstOrDefault() is { } cause
+        var causeEvents = GetDisplayCauseEvents(death);
+        var damageEvents = causeEvents
+            .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+            .ToList();
+        if (damageEvents.Count > 1)
+        {
+            var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
+            var sourceName = GetSharedDamageSourceName(damageEvents);
+            return new SharedDeathPost(
+                GetSharedPostElapsedSeconds(death),
+                death.MemberName,
+                death.ClassJobName,
+                null,
+                sourceName == "multiple targets" ? null : sourceName,
+                totalDamage,
+                damageEvents.Count);
+        }
+
+        return causeEvents.FirstOrDefault() is { } cause
             ? new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
                 death.MemberName,
                 death.ClassJobName,
                 cause.ActionName,
                 cause.SourceName,
-                cause.Kind == DeathEventKind.Status ? null : cause.Amount)
+                cause.Kind == DeathEventKind.Status ? null : cause.Amount,
+                null)
             : new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
                 death.MemberName,
                 death.ClassJobName,
+                null,
                 null,
                 null,
                 null);
@@ -2800,6 +2888,24 @@ public sealed class Plugin : IDalamudPlugin
     private static bool TryParseSharedDeathPost(string text, out SharedDeathPost post)
     {
         var cleaned = SanitizeChatText(text);
+        var multiHitMatch = SharedMultiHitDeathPostRegex.Match(cleaned);
+        if (multiHitMatch.Success &&
+            TryParseCombatTimer(multiHitMatch.Groups["timer"].Value, out var multiHitElapsedSeconds) &&
+            TryParseAmount(multiHitMatch.Groups["amount"].Value, out var multiHitAmount) &&
+            int.TryParse(multiHitMatch.Groups["hits"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var hitCount))
+        {
+            var sourceName = multiHitMatch.Groups["source"].Value;
+            post = new SharedDeathPost(
+                multiHitElapsedSeconds,
+                multiHitMatch.Groups["name"].Value,
+                multiHitMatch.Groups["job"].Value,
+                null,
+                string.Equals(sourceName, "multiple targets", StringComparison.OrdinalIgnoreCase) ? null : sourceName,
+                multiHitAmount,
+                hitCount);
+            return true;
+        }
+
         var knownMatch = SharedKnownDeathPostRegex.Match(cleaned);
         if (knownMatch.Success &&
             TryParseCombatTimer(knownMatch.Groups["timer"].Value, out var knownElapsedSeconds) &&
@@ -2811,7 +2917,8 @@ public sealed class Plugin : IDalamudPlugin
                 knownMatch.Groups["job"].Value,
                 knownMatch.Groups["action"].Value,
                 knownMatch.Groups["source"].Value,
-                amount);
+                amount,
+                null);
             return true;
         }
 
@@ -2825,6 +2932,7 @@ public sealed class Plugin : IDalamudPlugin
                 statusMatch.Groups["job"].Value,
                 statusMatch.Groups["action"].Value,
                 statusMatch.Groups["source"].Value,
+                null,
                 null);
             return true;
         }
@@ -2837,6 +2945,7 @@ public sealed class Plugin : IDalamudPlugin
                 unknownElapsedSeconds,
                 unknownMatch.Groups["name"].Value,
                 unknownMatch.Groups["job"].Value,
+                null,
                 null,
                 null,
                 null);
@@ -2862,9 +2971,9 @@ public sealed class Plugin : IDalamudPlugin
         return false;
     }
 
-    private static bool TryParseAmount(string amountText, out uint amount)
+    private static bool TryParseAmount(string amountText, out ulong amount)
     {
-        return uint.TryParse(
+        return ulong.TryParse(
             amountText.Replace(",", string.Empty, StringComparison.Ordinal),
             NumberStyles.None,
             CultureInfo.InvariantCulture,
@@ -2878,7 +2987,8 @@ public sealed class Plugin : IDalamudPlugin
             string.Equals(left.ClassJobName, right.ClassJobName, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.ActionName, right.ActionName, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.SourceName, right.SourceName, StringComparison.OrdinalIgnoreCase) &&
-            left.Amount == right.Amount;
+            left.Amount == right.Amount &&
+            left.HitCount == right.HitCount;
     }
 
     private string GetChatBrandingPrefix()
@@ -3081,7 +3191,8 @@ public sealed class Plugin : IDalamudPlugin
         string ClassJobName,
         string? ActionName,
         string? SourceName,
-        uint? Amount);
+        ulong? Amount,
+        int? HitCount);
 
     private readonly record struct RecentOwnSharedDeathPost(
         SharedDeathPost Post,
