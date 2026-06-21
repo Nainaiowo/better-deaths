@@ -63,6 +63,7 @@ public sealed class Plugin : IDalamudPlugin
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
     {
         WriteIndented = false,
@@ -125,6 +126,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> actionNameCache = new();
     private readonly Dictionary<uint, uint> actionIconCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
@@ -137,12 +139,14 @@ public sealed class Plugin : IDalamudPlugin
     private DateTime? pendingDeathRecapLinksDueAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
     private DateTime nextPluginUpdateCheckAtUtc = DateTime.MinValue;
+    private DateTime nextLiveCapturePruneAtUtc = DateTime.MinValue;
     private DateTime? lastPluginUpdateCheckAtUtc;
     private PluginUpdateCheckState pluginUpdateCheckState = PluginUpdateCheckState.NotChecked;
     private string? availablePluginUpdateVersion;
     private bool availablePluginUpdateIsTesting;
     private string? pluginUpdateCheckError;
     private string? pendingUpdateNoticeKey;
+    private string? lastSavedRecordedPullHistoryJson;
     private bool updateCheckInProgress;
     private static readonly string[] DefensiveStatusNames =
     [
@@ -480,6 +484,7 @@ public sealed class Plugin : IDalamudPlugin
         nextRecordedPullNumber = 1;
         currentPullRecordedPullNumber = 0;
         DeleteRecordedPullHistoryFiles();
+        lastSavedRecordedPullHistoryJson = null;
         SaveRecordedPullHistory();
     }
 
@@ -511,7 +516,13 @@ public sealed class Plugin : IDalamudPlugin
 
     public void SetMaxRecordedPulls(int pulls)
     {
-        Configuration.MaxRecordedPulls = Math.Clamp(pulls, 1, 100);
+        var maxRecordedPulls = Math.Clamp(pulls, 1, 100);
+        if (Configuration.MaxRecordedPulls == maxRecordedPulls)
+        {
+            return;
+        }
+
+        Configuration.MaxRecordedPulls = maxRecordedPulls;
         SaveConfiguration();
         TrimRecordedPulls();
         SaveRecordedPullHistory();
@@ -812,8 +823,7 @@ public sealed class Plugin : IDalamudPlugin
             FlushPendingDeathRecapLinks(now);
             UpdateCombatTimerState(now);
             RefreshPartyState();
-            PruneRecentEvents();
-            PruneRecentCombatLogEvents(now);
+            PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
         }
         catch (Exception ex)
@@ -996,16 +1006,14 @@ public sealed class Plugin : IDalamudPlugin
         currentMembers.Clear();
         currentMembers.AddRange(nextMembers);
 
-        var currentMemberKeys = currentMembers.Select(member => member.MemberKey).ToHashSet(StringComparer.Ordinal);
-        foreach (var staleKey in deadMemberKeys.Where(key => !currentMemberKeys.Contains(key)).ToList())
+        currentMemberKeyScratch.Clear();
+        foreach (var member in currentMembers)
         {
-            deadMemberKeys.Remove(staleKey);
+            currentMemberKeyScratch.Add(member.MemberKey);
         }
 
-        foreach (var staleKey in postResetSuppressedDeadMemberKeys.Where(key => !currentMemberKeys.Contains(key)).ToList())
-        {
-            postResetSuppressedDeadMemberKeys.Remove(staleKey);
-        }
+        deadMemberKeys.RemoveWhere(key => !currentMemberKeyScratch.Contains(key));
+        postResetSuppressedDeadMemberKeys.RemoveWhere(key => !currentMemberKeyScratch.Contains(key));
 
         var now = DateTime.UtcNow;
         UpdatePostResetDeathSuppression();
@@ -1015,9 +1023,9 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         TrackRecentStatuses(currentMembers, now);
-        TrackRecentHpHistory(currentMembers.Where(member => !member.IsDead), now);
+        TrackRecentHpHistory(currentMembers, now);
 
-        foreach (var member in currentMembers.OrderBy(member => member.PartyIndex))
+        foreach (var member in currentMembers)
         {
             if (!member.IsDead)
             {
@@ -1508,8 +1516,6 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         events.Add(record);
-        var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(Math.Max(Configuration.RecentEventSeconds, Configuration.DeathCauseSeconds) + 10);
-        events.RemoveAll(combatEvent => combatEvent.SeenAtUtc < cutoff);
     }
 
     private void AddRecentCombatLogEvent(CombatLogEventRecord record)
@@ -1521,8 +1527,6 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         events.Add(record);
-        var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(CombatLogEventRetentionSeconds);
-        events.RemoveAll(combatEvent => combatEvent.SeenAtUtc < cutoff);
         while (events.Count > MaxCombatLogEventsPerMember)
         {
             events.RemoveAt(0);
@@ -1533,20 +1537,21 @@ public sealed class Plugin : IDalamudPlugin
     {
         foreach (var member in members)
         {
-            var statuses = member.Statuses.Where(IsTrackedStatusDeathCandidate).ToList();
-            if (statuses.Count == 0)
+            List<StatusObservation>? observations = null;
+            foreach (var status in member.Statuses)
             {
-                continue;
-            }
+                if (!IsTrackedStatusDeathCandidate(status))
+                {
+                    continue;
+                }
 
-            if (!recentStatusesByMember.TryGetValue(member.MemberKey, out var observations))
-            {
-                observations = [];
-                recentStatusesByMember[member.MemberKey] = observations;
-            }
+                if (observations is null &&
+                    !recentStatusesByMember.TryGetValue(member.MemberKey, out observations))
+                {
+                    observations = [];
+                    recentStatusesByMember[member.MemberKey] = observations;
+                }
 
-            foreach (var status in statuses)
-            {
                 observations.RemoveAll(entry => entry.Status.Id == status.Id);
                 observations.Add(new StatusObservation(
                     now,
@@ -1558,15 +1563,13 @@ public sealed class Plugin : IDalamudPlugin
                     member.Statuses.ToList()));
             }
         }
-
-        PruneRecentStatuses(now);
     }
 
     private void TrackRecentHpHistory(IEnumerable<PartyMemberSnapshot> members, DateTime now)
     {
         foreach (var member in members)
         {
-            if (member.MaxHp == 0)
+            if (member.IsDead || member.MaxHp == 0)
             {
                 continue;
             }
@@ -1592,8 +1595,6 @@ public sealed class Plugin : IDalamudPlugin
                 GetRelevantDeathStatuses(member.Statuses)));
             lastHpHistorySampleByMember[member.MemberKey] = now;
         }
-
-        PruneRecentHpHistory(now);
     }
 
     private IReadOnlyList<HpHistorySnapshot> GetRecentHpHistory(string memberKey, int seconds)
@@ -1637,14 +1638,28 @@ public sealed class Plugin : IDalamudPlugin
             .ToList();
     }
 
-    private void PruneRecentEvents()
+    private void PruneLiveCaptureState(DateTime now)
+    {
+        if (nextLiveCapturePruneAtUtc > now)
+        {
+            return;
+        }
+
+        nextLiveCapturePruneAtUtc = now + LiveCapturePruneInterval;
+        PruneRecentEvents(now);
+        PruneRecentCombatLogEvents(now);
+        PruneRecentStatuses(now);
+        PruneRecentHpHistory(now);
+    }
+
+    private void PruneRecentEvents(DateTime now)
     {
         if (recentEventsByMember.Count == 0)
         {
             return;
         }
 
-        var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(Math.Max(Configuration.RecentEventSeconds, Configuration.DeathCauseSeconds) + 10);
+        var cutoff = now - TimeSpan.FromSeconds(Math.Max(Configuration.RecentEventSeconds, Configuration.DeathCauseSeconds) + 10);
         foreach (var key in recentEventsByMember.Keys.ToList())
         {
             recentEventsByMember[key].RemoveAll(combatEvent => combatEvent.SeenAtUtc < cutoff);
@@ -1797,6 +1812,7 @@ public sealed class Plugin : IDalamudPlugin
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
         lastHpHistorySampleByMember.Clear();
+        currentMemberKeyScratch.Clear();
         deadMemberKeys.Clear();
     }
 
@@ -1830,8 +1846,13 @@ public sealed class Plugin : IDalamudPlugin
     {
         collectingPostResetDeadMembers = true;
         postResetSuppressedDeadMemberKeys.Clear();
-        foreach (var member in currentMembers.Where(member => member.IsDead))
+        foreach (var member in currentMembers)
         {
+            if (!member.IsDead)
+            {
+                continue;
+            }
+
             postResetSuppressedDeadMemberKeys.Add(member.MemberKey);
             deadMemberKeys.Add(member.MemberKey);
         }
@@ -1850,9 +1871,14 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
-        foreach (var member in currentMembers.Where(member => !member.IsDead))
+        var hasAliveMember = false;
+        foreach (var member in currentMembers)
         {
-            postResetSuppressedDeadMemberKeys.Remove(member.MemberKey);
+            if (!member.IsDead)
+            {
+                hasAliveMember = true;
+                postResetSuppressedDeadMemberKeys.Remove(member.MemberKey);
+            }
         }
 
         if (!collectingPostResetDeadMembers)
@@ -1862,8 +1888,13 @@ public sealed class Plugin : IDalamudPlugin
 
         if (!Condition[ConditionFlag.InCombat])
         {
-            foreach (var member in currentMembers.Where(member => member.IsDead))
+            foreach (var member in currentMembers)
             {
+                if (!member.IsDead)
+                {
+                    continue;
+                }
+
                 if (postResetSuppressedDeadMemberKeys.Add(member.MemberKey))
                 {
                     AddDebugLog($"Suppressed reset-state KO for {member.MemberName}.");
@@ -1873,7 +1904,7 @@ public sealed class Plugin : IDalamudPlugin
             }
         }
 
-        if (Condition[ConditionFlag.InCombat] || currentMembers.Any(member => !member.IsDead))
+        if (Condition[ConditionFlag.InCombat] || hasAliveMember)
         {
             collectingPostResetDeadMembers = false;
         }
@@ -2119,6 +2150,7 @@ public sealed class Plugin : IDalamudPlugin
             }
 
             PruneRecordedPullHistoryRollingBackups();
+            lastSavedRecordedPullHistoryJson = json;
         }
         catch (Exception ex)
         {
@@ -2126,17 +2158,29 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    private static bool RecordedPullHistoryNeedsWrite(string json)
+    private bool RecordedPullHistoryNeedsWrite(string json)
     {
         try
         {
+            if (File.Exists(RecordedPullHistoryPath) &&
+                string.Equals(lastSavedRecordedPullHistoryJson, json, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             if (!File.Exists(RecordedPullHistoryPath))
             {
                 return true;
             }
 
             var existingJson = File.ReadAllText(RecordedPullHistoryPath);
-            return !string.Equals(existingJson, json, StringComparison.Ordinal);
+            if (!string.Equals(existingJson, json, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            lastSavedRecordedPullHistoryJson = json;
+            return false;
         }
         catch (Exception ex)
         {

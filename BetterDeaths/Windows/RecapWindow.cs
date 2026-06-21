@@ -40,11 +40,12 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.71";
+    private const string CurrentChangelogVersion = "0.1.0.72";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
+    private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
 
     private sealed record HpHistoryDisplayRow(
@@ -293,10 +294,10 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("#");
-        ImGui.TableSetupColumn("Time");
-        ImGui.TableSetupColumn("Player");
-        ImGui.TableSetupColumn("Cause");
+        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.4f);
+        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, 2.6f);
         DrawCenteredTableHeader("#", "Time", "Player", "Cause");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
@@ -679,11 +680,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("#");
-        ImGui.TableSetupColumn("Time");
-        ImGui.TableSetupColumn("Player");
-        ImGui.TableSetupColumn("Job");
-        ImGui.TableSetupColumn("Likely cause");
+        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.3f);
+        ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Likely cause", ImGuiTableColumnFlags.WidthStretch, 2.8f);
         DrawCenteredTableHeader("#", "Time", "Player", "Job", "Likely cause");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
@@ -1016,9 +1017,9 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("HP + shields");
-        ImGui.TableSetupColumn("Captured hits/events");
-        ImGui.TableSetupColumn("Captured player mits/debuffs");
+        ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.05f);
+        ImGui.TableSetupColumn("Captured hits/events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
+        ImGui.TableSetupColumn("Captured player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.7f);
         DrawCenteredTableHeader("HP + shields", "Captured hits/events", "Captured player mits/debuffs");
 
         ImGui.TableNextRow();
@@ -1168,11 +1169,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.9f);
-        ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.7f);
-        ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.3f);
-        ImGui.TableSetupColumn("Captured hit/event", ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.8f);
+        ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Captured hit/event", ImGuiTableColumnFlags.WidthStretch, 1.5f);
+        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
         DrawCenteredTableHeader("Before KO", "Timer", "HP + shields", "Captured hit/event", "Player mits/debuffs");
 
         for (var i = 0; i < rows.Count; i++)
@@ -1474,11 +1475,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("Icon");
-        ImGui.TableSetupColumn("Status");
-        ImGui.TableSetupColumn("ID");
-        ImGui.TableSetupColumn("Stacks");
-        ImGui.TableSetupColumn("Remaining");
+        ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthStretch, 0.45f);
+        ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthStretch, 2.0f);
+        ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.6f);
+        ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthStretch, 0.6f);
+        ImGui.TableSetupColumn("Remaining", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         DrawCenteredTableHeader("Icon", "Status", "ID", "Stacks", "Remaining");
 
         foreach (var status in statuses.OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase))
@@ -1526,11 +1527,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("Seen");
-        ImGui.TableSetupColumn("Timer");
-        ImGui.TableSetupColumn("Source");
-        ImGui.TableSetupColumn("Earlier hit");
-        ImGui.TableSetupColumn("Debuff");
+        ImGui.TableSetupColumn("Seen", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.7f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        ImGui.TableSetupColumn("Earlier hit", ImGuiTableColumnFlags.WidthStretch, 1.4f);
+        ImGui.TableSetupColumn("Debuff", ImGuiTableColumnFlags.WidthStretch, 1.7f);
         DrawCenteredTableHeader("Seen", "Timer", "Source", "Earlier hit", "Debuff");
 
         foreach (var row in rows)
@@ -1616,14 +1617,14 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.75f);
         ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.7f);
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.1f);
-        ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 0.9f);
-        ImGui.TableSetupColumn("HP + shields before", ImGuiTableColumnFlags.WidthStretch, 1.8f);
-        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.8f);
-        ImGui.TableSetupColumn("Boss damage-downs", ImGuiTableColumnFlags.WidthStretch, 1.8f);
+        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 0.85f);
+        ImGui.TableSetupColumn("HP + shields before", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("Boss damage-downs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
         DrawLeadUpEventsTableHeader();
 
         foreach (var combatEvent in events)
@@ -1719,7 +1720,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (events.Count == 0)
         {
-            ImGui.TextDisabled("-");
+            DrawCenteredText("-", DisabledColor);
             return;
         }
 
@@ -1727,7 +1728,7 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = GetIncomingDamageAmount(events);
         if (totalDamage is not null)
         {
-            ImGui.TextWrapped($"Hit for {FormatAmount(totalDamage.Value)}");
+            DrawCenteredOrWrappedText($"Hit for {FormatAmount(totalDamage.Value)}");
             DrawAmountTooltip();
         }
         else
@@ -1735,14 +1736,14 @@ public sealed class RecapWindow : Window, IDisposable
             var shownEvents = events.Take(maxEvents).ToList();
             foreach (var combatEvent in shownEvents)
             {
-                ImGui.TextWrapped(FormatLikelyCauseLine(combatEvent));
+                DrawCenteredOrWrappedText(FormatLikelyCauseLine(combatEvent));
                 DrawLikelyAutoAttackTooltip(combatEvent);
             }
 
             var hiddenCount = events.Count - shownEvents.Count;
             if (hiddenCount > 0)
             {
-                ImGui.TextDisabled($"+{hiddenCount} more");
+                DrawCenteredText($"+{hiddenCount} more", DisabledColor);
             }
         }
         ImGui.EndGroup();
@@ -2245,9 +2246,9 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("UTC");
-        ImGui.TableSetupColumn("Pull");
-        ImGui.TableSetupColumn("Message");
+        ImGui.TableSetupColumn("UTC", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Pull", ImGuiTableColumnFlags.WidthStretch, 0.5f);
+        ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.WidthStretch, 3.0f);
         DrawCenteredTableHeader("UTC", "Pull", "Message");
 
         foreach (var entry in entries.OrderBy(entry => entry.SeenAtUtc))
@@ -2317,6 +2318,20 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.72");
+        ImGui.TextDisabled("Improved responsive layout and reduced background overhead.");
+        ImGui.TextColored(LeadUpGoldColor, "Preparation for public beta testing. Lots of behind-the-scenes optimizations were made.");
+        ImGui.BulletText("HP + shields bars now scale to the available table cell width instead of using a fixed maximum size.");
+        ImGui.BulletText("HP bar text now shortens automatically in narrow columns and clips inside the bar.");
+        ImGui.BulletText("Recap, lead-up, status, and debug tables now use weighted responsive columns for cleaner resizing.");
+        ImGui.BulletText("Captured hits/events summary text is centered in Player Death Information.");
+        ImGui.BulletText("Reduced memory usage by 56% through code cleanup and saved JSON cleanup.");
+        ImGui.BulletText("Live capture cleanup now runs on a steady interval instead of every framework tick or combat event.");
+        ImGui.BulletText("Recorded pull history now skips disk writes when the saved data has not changed.");
+        ImGui.BulletText("Recorded pulls kept now saves after the slider edit is released instead of while dragging.");
+        ImGui.BulletText("Reduced small hot-path allocations in party refresh and reset-state tracking.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.71");
         ImGui.TextDisabled("Improved lead-up event accuracy and HP history readability.");
         DrawBreathingGoldBullet("10-second HP history now inserts captured hit/event rows at the actual event timestamp between HP samples.");
@@ -3212,12 +3227,14 @@ public sealed class RecapWindow : Window, IDisposable
 
         drawList.AddRect(position, barEnd, ImGui.GetColorU32(BarBorderColor), rounding);
 
-        var label = FormatHp(currentHp, shieldHp, maxHp);
+        var label = FormatHpForBar(currentHp, shieldHp, maxHp, size.X);
         var textSize = ImGui.CalcTextSize(label);
         var textPosition = new Vector2(
             centerLabel ? position.X + MathF.Max(4.0f, (size.X - textSize.X) * 0.5f) : position.X + 4.0f,
             position.Y + MathF.Max(1.0f, (size.Y - textSize.Y) * 0.5f));
+        ImGui.PushClipRect(position, barEnd, true);
         drawList.AddText(textPosition, ImGui.GetColorU32(clearlyUnsurvivable ? OverkillColor : Vector4.One), label);
+        ImGui.PopClipRect();
 
         if (ImGui.IsItemHovered())
         {
@@ -3250,11 +3267,53 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (maxHp == 0)
         {
-            return ImGui.CalcTextSize("0 + 0 shield").X;
+            return MathF.Max(MinimumHpShieldBarWidth, ImGui.GetContentRegionAvail().X);
         }
 
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        return Math.Clamp(availableWidth, 140.0f, 360.0f);
+        return MathF.Max(MinimumHpShieldBarWidth, availableWidth);
+    }
+
+    private static string FormatHpForBar(uint currentHp, uint shieldHp, uint maxHp, float width)
+    {
+        var availableTextWidth = MathF.Max(0.0f, width - 8.0f);
+        var effectiveHp = (ulong)currentHp + shieldHp;
+        var candidates = maxHp == 0
+            ? new[]
+            {
+                FormatHp(currentHp, shieldHp, maxHp),
+                $"{FormatCompactAmount(currentHp)} + {FormatCompactAmount(shieldHp)} shield",
+                $"{FormatCompactAmount(effectiveHp)} total",
+            }
+            : new[]
+            {
+                FormatHp(currentHp, shieldHp, maxHp),
+                $"{currentHp:N0} + {shieldHp:N0} / {maxHp:N0} ({(double)effectiveHp / maxHp:P0})",
+                $"{FormatCompactAmount(currentHp)} + {FormatCompactAmount(shieldHp)} / {FormatCompactAmount(maxHp)} ({(double)effectiveHp / maxHp:P0})",
+                $"{(double)effectiveHp / maxHp:P0}",
+            };
+
+        foreach (var candidate in candidates)
+        {
+            if (ImGui.CalcTextSize(candidate).X <= availableTextWidth)
+            {
+                return candidate;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string FormatCompactAmount(ulong amount)
+    {
+        if (amount >= 1_000_000)
+        {
+            return $"{amount / 1_000_000.0:0.#}m";
+        }
+
+        return amount >= 1_000
+            ? $"{amount / 1_000.0:0.#}k"
+            : amount.ToString("N0");
     }
 
     private static void DrawOverkillLine(uint currentHp, uint shieldHp, uint maxHp, ulong? incomingDamage)
