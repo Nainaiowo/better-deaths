@@ -2,12 +2,13 @@
 
 Better Deaths is a Dalamud plugin for reviewing party deaths with pull-level context.
 
-It records:
+It records and keeps:
 
-- party-wide death order
-- likely death cause
-- active statuses at death
-- recent action timeline before each death
+- party-wide death order by pull
+- likely death causes and captured hit details
+- HP plus shields before the selected hit
+- active player mitigations, shields, debuffs, and boss damage-downs
+- recent HP and event history before each death
 - recorded pull groups after wipes, recommences, and territory changes
 
 ## What It Does
@@ -19,16 +20,33 @@ It also includes:
 - HP plus shields before the likely hit
 - a compact HP bar with shields shown separately
 - active mitigation, shields, protections, and boss damage-down debuffs
-- recent action history before each death
-- grouped pulls that remain available after wipes
-- chat posts for a selected channel
+- 10 second lead-up history with captured hits and events
+- current pull review and an optional widget
+- locally saved pull history that remains available after wipes
+- chat posts for a selected channel with recap links
 - clickable recap links created from Better Deaths chat posts
+
+## Screenshots
+
+### Death Timeline
+
+![Better Deaths death timeline](assets/readme/death-timeline.png)
+
+### Player Death Information
+
+![Better Deaths player death information](assets/readme/player-death-information.png)
+
+### 10 Second Lead-Up
+
+![Better Deaths 10 second lead-up history](assets/readme/lead-up-history.png)
 
 ## Commands
 
 ```text
 /betterdeaths
 /bd
+/betterdeathswidget
+/bdwidget
 ```
 
 ## Dalamud Repository
@@ -40,3 +58,9 @@ https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/rep
 ```
 
 Then install `Better Deaths` from Dalamud's plugin installer.
+
+## Notes
+
+Better Deaths only functions in duties, not overworld combat or PvP.
+
+This is a work in progress raid review tool, so feedback and issue reports are welcome.
