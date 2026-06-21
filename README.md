@@ -24,7 +24,7 @@ It also includes:
 - current pull review and an optional widget
 - locally saved pull history that remains available after wipes
 - chat posts for a selected channel with recap links
-- clickable recap links created from Better Deaths chat posts
+- clickable recap links created from Better Deaths chat posts to share with participating party members with the plugin
 
 ## Screenshots
 
