@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.78";
+    private const string CurrentChangelogVersion = "0.1.0.79";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2617,6 +2617,9 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.ClearDebugLog();
         }
 
+        ImGui.TextDisabled(
+            $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
+
         ImGui.Separator();
         DrawDebugStatusSnapshots();
 
@@ -2749,6 +2752,11 @@ public sealed class RecapWindow : Window, IDisposable
             : $"0x{sourceId:X8}";
     }
 
+    private static string FormatDebugBool(bool value)
+    {
+        return value ? "yes" : "no";
+    }
+
     private static string FormatDebugStatusTooltip(StatusSnapshot status)
     {
         return $"{status.Name} ({status.Id})\nSource: {FormatDebugStatusSource(status.SourceId)}\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nRemaining: {FormatStatusDuration(status, true, true, "-")}";
@@ -2828,6 +2836,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.79");
+        ImGui.TextDisabled("Patched debug and self-capture tracking.");
+        DrawWrappedBullet("Patched an issue where debug capture could fail to show data when your own character was not being tracked.");
+        DrawWrappedBullet("Better Deaths now falls back to your local player when the party list does not expose your character.");
+        DrawWrappedBullet("Added a Debug tab capture-state line showing duty, combat, live capture, PvP block, and tracked character count.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.78");
         ImGui.TextDisabled("Improved debug capture for status troubleshooting.");
         DrawWrappedBullet("Reworked the Debug tab to show live raw status snapshots for tracked characters, which helps verify data needed for implementing additional features.");

@@ -243,6 +243,14 @@ public sealed partial class Plugin : IDalamudPlugin
         .ThenBy(snapshot => snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
+
+    public bool DebugIsPvPCaptureBlocked => IsPvPCaptureBlocked();
+
+    public bool DebugIsInCombat => Condition[ConditionFlag.InCombat];
+
+    public bool DebugShouldCaptureLiveCombat => ShouldCaptureLiveCombat(DateTime.UtcNow);
+
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
         FormatVersionForDisplay(typeof(Plugin).Assembly.GetName().Version),
@@ -1023,10 +1031,17 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         var members = new List<PartyMemberSnapshot>();
         var partyEntityIds = new HashSet<uint>();
+        var partyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var localPlayer = ObjectTable.LocalPlayer;
         var partyIndex = 0;
         foreach (var member in PartyList)
         {
             var memberName = member.Name.TextValue;
+            if (!string.IsNullOrWhiteSpace(memberName))
+            {
+                partyNames.Add(memberName);
+            }
+
             if (member.EntityId != 0)
             {
                 partyEntityIds.Add(member.EntityId);
@@ -1064,13 +1079,21 @@ public sealed partial class Plugin : IDalamudPlugin
             partyIndex++;
         }
 
+        AddLocalPlayerSnapshotIfMissing(members, partyEntityIds, partyNames, partyIndex, localPlayer);
+
         if (Configuration.CaptureOtherDeaths)
         {
+            var excludedOtherEntityIds = partyEntityIds.ToHashSet();
+            if (localPlayer?.EntityId is { } localEntityId && localEntityId != 0)
+            {
+                excludedOtherEntityIds.Add(localEntityId);
+            }
+
             foreach (var gameObject in ObjectTable)
             {
                 if (gameObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player ||
                     player.EntityId == 0 ||
-                    partyEntityIds.Contains(player.EntityId) ||
+                    excludedOtherEntityIds.Contains(player.EntityId) ||
                     player.MaxHp == 0)
                 {
                     continue;
@@ -1107,6 +1130,51 @@ public sealed partial class Plugin : IDalamudPlugin
             .OrderBy(member => member.PartyIndex)
             .ThenBy(member => member.MemberName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private void AddLocalPlayerSnapshotIfMissing(
+        List<PartyMemberSnapshot> members,
+        HashSet<uint> trackedEntityIds,
+        HashSet<string> trackedNames,
+        int partyIndex,
+        Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter? localPlayer)
+    {
+        if (!Configuration.CapturePartyDeaths ||
+            localPlayer is null ||
+            localPlayer.EntityId == 0 ||
+            localPlayer.MaxHp == 0)
+        {
+            return;
+        }
+
+        var memberName = localPlayer.Name.TextValue;
+        if (string.IsNullOrWhiteSpace(memberName) ||
+            trackedEntityIds.Contains(localPlayer.EntityId) ||
+            trackedNames.Contains(memberName))
+        {
+            return;
+        }
+
+        var statusSnapshots = localPlayer is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
+            ? BuildStatusSnapshots(battleChara.StatusList)
+            : [];
+        var classJobId = localPlayer.ClassJob.RowId;
+        members.Add(new PartyMemberSnapshot(
+            $"entity:{localPlayer.EntityId:X8}",
+            memberName,
+            partyIndex,
+            classJobId,
+            GetClassJobName(classJobId),
+            0,
+            localPlayer.EntityId,
+            localPlayer.CurrentHp,
+            CalculateShieldHp(localPlayer, localPlayer.MaxHp),
+            localPlayer.MaxHp,
+            localPlayer.IsDead || localPlayer.CurrentHp == 0,
+            true,
+            statusSnapshots));
+        trackedEntityIds.Add(localPlayer.EntityId);
+        trackedNames.Add(memberName);
     }
 
     private static uint CalculateShieldHp(Dalamud.Game.ClientState.Objects.Types.IGameObject? gameObject, uint maxHp)
