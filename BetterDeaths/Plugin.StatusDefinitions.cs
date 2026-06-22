@@ -8,6 +8,21 @@ public sealed partial class Plugin
 {
     private const uint PhysicalDamageReductionIconId = 60011;
     private const uint MagicDamageReductionIconId = 60012;
+    private const string IncomingAllDamageReductionTooltip = "Reduces all incoming damage.";
+    private const string IncomingPhysicalDamageReductionTooltip = "Reduces incoming physical damage.";
+    private const string IncomingMagicDamageReductionTooltip = "Reduces incoming magic damage.";
+    private const string ShieldTooltip = "Absorbs damage with a shield.";
+    private const string RegenTooltip = "Adds a regen or delayed healing effect.";
+    private const string HealingReceivedTooltip = "Increases healing received.";
+    private const string MaxHpTooltip = "Increases maximum HP.";
+    private const string InvulnerabilityTooltip = "Prevents or heavily limits lethal damage.";
+    private const string BlockParryTooltip = "Adds block or parry-based damage reduction.";
+    private const string OtherMitigationTooltip = "Tracked defensive context that Better Deaths does not classify more specifically yet.";
+    private const string BossAllDamageDownTooltip = "Reduces all damage dealt by the affected enemy.";
+    private const string BossPhysicalDamageDownTooltip = "Reduces physical damage dealt by the affected enemy.";
+    private const string BossMagicDamageDownTooltip = "Reduces magic damage dealt by the affected enemy.";
+    private const string BossDamageDownTooltip = "Boss-side damage-down debuff captured at death.";
+    private const string DebuffTooltip = "Relevant debuff captured at death.";
 
     internal sealed record MitigationTypeDisplay(string Label, uint IconId = 0, string? Tooltip = null);
 
@@ -233,7 +248,7 @@ public sealed partial class Plugin
         }
 
         return new MitigationDisplayInfo(
-            [new("Debuff")],
+            [new("Debuff", Tooltip: DebuffTooltip)],
             "-",
             false,
             null,
@@ -245,50 +260,50 @@ public sealed partial class Plugin
         var types = new List<MitigationTypeDisplay>();
         if (definition.DamageReductionPercent is not null)
         {
-            types.Add(new("All"));
+            types.Add(new("All", Tooltip: IncomingAllDamageReductionTooltip));
         }
 
         if (definition.PhysicalDamageReductionPercent is not null)
         {
-            types.Add(new("Physical", PhysicalDamageReductionIconId, "Physical damage reduction"));
+            types.Add(new("Physical", PhysicalDamageReductionIconId, IncomingPhysicalDamageReductionTooltip));
         }
 
         if (definition.MagicDamageReductionPercent is not null)
         {
-            types.Add(new("Magic", MagicDamageReductionIconId, "Magic damage reduction"));
+            types.Add(new("Magic", MagicDamageReductionIconId, IncomingMagicDamageReductionTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.Shield))
         {
-            types.Add(new("Shield"));
+            types.Add(new("Shield", Tooltip: ShieldTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.HealingOrRegen))
         {
-            types.Add(new("Regen"));
+            types.Add(new("Regen", Tooltip: RegenTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.HealingReceivedIncrease))
         {
-            types.Add(new("Heal+"));
+            types.Add(new("Heal+", Tooltip: HealingReceivedTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.MaxHpIncrease))
         {
-            types.Add(new("Max HP"));
+            types.Add(new("Max HP", Tooltip: MaxHpTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.InvulnerabilityOrDeathPrevention))
         {
-            types.Add(new("Invuln"));
+            types.Add(new("Invuln", Tooltip: InvulnerabilityTooltip));
         }
 
         if (definition.Effects.HasFlag(DefensiveStatusEffect.BlockOrParry))
         {
-            types.Add(new("Block"));
+            types.Add(new("Block", Tooltip: BlockParryTooltip));
         }
 
-        return types.Count == 0 ? [new("Other")] : types;
+        return types.Count == 0 ? [new("Other", Tooltip: OtherMitigationTooltip)] : types;
     }
 
     private static IReadOnlyList<MitigationTypeDisplay> BuildBossMitigationTypes(BossMitigationStatusDefinition definition)
@@ -296,20 +311,20 @@ public sealed partial class Plugin
         var types = new List<MitigationTypeDisplay>();
         if (definition.DamageDownPercent is not null)
         {
-            types.Add(new("All"));
+            types.Add(new("All", Tooltip: BossAllDamageDownTooltip));
         }
 
         if (definition.PhysicalDamageDownPercent is not null)
         {
-            types.Add(new("Physical", PhysicalDamageReductionIconId, "Physical damage dealt reduction"));
+            types.Add(new("Physical", PhysicalDamageReductionIconId, BossPhysicalDamageDownTooltip));
         }
 
         if (definition.MagicDamageDownPercent is not null)
         {
-            types.Add(new("Magic", MagicDamageReductionIconId, "Magic damage dealt reduction"));
+            types.Add(new("Magic", MagicDamageReductionIconId, BossMagicDamageDownTooltip));
         }
 
-        return types.Count == 0 ? [new("Boss DD")] : types;
+        return types.Count == 0 ? [new("Boss DD", Tooltip: BossDamageDownTooltip)] : types;
     }
 
     private static string FormatMitigationPercent(
