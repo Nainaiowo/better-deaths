@@ -25,8 +25,8 @@ public static class DeathDisplaySelector
 
     public static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
     {
-        var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
-        var cutoff = anchorSeenAtUtc - TimeSpan.FromSeconds(LeadUpHistorySeconds);
+        var displayAnchorSeenAtUtc = death.SeenAtUtc;
+        var cutoff = displayAnchorSeenAtUtc - TimeSpan.FromSeconds(LeadUpHistorySeconds);
         var events = death.RecentEvents.AsEnumerable();
         if (death.FatalSequence is { Events.Count: > 0 } sequence)
         {
@@ -39,7 +39,7 @@ public static class DeathDisplaySelector
         }
 
         return events
-            .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= anchorSeenAtUtc)
+            .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= displayAnchorSeenAtUtc)
             .Where(IsDeathRelevantLeadUpEvent)
             .GroupBy(combatEvent => (
                 combatEvent.SeenAtUtc,

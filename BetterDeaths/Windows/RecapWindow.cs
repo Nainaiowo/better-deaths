@@ -40,13 +40,14 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.74";
+    private const string CurrentChangelogVersion = "0.1.0.75";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
+    private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
 
     private sealed record HpHistoryDisplayRow(
         HpHistorySnapshot FirstSnapshot,
@@ -82,6 +83,7 @@ public sealed class RecapWindow : Window, IDisposable
         uint ShieldHp,
         uint MaxHp,
         IReadOnlyList<StatusSnapshot> Statuses,
+        IReadOnlyList<StatusSnapshot> NearbyHpStatuses,
         CombatEventRecord? Event,
         string? HpTooltipDetail);
 
@@ -1175,8 +1177,8 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.05f);
         ImGui.TableSetupColumn("Captured hits/events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
-        ImGui.TableSetupColumn("Captured player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.7f);
-        DrawCenteredTableHeader("HP + shields", "Captured hits/events", "Captured player mits/debuffs");
+        ImGui.TableSetupColumn("Captured mitigations/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.7f);
+        DrawCenteredTableHeader("HP + shields", "Captured hits/events", "Captured mitigations/debuffs");
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -1190,7 +1192,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableNextColumn();
         DrawEventSummaryCell(summary.Events, int.MaxValue);
         ImGui.TableNextColumn();
-        DrawStatusSummaryCell(row, true, Plugin.ShouldShowPlayerStatusTimerForDisplay, true);
+        DrawLeadUpSummaryMitigationDebuffCell(summary);
 
         ImGui.EndTable();
     }
@@ -1281,7 +1283,16 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("Extra mitigation context");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        DrawStatusSnapshot(plugin.GetRelevantPlayerStatusesForDisplay(GetSelectedPlayerStatuses(death)), $"{idSuffix}AtDeath");
+        var selection = DeathDisplaySelector.Select(death);
+        var statuses = GetCombinedMitigationDebuffStatuses(
+            GetSelectedPlayerStatuses(death),
+            selection.Events.SelectMany(combatEvent => combatEvent.SourceStatuses),
+            out var bossStatusKeys);
+        DrawStatusSnapshot(
+            statuses,
+            $"{idSuffix}AtDeath",
+            status => bossStatusKeys.Contains(GetStatusKey(status)) ||
+                Plugin.ShouldShowPlayerStatusTimerForDisplay(status));
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnLikelyHit(death, idSuffix);
     }
@@ -1300,7 +1311,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP history is sampled about every half second while alive; event rows show captured actions at their actual timestamps.");
         ImGui.TextColored(LeadUpGoldColor, "Event-row HP uses the HP captured with that event when available; otherwise it falls back to the latest prior HP sample.");
         ImGui.TextColored(LeadUpGoldColor, "If a following HP sample is stale after a captured hit, Better Deaths shows the derived post-hit HP with a tooltip.");
-        ImGui.TextColored(LeadUpGoldColor, "Player cells show active defensives, shields, mitigations, and encounter debuffs. Source cells show boss damage-down debuffs.");
+        ImGui.TextColored(LeadUpGoldColor, "Mitigation/debuff cells show player defensives, shields, mitigations, encounter debuffs, and boss damage-down debuffs when tied to a captured event.");
         ImGui.TextDisabled("Older saved pulls may show less history if that data was not captured at the time.");
         DrawHpHistory(death, idSuffix);
         ImGui.Separator();
@@ -1329,8 +1340,8 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Captured hit/event", ImGuiTableColumnFlags.WidthStretch, 1.5f);
-        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
-        DrawCenteredTableHeader("Before KO", "Timer", "HP + shields", "Captured hit/event", "Player mits/debuffs");
+        ImGui.TableSetupColumn("Mitigations/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
+        DrawCenteredTableHeader("Before KO", "Timer", "HP + shields", "Captured hit/event", "Mitigations/Debuffs");
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -1351,7 +1362,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawTimelineEventCell(row.Event);
             ImGui.TableNextColumn();
-            DrawStatusSummaryCell(plugin.GetRelevantPlayerStatusesForDisplay(row.Statuses), true, Plugin.ShouldShowPlayerStatusTimerForDisplay, true);
+            DrawMitigationDebuffSummaryCell(row);
         }
 
         ImGui.EndTable();
@@ -1406,6 +1417,7 @@ public sealed class RecapWindow : Window, IDisposable
                 hpDisplay.ShieldHp,
                 hpDisplay.MaxHp,
                 combatEvent.Statuses,
+                GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
                 combatEvent,
                 hpDisplay.TooltipDetail));
 
@@ -1438,6 +1450,7 @@ public sealed class RecapWindow : Window, IDisposable
                 displayShieldHp,
                 snapshot.MaxHp > 0 ? snapshot.MaxHp : pendingDerivedHp.SourceMaxHp,
                 snapshot.Statuses,
+                snapshot.Statuses,
                 null,
                 tooltip);
         }
@@ -1449,8 +1462,35 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.ShieldHp,
             snapshot.MaxHp,
             snapshot.Statuses,
+            snapshot.Statuses,
             null,
             null);
+    }
+
+    private static IReadOnlyList<StatusSnapshot> GetNearbyHpHistoryStatuses(
+        IReadOnlyList<HpHistorySnapshot> history,
+        DateTime seenAtUtc)
+    {
+        var statuses = new List<StatusSnapshot>();
+        var priorSnapshot = history
+            .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
+            .OrderByDescending(snapshot => snapshot.SeenAtUtc)
+            .FirstOrDefault();
+        if (priorSnapshot is not null && seenAtUtc - priorSnapshot.SeenAtUtc <= LeadUpStatusMergeWindow)
+        {
+            statuses.AddRange(priorSnapshot.Statuses);
+        }
+
+        var nextSnapshot = history
+            .Where(snapshot => snapshot.SeenAtUtc > seenAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .FirstOrDefault();
+        if (nextSnapshot is not null && nextSnapshot.SeenAtUtc - seenAtUtc <= LeadUpStatusMergeWindow)
+        {
+            statuses.AddRange(nextSnapshot.Statuses);
+        }
+
+        return statuses;
     }
 
     private static bool IsStalePostHitSample(HpHistorySnapshot snapshot, DerivedHpState pendingDerivedHp)
@@ -1617,9 +1657,12 @@ public sealed class RecapWindow : Window, IDisposable
         return first == last ? first : $"{first}-{last}";
     }
 
-    private void DrawStatusSnapshot(IReadOnlyList<StatusSnapshot> statuses, string idSuffix)
+    private void DrawStatusSnapshot(
+        IReadOnlyList<StatusSnapshot> statuses,
+        string idSuffix,
+        Func<StatusSnapshot, bool>? shouldShowTimer = null)
     {
-        DrawLeadUpLabel("Active player mitigations/debuffs at death");
+        DrawLeadUpLabel("Active mitigations/debuffs at death");
         if (statuses.Count == 0)
         {
             ImGui.TextDisabled("No defensive, mitigation, shield, or encounter debuff statuses captured.");
@@ -1650,7 +1693,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(status.StackCount == 0 ? "-" : status.StackCount.ToString());
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatStatusDuration(status, true, Plugin.ShouldShowPlayerStatusTimerForDisplay(status), "-"));
+            DrawCenteredText(FormatStatusDuration(status, true, ShouldShowStatusTimer(status, shouldShowTimer ?? Plugin.ShouldShowPlayerStatusTimerForDisplay), "-"));
         }
 
         ImGui.EndTable();
@@ -1806,7 +1849,7 @@ public sealed class RecapWindow : Window, IDisposable
                 GetIncomingDamageAmount(combatEvent),
                 hpDisplay.TooltipDetail);
             ImGui.TableNextColumn();
-            DrawStatusSummaryCell(plugin.GetRelevantPlayerStatusesForDisplay(combatEvent.Statuses), true, Plugin.ShouldShowPlayerStatusTimerForDisplay, true);
+            DrawStatusSummaryCell(GetMergedPlayerStatusesForEvent(death, combatEvent), true, Plugin.ShouldShowPlayerStatusTimerForDisplay, true);
             ImGui.TableNextColumn();
             DrawStatusSummaryCell(Plugin.GetBossMitigationStatusesForDisplay(combatEvent.SourceStatuses), true, null, true);
         }
@@ -1941,6 +1984,72 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var statuses = plugin.GetRelevantPlayerStatusesForDisplay(row.LastSnapshot.Statuses);
         DrawStatusSummaryCell(statuses, showTenthsOverTenSeconds, shouldShowTimer, centerContent);
+    }
+
+    private void DrawLeadUpSummaryMitigationDebuffCell(LeadUpSummaryRow summary)
+    {
+        DrawCombinedMitigationDebuffCell(
+            summary.Row.LastSnapshot.Statuses.Concat(summary.Events.SelectMany(combatEvent => combatEvent.Statuses)),
+            summary.Events.SelectMany(combatEvent => combatEvent.SourceStatuses));
+    }
+
+    private void DrawMitigationDebuffSummaryCell(LeadUpTimelineRow row)
+    {
+        DrawCombinedMitigationDebuffCell(
+            row.Statuses.Concat(row.NearbyHpStatuses),
+            row.Event?.SourceStatuses ?? []);
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetMergedPlayerStatusesForEvent(
+        PartyDeathRecord death,
+        CombatEventRecord combatEvent)
+    {
+        return plugin.GetRelevantPlayerStatusesForDisplay(
+            combatEvent.Statuses.Concat(GetNearbyHpHistoryStatuses(death.HpHistory, combatEvent.SeenAtUtc)));
+    }
+
+    private void DrawCombinedMitigationDebuffCell(
+        IEnumerable<StatusSnapshot> playerStatusSource,
+        IEnumerable<StatusSnapshot> bossStatusSource)
+    {
+        var statuses = GetCombinedMitigationDebuffStatuses(playerStatusSource, bossStatusSource, out var bossStatusKeys);
+
+        DrawStatusSummaryCell(
+            statuses,
+            true,
+            status => bossStatusKeys.Contains(GetStatusKey(status)) ||
+                Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
+            true);
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetCombinedMitigationDebuffStatuses(
+        IEnumerable<StatusSnapshot> playerStatusSource,
+        IEnumerable<StatusSnapshot> bossStatusSource,
+        out HashSet<(uint Id, uint IconId, uint SourceId)> bossStatusKeys)
+    {
+        var playerStatuses = plugin
+            .GetRelevantPlayerStatusesForDisplay(playerStatusSource)
+            .ToList();
+        var bossStatuses = Plugin
+            .GetBossMitigationStatusesForDisplay(bossStatusSource)
+            .ToList();
+
+        bossStatusKeys = bossStatuses
+            .Select(GetStatusKey)
+            .ToHashSet();
+        return playerStatuses
+            .Concat(bossStatuses)
+            .GroupBy(GetStatusKey)
+            .Select(group => group
+                .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
+                .ThenBy(status => status.StackCount)
+                .First())
+            .ToList();
+    }
+
+    private static (uint Id, uint IconId, uint SourceId) GetStatusKey(StatusSnapshot status)
+    {
+        return (status.Id, status.IconId, status.SourceId);
     }
 
     private void DrawStatusSummaryCell(
@@ -2516,6 +2625,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.75");
+        ImGui.TextDisabled("Improved mitigation and lead-up event review.");
+        DrawBreathingGoldBullet("Mitigation now displays more accurately in Player Death Information.");
+        DrawWrappedBullet("Boss-targeted mitigations are now included in Player Death Information and Extra mitigation context when needed.");
+        DrawWrappedBullet("Fixed a bug that prevented boss-targeted mitigations from appearing in the 10-second HP history.");
+        DrawWrappedBullet("Captured hits/events below the 10-second HP history now correctly show player mits/debuffs and boss damage-downs.");
+        DrawWrappedBullet("Fixed the 10-second captured hits/events table so wall/non-hit KOs cannot pull in events older than 10 seconds before the actual KO.");
+        DrawWrappedBullet("Renamed some columns to better reflect what they capture and display.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.74");
         ImGui.TextDisabled("Polished responsive text and shared recap link wording.");
         DrawWrappedBullet("Long centered table text now wraps into centered lines instead of falling back to left-aligned wrapping.");
