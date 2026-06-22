@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.79";
+    private const string CurrentChangelogVersion = "0.1.0.81";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2836,6 +2836,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.81");
+        ImGui.TextDisabled("Improved debug status retention.");
+        DrawWrappedBullet("Debug status rows now stay open while new statuses are captured.");
+        DrawWrappedBullet("Captured debug statuses remain visible until new combat starts or debug data is manually cleared.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.79");
         ImGui.TextDisabled("Patched debug and self-capture tracking.");
         DrawWrappedBullet("Patched an issue where debug capture could fail to show data when your own character was not being tracked.");
