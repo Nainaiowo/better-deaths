@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.73";
+    private const string CurrentChangelogVersion = "0.1.0.74";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2477,80 +2477,109 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawNotesTab()
     {
         ImGui.TextUnformatted("What Better Deaths adds");
-        ImGui.BulletText("Duty-only death review built around raid pulls, wipes, recommences, and resets.");
-        ImGui.BulletText("Current Pull and the optional widget show live death order while combat is happening.");
-        ImGui.BulletText("Last Pull Review keeps the most recent wiped/reset pull visible until the next duty pull starts.");
-        ImGui.BulletText("Recorded pull groups save immediately after wipes or resets, then restore when the plugin loads.");
-        ImGui.BulletText("Timeline-first recap shows who died, when they died, and the likely causes before opening player details.");
-        ImGui.BulletText("Fatal sequence summaries include source, action, amount, damage type, blocks, parries, crits, direct hits, and combat-log confirmations.");
-        ImGui.BulletText("HP plus shields before the likely hit is shown as a clear bar with overkill context.");
-        ImGui.BulletText("Nested 10-second lead-up under each death shows HP, shields, player mitigations, encounter debuffs, and captured hits before KO.");
-        ImGui.BulletText("Active player mitigations and boss damage-down debuffs are grouped so Reprisal, Addle, Feint, and similar effects are easier to audit.");
-        ImGui.BulletText("Chat-posted death summaries can include clickable recap links for other Better Deaths users with the same captured pull.");
+        DrawWrappedBullet("Duty-only death review built around raid pulls, wipes, recommences, and resets.");
+        DrawWrappedBullet("Current Pull and the optional widget show live death order while combat is happening.");
+        DrawWrappedBullet("Last Pull Review keeps the most recent wiped/reset pull visible until the next duty pull starts.");
+        DrawWrappedBullet("Recorded pull groups save immediately after wipes or resets, then restore when the plugin loads.");
+        DrawWrappedBullet("Timeline-first recap shows who died, when they died, and the likely causes before opening player details.");
+        DrawWrappedBullet("Fatal sequence summaries include source, action, amount, damage type, blocks, parries, crits, direct hits, and combat-log confirmations.");
+        DrawWrappedBullet("HP plus shields before the likely hit is shown as a clear bar with overkill context.");
+        DrawWrappedBullet("Nested 10-second lead-up under each death shows HP, shields, player mitigations, encounter debuffs, and captured hits before KO.");
+        DrawWrappedBullet("Active player mitigations and boss damage-down debuffs are grouped so Reprisal, Addle, Feint, and similar effects are easier to audit.");
+        DrawWrappedBullet("Chat-posted death summaries can include clickable recap links for other Better Deaths users with the same captured pull.");
         ImGui.Separator();
         ImGui.TextWrapped("The goal is to make wipe review fast: see who died, see why, see what was active, and keep the pull context intact between attempts.");
         ImGui.Separator();
         DrawCreatorNote();
     }
 
+    private static void DrawWrappedBullet(string text)
+    {
+        DrawWrappedBullet(text, null);
+    }
+
+    private static void DrawWrappedBullet(string text, Vector4? color)
+    {
+        if (color is { } textColor)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+        }
+
+        ImGui.Bullet();
+        ImGui.SameLine();
+        ImGui.TextWrapped(text);
+        if (color is not null)
+        {
+            ImGui.PopStyleColor();
+        }
+    }
+
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.74");
+        ImGui.TextDisabled("Polished responsive text and shared recap link wording.");
+        DrawWrappedBullet("Long centered table text now wraps into centered lines instead of falling back to left-aligned wrapping.");
+        DrawWrappedBullet("Notes feature bullets now wrap when the window is narrowed.");
+        DrawWrappedBullet("Changelog bullets now wrap when the window is narrowed.");
+        DrawWrappedBullet("Detected shared recap links now show Pull link detected with a compact Open Recap link.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.73");
         ImGui.TextDisabled("Improved Current Pull widget readability.");
         DrawBreathingGoldBullet("Current Pull widget now includes an Overkill column.");
         DrawBreathingGoldBullet("Current Pull widget now includes a Mits column with player mitigation/debuff and boss damage-down icons.");
         DrawBreathingGoldBullet("Widget cause and overkill numbers now use compact values like 3k, 186.9k, and 1.3m.");
-        ImGui.BulletText("Removed the widget # column to make room for mitigation icons while keeping deaths ordered by time.");
-        ImGui.BulletText("Widget mitigation icons wrap inside the Mits column and have their own icon-size slider.");
-        ImGui.BulletText("Multi-hit chat posts now summarize total damage in one recap line.");
-        ImGui.BulletText("Shared recap recognition now supports the new multi-hit chat summary format.");
-        ImGui.BulletText("Duplicate mitigation/debuff status snapshots are now collapsed in recap details, lead-up tables, widgets, and chat posts.");
-        ImGui.BulletText("Older saved pulls also benefit from the duplicate status cleanup when they are displayed.");
+        DrawWrappedBullet("Removed the widget # column to make room for mitigation icons while keeping deaths ordered by time.");
+        DrawWrappedBullet("Widget mitigation icons wrap inside the Mits column and have their own icon-size slider.");
+        DrawWrappedBullet("Multi-hit chat posts now summarize total damage in one recap line.");
+        DrawWrappedBullet("Shared recap recognition now supports the new multi-hit chat summary format.");
+        DrawWrappedBullet("Duplicate mitigation/debuff status snapshots are now collapsed in recap details, lead-up tables, widgets, and chat posts.");
+        DrawWrappedBullet("Older saved pulls also benefit from the duplicate status cleanup when they are displayed.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.72");
         ImGui.TextDisabled("Improved responsive layout and reduced background overhead.");
         ImGui.TextColored(LeadUpGoldColor, "Preparation for public beta testing. Lots of behind-the-scenes optimizations were made.");
-        ImGui.BulletText("HP + shields bars now scale to the available table cell width instead of using a fixed maximum size.");
-        ImGui.BulletText("HP bar text now shortens automatically in narrow columns and clips inside the bar.");
-        ImGui.BulletText("Recap, lead-up, status, and debug tables now use weighted responsive columns for cleaner resizing.");
-        ImGui.BulletText("Captured hits/events summary text is centered in Player Death Information.");
-        ImGui.BulletText("Reduced memory usage by 56% through code cleanup and saved JSON cleanup.");
-        ImGui.BulletText("Live capture cleanup now runs on a steady interval instead of every framework tick or combat event.");
-        ImGui.BulletText("Recorded pull history now skips disk writes when the saved data has not changed.");
-        ImGui.BulletText("Recorded pulls kept now saves after the slider edit is released instead of while dragging.");
-        ImGui.BulletText("Reduced small hot-path allocations in party refresh and reset-state tracking.");
+        DrawWrappedBullet("HP + shields bars now scale to the available table cell width instead of using a fixed maximum size.");
+        DrawWrappedBullet("HP bar text now shortens automatically in narrow columns and clips inside the bar.");
+        DrawWrappedBullet("Recap, lead-up, status, and debug tables now use weighted responsive columns for cleaner resizing.");
+        DrawWrappedBullet("Captured hits/events summary text is centered in Player Death Information.");
+        DrawWrappedBullet("Reduced memory usage by 56% through code cleanup and saved JSON cleanup.");
+        DrawWrappedBullet("Live capture cleanup now runs on a steady interval instead of every framework tick or combat event.");
+        DrawWrappedBullet("Recorded pull history now skips disk writes when the saved data has not changed.");
+        DrawWrappedBullet("Recorded pulls kept now saves after the slider edit is released instead of while dragging.");
+        DrawWrappedBullet("Reduced small hot-path allocations in party refresh and reset-state tracking.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.71");
         ImGui.TextDisabled("Improved lead-up event accuracy and HP history readability.");
         DrawBreathingGoldBullet("10-second HP history now inserts captured hit/event rows at the actual event timestamp between HP samples.");
         DrawBreathingGoldBullet("Stale post-hit HP samples now show derived post-hit HP, with tooltips showing the raw captured sample.");
-        ImGui.BulletText("Captured event rows use the HP captured with that event when available, with tooltip fallback details.");
-        ImGui.BulletText("The detailed captured hits/events table remains available for full source, action, amount, and status review.");
-        ImGui.BulletText("Lead-up timing now displays relative to the actual KO time to avoid the hidden fatal-sequence buffer offset.");
-        ImGui.BulletText("Lead-up table layout was cleaned up so HP bars, captured events, and mitigation/debuff columns have clearer spacing and alignment.");
-        ImGui.BulletText("Widget player-name display setting is now labeled Naming Options.");
+        DrawWrappedBullet("Captured event rows use the HP captured with that event when available, with tooltip fallback details.");
+        DrawWrappedBullet("The detailed captured hits/events table remains available for full source, action, amount, and status review.");
+        DrawWrappedBullet("Lead-up timing now displays relative to the actual KO time to avoid the hidden fatal-sequence buffer offset.");
+        DrawWrappedBullet("Lead-up table layout was cleaned up so HP bars, captured events, and mitigation/debuff columns have clearer spacing and alignment.");
+        DrawWrappedBullet("Widget player-name display setting is now labeled Naming Options.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.70");
         ImGui.TextDisabled("Improved recap readability and widget controls.");
         DrawBreathingGoldBullet("Visible overkill amount now appears beneath the HP + shields bar.");
         DrawBreathingGoldBullet("Current Pull widget now shows job icons next to player names and can switch between full names and initials.");
-        ImGui.BulletText("Recap tables now center headers and compact values while keeping long cause/status text readable.");
-        ImGui.BulletText("Debug tab is now hidden by default and can be revealed from the bottom of Settings under Developer tools.");
+        DrawWrappedBullet("Recap tables now center headers and compact values while keeping long cause/status text readable.");
+        DrawWrappedBullet("Debug tab is now hidden by default and can be revealed from the bottom of Settings under Developer tools.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.69");
         ImGui.TextDisabled("Word fixing and recap table cleanup.");
-        ImGui.BulletText("Cleaned up captured hits/events so action IDs no longer crowd the 10-second lead-up table.");
-        ImGui.BulletText("Moved hit flags into the Type column and removed the extra Flags column.");
-        ImGui.BulletText("Centered mitigation and debuff status cells in the lead-up table.");
+        DrawWrappedBullet("Cleaned up captured hits/events so action IDs no longer crowd the 10-second lead-up table.");
+        DrawWrappedBullet("Moved hit flags into the Type column and removed the extra Flags column.");
+        DrawWrappedBullet("Centered mitigation and debuff status cells in the lead-up table.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.68");
         ImGui.TextDisabled("Polished widget and Notes wording.");
-        ImGui.BulletText("Renamed the widget window to Better Deaths Widget to avoid repeating Current Pull in the title bar.");
+        DrawWrappedBullet("Renamed the widget window to Better Deaths Widget to avoid repeating Current Pull in the title bar.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.67");
@@ -2558,64 +2587,64 @@ public sealed class RecapWindow : Window, IDisposable
         DrawBreathingGoldBullet("Last Pull Review keeps the most recent wiped/reset pull visible until the next duty pull starts.");
         DrawBreathingGoldBullet("Review copies now show the saved Recorded Pull number.");
         DrawBreathingGoldBullet("Better Deaths now only captures inside active duties, so overworld combat will not clear review data or create recaps.");
-        ImGui.BulletText("Recorded pulls still save immediately on wipe/reset/territory changes without duplicating the same pull.");
-        ImGui.BulletText("Removed mitigation timers from chat-posted active status lines to keep chat summaries cleaner.");
-        ImGui.BulletText("Updated the Notes tab feature summary to better describe the current review tools.");
-        ImGui.BulletText("Updated the Settings warning to: Only functions in duties, not overworld or PvP.");
+        DrawWrappedBullet("Recorded pulls still save immediately on wipe/reset/territory changes without duplicating the same pull.");
+        DrawWrappedBullet("Removed mitigation timers from chat-posted active status lines to keep chat summaries cleaner.");
+        DrawWrappedBullet("Updated the Notes tab feature summary to better describe the current review tools.");
+        DrawWrappedBullet("Updated the Settings warning to: Only functions in duties, not overworld or PvP.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.66");
         ImGui.TextDisabled("Improved Current Pull widget readability.");
         DrawBreathingGoldBullet("Current Pull widget now uses a compact widget-only death table instead of the full recap layout.");
-        ImGui.BulletText("Multi-hit deaths are summarized into one total line in the widget, with full hit details kept in the tooltip.");
-        ImGui.BulletText("Widget content now clips and scrolls inside the widget instead of overflowing during busy pulls.");
-        ImGui.BulletText("Widget preview now uses the same compact renderer as the live widget.");
+        DrawWrappedBullet("Multi-hit deaths are summarized into one total line in the widget, with full hit details kept in the tooltip.");
+        DrawWrappedBullet("Widget content now clips and scrolls inside the widget instead of overflowing during busy pulls.");
+        DrawWrappedBullet("Widget preview now uses the same compact renderer as the live widget.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.65");
         ImGui.TextDisabled("Improved death context consistency.");
-        ImGui.BulletText("Moved extra mitigation context above the 10-second lead-up so important mitigation review is easier to see.");
-        ImGui.BulletText("Player mitigation and debuff context now uses the selected pre-hit snapshot before falling back to post-death statuses.");
-        ImGui.BulletText("Earlier boss debuff review now compares against the selected likely-hit group instead of an older single-cause fallback.");
-        ImGui.BulletText("Cleaned up old duplicate death-cause paths so the recap UI, debug log, and chat systems stay aligned.");
-        ImGui.BulletText("Improved captured hits/events rendering and clarified the empty-state wording.");
+        DrawWrappedBullet("Moved extra mitigation context above the 10-second lead-up so important mitigation review is easier to see.");
+        DrawWrappedBullet("Player mitigation and debuff context now uses the selected pre-hit snapshot before falling back to post-death statuses.");
+        DrawWrappedBullet("Earlier boss debuff review now compares against the selected likely-hit group instead of an older single-cause fallback.");
+        DrawWrappedBullet("Cleaned up old duplicate death-cause paths so the recap UI, debug log, and chat systems stay aligned.");
+        DrawWrappedBullet("Improved captured hits/events rendering and clarified the empty-state wording.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.64");
         ImGui.TextDisabled("Improved captured hit readability.");
-        ImGui.BulletText("Captured hits/events summaries now show the combined damage total as a single hit value.");
-        ImGui.BulletText("Likely cause details still keep the full source, action, amount, and flags breakdown.");
+        DrawWrappedBullet("Captured hits/events summaries now show the combined damage total as a single hit value.");
+        DrawWrappedBullet("Likely cause details still keep the full source, action, amount, and flags breakdown.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.63");
         ImGui.TextDisabled("Improved chat recap consistency.");
-        ImGui.BulletText("Changed chat-posted death recaps to use the same selected death-display data as Player Death Information.");
-        ImGui.BulletText("Chat HP before hit now uses the mathematically selected pre-hit HP plus shield snapshot when available.");
-        ImGui.BulletText("Chat-posted active mits and player debuffs now come from the same selected snapshot shown in the UI.");
-        ImGui.BulletText("Centralized death display selection so the recap window, timeline cause, shared recap matching, and chat posts stay aligned.");
+        DrawWrappedBullet("Changed chat-posted death recaps to use the same selected death-display data as Player Death Information.");
+        DrawWrappedBullet("Chat HP before hit now uses the mathematically selected pre-hit HP plus shield snapshot when available.");
+        DrawWrappedBullet("Chat-posted active mits and player debuffs now come from the same selected snapshot shown in the UI.");
+        DrawWrappedBullet("Centralized death display selection so the recap window, timeline cause, shared recap matching, and chat posts stay aligned.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.62");
         ImGui.TextDisabled("Improved HP and hit display consistency.");
-        ImGui.BulletText("Changed player death HP selection to prefer the latest pre-hit snapshot that mathematically fits the captured killing damage.");
-        ImGui.BulletText("Merged fatal sequence events into the 10-second lead-up so captured hits/events do not appear empty when fatal sequence data exists.");
-        ImGui.BulletText("Kept the displayed HP bar and captured hit list tied to the same selected death-cause events.");
+        DrawWrappedBullet("Changed player death HP selection to prefer the latest pre-hit snapshot that mathematically fits the captured killing damage.");
+        DrawWrappedBullet("Merged fatal sequence events into the 10-second lead-up so captured hits/events do not appear empty when fatal sequence data exists.");
+        DrawWrappedBullet("Kept the displayed HP bar and captured hit list tied to the same selected death-cause events.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.61");
         ImGui.TextDisabled("Improved likely cause accuracy.");
-        ImGui.BulletText("Stopped heals from being captured as death lead-up events.");
-        ImGui.BulletText("Limited displayed likely causes to positive damage or status KO events.");
-        ImGui.BulletText("Kept miss and invulnerability events as lead-up context without promoting them to the timeline, player details, or chat-posted cause.");
+        DrawWrappedBullet("Stopped heals from being captured as death lead-up events.");
+        DrawWrappedBullet("Limited displayed likely causes to positive damage or status KO events.");
+        DrawWrappedBullet("Kept miss and invulnerability events as lead-up context without promoting them to the timeline, player details, or chat-posted cause.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.60");
         ImGui.TextDisabled("Improved recap readability and chat-posted death details.");
         DrawBreathingGoldBullet("Added multiple likely causes to player death details when several captured hits/events contributed to the KO.");
         DrawBreathingGoldBullet("Added player debuffs to chat-posted death summaries.");
-        ImGui.BulletText("Removed boss ability icon columns from recaps and lead-up tables because those actions usually do not have useful icons.");
-        ImGui.BulletText("Changed likely cause details to show Action, Source, Amount, and Flags in a consistent bullet format.");
-        ImGui.BulletText("Cleaned up the Widget tab preview so the opacity slider is not fighting an extra container background.");
+        DrawWrappedBullet("Removed boss ability icon columns from recaps and lead-up tables because those actions usually do not have useful icons.");
+        DrawWrappedBullet("Changed likely cause details to show Action, Source, Amount, and Flags in a consistent bullet format.");
+        DrawWrappedBullet("Cleaned up the Widget tab preview so the opacity slider is not fighting an extra container background.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.59");
@@ -2628,40 +2657,38 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextDisabled("Improved live pull visibility and death timeline consistency.");
         DrawBreathingGoldBullet("Added an optional Current Pull widget for watching deaths during live combat.");
         DrawBreathingGoldBullet("Added /bdwidget and /betterdeathswidget to toggle the Current Pull widget.");
-        ImGui.BulletText("Updated death timeline likely causes to match the captured hits/events shown in player death details.");
-        ImGui.BulletText("Centered death timeline headers and key columns for cleaner reading.");
-        ImGui.BulletText("Changed recorded pull reset timestamps to display in local time.");
-        ImGui.BulletText("Removed misleading combat event and likely cause window sliders from Settings.");
+        DrawWrappedBullet("Updated death timeline likely causes to match the captured hits/events shown in player death details.");
+        DrawWrappedBullet("Centered death timeline headers and key columns for cleaner reading.");
+        DrawWrappedBullet("Changed recorded pull reset timestamps to display in local time.");
+        DrawWrappedBullet("Removed misleading combat event and likely cause window sliders from Settings.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.57");
         ImGui.TextDisabled("Improved death timeline job display.");
-        ImGui.BulletText("Centered job abbreviations beside job icons in the death timeline.");
+        DrawWrappedBullet("Centered job abbreviations beside job icons in the death timeline.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.56");
         ImGui.TextDisabled("Fixed report rendering with job icons.");
-        ImGui.BulletText("Fixed a crash when opening reports that tried to draw an unavailable job icon.");
-        ImGui.BulletText("Job icons now fall back safely if the game icon asset cannot be loaded.");
+        DrawWrappedBullet("Fixed a crash when opening reports that tried to draw an unavailable job icon.");
+        DrawWrappedBullet("Job icons now fall back safely if the game icon asset cannot be loaded.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.54");
         ImGui.TextDisabled("Improved death recap capture and review clarity.");
-        ImGui.BulletText("Added compact fatal sequence tracking around deaths.");
-        ImGui.BulletText("Added filtered combat-log confirmations for boss and enemy damage to players.");
-        ImGui.BulletText("Limited live capture to combat, with a short grace window for delayed KO detection.");
-        ImGui.BulletText("Reduced misleading HP display by using the closest alive HP and shield sample before KO.");
-        ImGui.BulletText("Added job icons next to job abbreviations in the death timeline.");
-        ImGui.BulletText("Changed 8-player death link text to Party wipe detected.");
-        ImGui.BulletText("Reduced settings stutter by saving Recorded pulls kept after releasing the slider.");
-        ImGui.BulletText("Added safer bounded in-memory capture so Better Deaths does not behave like a debug logger.");
+        DrawWrappedBullet("Added compact fatal sequence tracking around deaths.");
+        DrawWrappedBullet("Added filtered combat-log confirmations for boss and enemy damage to players.");
+        DrawWrappedBullet("Limited live capture to combat, with a short grace window for delayed KO detection.");
+        DrawWrappedBullet("Reduced misleading HP display by using the closest alive HP and shield sample before KO.");
+        DrawWrappedBullet("Added job icons next to job abbreviations in the death timeline.");
+        DrawWrappedBullet("Changed 8-player death link text to Party wipe detected.");
+        DrawWrappedBullet("Reduced settings stutter by saving Recorded pulls kept after releasing the slider.");
+        DrawWrappedBullet("Added safer bounded in-memory capture so Better Deaths does not behave like a debug logger.");
     }
 
     private static void DrawBreathingGoldBullet(string text)
     {
-        ImGui.PushStyleColor(ImGuiCol.Text, GetBreathingGoldColor());
-        ImGui.BulletText(text);
-        ImGui.PopStyleColor();
+        DrawWrappedBullet(text, GetBreathingGoldColor());
     }
 
     private static Vector4 GetBreathingGoldColor()
@@ -3064,30 +3091,64 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawCenteredOrWrappedText(string text, Vector4? color)
     {
         var textWidth = ImGui.CalcTextSize(text).X;
-        var shouldCenter = textWidth <= ImGui.GetContentRegionAvail().X;
-        if (shouldCenter)
-        {
-            CenterNextItem(textWidth);
-        }
+        var availableWidth = ImGui.GetContentRegionAvail().X;
 
         if (color is { } textColor)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, textColor);
         }
 
-        if (shouldCenter)
+        ImGui.BeginGroup();
+        if (textWidth <= availableWidth)
         {
+            CenterNextItem(textWidth);
             ImGui.TextUnformatted(text);
         }
         else
         {
-            ImGui.TextWrapped(text);
+            foreach (var line in WrapTextForWidth(text, availableWidth))
+            {
+                CenterNextItem(ImGui.CalcTextSize(line).X);
+                ImGui.TextUnformatted(line);
+            }
         }
 
+        ImGui.EndGroup();
         if (color is not null)
         {
             ImGui.PopStyleColor();
         }
+    }
+
+    private static IReadOnlyList<string> WrapTextForWidth(string text, float maxWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text) || maxWidth <= 0.0f)
+        {
+            return [text];
+        }
+
+        var lines = new List<string>();
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var currentLine = string.Empty;
+        foreach (var word in words)
+        {
+            var candidate = string.IsNullOrEmpty(currentLine) ? word : $"{currentLine} {word}";
+            if (ImGui.CalcTextSize(candidate).X <= maxWidth || string.IsNullOrEmpty(currentLine))
+            {
+                currentLine = candidate;
+                continue;
+            }
+
+            lines.Add(currentLine);
+            currentLine = word;
+        }
+
+        if (!string.IsNullOrEmpty(currentLine))
+        {
+            lines.Add(currentLine);
+        }
+
+        return lines.Count == 0 ? [text] : lines;
     }
 
     private static void DrawCauseText(CombatEventRecord? cause)

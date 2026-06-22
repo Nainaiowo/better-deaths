@@ -760,7 +760,7 @@ public sealed class Plugin : IDalamudPlugin
                     return;
                 }
 
-                PrintDeathRecapLink(death);
+                PrintDetectedSharedRecapLink(death);
                 AddDebugLog($"Linked shared Better Deaths recap for {death.MemberName}.");
                 return;
             }
@@ -3072,9 +3072,19 @@ public sealed class Plugin : IDalamudPlugin
         PrintDeathRecapLink(death, death.MemberName);
     }
 
+    private void PrintDetectedSharedRecapLink(PartyDeathRecord death)
+    {
+        PrintDeathRecapLink(death, "Pull link detected", "[ Open Recap ]");
+    }
+
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel)
     {
         var label = Configuration.RemoveChatBranding ? "[ Open recap ]" : "[ Open Better Deaths recap ]";
+        PrintDeathRecapLink(death, batchLabel, label);
+    }
+
+    private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel, string label)
+    {
         var batchText = string.IsNullOrWhiteSpace(batchLabel) ? string.Empty : $"{batchLabel} ";
         var message = new SeString(
             new TextPayload(GetChatBrandingPrefix()),
