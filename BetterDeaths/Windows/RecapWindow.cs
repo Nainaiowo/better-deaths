@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.75";
+    private const string CurrentChangelogVersion = "0.1.0.76";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -97,6 +97,12 @@ public sealed class RecapWindow : Window, IDisposable
         uint SourceMaxHp,
         uint DerivedCurrentHp,
         uint DerivedShieldHp);
+
+    private sealed record OverkillDisplay(
+        string Text,
+        string CompactText,
+        Vector4 Color,
+        string TooltipLine);
 
     private readonly struct ImGuiIndentScope : IDisposable
     {
@@ -847,10 +853,8 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var snapshot = selection.Snapshot;
-        var overkillAmount = CalculateOverkillAmount(snapshot.CurrentHp, snapshot.ShieldHp, incomingDamage);
-        DrawCenteredText(
-            FormatWidgetAmount(overkillAmount),
-            overkillAmount > 0 ? OverkillColor : DisabledColor);
+        var overkillDisplay = GetOverkillDisplay(snapshot.CurrentHp, snapshot.ShieldHp, incomingDamage);
+        DrawCenteredText(overkillDisplay.CompactText, overkillDisplay.Color);
 
         if (ImGui.IsItemHovered())
         {
@@ -858,7 +862,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SetTooltip(
                 $"Incoming damage: {incomingDamage.Value:N0}\n" +
                 $"HP plus shields before hit: {effectiveHp:N0}\n" +
-                $"Overkill: {overkillAmount:N0}");
+                overkillDisplay.TooltipLine);
         }
     }
 
@@ -1283,16 +1287,13 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("Extra mitigation context");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        var selection = DeathDisplaySelector.Select(death);
-        var statuses = GetCombinedMitigationDebuffStatuses(
-            GetSelectedPlayerStatuses(death),
-            selection.Events.SelectMany(combatEvent => combatEvent.SourceStatuses),
-            out var bossStatusKeys);
+        var summary = GetLeadUpSummaryRow(death);
+        var statuses = summary is not null
+            ? GetLeadUpSummaryMitigationDebuffStatuses(summary, out _)
+            : GetSelectedMitigationDebuffStatuses(death);
         DrawStatusSnapshot(
             statuses,
-            $"{idSuffix}AtDeath",
-            status => bossStatusKeys.Contains(GetStatusKey(status)) ||
-                Plugin.ShouldShowPlayerStatusTimerForDisplay(status));
+            $"{idSuffix}AtDeath");
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnLikelyHit(death, idSuffix);
     }
@@ -1633,34 +1634,9 @@ public sealed class RecapWindow : Window, IDisposable
             string.Equals(pair.First.Name, pair.Second.Name, StringComparison.Ordinal));
     }
 
-    private static string FormatHpHistoryRelativeRange(DateTime deathSeenAtUtc, HpHistoryDisplayRow row)
-    {
-        var first = FormatRelativeToDeath(deathSeenAtUtc, row.FirstSnapshot.SeenAtUtc);
-        if (row.SampleCount <= 1 || row.FirstSnapshot.SeenAtUtc == row.LastSnapshot.SeenAtUtc)
-        {
-            return first;
-        }
-
-        var last = FormatRelativeToDeath(deathSeenAtUtc, row.LastSnapshot.SeenAtUtc);
-        return $"{first} to {last} ({row.SampleCount} samples)";
-    }
-
-    private static string FormatHpHistoryTimerRange(HpHistoryDisplayRow row)
-    {
-        var first = FormatCombatTimer(row.FirstSnapshot.PullElapsedSeconds);
-        if (row.SampleCount <= 1 || row.FirstSnapshot.PullElapsedSeconds == row.LastSnapshot.PullElapsedSeconds)
-        {
-            return first;
-        }
-
-        var last = FormatCombatTimer(row.LastSnapshot.PullElapsedSeconds);
-        return first == last ? first : $"{first}-{last}";
-    }
-
     private void DrawStatusSnapshot(
         IReadOnlyList<StatusSnapshot> statuses,
-        string idSuffix,
-        Func<StatusSnapshot, bool>? shouldShowTimer = null)
+        string idSuffix)
     {
         DrawLeadUpLabel("Active mitigations/debuffs at death");
         if (statuses.Count == 0)
@@ -1675,28 +1651,120 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthStretch, 0.45f);
-        ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthStretch, 2.0f);
-        ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.6f);
-        ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthStretch, 0.6f);
-        ImGui.TableSetupColumn("Remaining", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        DrawCenteredTableHeader("Icon", "Status", "ID", "Stacks", "Remaining");
+        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.7f);
+        ImGui.TableSetupColumn("Mit Type", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Linked Effects", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        DrawCenteredTableHeader("Icon", "Ability", "Mit Type", "Mit%", "Linked Effects");
 
         foreach (var status in statuses.OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase))
         {
+            var displayInfo = Plugin.GetMitigationDisplayInfo(status);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             DrawCenteredGameIcon(status.IconId, configuration.StatusIconSize, status.Name);
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(status.Name);
             ImGui.TableNextColumn();
-            DrawCenteredText(status.Id.ToString());
+            DrawMitigationTypeCell(displayInfo.Types);
             ImGui.TableNextColumn();
-            DrawCenteredText(status.StackCount == 0 ? "-" : status.StackCount.ToString());
+            DrawMitigationPercentCell(displayInfo);
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatStatusDuration(status, true, ShouldShowStatusTimer(status, shouldShowTimer ?? Plugin.ShouldShowPlayerStatusTimerForDisplay), "-"));
+            DrawInducedStatusesCell(displayInfo.InducedStatuses);
         }
 
         ImGui.EndTable();
+    }
+
+    private void DrawMitigationTypeCell(IReadOnlyList<Plugin.MitigationTypeDisplay> types)
+    {
+        if (types.Count == 0)
+        {
+            DrawCenteredText("-", DisabledColor);
+            return;
+        }
+
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 22.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var groupWidth = types.Aggregate(0.0f, (width, type) =>
+            width + (width > 0.0f ? spacing : 0.0f) +
+            (type.IconId == 0 ? 0.0f : iconSize + spacing) +
+            ImGui.CalcTextSize(type.Label).X);
+        CenterNextItem(groupWidth);
+
+        ImGui.BeginGroup();
+        for (var i = 0; i < types.Count; i++)
+        {
+            if (i > 0)
+            {
+                ImGui.SameLine();
+            }
+
+            var type = types[i];
+            if (type.IconId != 0)
+            {
+                DrawGameIcon(type.IconId, iconSize, type.Tooltip ?? type.Label);
+                ImGui.SameLine();
+            }
+
+            ImGui.TextUnformatted(type.Label);
+            if (ImGui.IsItemHovered() && type.Tooltip is not null)
+            {
+                ImGui.SetTooltip(type.Tooltip);
+            }
+        }
+
+        ImGui.EndGroup();
+    }
+
+    private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo)
+    {
+        if (displayInfo.MitigationPercentText == "-")
+        {
+            DrawCenteredText("-", DisabledColor);
+            return;
+        }
+
+        if (displayInfo.HasVariableMitigationPercent)
+        {
+            DrawCenteredText(displayInfo.MitigationPercentText, GetBreathingGoldColor());
+            if (ImGui.IsItemHovered() && displayInfo.MitigationPercentTooltip is not null)
+            {
+                ImGui.SetTooltip(displayInfo.MitigationPercentTooltip);
+            }
+
+            return;
+        }
+
+        DrawCenteredText(displayInfo.MitigationPercentText);
+    }
+
+    private void DrawInducedStatusesCell(IReadOnlyList<Plugin.InducedMitigationDisplay> inducedStatuses)
+    {
+        if (inducedStatuses.Count == 0)
+        {
+            DrawCenteredText("-", DisabledColor);
+            return;
+        }
+
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 24.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var groupWidth = (inducedStatuses.Count * iconSize) + ((inducedStatuses.Count - 1) * spacing);
+        CenterNextItem(groupWidth);
+
+        ImGui.BeginGroup();
+        for (var i = 0; i < inducedStatuses.Count; i++)
+        {
+            if (i > 0)
+            {
+                ImGui.SameLine();
+            }
+
+            var inducedStatus = inducedStatuses[i];
+            DrawGameIcon(GetStatusIconId(inducedStatus.StatusId), iconSize, inducedStatus.Name);
+        }
+
+        ImGui.EndGroup();
     }
 
     private static IReadOnlyList<StatusSnapshot> GetSelectedPlayerStatuses(PartyDeathRecord death)
@@ -1928,7 +1996,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (totalDamage is not null)
         {
             DrawCenteredOrWrappedText($"Hit for {FormatAmount(totalDamage.Value)}");
-            DrawAmountTooltip();
+            DrawPostMitigationHitTooltip();
         }
         else
         {
@@ -1953,7 +2021,8 @@ public sealed class RecapWindow : Window, IDisposable
             if (totalDamage is not null)
             {
                 tooltipLines.Insert(0, $"Total damage: {FormatAmount(totalDamage.Value)}");
-                tooltipLines.Insert(1, string.Empty);
+                tooltipLines.Insert(1, "The value presented is the calculated hit post-mitigations.");
+                tooltipLines.Insert(2, string.Empty);
             }
 
             if (events.Any(IsLikelyAutoAttack))
@@ -1963,6 +2032,14 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.SetTooltip(string.Join(Environment.NewLine, tooltipLines));
+        }
+    }
+
+    private static void DrawPostMitigationHitTooltip()
+    {
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("The value presented is the calculated hit post-mitigations.");
         }
     }
 
@@ -1976,21 +2053,15 @@ public sealed class RecapWindow : Window, IDisposable
         return $"{combatEvent.SourceName}: {combatEvent.ActionName} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
     }
 
-    private void DrawStatusSummaryCell(
-        HpHistoryDisplayRow row,
-        bool showTenthsOverTenSeconds = false,
-        Func<StatusSnapshot, bool>? shouldShowTimer = null,
-        bool centerContent = false)
-    {
-        var statuses = plugin.GetRelevantPlayerStatusesForDisplay(row.LastSnapshot.Statuses);
-        DrawStatusSummaryCell(statuses, showTenthsOverTenSeconds, shouldShowTimer, centerContent);
-    }
-
     private void DrawLeadUpSummaryMitigationDebuffCell(LeadUpSummaryRow summary)
     {
-        DrawCombinedMitigationDebuffCell(
-            summary.Row.LastSnapshot.Statuses.Concat(summary.Events.SelectMany(combatEvent => combatEvent.Statuses)),
-            summary.Events.SelectMany(combatEvent => combatEvent.SourceStatuses));
+        var statuses = GetLeadUpSummaryMitigationDebuffStatuses(summary, out var bossStatusKeys);
+        DrawStatusSummaryCell(
+            statuses,
+            true,
+            status => bossStatusKeys.Contains(GetStatusKey(status)) ||
+                Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
+            true);
     }
 
     private void DrawMitigationDebuffSummaryCell(LeadUpTimelineRow row)
@@ -2020,6 +2091,36 @@ public sealed class RecapWindow : Window, IDisposable
             status => bossStatusKeys.Contains(GetStatusKey(status)) ||
                 Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
             true);
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetLeadUpSummaryMitigationDebuffStatuses(
+        LeadUpSummaryRow summary,
+        out HashSet<(uint Id, uint IconId, uint SourceId)> bossStatusKeys)
+    {
+        return GetCombinedMitigationDebuffStatuses(
+            GetLeadUpSummaryPlayerStatusSource(summary),
+            GetLeadUpSummaryBossStatusSource(summary),
+            out bossStatusKeys);
+    }
+
+    private static IEnumerable<StatusSnapshot> GetLeadUpSummaryPlayerStatusSource(LeadUpSummaryRow summary)
+    {
+        return summary.Row.LastSnapshot.Statuses
+            .Concat(summary.Events.SelectMany(combatEvent => combatEvent.Statuses));
+    }
+
+    private static IEnumerable<StatusSnapshot> GetLeadUpSummaryBossStatusSource(LeadUpSummaryRow summary)
+    {
+        return summary.Events.SelectMany(combatEvent => combatEvent.SourceStatuses);
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetSelectedMitigationDebuffStatuses(PartyDeathRecord death)
+    {
+        var selection = DeathDisplaySelector.Select(death);
+        return GetCombinedMitigationDebuffStatuses(
+            GetSelectedPlayerStatuses(death),
+            selection.Events.SelectMany(combatEvent => combatEvent.SourceStatuses),
+            out _);
     }
 
     private IReadOnlyList<StatusSnapshot> GetCombinedMitigationDebuffStatuses(
@@ -2625,6 +2726,18 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.76");
+        ImGui.TextDisabled("Cleaned up mitigation review and table wiring.");
+        DrawBreathingGoldBullet("Extra mitigation context now shows review-focused mitigation details instead of low-value raw status fields.");
+        DrawBreathingGoldBullet("Renamed Status to Ability, Spell ID to Mit Type, Stacks to Mit%, and Remaining to Linked Effects.");
+        DrawWrappedBullet("Mit Type and Mit% now use stored mitigation metadata, including physical and magic reduction types when applicable.");
+        DrawWrappedBullet("Linked Effects now shows related mitigation effects such as Bloodwhetting granting Stem the Flow and Stem the Tide.");
+        DrawWrappedBullet("Variable mitigation values, such as Intervention, are highlighted with a tooltip explaining why the value may change.");
+        DrawWrappedBullet("Captured hits/events now clarify that displayed damage values are calculated post-mitigation.");
+        DrawWrappedBullet("Overkill now distinguishes exact lethal hits from non-lethal captured hits followed by likely non-hit KOs.");
+        DrawWrappedBullet("Cleaned up redundant backend display paths and removed abandoned code that no longer contributed to recap review.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.75");
         ImGui.TextDisabled("Improved mitigation and lead-up event review.");
         DrawBreathingGoldBullet("Mitigation now displays more accurately in Player Death Information.");
@@ -3270,29 +3383,6 @@ public sealed class RecapWindow : Window, IDisposable
         return lines.Count == 0 ? [text] : lines;
     }
 
-    private static void DrawCauseText(CombatEventRecord? cause)
-    {
-        if (cause is null)
-        {
-            ImGui.TextColored(WarningColor, "Likely walled/non-hit KO");
-            return;
-        }
-
-        ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(cause.Kind));
-        ImGui.TextUnformatted(cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {cause.SourceName}"
-            : $"{cause.ActionName} - {cause.Amount:N0} from {cause.SourceName}");
-        DrawLikelyAutoAttackTooltip(cause);
-        ImGui.PopStyleColor();
-    }
-
-    private static void DrawEventKind(DeathEventKind kind)
-    {
-        ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(kind));
-        ImGui.TextUnformatted(kind.ToString());
-        ImGui.PopStyleColor();
-    }
-
     private static void DrawEventTypeText(CombatEventRecord combatEvent)
     {
         DrawCenteredText(FormatEventType(combatEvent), GetEventColor(combatEvent.Kind));
@@ -3618,6 +3708,10 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 tooltip += $"\nOverkilled by {overkillAmount:N0}.";
             }
+            else if (incomingDamage is not null)
+            {
+                tooltip += $"\n{GetOverkillDisplay(currentHp, shieldHp, incomingDamage).TooltipLine}";
+            }
 
             if (clearlyUnsurvivable)
             {
@@ -3689,25 +3783,14 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawOverkillLine(uint currentHp, uint shieldHp, uint maxHp, ulong? incomingDamage)
     {
         var damageAmount = incomingDamage.GetValueOrDefault();
-        var overkillAmount = CalculateOverkillAmount(currentHp, shieldHp, incomingDamage);
-        var text = incomingDamage is null
-            ? "Overkill: -"
-            : $"Overkill: {overkillAmount:N0}";
-
-        if (overkillAmount > 0)
-        {
-            DrawCenteredText(text, OverkillColor);
-        }
-        else
-        {
-            DrawCenteredText(text, DisabledColor);
-        }
+        var overkillDisplay = GetOverkillDisplay(currentHp, shieldHp, incomingDamage);
+        DrawCenteredText(overkillDisplay.Text, overkillDisplay.Color);
 
         if (ImGui.IsItemHovered())
         {
             var tooltip = incomingDamage is null
                 ? "No incoming damage amount was captured for this selected event."
-                : $"Incoming damage: {damageAmount:N0}\nHP plus shields before hit: {(ulong)currentHp + shieldHp:N0}";
+                : $"Incoming damage: {damageAmount:N0}\nHP plus shields before hit: {(ulong)currentHp + shieldHp:N0}\n{overkillDisplay.TooltipLine}";
             if (maxHp > 0)
             {
                 tooltip += $"\nMax HP: {maxHp:N0}";
@@ -3717,13 +3800,43 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static ulong CalculateOverkillAmount(uint currentHp, uint shieldHp, ulong? incomingDamage)
+    private static OverkillDisplay GetOverkillDisplay(uint currentHp, uint shieldHp, ulong? incomingDamage)
     {
-        var damageAmount = incomingDamage.GetValueOrDefault();
+        if (incomingDamage is null)
+        {
+            return new OverkillDisplay(
+                "Overkill: -",
+                "-",
+                DisabledColor,
+                "No incoming damage amount was captured for this selected event.");
+        }
+
+        var damageAmount = incomingDamage.Value;
         var effectiveHp = (ulong)currentHp + shieldHp;
-        return incomingDamage is not null && damageAmount > effectiveHp
-            ? damageAmount - effectiveHp
-            : 0UL;
+        if (damageAmount > effectiveHp)
+        {
+            var overkillAmount = damageAmount - effectiveHp;
+            return new OverkillDisplay(
+                $"Overkill: {overkillAmount:N0}",
+                FormatWidgetAmount(overkillAmount),
+                OverkillColor,
+                $"Overkilled by {overkillAmount:N0}.");
+        }
+
+        if (damageAmount == effectiveHp)
+        {
+            return new OverkillDisplay(
+                "Exact lethal hit",
+                "Exact",
+                DisabledColor,
+                "Captured hit exactly matched HP plus shields before hit.");
+        }
+
+        return new OverkillDisplay(
+            "No overkill. Likely follow-up non-hit KO.",
+            "Non-hit KO",
+            WarningColor,
+            "Captured hit was non-lethal based on HP plus shields before hit. The KO likely came from a follow-up non-hit cause.");
     }
 
     private static string FormatHp(uint currentHp, uint shieldHp, uint maxHp)

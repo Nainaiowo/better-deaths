@@ -31,7 +31,7 @@ using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace BetterDeaths;
 
-public sealed class Plugin : IDalamudPlugin
+public sealed partial class Plugin : IDalamudPlugin
 {
     private const string MainCommandName = "/betterdeaths";
     private const string ShortCommandName = "/bd";
@@ -153,67 +153,6 @@ public sealed class Plugin : IDalamudPlugin
     private string? pendingUpdateNoticeKey;
     private string? lastSavedRecordedPullHistoryJson;
     private bool updateCheckInProgress;
-    private static readonly string[] DefensiveStatusNames =
-    [
-        "Aquaveil",
-        "Bloodwhetting",
-        "Bulwark",
-        "Camouflage",
-        "Catalyze",
-        "Collective Unconscious",
-        "Dark Force",
-        "Dark Mind",
-        "Dark Missionary",
-        "Divine Benison",
-        "Divine Caress",
-        "Divine Veil",
-        "Eukrasian Diagnosis",
-        "Eukrasian Prognosis",
-        "Exaltation",
-        "Expedient",
-        "Galvanize",
-        "Gunmetal Soul",
-        "Haima",
-        "Hallowed Ground",
-        "Heart of Corundum",
-        "Heart of Light",
-        "Heart of Stone",
-        "Holos",
-        "Holmgang",
-        "Intervention",
-        "Kerachole",
-        "Land Waker",
-        "Living Dead",
-        "Magick Barrier",
-        "Manaward",
-        "Nascent Flash",
-        "Nebula",
-        "Oblation",
-        "Panhaima",
-        "Passage of Arms",
-        "Rampart",
-        "Radiant Aegis",
-        "Riddle of Earth",
-        "Sacred Soil",
-        "Sentinel",
-        "Shade Shift",
-        "Shake It Off",
-        "Sheltron",
-        "Shield Samba",
-        "Shadow Wall",
-        "Superbolide",
-        "Tactician",
-        "Taurochole",
-        "Temperance",
-        "The Blackest Night",
-        "Third Eye",
-        "Thrill of Battle",
-        "Troubadour",
-        "Undead Rebirth",
-        "Vengeance",
-        "Wheel of Fortune",
-    ];
-
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -249,17 +188,6 @@ public sealed class Plugin : IDalamudPlugin
         "vulnerability up",
         "water resistance down",
         "wind resistance down",
-    ];
-
-    private static readonly uint[] BossMitigationStatusIds =
-    [
-        1203, // Addle
-        1195, // Feint
-        1193, // Reprisal
-        860, // Dismantled
-        1715, // Malodorous
-        2115, // Conked
-        3642, // Candy Cane
     ];
 
     private static readonly string[] DoomStatusNameFragments =
