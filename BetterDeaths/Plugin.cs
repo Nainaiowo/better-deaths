@@ -417,11 +417,6 @@ public sealed partial class Plugin : IDalamudPlugin
     public void SetDebugLogEnabled(bool enabled)
     {
         Configuration.DebugLogEnabled = enabled;
-        if (!enabled)
-        {
-            debugStatusSnapshotsByMember.Clear();
-        }
-
         SaveConfiguration();
     }
 
@@ -957,7 +952,6 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
             currentMembers.Clear();
-            debugStatusSnapshotsByMember.Clear();
             return;
         }
 
@@ -970,7 +964,6 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             currentMembers.Clear();
-            debugStatusSnapshotsByMember.Clear();
             ClearPostResetDeathSuppression();
             return;
         }
@@ -1638,9 +1631,14 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
-        debugStatusSnapshotsByMember.Clear();
         foreach (var member in members)
         {
+            var statuses = member.Statuses.ToList();
+            if (debugStatusSnapshotsByMember.TryGetValue(member.MemberKey, out var existing))
+            {
+                statuses = MergeDebugStatuses(existing.Statuses, statuses);
+            }
+
             debugStatusSnapshotsByMember[member.MemberKey] = new DebugStatusSnapshot(
                 now,
                 CurrentPullElapsedSeconds,
@@ -1654,8 +1652,26 @@ public sealed partial class Plugin : IDalamudPlugin
                 member.MaxHp,
                 member.IsDead,
                 member.IsPartyMember,
-                member.Statuses.ToList());
+                statuses);
         }
+    }
+
+    private static List<StatusSnapshot> MergeDebugStatuses(
+        IReadOnlyList<StatusSnapshot> existingStatuses,
+        IReadOnlyList<StatusSnapshot> currentStatuses)
+    {
+        var merged = new Dictionary<(uint Id, uint SourceId), StatusSnapshot>();
+        foreach (var status in existingStatuses)
+        {
+            merged[(status.Id, status.SourceId)] = status;
+        }
+
+        foreach (var status in currentStatuses)
+        {
+            merged[(status.Id, status.SourceId)] = status;
+        }
+
+        return merged.Values.ToList();
     }
 
     private IReadOnlyList<HpHistorySnapshot> GetRecentHpHistory(string memberKey, int seconds)
@@ -2004,9 +2020,15 @@ public sealed partial class Plugin : IDalamudPlugin
         var inCombat = Condition[ConditionFlag.InCombat];
         if (inCombat)
         {
+            var startedNewCombat = !combatTimerRunning;
             if (currentPullClosedForReview)
             {
                 ResetCurrentPull(suppressResetStateDeaths: false);
+            }
+
+            if (startedNewCombat)
+            {
+                ClearDebugStatusSnapshotsForNewCombat();
             }
 
             lastInCombatAtUtc = now;
@@ -2028,6 +2050,17 @@ public sealed partial class Plugin : IDalamudPlugin
             lastKnownPullElapsedSeconds = CalculatePullElapsed(now);
             combatTimerRunning = false;
         }
+    }
+
+    private void ClearDebugStatusSnapshotsForNewCombat()
+    {
+        if (debugStatusSnapshotsByMember.Count == 0)
+        {
+            return;
+        }
+
+        debugStatusSnapshotsByMember.Clear();
+        AddDebugLog("Cleared debug status table for new combat.");
     }
 
     private float CalculatePullElapsed(DateTime now)

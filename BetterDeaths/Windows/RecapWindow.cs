@@ -2602,7 +2602,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDebugTab()
     {
-        ImGui.TextWrapped("Debug shows the latest raw status snapshot for each tracked character, plus the internal capture log. Use this to verify whether Dalamud exposes a status before Better Deaths filters it for recaps.");
+        ImGui.TextWrapped("Debug shows raw statuses captured for each tracked character during the current combat, plus the internal capture log. Use this to verify whether Dalamud exposes a status before Better Deaths filters it for recaps.");
         ImGui.TextColored(SpamWarningColor, "Warning: this is for troubleshooting only and can get noisy while combat events are happening.");
 
         var debugEnabled = configuration.DebugLogEnabled;
@@ -2629,8 +2629,8 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDebugStatusSnapshots()
     {
-        ImGui.TextColored(LeadUpGoldColor, "Latest raw status snapshots");
-        ImGui.TextDisabled("Memory-only. Respects Capture Party and Capture Others settings. Not saved to recorded pulls.");
+        ImGui.TextColored(LeadUpGoldColor, "Captured raw status table");
+        ImGui.TextDisabled("Memory-only. Respects Capture Party and Capture Others settings. Statuses stay listed until new combat or manual clear.");
 
         if (!configuration.DebugLogEnabled)
         {
@@ -2649,16 +2649,16 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.PushID($"DebugStatus{snapshot.MemberKey}");
             var deadText = snapshot.IsDead ? " dead" : string.Empty;
-            var label = $"{snapshot.MemberName} ({snapshot.ClassJobName}) - {snapshot.Statuses.Count:N0} statuses{deadText}";
+            var label = $"{snapshot.MemberName} ({snapshot.ClassJobName}) - {snapshot.Statuses.Count:N0} captured statuses{deadText}###DebugStatusSnapshot";
             if (ImGui.TreeNode(label))
             {
                 var shieldText = snapshot.ShieldHp > 0 ? $" + {snapshot.ShieldHp:N0} shield" : string.Empty;
                 ImGui.TextDisabled(
-                    $"Seen {snapshot.SeenAtUtc:HH:mm:ss} UTC | Pull {FormatCombatTimer(snapshot.PullElapsedSeconds)} | HP {snapshot.CurrentHp:N0}{shieldText} / {snapshot.MaxHp:N0}");
+                    $"Last seen {snapshot.SeenAtUtc:HH:mm:ss} UTC | Pull {FormatCombatTimer(snapshot.PullElapsedSeconds)} | HP {snapshot.CurrentHp:N0}{shieldText} / {snapshot.MaxHp:N0}");
 
                 if (snapshot.Statuses.Count == 0)
                 {
-                    ImGui.TextDisabled("No raw statuses exposed for this character.");
+                    ImGui.TextDisabled("No raw statuses captured for this character.");
                 }
                 else
                 {
@@ -2685,7 +2685,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 0.85f);
         ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthStretch, 0.55f);
         ImGui.TableSetupColumn("Remaining", ImGuiTableColumnFlags.WidthStretch, 0.75f);
-        DrawCenteredTableHeader("Icon", "ID", "Name", "Source", "Stacks", "Remaining");
+        DrawCenteredTableHeader("Icon", "ID", "Name", "Source", "Stacks", "Last remaining");
 
         foreach (var status in snapshot.Statuses
                      .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
