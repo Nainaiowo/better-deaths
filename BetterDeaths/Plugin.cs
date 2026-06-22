@@ -123,6 +123,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<PartyDeathRecord> currentDeaths = [];
     private readonly List<PullDeathSnapshot> recordedPulls = [];
     private readonly List<DebugLogEntry> debugLogEntries = [];
+    private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
@@ -236,6 +237,11 @@ public sealed partial class Plugin : IDalamudPlugin
     public IReadOnlyList<PullDeathSnapshot> RecordedPulls => recordedPulls;
 
     public IReadOnlyList<DebugLogEntry> DebugLogEntries => debugLogEntries;
+
+    public IReadOnlyList<DebugStatusSnapshot> DebugStatusSnapshots => debugStatusSnapshotsByMember.Values
+        .OrderBy(snapshot => snapshot.PartyIndex)
+        .ThenBy(snapshot => snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
 
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
@@ -403,12 +409,18 @@ public sealed partial class Plugin : IDalamudPlugin
     public void SetDebugLogEnabled(bool enabled)
     {
         Configuration.DebugLogEnabled = enabled;
+        if (!enabled)
+        {
+            debugStatusSnapshotsByMember.Clear();
+        }
+
         SaveConfiguration();
     }
 
     public void ClearDebugLog()
     {
         debugLogEntries.Clear();
+        debugStatusSnapshotsByMember.Clear();
     }
 
     public void ClearRecordedPulls()
@@ -937,6 +949,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
             currentMembers.Clear();
+            debugStatusSnapshotsByMember.Clear();
             return;
         }
 
@@ -949,6 +962,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             currentMembers.Clear();
+            debugStatusSnapshotsByMember.Clear();
             ClearPostResetDeathSuppression();
             return;
         }
@@ -967,6 +981,7 @@ public sealed partial class Plugin : IDalamudPlugin
         postResetSuppressedDeadMemberKeys.RemoveWhere(key => !currentMemberKeyScratch.Contains(key));
 
         var now = DateTime.UtcNow;
+        TrackDebugStatusSnapshots(currentMembers, now);
         UpdatePostResetDeathSuppression();
         if (!ShouldCaptureLiveCombat(now))
         {
@@ -1545,6 +1560,33 @@ public sealed partial class Plugin : IDalamudPlugin
                 member.MaxHp,
                 GetRelevantDeathStatuses(member.Statuses)));
             lastHpHistorySampleByMember[member.MemberKey] = now;
+        }
+    }
+
+    private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
+    {
+        if (!Configuration.DebugLogEnabled)
+        {
+            return;
+        }
+
+        debugStatusSnapshotsByMember.Clear();
+        foreach (var member in members)
+        {
+            debugStatusSnapshotsByMember[member.MemberKey] = new DebugStatusSnapshot(
+                now,
+                CurrentPullElapsedSeconds,
+                member.MemberKey,
+                member.MemberName,
+                member.PartyIndex,
+                member.ClassJobId,
+                member.ClassJobName,
+                member.CurrentHp,
+                member.ShieldHp,
+                member.MaxHp,
+                member.IsDead,
+                member.IsPartyMember,
+                member.Statuses.ToList());
         }
     }
 

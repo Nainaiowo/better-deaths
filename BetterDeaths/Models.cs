@@ -136,6 +136,21 @@ public sealed record DebugLogEntry(
     float PullElapsedSeconds,
     string Message);
 
+public sealed record DebugStatusSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string MemberKey,
+    string MemberName,
+    int PartyIndex,
+    uint ClassJobId,
+    string ClassJobName,
+    uint CurrentHp,
+    uint ShieldHp,
+    uint MaxHp,
+    bool IsDead,
+    bool IsPartyMember,
+    IReadOnlyList<StatusSnapshot> Statuses);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

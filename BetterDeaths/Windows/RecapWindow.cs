@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.77";
+    private const string CurrentChangelogVersion = "0.1.0.78";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1309,11 +1309,9 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP history is sampled about every half second while alive; event rows show captured actions at their actual timestamps.");
-        ImGui.TextColored(LeadUpGoldColor, "Event-row HP uses the HP captured with that event when available; otherwise it falls back to the latest prior HP sample.");
-        ImGui.TextColored(LeadUpGoldColor, "If a following HP sample is stale after a captured hit, Better Deaths shows the derived post-hit HP with a tooltip.");
-        ImGui.TextColored(LeadUpGoldColor, "Mitigation/debuff cells show player defensives, shields, mitigations, encounter debuffs, and boss damage-down debuffs when tied to a captured event.");
-        ImGui.TextDisabled("Older saved pulls may show less history if that data was not captured at the time.");
+        ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP is sampled while alive; action rows show captured hits/events at their actual timestamps.");
+        ImGui.TextColored(LeadUpGoldColor, "Mitigation/debuff cells show relevant player defensives, shields, encounter debuffs, and boss-targeted mitigations when tied to a captured event.");
+        ImGui.TextDisabled("Older saved pulls may show less detail if that data was not captured at the time.");
         DrawHpHistory(death, idSuffix);
         ImGui.Separator();
         DrawLeadUpEvents(death, idSuffix);
@@ -1774,7 +1772,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawEarlierBossDebuffsNotOnLikelyHit(PartyDeathRecord death, string idSuffix)
     {
-        DrawLeadUpLabel("Earlier boss debuffs, not on likely hit");
+        DrawLeadUpLabel("Mitigations that expired on the leadup to the hit");
         var selection = DeathDisplaySelector.Select(death);
         if (selection.Events.Count == 0)
         {
@@ -2604,23 +2602,115 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDebugTab()
     {
-        ImGui.TextWrapped("Debug records the same internal capture messages that the old debug chat option printed: tracked action effects and deaths as Better Deaths detects them.");
-        ImGui.TextColored(SpamWarningColor, "Warning: this WILL spam while combat events are happening.");
+        ImGui.TextWrapped("Debug shows the latest raw status snapshot for each tracked character, plus the internal capture log. Use this to verify whether Dalamud exposes a status before Better Deaths filters it for recaps.");
+        ImGui.TextColored(SpamWarningColor, "Warning: this is for troubleshooting only and can get noisy while combat events are happening.");
 
         var debugEnabled = configuration.DebugLogEnabled;
-        if (ImGui.Checkbox("Enable debug log", ref debugEnabled))
+        if (ImGui.Checkbox("Enable debug capture", ref debugEnabled))
         {
             plugin.SetDebugLogEnabled(debugEnabled);
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Clear log"))
+        if (ImGui.Button("Clear debug data"))
         {
             plugin.ClearDebugLog();
         }
 
         ImGui.Separator();
+        DrawDebugStatusSnapshots();
+
+        ImGui.Separator();
+        DrawDebugLog();
+    }
+
+    private void DrawDebugStatusSnapshots()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "Latest raw status snapshots");
+        ImGui.TextDisabled("Memory-only. Respects Capture Party and Capture Others settings. Not saved to recorded pulls.");
+
+        if (!configuration.DebugLogEnabled)
+        {
+            ImGui.TextDisabled("Enable debug capture to see raw statuses.");
+            return;
+        }
+
+        var snapshots = plugin.DebugStatusSnapshots;
+        if (snapshots.Count == 0)
+        {
+            ImGui.TextDisabled("No tracked status snapshots yet. Enter an active duty with tracked characters visible.");
+            return;
+        }
+
+        foreach (var snapshot in snapshots)
+        {
+            ImGui.PushID($"DebugStatus{snapshot.MemberKey}");
+            var deadText = snapshot.IsDead ? " dead" : string.Empty;
+            var label = $"{snapshot.MemberName} ({snapshot.ClassJobName}) - {snapshot.Statuses.Count:N0} statuses{deadText}";
+            if (ImGui.TreeNode(label))
+            {
+                var shieldText = snapshot.ShieldHp > 0 ? $" + {snapshot.ShieldHp:N0} shield" : string.Empty;
+                ImGui.TextDisabled(
+                    $"Seen {snapshot.SeenAtUtc:HH:mm:ss} UTC | Pull {FormatCombatTimer(snapshot.PullElapsedSeconds)} | HP {snapshot.CurrentHp:N0}{shieldText} / {snapshot.MaxHp:N0}");
+
+                if (snapshot.Statuses.Count == 0)
+                {
+                    ImGui.TextDisabled("No raw statuses exposed for this character.");
+                }
+                else
+                {
+                    DrawDebugStatusTable(snapshot);
+                }
+
+                ImGui.TreePop();
+            }
+
+            ImGui.PopID();
+        }
+    }
+
+    private void DrawDebugStatusTable(DebugStatusSnapshot snapshot)
+    {
+        if (!ImGui.BeginTable("##DebugRawStatuses", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed, Math.Clamp(configuration.StatusIconSize, 16.0f, 32.0f) + 10.0f);
+        ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 2.0f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 0.85f);
+        ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Remaining", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+        DrawCenteredTableHeader("Icon", "ID", "Name", "Source", "Stacks", "Remaining");
+
+        foreach (var status in snapshot.Statuses
+                     .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(status => status.Id)
+                     .ThenBy(status => status.SourceId))
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            DrawCenteredGameIcon(status.IconId, Math.Clamp(configuration.StatusIconSize, 16.0f, 32.0f), FormatDebugStatusTooltip(status));
+            ImGui.TableNextColumn();
+            DrawCenteredText(status.Id.ToString());
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(status.Name);
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugStatusSource(status.SourceId));
+            ImGui.TableNextColumn();
+            DrawCenteredText(status.StackCount == 0 ? "-" : status.StackCount.ToString());
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatStatusDuration(status, true, true, "-"));
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawDebugLog()
+    {
         var entries = plugin.DebugLogEntries;
+        ImGui.TextColored(LeadUpGoldColor, "Internal capture log");
         ImGui.TextDisabled($"{entries.Count:N0} debug rows kept. The newest 500 rows are retained.");
         if (entries.Count == 0)
         {
@@ -2650,6 +2740,18 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndTable();
+    }
+
+    private static string FormatDebugStatusSource(uint sourceId)
+    {
+        return sourceId == 0
+            ? "-"
+            : $"0x{sourceId:X8}";
+    }
+
+    private static string FormatDebugStatusTooltip(StatusSnapshot status)
+    {
+        return $"{status.Name} ({status.Id})\nSource: {FormatDebugStatusSource(status.SourceId)}\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nRemaining: {FormatStatusDuration(status, true, true, "-")}";
     }
 
     private bool HasPendingDeathSelection(IReadOnlyList<PartyDeathRecord> deaths)
@@ -2726,6 +2828,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.78");
+        ImGui.TextDisabled("Improved debug capture for status troubleshooting.");
+        DrawWrappedBullet("Reworked the Debug tab to show live raw status snapshots for tracked characters, which helps verify data needed for implementing additional features.");
+        DrawWrappedBullet("Raw debug status snapshots now show status icon, ID, name, source, stacks, and remaining time.");
+        DrawWrappedBullet("Debug data is memory-only and clears when debug capture is disabled or cleared.");
+        DrawWrappedBullet("Shortened the 10-second lead-up explanation text.");
+        DrawWrappedBullet("Renamed the expired mitigation section to better describe what it shows.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.77");
         ImGui.TextDisabled("Clarified mitigation type labels.");
         DrawWrappedBullet("Mit Type entries now show tooltips explaining All, Physical, Magic, Shield, Regen, and other displayed categories.");
