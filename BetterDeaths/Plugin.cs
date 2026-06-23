@@ -69,10 +69,17 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRawActorControlPackets = 256;
     private const int MaxDebugEffectResultEvents = 1000;
     private const int MaxDebugActorControlEvents = 1000;
+    private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
+    private const uint ActorControlDeathCategory = 0x6;
+    private const uint ActorControlGainEffectCategory = 0x14;
+    private const uint ActorControlLoseEffectCategory = 0x15;
+    private const uint ActorControlUpdateEffectCategory = 0x16;
+    private const uint ActorControlDotCategory = 0x605;
+    private const uint InvalidActorEntityId = 0xE0000000;
     private const string ActorControlSignature = "E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64";
     private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
@@ -1344,16 +1351,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            if (!deadMemberKeys.Add(member.MemberKey))
-            {
-                continue;
-            }
-
-            EnsurePullStarted(now);
-            var death = CreateDeathRecord(member);
-            currentDeaths.Add(death);
-            QueueDeathRecapLink(death, now);
-            AddDebugLog($"{member.MemberName} died to {FormatCause(DeathDisplaySelector.Select(death).Events)}.");
+            TryCaptureDeath(member, now, "Framework");
         }
     }
 
@@ -1617,9 +1615,7 @@ public sealed partial class Plugin : IDalamudPlugin
         byte param9)
     {
         var now = DateTime.UtcNow;
-        if (!Configuration.DebugLogEnabled ||
-            debugCaptureFrozen ||
-            !ShouldAcceptRawCombatCapture(now))
+        if (!ShouldAcceptRawCombatCapture(now))
         {
             return;
         }
@@ -1644,9 +1640,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
     {
         var now = DateTime.UtcNow;
-        if (!Configuration.DebugLogEnabled ||
-            debugCaptureFrozen ||
-            !ShouldAcceptRawCombatCapture(now) ||
+        if (!ShouldAcceptRawCombatCapture(now) ||
             actionIntegrityData == IntPtr.Zero)
         {
             return;
@@ -1781,6 +1775,13 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return nextRawActorControlSequence++;
         }
+    }
+
+    private uint GetNextResolvedCombatEventOrdinal()
+    {
+        return nextResolvedCombatEventOrdinal > uint.MaxValue
+            ? uint.MaxValue
+            : (uint)nextResolvedCombatEventOrdinal++;
     }
 
     private void EnqueueRawActionEffectPacket(RawActionEffectPacket packet)
@@ -1962,7 +1963,9 @@ public sealed partial class Plugin : IDalamudPlugin
             var hpSource = priorHp is null
                 ? CombatEventHpSource.NoPreHitSample
                 : CombatEventHpSource.LatestPriorSample;
-            var playerStatuses = GetRelevantDeathStatuses(priorHp?.Statuses ?? member.Statuses);
+            var playerStatuses = priorHp is null
+                ? GetRelevantDeathStatuses(member.Statuses)
+                : GetRelevantDeathStatuses(member.Statuses.Concat(priorHp.Statuses));
             var eventCurrentHp = priorHp?.CurrentHp ?? 0;
             var eventShieldHp = priorHp?.ShieldHp ?? 0;
             var eventMaxHp = priorHp?.MaxHp ?? member.MaxHp;
@@ -1984,9 +1987,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     amount += effect.Param3 << 16;
                 }
 
-                var eventOrdinal = nextResolvedCombatEventOrdinal > uint.MaxValue
-                    ? uint.MaxValue
-                    : (uint)nextResolvedCombatEventOrdinal++;
+                var eventOrdinal = GetNextResolvedCombatEventOrdinal();
                 var record = new CombatEventRecord(
                     packet.SeenAtUtc,
                     CalculatePullElapsed(packet.SeenAtUtc),
@@ -2057,14 +2058,37 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
     {
+        var member = FindCurrentMemberByEffectResultPacket(packet);
+        var packetStatuses = BuildEffectResultStatusSnapshots(packet);
+        var mergedStatuses = member is null
+            ? packetStatuses
+            : DeduplicateStatusSnapshots(member.Statuses.Concat(packetStatuses));
+        var shieldHp = CalculateShieldHpFromPercent(packet.MaxHp, packet.ShieldPercent);
+
+        if (member is not null)
+        {
+            CaptureEffectResultHpSnapshot(member, packet, shieldHp, mergedStatuses);
+            if (packet.MaxHp > 0 && packet.CurrentHp == 0)
+            {
+                TryCaptureDeath(
+                    member with
+                    {
+                        CurrentHp = 0,
+                        ShieldHp = 0,
+                        MaxHp = packet.MaxHp,
+                        IsDead = true,
+                        Statuses = mergedStatuses,
+                    },
+                    packet.SeenAtUtc,
+                    "EffectResult");
+            }
+        }
+
         if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
 
-        var member = currentMembers.FirstOrDefault(member =>
-            member.EntityId != 0 &&
-            (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
         if (member is null && !Configuration.CaptureOtherDeaths)
         {
             return;
@@ -2072,20 +2096,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         var targetName = member?.MemberName ??
             GetEntityDisplayName(packet.TargetId != 0 ? packet.TargetId : packet.ActorId);
-        var shieldHp = CalculateShieldHpFromPercent(packet.MaxHp, packet.ShieldPercent);
-        var statuses = packet.Statuses
-            .Select(status => new DebugEffectResultStatus(
-                status.EffectIndex,
-                status.EffectId,
-                GetStatusName(status.EffectId),
-                GetStatusIconId(status.EffectId),
-                status.StackCount,
-                status.Duration,
-                status.SourceActorId,
-                GetStatusSourceName(status.SourceActorId)))
-            .OrderBy(status => status.EffectIndex)
-            .ThenBy(status => status.EffectId)
-            .ToList();
+        var statuses = BuildDebugEffectResultStatuses(packet);
 
         var snapshot = new DebugEffectResultSnapshot(
             packet.SeenAtUtc,
@@ -2117,14 +2128,33 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
+        var member = FindCurrentMemberByEntityId(packet.EntityId);
+        if (member is not null)
+        {
+            CaptureActorControlStatusChange(packet, member);
+            CaptureActorControlDotEvent(packet, member);
+        }
+
+        if (packet.Category == ActorControlDeathCategory && member is not null)
+        {
+            var bestKnownStatuses = GetBestKnownStatuses(member, packet.SeenAtUtc);
+            TryCaptureDeath(
+                member with
+                {
+                    CurrentHp = 0,
+                    ShieldHp = 0,
+                    IsDead = true,
+                    Statuses = bestKnownStatuses,
+                },
+                packet.SeenAtUtc,
+                "ActorControl");
+        }
+
         if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
 
-        var member = currentMembers.FirstOrDefault(member =>
-            member.EntityId != 0 &&
-            member.EntityId == packet.EntityId);
         if (member is null && !Configuration.CaptureOtherDeaths)
         {
             return;
@@ -2161,7 +2191,7 @@ public sealed partial class Plugin : IDalamudPlugin
         QueueDebugCaptureRecord("ActorControl", debugEvent);
         AddDebugLog(
             $"ActorControl {categoryName} for {entityName}: p1 {packet.Param1}, p2 {packet.Param2}, target {FormatDebugActorControlTarget(packet.TargetId)}.");
-        if (debugFreezeOnDeathEnabled && packet.Category == 0x6)
+        if (debugFreezeOnDeathEnabled && packet.Category == ActorControlDeathCategory)
         {
             SetDebugCaptureFrozen(true);
         }
@@ -2183,6 +2213,20 @@ public sealed partial class Plugin : IDalamudPlugin
             string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
     }
 
+    private PartyMemberSnapshot? FindCurrentMemberByEntityId(uint entityId)
+    {
+        return entityId == 0
+            ? null
+            : currentMembers.FirstOrDefault(member => member.EntityId != 0 && member.EntityId == entityId);
+    }
+
+    private PartyMemberSnapshot? FindCurrentMemberByEffectResultPacket(RawEffectResultPacket packet)
+    {
+        return currentMembers.FirstOrDefault(member =>
+            member.EntityId != 0 &&
+            (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
+    }
+
     private HpHistorySnapshot? GetLatestPriorHpSnapshot(string memberKey, DateTime seenAtUtc, TimeSpan maxAge)
     {
         if (!recentHpHistoryByMember.TryGetValue(memberKey, out var history))
@@ -2196,6 +2240,190 @@ public sealed partial class Plugin : IDalamudPlugin
             .Where(snapshot => snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0)
             .OrderBy(snapshot => snapshot.SeenAtUtc)
             .LastOrDefault();
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetBestKnownStatuses(PartyMemberSnapshot member, DateTime seenAtUtc)
+    {
+        var priorHp = GetLatestPriorHpSnapshot(member.MemberKey, seenAtUtc, TimeSpan.FromMilliseconds(1500));
+        return priorHp is null
+            ? member.Statuses
+            : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+    }
+
+    private void CaptureActorControlDotEvent(RawActorControlPacket packet, PartyMemberSnapshot member)
+    {
+        if (packet.Category != ActorControlDotCategory ||
+            packet.Param2 == 0)
+        {
+            return;
+        }
+
+        var priorHp = GetLatestPriorHpSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
+        var hpSource = priorHp is null
+            ? CombatEventHpSource.NoPreHitSample
+            : CombatEventHpSource.LatestPriorSample;
+        var sourceEntityId = NormalizeActorEntityId(packet.Param3);
+        if (sourceEntityId == member.EntityId)
+        {
+            sourceEntityId = 0;
+        }
+
+        var sourceName = sourceEntityId == 0
+            ? "Damage over time"
+            : GetEntityDisplayName(sourceEntityId);
+        var sourceStatuses = sourceEntityId == 0
+            ? []
+            : GetBossMitigationStatuses(BuildSourceStatusSnapshots(sourceEntityId));
+        var statusSource = priorHp is null
+            ? GetBestKnownStatuses(member, packet.SeenAtUtc)
+            : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+        var eventOrdinal = GetNextResolvedCombatEventOrdinal();
+        var record = new CombatEventRecord(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            member.MemberKey,
+            member.MemberName,
+            member.PartyIndex,
+            sourceEntityId,
+            sourceName,
+            ActorControlDotCategory,
+            "DoT tick",
+            0,
+            DeathEventKind.Damage,
+            packet.Param2,
+            priorHp?.CurrentHp ?? 0,
+            priorHp?.ShieldHp ?? 0,
+            priorHp?.MaxHp ?? member.MaxHp,
+            DamageType.Unknown,
+            false,
+            false,
+            false,
+            false,
+            "Periodic damage tick.",
+            GetRelevantDeathStatuses(statusSource),
+            sourceStatuses)
+        {
+            EventIdentity = $"actor:{packet.Sequence}:dot:{member.MemberKey}:{packet.Param2}",
+            EventOrdinal = eventOrdinal,
+            HpSource = hpSource,
+        };
+        AddRecentEvent(record);
+        QueueDebugCaptureRecord("ActionEffect", CreateDebugActionEffectRecord(record));
+    }
+
+    private void CaptureActorControlStatusChange(RawActorControlPacket packet, PartyMemberSnapshot member)
+    {
+        if (!TryCreateActorControlStatusSnapshot(packet, member, out var status))
+        {
+            return;
+        }
+
+        if (!IsRelevantDeathStatus(status) && !IsTrackedStatusDeathCandidate(status))
+        {
+            return;
+        }
+
+        var statusesForSnapshot = packet.Category == ActorControlLoseEffectCategory
+            ? DeduplicateStatusSnapshots(member.Statuses.Where(existing => !StatusMatchesPacketStatus(existing, status)))
+            : DeduplicateStatusSnapshots(member.Statuses
+                .Where(existing => existing.Id != status.Id || existing.SourceId != status.SourceId)
+                .Append(status));
+
+        AddRecentStatusObservation(
+            member.MemberKey,
+            packet.SeenAtUtc,
+            status,
+            member.CurrentHp,
+            member.ShieldHp,
+            member.MaxHp,
+            statusesForSnapshot);
+
+        if (member.IsDead || member.MaxHp == 0 ||
+            pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
+        {
+            return;
+        }
+
+        AddRecentHpHistorySnapshot(
+            member.MemberKey,
+            new HpHistorySnapshot(
+                packet.SeenAtUtc,
+                CalculatePullElapsed(packet.SeenAtUtc),
+                member.CurrentHp,
+                member.ShieldHp,
+                member.MaxHp,
+                GetRelevantDeathStatuses(statusesForSnapshot)));
+    }
+
+    private bool TryCreateActorControlStatusSnapshot(
+        RawActorControlPacket packet,
+        PartyMemberSnapshot member,
+        out StatusSnapshot status)
+    {
+        var statusId = packet.Category switch
+        {
+            ActorControlGainEffectCategory => packet.Param1,
+            ActorControlLoseEffectCategory => packet.Param1,
+            ActorControlUpdateEffectCategory => packet.Param2,
+            _ => 0u,
+        };
+        if (statusId == 0 || statusId > ushort.MaxValue)
+        {
+            status = default!;
+            return false;
+        }
+
+        var sourceId = packet.Category == ActorControlUpdateEffectCategory
+            ? FindStatusSourceId(member.Statuses, statusId)
+            : NormalizeActorEntityId(packet.Param3);
+        var stackCount = packet.Category == ActorControlUpdateEffectCategory
+            ? ClampStatusStackCount(packet.Param3)
+            : ClampStatusStackCount(packet.Param2);
+        var remainingTime = packet.Category == ActorControlLoseEffectCategory
+            ? 0.0f
+            : FindStatusRemainingTime(member.Statuses, statusId, sourceId);
+        status = new StatusSnapshot(
+            statusId,
+            GetStatusName(statusId),
+            GetStatusIconId(statusId),
+            sourceId,
+            stackCount,
+            remainingTime);
+        return true;
+    }
+
+    private static uint NormalizeActorEntityId(uint entityId)
+    {
+        return entityId is 0 or InvalidActorEntityId or uint.MaxValue ? 0 : entityId;
+    }
+
+    private static bool StatusMatchesPacketStatus(StatusSnapshot existing, StatusSnapshot packetStatus)
+    {
+        return existing.Id == packetStatus.Id &&
+            (packetStatus.SourceId == 0 || existing.SourceId == packetStatus.SourceId);
+    }
+
+    private static ushort ClampStatusStackCount(uint value)
+    {
+        return value > ushort.MaxValue ? ushort.MaxValue : (ushort)value;
+    }
+
+    private static uint FindStatusSourceId(IEnumerable<StatusSnapshot> statuses, uint statusId)
+    {
+        return statuses
+            .Where(status => status.Id == statusId)
+            .Select(status => status.SourceId)
+            .FirstOrDefault();
+    }
+
+    private static float FindStatusRemainingTime(IEnumerable<StatusSnapshot> statuses, uint statusId, uint sourceId)
+    {
+        var status = statuses
+            .Where(status => status.Id == statusId)
+            .OrderByDescending(status => status.SourceId == sourceId)
+            .ThenBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
+            .FirstOrDefault();
+        return status?.RemainingTime ?? 0.0f;
     }
 
     private static string GetEntityDisplayName(uint entityId)
@@ -2358,31 +2586,57 @@ public sealed partial class Plugin : IDalamudPlugin
         return false;
     }
 
-    private PartyDeathRecord CreateDeathRecord(PartyMemberSnapshot member)
+    private bool TryCaptureDeath(PartyMemberSnapshot member, DateTime deathSeenAtUtc, string signalSource)
     {
-        var now = DateTime.UtcNow;
+        if (pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
+        {
+            return false;
+        }
+
+        if (postResetSuppressedDeadMemberKeys.Contains(member.MemberKey))
+        {
+            deadMemberKeys.Add(member.MemberKey);
+            return false;
+        }
+
+        if (!deadMemberKeys.Add(member.MemberKey))
+        {
+            return false;
+        }
+
+        EnsurePullStarted(deathSeenAtUtc);
+        var death = CreateDeathRecord(member, deathSeenAtUtc);
+        currentDeaths.Add(death);
+        QueueDeathRecapLink(death, DateTime.UtcNow);
+        AddDebugLog($"{member.MemberName} died to {FormatCause(DeathDisplaySelector.Select(death).Events)} via {signalSource}.");
+        return true;
+    }
+
+    private PartyDeathRecord CreateDeathRecord(PartyMemberSnapshot member, DateTime deathSeenAtUtc)
+    {
         var events = GetRecentEvents(member.MemberKey, Math.Max(Configuration.RecentEventSeconds, BetterDeathsLeadUpCaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, BetterDeathsLeadUpCaptureSeconds);
-        var fatalSequence = CreateFatalSequence(member.MemberKey, now, events, hpHistory);
-        var causeCutoff = now - TimeSpan.FromSeconds(Configuration.DeathCauseSeconds);
+        var fatalSequence = CreateFatalSequence(member.MemberKey, deathSeenAtUtc, events, hpHistory);
+        var causeCutoff = deathSeenAtUtc - TimeSpan.FromSeconds(Configuration.DeathCauseSeconds);
         var sequenceCause = fatalSequence is not null
             ? GetPrimaryFatalSequenceEvent(fatalSequence)
             : null;
         var fallbackEventCause = events
             .Where(combatEvent => combatEvent.SeenAtUtc >= causeCutoff)
+            .Where(combatEvent => combatEvent.SeenAtUtc <= deathSeenAtUtc + FatalSequenceEndBuffer)
             .Where(IsLikelyDeathCauseEvent)
             .OrderByDescending(combatEvent => combatEvent.SeenAtUtc)
             .ThenByDescending(combatEvent => combatEvent.Kind == DeathEventKind.Damage)
             .FirstOrDefault();
         var eventCause = sequenceCause ?? fallbackEventCause;
-        var statusCause = CreateStatusDeathCause(member, now);
+        var statusCause = CreateStatusDeathCause(member, deathSeenAtUtc);
         var cause = ShouldPreferStatusCause(statusCause, eventCause)
             ? statusCause
             : eventCause ?? statusCause;
 
         return new PartyDeathRecord(
-            now,
-            CurrentPullElapsedSeconds,
+            deathSeenAtUtc,
+            CalculatePullElapsed(deathSeenAtUtc),
             member.MemberKey,
             member.MemberName,
             member.PartyIndex,
@@ -2549,31 +2803,13 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         foreach (var member in members)
         {
-            List<StatusObservation>? observations = null;
-            foreach (var status in member.Statuses)
-            {
-                if (!IsTrackedStatusDeathCandidate(status))
-                {
-                    continue;
-                }
-
-                if (observations is null &&
-                    !recentStatusesByMember.TryGetValue(member.MemberKey, out observations))
-                {
-                    observations = [];
-                    recentStatusesByMember[member.MemberKey] = observations;
-                }
-
-                observations.RemoveAll(entry => entry.Status.Id == status.Id);
-                observations.Add(new StatusObservation(
-                    now,
-                    CurrentPullElapsedSeconds,
-                    status,
-                    member.CurrentHp,
-                    member.ShieldHp,
-                    member.MaxHp,
-                    member.Statuses.ToList()));
-            }
+            TrackRecentStatusObservations(
+                member.MemberKey,
+                now,
+                member.Statuses,
+                member.CurrentHp,
+                member.ShieldHp,
+                member.MaxHp);
         }
     }
 
@@ -2592,21 +2828,122 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            if (!recentHpHistoryByMember.TryGetValue(member.MemberKey, out var history))
+            AddRecentHpHistorySnapshot(
+                member.MemberKey,
+                new HpHistorySnapshot(
+                    now,
+                    CurrentPullElapsedSeconds,
+                    member.CurrentHp,
+                    member.ShieldHp,
+                    member.MaxHp,
+                    GetRelevantDeathStatuses(member.Statuses)));
+        }
+    }
+
+    private void CaptureEffectResultHpSnapshot(
+        PartyMemberSnapshot member,
+        RawEffectResultPacket packet,
+        uint shieldHp,
+        IReadOnlyList<StatusSnapshot> mergedStatuses)
+    {
+        if (packet.MaxHp == 0 ||
+            pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
+        {
+            return;
+        }
+
+        TrackRecentStatusObservations(
+            member.MemberKey,
+            packet.SeenAtUtc,
+            mergedStatuses,
+            packet.CurrentHp,
+            shieldHp,
+            packet.MaxHp);
+
+        if (packet.CurrentHp == 0 && shieldHp == 0)
+        {
+            return;
+        }
+
+        AddRecentHpHistorySnapshot(
+            member.MemberKey,
+            new HpHistorySnapshot(
+                packet.SeenAtUtc,
+                CalculatePullElapsed(packet.SeenAtUtc),
+                packet.CurrentHp,
+                shieldHp,
+                packet.MaxHp,
+                GetRelevantDeathStatuses(mergedStatuses)));
+    }
+
+    private void TrackRecentStatusObservations(
+        string memberKey,
+        DateTime seenAtUtc,
+        IEnumerable<StatusSnapshot> statuses,
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp)
+    {
+        var statusList = statuses.ToList();
+        foreach (var status in statusList)
+        {
+            if (!IsTrackedStatusDeathCandidate(status))
             {
-                history = [];
-                recentHpHistoryByMember[member.MemberKey] = history;
+                continue;
             }
 
-            history.Add(new HpHistorySnapshot(
-                now,
-                CurrentPullElapsedSeconds,
-                member.CurrentHp,
-                member.ShieldHp,
-                member.MaxHp,
-                GetRelevantDeathStatuses(member.Statuses)));
-            lastHpHistorySampleByMember[member.MemberKey] = now;
+            AddRecentStatusObservation(
+                memberKey,
+                seenAtUtc,
+                status,
+                currentHp,
+                shieldHp,
+                maxHp,
+                statusList);
         }
+    }
+
+    private void AddRecentStatusObservation(
+        string memberKey,
+        DateTime seenAtUtc,
+        StatusSnapshot status,
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp,
+        IReadOnlyList<StatusSnapshot> statuses)
+    {
+        if (!recentStatusesByMember.TryGetValue(memberKey, out var observations))
+        {
+            observations = [];
+            recentStatusesByMember[memberKey] = observations;
+        }
+
+        observations.RemoveAll(entry => entry.Status.Id == status.Id);
+        observations.Add(new StatusObservation(
+            seenAtUtc,
+            CalculatePullElapsed(seenAtUtc),
+            status,
+            currentHp,
+            shieldHp,
+            maxHp,
+            statuses));
+    }
+
+    private void AddRecentHpHistorySnapshot(string memberKey, HpHistorySnapshot snapshot)
+    {
+        if (!recentHpHistoryByMember.TryGetValue(memberKey, out var history))
+        {
+            history = [];
+            recentHpHistoryByMember[memberKey] = history;
+        }
+
+        history.Add(snapshot);
+        while (history.Count > MaxRecentHpHistoryPerMember)
+        {
+            history.RemoveAt(0);
+        }
+
+        lastHpHistorySampleByMember[memberKey] = snapshot.SeenAtUtc;
     }
 
     private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
@@ -2665,6 +3002,36 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         return merged.Values.ToList();
+    }
+
+    private IReadOnlyList<StatusSnapshot> BuildEffectResultStatusSnapshots(RawEffectResultPacket packet)
+    {
+        return DeduplicateStatusSnapshots(packet.Statuses
+            .Where(status => status.EffectId != 0)
+            .Select(status => new StatusSnapshot(
+                status.EffectId,
+                GetStatusName(status.EffectId),
+                GetStatusIconId(status.EffectId),
+                status.SourceActorId,
+                status.StackCount,
+                status.Duration)));
+    }
+
+    private IReadOnlyList<DebugEffectResultStatus> BuildDebugEffectResultStatuses(RawEffectResultPacket packet)
+    {
+        return packet.Statuses
+            .Select(status => new DebugEffectResultStatus(
+                status.EffectIndex,
+                status.EffectId,
+                GetStatusName(status.EffectId),
+                GetStatusIconId(status.EffectId),
+                status.StackCount,
+                status.Duration,
+                status.SourceActorId,
+                GetStatusSourceName(status.SourceActorId)))
+            .OrderBy(status => status.EffectIndex)
+            .ThenBy(status => status.EffectId)
+            .ToList();
     }
 
     private static string BuildDebugStatusPersistSignature(DebugStatusSnapshot snapshot)
@@ -3537,7 +3904,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static IReadOnlyList<StatusSnapshot> GetRelevantDeathStatuses(IEnumerable<StatusSnapshot> statuses)
     {
-        return PipeDeduplicateStatusSnapshots(statuses
+        return DeduplicateStatusSnapshots(statuses
                 .Where(IsRelevantDeathStatus))
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
@@ -3561,11 +3928,16 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static IReadOnlyList<StatusSnapshot> GetBossMitigationStatuses(IEnumerable<StatusSnapshot> statuses)
     {
-        return PipeDeduplicateStatusSnapshots(statuses
+        return DeduplicateStatusSnapshots(statuses
                 .Where(IsBossMitigationStatus))
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
             .ToList();
+    }
+
+    private static IReadOnlyList<StatusSnapshot> DeduplicateStatusSnapshots(IEnumerable<StatusSnapshot> statuses)
+    {
+        return PipeDeduplicateStatusSnapshots(statuses).ToList();
     }
 
     private static IEnumerable<StatusSnapshot> PipeDeduplicateStatusSnapshots(IEnumerable<StatusSnapshot> statuses)

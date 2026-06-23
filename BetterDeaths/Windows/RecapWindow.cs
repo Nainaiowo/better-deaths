@@ -42,7 +42,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.89";
+    private const string CurrentChangelogVersion = "0.1.0.90";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3407,6 +3407,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.90");
+        ImGui.TextDisabled("Reworked live combat capture for more accurate death review.");
+        DrawBreathingGoldBullet("Reworked death capture to use hook-based live combat data instead of relying mostly on periodic FFXIV HP/status snapshots.");
+        DrawWrappedBullet("10-second lead-up history now receives packet-timed HP, shield, and status updates when the game exposes them.");
+        DrawWrappedBullet("Death confirmation now uses live combat events to anchor KO timing sooner and more consistently.");
+        DrawWrappedBullet("DoT tick damage can now appear as a captured death event when it is the relevant hit.");
+        DrawWrappedBullet("Player mitigation and debuff context now merges nearby live combat data with existing snapshots for better pre-hit review.");
+        DrawWrappedBullet("Likely wall/non-hit KO fallback is cleaner when a death is confirmed but no lethal hit is captured.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.89");
         ImGui.TextDisabled("Debug updates for future release testing.");
         DrawWrappedBullet("Updated Debug for future release testing.");
