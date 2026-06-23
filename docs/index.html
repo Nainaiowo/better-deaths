@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Better Deaths - FFXIV Dalamud Death Recap Plugin</title>
+  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, mitigation review, pull history, HP plus shields, and recent combat timeline analysis.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
+  <link rel="icon" href="assets/icon.png" type="image/png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
+  <meta property="og:description" content="Review raid deaths with likely causes, HP plus shields, mitigations, boss damage-downs, and a 10 second combat lead-up.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
+  <meta name="twitter:description" content="A Dalamud plugin for clearer FFXIV raid death review.">
+  <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Better Deaths",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows",
+    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, mitigation review, pull history, HP plus shields, and recent combat timeline analysis.",
+    "softwareRequirements": "Dalamud",
+    "url": "https://nainaiowo.github.io/better-deaths/",
+    "codeRepository": "https://github.com/Nainaiowo/better-deaths",
+    "author": {
+      "@type": "Person",
+      "name": "Nainaiowo"
+    }
+  }
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101014;
+      --panel: #17181d;
+      --panel-2: #202127;
+      --text: #f4f1ea;
+      --muted: #b8b2a5;
+      --gold: #f2c14e;
+      --green: #64d98a;
+      --red: #ff684f;
+      --blue: #77b7ff;
+      --line: rgba(255, 255, 255, 0.14);
+      --shadow: rgba(0, 0, 0, 0.45);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.18em;
+    }
+
+    a:hover {
+      color: #ffe08b;
+    }
+
+    .hero {
+      min-height: 92vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(16, 16, 20, 0.96) 0%, rgba(16, 16, 20, 0.78) 46%, rgba(16, 16, 20, 0.46) 100%),
+        url("assets/death-timeline.png") center right / cover no-repeat;
+      z-index: -2;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 32vh;
+      background: linear-gradient(180deg, rgba(16, 16, 20, 0) 0%, var(--bg) 95%);
+      z-index: -1;
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .hero-content {
+      max-width: 720px;
+      padding: 72px 0 120px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .brand-row img {
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .eyebrow {
+      color: var(--gold);
+      font-weight: 700;
+      letter-spacing: 0;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(3rem, 10vw, 6.5rem);
+      line-height: 0.95;
+      margin: 0 0 24px;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      font-size: clamp(1.08rem, 2.2vw, 1.45rem);
+      color: var(--muted);
+      max-width: 680px;
+      margin: 0 0 30px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+    }
+
+    .button.primary {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #1b1608;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    main {
+      padding: 52px 0 72px;
+    }
+
+    section {
+      padding: 42px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    section:last-child {
+      border-bottom: 0;
+    }
+
+    h2 {
+      font-size: clamp(1.75rem, 4vw, 2.75rem);
+      line-height: 1.08;
+      margin: 0 0 16px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 1.1rem;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 16px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 26px;
+    }
+
+    .feature {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .feature p {
+      color: var(--muted);
+      margin-bottom: 0;
+    }
+
+    .screens {
+      display: grid;
+      gap: 28px;
+    }
+
+    .screenshot {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 22px 48px rgba(0, 0, 0, 0.28);
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--panel-2);
+    }
+
+    .screenshot figcaption {
+      padding: 14px 16px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+
+    .install-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 20px;
+    }
+
+    code {
+      color: var(--green);
+      background: rgba(100, 217, 138, 0.09);
+      border: 1px solid rgba(100, 217, 138, 0.2);
+      padding: 3px 6px;
+      border-radius: 5px;
+      word-break: break-word;
+    }
+
+    .repo-url {
+      display: block;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .note {
+      border-left: 3px solid var(--gold);
+      padding: 12px 0 12px 16px;
+      color: var(--muted);
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 0.93rem;
+    }
+
+    .tag strong {
+      color: var(--text);
+    }
+
+    footer {
+      color: var(--muted);
+      padding: 30px 0 44px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 820px) {
+      .hero {
+        min-height: 84vh;
+      }
+
+      .hero::before {
+        background:
+          linear-gradient(180deg, rgba(16, 16, 20, 0.95) 0%, rgba(16, 16, 20, 0.76) 58%, rgba(16, 16, 20, 0.58) 100%),
+          url("assets/death-timeline.png") center / cover no-repeat;
+      }
+
+      .hero-content {
+        padding: 56px 0 96px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .install-box {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <div class="hero-content">
+        <div class="brand-row">
+          <img src="assets/icon.png" alt="Better Deaths plugin icon">
+          <p class="eyebrow">FFXIV Dalamud plugin</p>
+        </div>
+        <h1>Better Deaths</h1>
+        <p class="lead">A raid-focused death recap tool for reviewing likely causes, HP plus shields, mitigation coverage, boss-targeted damage-downs, and the 10 second lead-up before each KO.</p>
+        <div class="actions">
+          <a class="button primary" href="#install">Install with Dalamud</a>
+          <a class="button" href="https://github.com/Nainaiowo/better-deaths">View GitHub Repo</a>
+        </div>
+        <div class="status-row" aria-label="Project details">
+          <span class="tag"><strong>Duty-only</strong> recap capture</span>
+          <span class="tag"><strong>Saved</strong> pull history</span>
+          <span class="tag"><strong>Testing</strong> and stable builds</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="wrap" id="features">
+      <h2>Death review built for raid progression</h2>
+      <p class="muted">Better Deaths keeps deaths grouped by pull and puts the useful review data in one place, so a wipe can be checked without digging through scattered combat text.</p>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Likely Cause And Hit Details</h3>
+          <p>See the selected hit or event, source, amount, flags, overkill, and HP plus shields before the likely lethal damage.</p>
+        </article>
+        <article class="feature">
+          <h3>Mitigation Context</h3>
+          <p>Review player mitigations, shields, encounter debuffs, and boss-targeted mitigations such as Reprisal, Addle, and Feint.</p>
+        </article>
+        <article class="feature">
+          <h3>10 Second Lead-Up</h3>
+          <p>Inspect recent HP samples and captured combat events leading into a death, including relevant status icons at each point.</p>
+        </article>
+        <article class="feature">
+          <h3>Pull History</h3>
+          <p>Keep recorded pull groups after wipes, recommences, territory changes, and plugin reloads for later review.</p>
+        </article>
+        <article class="feature">
+          <h3>Current Pull Widget</h3>
+          <p>Keep a compact current-pull view open during progression with the death time, player, cause, overkill, and mitigation icons.</p>
+        </article>
+        <article class="feature">
+          <h3>Shareable Recap Links</h3>
+          <p>Post concise recap information to chat and generate clickable recap links for party members who also use Better Deaths.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap" id="screenshots">
+      <h2>What it looks like</h2>
+      <div class="screens">
+        <figure class="screenshot">
+          <img src="assets/death-timeline.png" alt="Better Deaths death timeline showing ordered party deaths and likely causes">
+          <figcaption>Death timeline with ordered player deaths, jobs, timers, and likely causes.</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/player-death-information.png" alt="Better Deaths player death information with HP plus shields and captured mitigations">
+          <figcaption>Player death information with HP plus shields, captured hits, active mitigations, and debuffs.</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/lead-up-history.png" alt="Better Deaths 10 second lead-up table with HP history and combat events">
+          <figcaption>10 second lead-up history with HP samples, captured events, and mitigation/debuff icons.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="wrap" id="install">
+      <h2>Install Better Deaths</h2>
+      <p class="muted">Add the custom plugin repository in Dalamud, then install <strong>Better Deaths</strong> from the plugin installer.</p>
+      <div class="install-box">
+        <code class="repo-url">https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json</code>
+        <a class="button primary" href="https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json">Open Repo JSON</a>
+      </div>
+      <p class="note">Better Deaths only functions in duties. It does not capture overworld combat or PvP recaps.</p>
+    </section>
+
+    <section class="wrap" id="commands">
+      <h2>Commands</h2>
+      <p><code>/betterdeaths</code> <code>/bd</code> <code>/betterdeathswidget</code> <code>/bdwidget</code></p>
+      <p class="muted">Use these commands to open the main death recap window or toggle the current pull widget.</p>
+    </section>
+
+    <section class="wrap" id="links">
+      <h2>Project links</h2>
+      <p><a href="https://github.com/Nainaiowo/better-deaths">GitHub repository</a></p>
+      <p><a href="https://github.com/Nainaiowo/better-deaths/issues">Feedback and issue reports</a></p>
+      <p><a href="https://github.com/Nainaiowo/IMakeSillyThings">Dalamud repository group</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Better Deaths is an unofficial Dalamud plugin for FFXIV raid review.</p>
+    </div>
+  </footer>
+</body>
+</html>

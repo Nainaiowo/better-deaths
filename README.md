@@ -2,6 +2,8 @@
 
 Better Deaths is a Dalamud plugin for reviewing party deaths with pull-level context.
 
+Website: https://nainaiowo.github.io/better-deaths/
+
 It records and keeps:
 
 - party-wide death order by pull
