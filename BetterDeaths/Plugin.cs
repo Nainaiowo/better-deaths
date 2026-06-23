@@ -81,7 +81,7 @@ public sealed partial class Plugin : IDalamudPlugin
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.\s+HP before hit unavailable\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
@@ -512,7 +512,7 @@ public sealed partial class Plugin : IDalamudPlugin
         if (causeEvents.Count == 0)
         {
             RememberOwnSharedDeathPost(death);
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: likely walled/non-hit KO. HP before hit unavailable.");
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: likely walled/non-hit KO.");
             QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
             QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
             return;
