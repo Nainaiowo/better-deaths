@@ -135,6 +135,37 @@ public sealed partial class Plugin : IDalamudPlugin
         string Kind,
         JsonElement Data);
 
+    private sealed record DebugActionEffectRecord(
+        DateTime SeenAtUtc,
+        float PullElapsedSeconds,
+        string MemberKey,
+        string MemberName,
+        int PartyIndex,
+        uint SourceEntityId,
+        string SourceName,
+        uint ActionId,
+        string ActionName,
+        uint ActionIconId,
+        string Kind,
+        int KindId,
+        uint Amount,
+        uint CurrentHp,
+        uint ShieldHp,
+        uint MaxHp,
+        string DamageType,
+        int DamageTypeId,
+        bool Critical,
+        bool DirectHit,
+        bool Blocked,
+        bool Parried,
+        string Detail,
+        string? EventIdentity,
+        uint EventOrdinal,
+        string HpSource,
+        int HpSourceId,
+        IReadOnlyList<StatusSnapshot> Statuses,
+        IReadOnlyList<StatusSnapshot> SourceStatuses);
+
     private sealed record RawActionEffectPacket(
         long Sequence,
         DateTime SeenAtUtc,
@@ -1986,6 +2017,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     HpSource = hpSource,
                 };
                 AddRecentEvent(record);
+                QueueDebugCaptureRecord("ActionEffect", CreateDebugActionEffectRecord(record));
             }
         }
 
@@ -2649,6 +2681,40 @@ public sealed partial class Plugin : IDalamudPlugin
                     .OrderBy(status => status.Id)
                     .ThenBy(status => status.SourceId)
                     .Select(status => $"{status.Id}:{status.SourceId}:{status.StackCount}")));
+    }
+
+    private static DebugActionEffectRecord CreateDebugActionEffectRecord(CombatEventRecord record)
+    {
+        return new DebugActionEffectRecord(
+            record.SeenAtUtc,
+            record.PullElapsedSeconds,
+            record.MemberKey,
+            record.MemberName,
+            record.PartyIndex,
+            record.SourceEntityId,
+            record.SourceName,
+            record.ActionId,
+            record.ActionName,
+            record.ActionIconId,
+            record.Kind.ToString(),
+            (int)record.Kind,
+            record.Amount,
+            record.CurrentHp,
+            record.ShieldHp,
+            record.MaxHp,
+            record.DamageType.ToString(),
+            (int)record.DamageType,
+            record.Critical,
+            record.DirectHit,
+            record.Blocked,
+            record.Parried,
+            record.Detail,
+            record.EventIdentity,
+            record.EventOrdinal,
+            record.HpSource.ToString(),
+            (int)record.HpSource,
+            record.Statuses,
+            record.SourceStatuses);
     }
 
     private IReadOnlyList<HpHistorySnapshot> GetRecentHpHistory(string memberKey, int seconds)
