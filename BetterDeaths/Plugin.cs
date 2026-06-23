@@ -4830,8 +4830,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel)
     {
-        var label = Configuration.RemoveChatBranding ? "[ Open recap ]" : "[ Open Better Deaths recap ]";
-        PrintDeathRecapLink(death, batchLabel, label);
+        PrintDeathRecapLink(death, batchLabel, "[ Open Recap ]");
     }
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel, string label)
@@ -4844,7 +4843,7 @@ public sealed partial class Plugin : IDalamudPlugin
         QueueDeathRecapLinkMessage(
             death,
             death.MemberName,
-            Configuration.RemoveChatBranding ? "[ Open recap ]" : "[ Open Better Deaths recap ]",
+            "[ Open Recap ]",
             DateTime.MinValue);
     }
 
