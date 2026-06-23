@@ -105,6 +105,9 @@ public sealed partial class Plugin : IDalamudPlugin
         WriteIndented = false,
         PropertyNameCaseInsensitive = true,
     };
+    private static readonly Regex SharedDamageDeathPostRegex = new(
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\.(?:\s+HP before hit:\s+.+?\.)?(?:\s+Overkill:\s+(?:[\d,]+|-)\.)?$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedKnownDeathPostRegex = new(
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+from\s+(?<action>.+?)\s+by\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -115,7 +118,7 @@ public sealed partial class Plugin : IDalamudPlugin
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.(?:\s+HP before KO:\s+.+\.)?$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:likely walled/)?non-hit KO\.(?:\s+HP before KO:\s+.+\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
@@ -882,7 +885,7 @@ public sealed partial class Plugin : IDalamudPlugin
             var hpSuffix = selection.Snapshot is null
                 ? string.Empty
                 : $" HP before KO: {FormatEffectiveHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: likely walled/non-hit KO.{hpSuffix}");
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: non-hit KO.{hpSuffix}");
             QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
             QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
             return;
@@ -892,9 +895,9 @@ public sealed partial class Plugin : IDalamudPlugin
         var damageEvents = causeEvents
             .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
             .ToList();
-        if (damageEvents.Count > 1)
+        if (damageEvents.Count > 0)
         {
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatMultiHitLine(damageEvents, selection.Snapshot)}");
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatDamageLine(damageEvents, selection.Snapshot)}");
         }
         else
         {
@@ -919,7 +922,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static string FormatDeathStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
     {
         var groups = new List<string>();
-        var defenses = GetRelevantDeathStatuses(GetPrimaryDisplayStatusSnapshot(death, selection))
+        var defenses = GetPrimaryDisplayPlayerStatuses(death, selection)
             .Where(IsDefensiveStatus)
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
@@ -936,7 +939,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static string FormatPlayerDebuffStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
     {
-        var debuffs = GetRelevantDeathStatuses(GetPrimaryDisplayStatusSnapshot(death, selection))
+        var debuffs = GetPrimaryDisplayPlayerStatuses(death, selection)
             .Where(IsPlayerDebuffStatus)
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
@@ -950,6 +953,13 @@ public sealed partial class Plugin : IDalamudPlugin
         return selection.Snapshot?.Statuses ??
             GetPrimaryDisplayCauseEvent(selection.Events)?.Statuses ??
             death.StatusesAtDeath;
+    }
+
+    private static IReadOnlyList<StatusSnapshot> GetPrimaryDisplayPlayerStatuses(PartyDeathRecord death, DeathDisplaySelection selection)
+    {
+        return GetRelevantDeathStatuses(
+            GetPrimaryDisplayStatusSnapshot(death, selection)
+                .Concat(selection.Events.SelectMany(combatEvent => combatEvent.Statuses)));
     }
 
     private static IReadOnlyList<string> FormatBossMitigationGroups(DeathDisplaySelection selection)
@@ -4380,39 +4390,52 @@ public sealed partial class Plugin : IDalamudPlugin
             : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}.{hpSuffix}";
     }
 
-    private static string FormatDeathChatMultiHitLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
+    private static string FormatDeathChatDamageLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
     {
-        var hpText = FormatDeathChatHp(snapshot, damageEvents[0]);
-        var hpSuffix = hpText is null
+        var hpDisplay = GetDeathChatHpDisplay(snapshot, damageEvents[0]);
+        var hpSuffix = hpDisplay.Text is null
             ? string.Empty
-            : $" HP before hit: {hpText}.";
+            : $" HP before hit: {hpDisplay.Text}.";
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
-        var sourceName = GetSharedDamageSourceName(damageEvents);
-        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}.{hpSuffix}";
+        return $"{totalDamage:N0} damage.{hpSuffix} Overkill: {FormatDeathChatOverkill(totalDamage, hpDisplay.EffectiveHp)}.";
     }
 
     private static string? FormatDeathChatHp(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
     {
-        if (snapshot is not null)
-        {
-            return FormatEffectiveHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp);
-        }
-
-        return fallbackEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
-            fallbackEvent.MaxHp > 0 &&
-            (fallbackEvent.CurrentHp > 0 || fallbackEvent.ShieldHp > 0)
-            ? FormatEffectiveHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp)
-            : null;
+        return GetDeathChatHpDisplay(snapshot, fallbackEvent).Text;
     }
 
-    private static string GetSharedDamageSourceName(IReadOnlyList<CombatEventRecord> damageEvents)
+    private static DeathChatHpDisplay GetDeathChatHpDisplay(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
     {
-        var sourceNames = damageEvents
-            .Select(cause => cause.SourceName)
-            .Where(sourceName => !string.IsNullOrWhiteSpace(sourceName))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        return sourceNames.Count == 1 ? sourceNames[0] : "multiple targets";
+        if (snapshot is not null)
+        {
+            return new DeathChatHpDisplay(
+                FormatEffectiveHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp),
+                snapshot.CurrentHp + (ulong)snapshot.ShieldHp);
+        }
+
+        if (fallbackEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
+            fallbackEvent.MaxHp > 0 &&
+            (fallbackEvent.CurrentHp > 0 || fallbackEvent.ShieldHp > 0))
+        {
+            return new DeathChatHpDisplay(
+                FormatEffectiveHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp),
+                fallbackEvent.CurrentHp + (ulong)fallbackEvent.ShieldHp);
+        }
+
+        return new DeathChatHpDisplay(null, null);
+    }
+
+    private static string FormatDeathChatOverkill(ulong incomingDamage, ulong? effectiveHp)
+    {
+        if (effectiveHp is null)
+        {
+            return "-";
+        }
+
+        return incomingDamage > effectiveHp.Value
+            ? $"{incomingDamage - effectiveHp.Value:N0}"
+            : "0";
     }
 
     private static string FormatHp(uint currentHp, uint shieldHp, uint maxHp)
@@ -4531,6 +4554,14 @@ public sealed partial class Plugin : IDalamudPlugin
                 damageEvents.All(cause => string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
         }
 
+        if (post.ActionName is null && post.SourceName is null)
+        {
+            var totalDamage = causeEvents
+                .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+                .Aggregate(0UL, (sum, cause) => sum + cause.Amount);
+            return totalDamage == post.Amount.Value;
+        }
+
         return causeEvents.Any(cause =>
             post.Amount.Value == cause.Amount &&
             string.Equals(cause.ActionName, post.ActionName, StringComparison.OrdinalIgnoreCase) &&
@@ -4543,18 +4574,17 @@ public sealed partial class Plugin : IDalamudPlugin
         var damageEvents = causeEvents
             .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
             .ToList();
-        if (damageEvents.Count > 1)
+        if (damageEvents.Count > 0)
         {
             var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
-            var sourceName = GetSharedDamageSourceName(damageEvents);
             return new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
                 death.MemberName,
                 death.ClassJobName,
                 null,
-                sourceName == "multiple targets" ? null : sourceName,
+                null,
                 totalDamage,
-                damageEvents.Count);
+                null);
         }
 
         return causeEvents.FirstOrDefault() is { } cause
@@ -4584,6 +4614,22 @@ public sealed partial class Plugin : IDalamudPlugin
     private static bool TryParseSharedDeathPost(string text, out SharedDeathPost post)
     {
         var cleaned = SanitizeChatText(text);
+        var damageMatch = SharedDamageDeathPostRegex.Match(cleaned);
+        if (damageMatch.Success &&
+            TryParseCombatTimer(damageMatch.Groups["timer"].Value, out var damageElapsedSeconds) &&
+            TryParseAmount(damageMatch.Groups["amount"].Value, out var damageAmount))
+        {
+            post = new SharedDeathPost(
+                damageElapsedSeconds,
+                damageMatch.Groups["name"].Value,
+                damageMatch.Groups["job"].Value,
+                null,
+                null,
+                damageAmount,
+                null);
+            return true;
+        }
+
         var multiHitMatch = SharedMultiHitDeathPostRegex.Match(cleaned);
         if (multiHitMatch.Success &&
             TryParseCombatTimer(multiHitMatch.Groups["timer"].Value, out var multiHitElapsedSeconds) &&
@@ -4941,6 +4987,10 @@ public sealed partial class Plugin : IDalamudPlugin
         string? SourceName,
         ulong? Amount,
         int? HitCount);
+
+    private readonly record struct DeathChatHpDisplay(
+        string? Text,
+        ulong? EffectiveHp);
 
     private readonly record struct RecentOwnSharedDeathPost(
         SharedDeathPost Post,
