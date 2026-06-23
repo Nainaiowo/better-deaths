@@ -61,10 +61,13 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRawActionEffectPackets = 256;
     private const int MaxRawCombatLogMessages = 256;
     private const int MaxRawEffectResultPackets = 256;
+    private const int MaxRawActorControlPackets = 256;
+    private const int MaxDebugActorControlEvents = 200;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
+    private const string ActorControlSignature = "E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64";
     private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
@@ -167,6 +170,22 @@ public sealed partial class Plugin : IDalamudPlugin
         float Duration,
         uint SourceActorId);
 
+    private sealed record RawActorControlPacket(
+        long Sequence,
+        DateTime SeenAtUtc,
+        uint EntityId,
+        uint Category,
+        uint Param1,
+        uint Param2,
+        uint Param3,
+        uint Param4,
+        uint Param5,
+        uint Param6,
+        uint Param7,
+        uint Param8,
+        ulong TargetId,
+        byte Param9);
+
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     private unsafe struct EffectResultPacket
     {
@@ -197,6 +216,20 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private delegate void ProcessPacketEffectResultDelegate(uint targetId, IntPtr actionIntegrityData, byte isReplay);
 
+    private delegate void ProcessPacketActorControlDelegate(
+        uint entityId,
+        uint category,
+        uint param1,
+        uint param2,
+        uint param3,
+        uint param4,
+        uint param5,
+        uint param6,
+        uint param7,
+        uint param8,
+        ulong targetId,
+        byte param9);
+
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
@@ -220,6 +253,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<DebugLogEntry> debugLogEntries = [];
     private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
+    private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
@@ -242,9 +276,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Queue<RawActionEffectPacket> rawActionEffectPackets = [];
     private readonly Queue<RawCombatLogMessage> rawCombatLogMessages = [];
     private readonly Queue<RawEffectResultPacket> rawEffectResultPackets = [];
+    private readonly Queue<RawActorControlPacket> rawActorControlPackets = [];
     private long nextRawActionEffectSequence = 1;
     private long nextRawCombatLogSequence = 1;
     private long nextRawEffectResultSequence = 1;
+    private long nextRawActorControlSequence = 1;
     private long nextResolvedCombatEventOrdinal = 1;
     private DateTime? pendingDeathRecapLinksDueAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
@@ -259,6 +295,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private string? lastSavedRecordedPullHistoryJson;
     private bool updateCheckInProgress;
     private bool effectResultHookEnabled;
+    private bool actorControlHookEnabled;
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -319,6 +356,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private Hook<ActionEffectHandler.Delegates.Receive>? actionEffectHook;
     private Hook<ProcessPacketEffectResultDelegate>? effectResultHook;
+    private Hook<ProcessPacketActorControlDelegate>? actorControlHook;
     private DateTime? pullStartedAtUtc;
     private DateTime? lastInCombatAtUtc;
     private float lastKnownPullElapsedSeconds;
@@ -354,6 +392,11 @@ public sealed partial class Plugin : IDalamudPlugin
         .ThenBy(snapshot => snapshot.TargetName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    public IReadOnlyList<DebugActorControlEvent> DebugActorControlEvents => debugActorControlEvents
+        .OrderBy(entry => entry.SeenAtUtc)
+        .ThenBy(entry => entry.Category)
+        .ToList();
+
     public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
 
     public bool DebugIsPvPCaptureBlocked => IsPvPCaptureBlocked();
@@ -363,6 +406,8 @@ public sealed partial class Plugin : IDalamudPlugin
     public bool DebugShouldCaptureLiveCombat => ShouldCaptureLiveCombat(DateTime.UtcNow);
 
     public bool DebugEffectResultHookEnabled => effectResultHookEnabled;
+
+    public bool DebugActorControlHookEnabled => actorControlHookEnabled;
 
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
@@ -433,6 +478,21 @@ public sealed partial class Plugin : IDalamudPlugin
 
         try
         {
+            actorControlHook = GameInteropProvider.HookFromSignature<ProcessPacketActorControlDelegate>(
+                ActorControlSignature,
+                OnProcessPacketActorControl);
+            actorControlHook.Enable();
+            actorControlHookEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            actorControlHookEnabled = false;
+            actorControlHook = null;
+            Log.Warning(ex, "Better Deaths ActorControl debug hook could not be enabled.");
+        }
+
+        try
+        {
             effectResultHook = GameInteropProvider.HookFromSignature<ProcessPacketEffectResultDelegate>(
                 EffectResultSignature,
                 OnProcessPacketEffectResult);
@@ -472,6 +532,7 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyReset;
         effectResultHook?.Dispose();
+        actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
         CommandManager.RemoveHandler(ShortWidgetCommandName);
@@ -554,6 +615,7 @@ public sealed partial class Plugin : IDalamudPlugin
         debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
+        debugActorControlEvents.Clear();
     }
 
     public void ClearRecordedPulls()
@@ -1369,6 +1431,70 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private void OnProcessPacketActorControl(
+        uint entityId,
+        uint category,
+        uint param1,
+        uint param2,
+        uint param3,
+        uint param4,
+        uint param5,
+        uint param6,
+        uint param7,
+        uint param8,
+        ulong targetId,
+        byte param9)
+    {
+        actorControlHook?.Original(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8, targetId, param9);
+
+        try
+        {
+            EnqueueRawActorControl(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8, targetId, param9);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not process Better Deaths ActorControl packet.");
+        }
+    }
+
+    private void EnqueueRawActorControl(
+        uint entityId,
+        uint category,
+        uint param1,
+        uint param2,
+        uint param3,
+        uint param4,
+        uint param5,
+        uint param6,
+        uint param7,
+        uint param8,
+        ulong targetId,
+        byte param9)
+    {
+        var now = DateTime.UtcNow;
+        if (!Configuration.DebugLogEnabled ||
+            !ShouldAcceptRawCombatCapture(now))
+        {
+            return;
+        }
+
+        EnqueueRawActorControlPacket(new RawActorControlPacket(
+            GetNextRawActorControlSequence(),
+            now,
+            entityId,
+            category,
+            param1,
+            param2,
+            param3,
+            param4,
+            param5,
+            param6,
+            param7,
+            param8,
+            targetId,
+            param9));
+    }
+
     private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
     {
         var now = DateTime.UtcNow;
@@ -1502,6 +1628,14 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private long GetNextRawActorControlSequence()
+    {
+        lock (rawCombatQueueLock)
+        {
+            return nextRawActorControlSequence++;
+        }
+    }
+
     private void EnqueueRawActionEffectPacket(RawActionEffectPacket packet)
     {
         lock (rawCombatQueueLock)
@@ -1538,6 +1672,18 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private void EnqueueRawActorControlPacket(RawActorControlPacket packet)
+    {
+        lock (rawCombatQueueLock)
+        {
+            rawActorControlPackets.Enqueue(packet);
+            while (rawActorControlPackets.Count > MaxRawActorControlPackets)
+            {
+                rawActorControlPackets.Dequeue();
+            }
+        }
+    }
+
     private void ResolveRawCombatQueues(DateTime now)
     {
         var actionPackets = DrainRawActionEffectPackets(now);
@@ -1556,6 +1702,12 @@ public sealed partial class Plugin : IDalamudPlugin
         foreach (var packet in effectResultPackets.OrderBy(packet => packet.Sequence))
         {
             ResolveRawEffectResultPacket(packet);
+        }
+
+        var actorControlPackets = DrainRawActorControlPackets(now);
+        foreach (var packet in actorControlPackets.OrderBy(packet => packet.Sequence))
+        {
+            ResolveRawActorControlPacket(packet);
         }
     }
 
@@ -1618,6 +1770,27 @@ public sealed partial class Plugin : IDalamudPlugin
 
             var packets = rawEffectResultPackets.ToList();
             rawEffectResultPackets.Clear();
+            return packets;
+        }
+    }
+
+    private IReadOnlyList<RawActorControlPacket> DrainRawActorControlPackets(DateTime now)
+    {
+        lock (rawCombatQueueLock)
+        {
+            var cutoff = now - TimeSpan.FromSeconds(RawCombatLogRetentionSeconds);
+            while (rawActorControlPackets.Count > 0 && rawActorControlPackets.Peek().SeenAtUtc < cutoff)
+            {
+                rawActorControlPackets.Dequeue();
+            }
+
+            if (rawActorControlPackets.Count == 0)
+            {
+                return [];
+            }
+
+            var packets = rawActorControlPackets.ToList();
+            rawActorControlPackets.Clear();
             return packets;
         }
     }
@@ -1788,6 +1961,53 @@ public sealed partial class Plugin : IDalamudPlugin
             $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
     }
 
+    private void ResolveRawActorControlPacket(RawActorControlPacket packet)
+    {
+        if (!Configuration.DebugLogEnabled)
+        {
+            return;
+        }
+
+        var member = currentMembers.FirstOrDefault(member =>
+            member.EntityId != 0 &&
+            member.EntityId == packet.EntityId);
+        if (member is null && !Configuration.CaptureOtherDeaths)
+        {
+            return;
+        }
+
+        var entityName = member?.MemberName ?? GetEntityDisplayName(packet.EntityId);
+        var targetName = GetActorControlTargetName(packet.TargetId);
+        var categoryName = GetActorControlCategoryName(packet.Category);
+        var debugEvent = new DebugActorControlEvent(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            packet.EntityId,
+            entityName,
+            packet.Category,
+            categoryName,
+            packet.Param1,
+            packet.Param2,
+            packet.Param3,
+            packet.Param4,
+            packet.Param5,
+            packet.Param6,
+            packet.Param7,
+            packet.Param8,
+            packet.TargetId,
+            targetName,
+            packet.Param9);
+
+        debugActorControlEvents.Add(debugEvent);
+        while (debugActorControlEvents.Count > MaxDebugActorControlEvents)
+        {
+            debugActorControlEvents.RemoveAt(0);
+        }
+
+        AddDebugLog(
+            $"ActorControl {categoryName} for {entityName}: p1 {packet.Param1}, p2 {packet.Param2}, target {FormatDebugActorControlTarget(packet.TargetId)}.");
+    }
+
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
     {
         return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member));
@@ -1841,6 +2061,47 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         return $"Entity {entityId:X8}";
+    }
+
+    private static string GetActorControlTargetName(ulong targetId)
+    {
+        if (targetId == 0)
+        {
+            return "Unknown target";
+        }
+
+        var lowerTargetId = (uint)(targetId & uint.MaxValue);
+        return lowerTargetId == 0
+            ? $"Target 0x{targetId:X16}"
+            : GetEntityDisplayName(lowerTargetId);
+    }
+
+    private static string GetActorControlCategoryName(uint category)
+    {
+        return category switch
+        {
+            0x6 => "Death",
+            0xF => "CancelAbility",
+            0x14 => "GainEffect",
+            0x15 => "LoseEffect",
+            0x16 => "UpdateEffect",
+            0x22 => "TargetIcon",
+            0x23 => "Tether",
+            0x36 => "Targetable",
+            0x6D => "DirectorUpdate",
+            0x1F6 => "SetTargetSign",
+            0x1F9 => "LimitBreak",
+            0x604 => "HoT",
+            0x605 => "DoT",
+            _ => $"Category 0x{category:X}",
+        };
+    }
+
+    private static string FormatDebugActorControlTarget(ulong targetId)
+    {
+        return targetId == 0
+            ? "-"
+            : $"0x{targetId:X16}";
     }
 
     private static string FormatLogEntityName(ILogMessageEntity entity)
@@ -2459,6 +2720,7 @@ public sealed partial class Plugin : IDalamudPlugin
             rawActionEffectPackets.Clear();
             rawCombatLogMessages.Clear();
             rawEffectResultPackets.Clear();
+            rawActorControlPackets.Clear();
         }
 
         currentMemberKeyScratch.Clear();
@@ -2642,14 +2904,16 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ClearDebugStatusSnapshotsForNewCombat()
     {
         if (debugStatusSnapshotsByMember.Count == 0 &&
-            debugEffectResultSnapshotsByTarget.Count == 0)
+            debugEffectResultSnapshotsByTarget.Count == 0 &&
+            debugActorControlEvents.Count == 0)
         {
             return;
         }
 
         debugStatusSnapshotsByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
-        AddDebugLog("Cleared debug status and EffectResult tables for new combat.");
+        debugActorControlEvents.Clear();
+        AddDebugLog("Cleared debug status, EffectResult, and ActorControl tables for new combat.");
     }
 
     private float CalculatePullElapsed(DateTime now)

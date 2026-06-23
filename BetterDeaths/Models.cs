@@ -192,6 +192,25 @@ public sealed record DebugEffectResultSnapshot(
     bool IsReplay,
     IReadOnlyList<DebugEffectResultStatus> Statuses);
 
+public sealed record DebugActorControlEvent(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    uint EntityId,
+    string EntityName,
+    uint Category,
+    string CategoryName,
+    uint Param1,
+    uint Param2,
+    uint Param3,
+    uint Param4,
+    uint Param5,
+    uint Param6,
+    uint Param7,
+    uint Param8,
+    ulong TargetId,
+    string TargetName,
+    byte Param9);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

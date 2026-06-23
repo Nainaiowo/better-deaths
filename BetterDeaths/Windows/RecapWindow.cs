@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.84";
+    private const string CurrentChangelogVersion = "0.1.0.85";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2660,13 +2660,16 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TextDisabled(
-            $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
+            $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | ActorControl hook {FormatDebugBool(plugin.DebugActorControlHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
 
         ImGui.Separator();
         DrawDebugStatusSnapshots();
 
         ImGui.Separator();
         DrawDebugEffectResultSnapshots();
+
+        ImGui.Separator();
+        DrawDebugActorControlEvents();
 
         ImGui.Separator();
         DrawDebugLog();
@@ -2850,6 +2853,93 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
+    private void DrawDebugActorControlEvents()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "ActorControl packet table");
+        ImGui.TextDisabled("Memory-only. Shows the latest raw ActorControl events, including death, DoT, HoT, status, tether, and target/control categories when the client exposes them.");
+
+        if (!configuration.DebugLogEnabled)
+        {
+            ImGui.TextDisabled("Enable debug capture to see ActorControl packets.");
+            return;
+        }
+
+        if (!plugin.DebugActorControlHookEnabled)
+        {
+            ImGui.TextColored(WarningColor, "ActorControl hook is not enabled. The signature may be unavailable on this client build.");
+            return;
+        }
+
+        var events = plugin.DebugActorControlEvents;
+        if (events.Count == 0)
+        {
+            ImGui.TextDisabled("No ActorControl packets captured yet. Enter combat in a duty with tracked characters visible.");
+            return;
+        }
+
+        if (!ImGui.BeginTable("##DebugActorControlEvents", 16, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("UTC", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Pull", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Entity", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Category", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        ImGui.TableSetupColumn("p1", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p2", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p3", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p4", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p5", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p6", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p7", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("p8", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Param9", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Entity ID", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+        ImGui.TableSetupColumn("Target ID", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        DrawCenteredTableHeader("UTC", "Pull", "Entity", "Category", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "Target", "Param9", "Entity ID", "Target ID");
+
+        foreach (var entry in events)
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            DrawCenteredText(entry.SeenAtUtc.ToString("HH:mm:ss"));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatCombatTimer(entry.PullElapsedSeconds));
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(entry.EntityName);
+            ImGui.TableNextColumn();
+            DrawCenteredText($"{entry.CategoryName} ({entry.Category})");
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param1));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param2));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param3));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param4));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param5));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param6));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param7));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlParam(entry.Param8));
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(entry.TargetName);
+            ImGui.TableNextColumn();
+            DrawCenteredText(entry.Param9.ToString());
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugStatusSource(entry.EntityId));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugActorControlTarget(entry.TargetId));
+        }
+
+        ImGui.EndTable();
+    }
+
     private void DrawDebugLog()
     {
         var entries = plugin.DebugLogEntries;
@@ -2890,6 +2980,20 @@ public sealed class RecapWindow : Window, IDisposable
         return sourceId == 0
             ? "-"
             : $"0x{sourceId:X8}";
+    }
+
+    private static string FormatDebugActorControlTarget(ulong targetId)
+    {
+        return targetId == 0
+            ? "-"
+            : $"0x{targetId:X16}";
+    }
+
+    private static string FormatDebugActorControlParam(uint value)
+    {
+        return value == 0
+            ? "-"
+            : value.ToString();
     }
 
     private static string FormatDebugBool(bool value)
@@ -2990,6 +3094,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.85");
+        ImGui.TextDisabled("Testing ActorControl debug capture.");
+        DrawBreathingGoldBullet("Added an ActorControl signature hook for testing death, DoT, HoT, tether, target, and status/control event timing.");
+        DrawBreathingGoldBullet("Debug now has an ActorControl packet table so raw categories, params, entity IDs, and target IDs can be validated in-game.");
+        DrawWrappedBullet("The ActorControl hook fails gracefully if the signature is unavailable instead of blocking Better Deaths from loading.");
+        DrawWrappedBullet("ActorControl capture currently feeds Debug only; death recap selection is unchanged while this data is validated.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.84");
         ImGui.TextDisabled("Testing EffectResult hook capture.");
         DrawBreathingGoldBullet("Added an EffectResult signature hook for testing packet-side HP, shield, MP, related action sequence, and status data.");
