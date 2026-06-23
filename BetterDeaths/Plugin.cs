@@ -25,6 +25,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -47,6 +48,10 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
     private const int MaxDebugLogEntries = 1000;
+    private const string DebugCaptureFileName = "debug-capture.jsonl";
+    private const long MaxDebugCaptureFileBytes = 25L * 1024L * 1024L;
+    private const long DebugCaptureTrimTargetBytes = 20L * 1024L * 1024L;
+    private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
     private const int RecordedPullHistorySchemaVersion = 2;
     private const int RecordedPullHistoryRollingBackupCount = 5;
@@ -80,7 +85,13 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan DebugCaptureFlushInterval = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = true,
+    };
+    private static readonly JsonSerializerOptions DebugCaptureJsonOptions = new()
     {
         WriteIndented = false,
         PropertyNameCaseInsensitive = true,
@@ -115,6 +126,14 @@ public sealed partial class Plugin : IDalamudPlugin
     ];
 
     private sealed record RecordedPullHistoryFile(int SchemaVersion, List<PullDeathSnapshot> Pulls);
+
+    private sealed record DebugCaptureFileRecord(
+        DateTime SeenAtUtc,
+        float PullElapsedSeconds,
+        uint TerritoryId,
+        string TerritoryName,
+        string Kind,
+        JsonElement Data);
 
     private sealed record RawActionEffectPacket(
         long Sequence,
@@ -253,9 +272,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<PullDeathSnapshot> recordedPulls = [];
     private readonly List<DebugLogEntry> debugLogEntries = [];
     private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> debugStatusPersistSignaturesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
     private readonly List<DebugEffectResultSnapshot> debugEffectResultHistory = [];
     private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
+    private readonly Queue<string> debugCaptureFileLines = new();
+    private readonly object debugCaptureFileLock = new();
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
@@ -300,6 +322,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool actorControlHookEnabled;
     private bool debugFreezeOnDeathEnabled;
     private bool debugCaptureFrozen;
+    private DateTime lastDebugCaptureFlushAtUtc = DateTime.MinValue;
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -422,6 +445,23 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public bool DebugCaptureFrozen => debugCaptureFrozen;
 
+    public string DebugCaptureFilePath => DebugCaptureFileFullPath;
+
+    public long DebugCaptureFileSizeBytes => GetDebugCaptureFileSizeBytes();
+
+    public long DebugCaptureMaxFileSizeBytes => MaxDebugCaptureFileBytes;
+
+    public int DebugCaptureQueuedLineCount
+    {
+        get
+        {
+            lock (debugCaptureFileLock)
+            {
+                return debugCaptureFileLines.Count;
+            }
+        }
+    }
+
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
         FormatVersionForDisplay(typeof(Plugin).Assembly.GetName().Version),
@@ -535,6 +575,7 @@ public sealed partial class Plugin : IDalamudPlugin
         disposing = true;
         CaptureCurrentPullSnapshot("Plugin unloaded");
         SaveRecordedPullHistory();
+        FlushDebugCaptureFile(force: true);
         PluginInterface.UiBuilder.OpenConfigUi -= OpenMainUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
         PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
@@ -623,6 +664,16 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetDebugSaveToFileEnabled(bool enabled)
+    {
+        Configuration.DebugSaveToFileEnabled = enabled;
+        SaveConfiguration();
+        if (!enabled)
+        {
+            FlushDebugCaptureFile(force: true);
+        }
+    }
+
     public void SetDebugFreezeOnDeathEnabled(bool enabled)
     {
         debugFreezeOnDeathEnabled = enabled;
@@ -648,10 +699,36 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
+        debugStatusPersistSignaturesByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
         debugCaptureFrozen = false;
+    }
+
+    public void ClearSavedDebugCaptureFile()
+    {
+        lock (debugCaptureFileLock)
+        {
+            debugCaptureFileLines.Clear();
+        }
+
+        try
+        {
+            if (File.Exists(DebugCaptureFileFullPath))
+            {
+                File.Delete(DebugCaptureFileFullPath);
+            }
+
+            if (File.Exists(DebugCaptureTempFilePath))
+            {
+                File.Delete(DebugCaptureTempFilePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not clear Better Deaths debug capture file.");
+        }
     }
 
     public void ClearRecordedPulls()
@@ -1012,6 +1089,7 @@ public sealed partial class Plugin : IDalamudPlugin
             FlushPendingDeathRecapLinks(now);
             UpdateCombatTimerState(now);
             RefreshPartyState();
+            FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
         }
@@ -2000,6 +2078,7 @@ public sealed partial class Plugin : IDalamudPlugin
             debugEffectResultHistory.RemoveAt(0);
         }
 
+        QueueDebugCaptureRecord("EffectResult", snapshot);
         AddDebugLog(
             $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
     }
@@ -2047,6 +2126,7 @@ public sealed partial class Plugin : IDalamudPlugin
             debugActorControlEvents.RemoveAt(0);
         }
 
+        QueueDebugCaptureRecord("ActorControl", debugEvent);
         AddDebugLog(
             $"ActorControl {categoryName} for {entityName}: p1 {packet.Param1}, p2 {packet.Param2}, target {FormatDebugActorControlTarget(packet.TargetId)}.");
         if (debugFreezeOnDeathEnabled && packet.Category == 0x6)
@@ -2526,6 +2606,14 @@ public sealed partial class Plugin : IDalamudPlugin
                 member.IsDead,
                 member.IsPartyMember,
                 statuses);
+            var snapshot = debugStatusSnapshotsByMember[member.MemberKey];
+            var signature = BuildDebugStatusPersistSignature(snapshot);
+            if (!debugStatusPersistSignaturesByMember.TryGetValue(member.MemberKey, out var existingSignature) ||
+                !string.Equals(signature, existingSignature, StringComparison.Ordinal))
+            {
+                debugStatusPersistSignaturesByMember[member.MemberKey] = signature;
+                QueueDebugCaptureRecord("StatusSnapshot", snapshot);
+            }
         }
     }
 
@@ -2545,6 +2633,22 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         return merged.Values.ToList();
+    }
+
+    private static string BuildDebugStatusPersistSignature(DebugStatusSnapshot snapshot)
+    {
+        return string.Join(
+            "|",
+            snapshot.IsDead ? "dead" : "alive",
+            snapshot.CurrentHp,
+            snapshot.ShieldHp,
+            snapshot.MaxHp,
+            string.Join(
+                ";",
+                snapshot.Statuses
+                    .OrderBy(status => status.Id)
+                    .ThenBy(status => status.SourceId)
+                    .Select(status => $"{status.Id}:{status.SourceId}:{status.StackCount}")));
     }
 
     private IReadOnlyList<HpHistorySnapshot> GetRecentHpHistory(string memberKey, int seconds)
@@ -2962,6 +3066,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
+        debugStatusPersistSignaturesByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
@@ -3016,6 +3121,12 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static string RecordedPullHistoryPath =>
         Path.Combine(PluginInterface.ConfigDirectory.FullName, RecordedPullHistoryFileName);
+
+    private static string DebugCaptureFileFullPath =>
+        Path.Combine(PluginInterface.ConfigDirectory.FullName, DebugCaptureFileName);
+
+    private static string DebugCaptureTempFilePath =>
+        DebugCaptureFileFullPath + ".tmp";
 
     private static string RecordedPullHistoryTempPath =>
         RecordedPullHistoryPath + ".tmp";
@@ -3622,10 +3733,138 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
-        debugLogEntries.Add(new DebugLogEntry(DateTime.UtcNow, CurrentPullElapsedSeconds, message));
+        var entry = new DebugLogEntry(DateTime.UtcNow, CurrentPullElapsedSeconds, message);
+        debugLogEntries.Add(entry);
         while (debugLogEntries.Count > MaxDebugLogEntries)
         {
             debugLogEntries.RemoveAt(0);
+        }
+
+        QueueDebugCaptureRecord("DebugLog", entry);
+    }
+
+    private void QueueDebugCaptureRecord<T>(string kind, T data)
+    {
+        if (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            var record = new DebugCaptureFileRecord(
+                DateTime.UtcNow,
+                CurrentPullElapsedSeconds,
+                currentTerritoryId,
+                currentTerritoryName,
+                kind,
+                JsonSerializer.SerializeToElement(data, DebugCaptureJsonOptions));
+            var line = JsonSerializer.Serialize(record, DebugCaptureJsonOptions);
+            lock (debugCaptureFileLock)
+            {
+                debugCaptureFileLines.Enqueue(line);
+                while (debugCaptureFileLines.Count > MaxQueuedDebugCaptureFileLines)
+                {
+                    debugCaptureFileLines.Dequeue();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not queue Better Deaths debug capture row.");
+        }
+    }
+
+    private void FlushDebugCaptureFile(DateTime? now = null, bool force = false)
+    {
+        if (!force && (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled))
+        {
+            return;
+        }
+
+        var currentTime = now ?? DateTime.UtcNow;
+        List<string> lines = [];
+        lock (debugCaptureFileLock)
+        {
+            if (debugCaptureFileLines.Count == 0)
+            {
+                return;
+            }
+
+            if (!force &&
+                debugCaptureFileLines.Count < 500 &&
+                currentTime - lastDebugCaptureFlushAtUtc < DebugCaptureFlushInterval)
+            {
+                return;
+            }
+
+            while (debugCaptureFileLines.Count > 0)
+            {
+                lines.Add(debugCaptureFileLines.Dequeue());
+            }
+        }
+
+        try
+        {
+            Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
+            File.AppendAllLines(DebugCaptureFileFullPath, lines, Encoding.UTF8);
+            TrimDebugCaptureFileToCap();
+            lastDebugCaptureFlushAtUtc = currentTime;
+        }
+        catch (Exception ex)
+        {
+            lastDebugCaptureFlushAtUtc = currentTime;
+            Log.Warning(ex, "Could not write Better Deaths debug capture file.");
+        }
+    }
+
+    private static long GetDebugCaptureFileSizeBytes()
+    {
+        try
+        {
+            return File.Exists(DebugCaptureFileFullPath)
+                ? new FileInfo(DebugCaptureFileFullPath).Length
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static void TrimDebugCaptureFileToCap()
+    {
+        try
+        {
+            if (!File.Exists(DebugCaptureFileFullPath) ||
+                new FileInfo(DebugCaptureFileFullPath).Length <= MaxDebugCaptureFileBytes)
+            {
+                return;
+            }
+
+            var lines = File.ReadAllLines(DebugCaptureFileFullPath, Encoding.UTF8);
+            var retainedLines = new List<string>();
+            var retainedBytes = 0L;
+            for (var index = lines.Length - 1; index >= 0; index--)
+            {
+                var line = lines[index];
+                var lineBytes = Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+                if (retainedLines.Count > 0 && retainedBytes + lineBytes > DebugCaptureTrimTargetBytes)
+                {
+                    break;
+                }
+
+                retainedLines.Add(line);
+                retainedBytes += lineBytes;
+            }
+
+            retainedLines.Reverse();
+            File.WriteAllLines(DebugCaptureTempFilePath, retainedLines, Encoding.UTF8);
+            File.Move(DebugCaptureTempFilePath, DebugCaptureFileFullPath, true);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not trim Better Deaths debug capture file.");
         }
     }
 

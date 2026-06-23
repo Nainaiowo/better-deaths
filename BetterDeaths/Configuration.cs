@@ -53,6 +53,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool DebugLogEnabled { get; set; }
 
+    public bool DebugSaveToFileEnabled { get; set; } = true;
+
     public string LastAnnouncedUpdateNoticeKey { get; set; } = string.Empty;
 
     public string LastSeenChangelogVersion { get; set; } = string.Empty;

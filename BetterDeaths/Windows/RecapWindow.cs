@@ -42,7 +42,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.87";
+    private const string CurrentChangelogVersion = "0.1.0.88";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2695,6 +2695,37 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
+        var saveDebugFile = configuration.DebugSaveToFileEnabled;
+        if (ImGui.Checkbox("Save debug file", ref saveDebugFile))
+        {
+            plugin.SetDebugSaveToFileEnabled(saveDebugFile);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("When enabled, Debug writes captured rows to a local JSONL file. The newest rows are kept and the file is capped at 25 MB.");
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Clear saved debug file"))
+        {
+            plugin.ClearSavedDebugCaptureFile();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Deletes the saved debug JSONL file and clears pending debug-file rows. This does not clear the visible in-memory Debug tables.");
+        }
+
+        ImGui.TextDisabled($"Saved debug file: {FormatByteSize(plugin.DebugCaptureFileSizeBytes)} / {FormatByteSize(plugin.DebugCaptureMaxFileSizeBytes)}");
+        if (plugin.DebugCaptureQueuedLineCount > 0)
+        {
+            ImGui.SameLine();
+            ImGui.TextDisabled($"Queued rows: {plugin.DebugCaptureQueuedLineCount:N0}");
+        }
+
+        ImGui.TextDisabled(plugin.DebugCaptureFilePath);
+
         DrawDebugFilters();
 
         ImGui.TextDisabled(
@@ -3288,6 +3319,20 @@ public sealed class RecapWindow : Window, IDisposable
                 : $"{duration:0.0}s";
     }
 
+    private static string FormatByteSize(long bytes)
+    {
+        const double oneKb = 1024.0;
+        const double oneMb = oneKb * 1024.0;
+        if (bytes >= oneMb)
+        {
+            return $"{bytes / oneMb:0.0} MB";
+        }
+
+        return bytes >= oneKb
+            ? $"{bytes / oneKb:0.0} KB"
+            : $"{bytes:N0} B";
+    }
+
     private bool HasPendingDeathSelection(IReadOnlyList<PartyDeathRecord> deaths)
     {
         return pendingDeathSelection is { } target && ContainsDeath(deaths, target);
@@ -3362,6 +3407,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.88");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.87");
         ImGui.TextDisabled("Debug updates for future release testing.");
         DrawWrappedBullet("Updated Debug for future release testing.");
