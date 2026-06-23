@@ -59,6 +59,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public string LastSeenChangelogVersion { get; set; } = string.Empty;
 
+    public string LastAcknowledgedNoticeId { get; set; } = string.Empty;
+
     public DeathChatChannel DeathChatChannel { get; set; } = DeathChatChannel.Party;
 
     public int RecentEventSeconds { get; set; } = 20;

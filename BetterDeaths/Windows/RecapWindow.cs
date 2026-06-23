@@ -34,6 +34,11 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 DisabledColor = new(0.65f, 0.65f, 0.65f, 1.0f);
     private static readonly Vector4 UpdateBannerBgColor = new(0.16f, 0.24f, 0.12f, 0.95f);
     private static readonly Vector4 UpdateBannerTextColor = new(0.35f, 1.0f, 0.45f, 1.0f);
+    private static readonly Vector4 NoticeBgColor = new(0.03f, 0.15f, 0.15f, 0.96f);
+    private static readonly Vector4 NoticeBorderColor = new(0.37f, 0.92f, 0.83f, 1.0f);
+    private static readonly Vector4 NoticeTextColor = new(0.84f, 1.0f, 0.97f, 1.0f);
+    private static readonly Vector4 NoticeButtonColor = new(0.04f, 0.34f, 0.32f, 1.0f);
+    private static readonly Vector4 NoticeButtonHoveredColor = new(0.06f, 0.46f, 0.43f, 1.0f);
     private static readonly Vector4 HpBarColor = new(0.2f, 0.75f, 0.35f, 1.0f);
     private static readonly Vector4 ShieldBarColor = new(1.0f, 0.82f, 0.16f, 1.0f);
     private static readonly Vector4 BarBackgroundColor = new(0.18f, 0.18f, 0.18f, 1.0f);
@@ -148,6 +153,12 @@ public sealed class RecapWindow : Window, IDisposable
     public override void Draw()
     {
         DrawPluginUpdateBanner();
+
+        if (plugin.ShouldShowThankYouNotice())
+        {
+            DrawOneTimeThankYouNotice();
+            return;
+        }
 
         if (!ImGui.BeginTabBar("##BetterDeathsTabs"))
         {
@@ -2633,6 +2644,44 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.TextDisabled(GetPluginUpdateStatusText(status));
         }
+    }
+
+    private void DrawOneTimeThankYouNotice()
+    {
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, NoticeBgColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
+
+        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
+        {
+            ImGui.TextColored(NoticeBorderColor, "Hey! Nainai here!");
+            ImGui.Spacing();
+            ImGui.TextWrapped("I just wanted to give a short message to the users that have been helping me with the development of this project. With this update, I've released a big change!");
+            ImGui.Spacing();
+            ImGui.TextWrapped("Up until now, for over 90 updates, we've been at the mercy of FFXIV snapshotting information. Dalamud and its API help a little bit, but in terms of having ACCURATE information available constantly for your recap use, I've done the best that I can.");
+            ImGui.Spacing();
+            ImGui.TextWrapped("We now use real-time HP and death information. Tracking has improved considerably with these changes, and we should now have almost (if not exactly) FF Logs-level accuracy. This will be one of two major updates along the way toward an actual release to v1.0.");
+            ImGui.Spacing();
+            ImGui.TextColored(NoticeBorderColor, "I appreciate you all so much for your help and your continued feedback ♥ w ♥");
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            ImGui.PushStyleColor(ImGuiCol.Button, NoticeButtonColor);
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, NoticeButtonHoveredColor);
+            if (ImGui.Button("Continue to Better Deaths"))
+            {
+                plugin.MarkThankYouNoticeAcknowledged();
+            }
+
+            ImGui.PopStyleColor();
+            ImGui.PopStyleColor();
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
+        ImGui.PopStyleColor();
+        ImGui.PopStyleColor();
     }
 
     private static bool ShouldDrawPluginUpdateBanner(PluginUpdateStatus status)
