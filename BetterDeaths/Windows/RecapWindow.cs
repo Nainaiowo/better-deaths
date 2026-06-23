@@ -164,7 +164,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var selectExampleTab = pendingDeathSelection is not null && ContainsDeath(GetExampleDeaths(), pendingDeathSelection);
+        var selectExampleTab = pendingDeathSelection is { Source: DeathSelectionSource.Example };
         var selectDeathRecapTab = pendingDeathSelection is not null && !selectExampleTab;
         if (ImGui.BeginTabItem("Death Recap", selectDeathRecapTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
@@ -215,15 +215,19 @@ public sealed class RecapWindow : Window, IDisposable
 
     public bool FocusDeath(long deathSeenAtTicks, uint memberKeyHash)
     {
-        var target = new DeathSelectionTarget(deathSeenAtTicks, memberKeyHash);
-        if (!ContainsDeath(GetExampleDeaths(), target) &&
-            !ContainsDeath(plugin.CurrentDeaths, target) &&
-            !plugin.RecordedPulls.Any(snapshot => ContainsDeath(snapshot.Deaths, target)))
+        var target = ResolveDeathSelectionTarget(deathSeenAtTicks, memberKeyHash);
+        if (target is null)
         {
             return false;
         }
 
         pendingDeathSelection = target;
+        if (target.Source == DeathSelectionSource.Recorded &&
+            target.RecordedPullTerritoryId is { } territoryId)
+        {
+            recordedPullDutyFilter = territoryId;
+        }
+
         clearPendingDeathSelection = false;
         IsOpen = true;
         return true;
@@ -243,13 +247,13 @@ public sealed class RecapWindow : Window, IDisposable
         using var examplePullIndent = new ImGuiIndentScope(PullBodyIndent);
         DrawDeathTimeline(deaths, "ExamplePull");
         ImGui.Separator();
-        DrawDeathDetails(deaths, "ExamplePull");
+        DrawDeathDetails(deaths, "ExamplePull", selectionSource: DeathSelectionSource.Example);
     }
 
     private void DrawCurrentPull()
     {
         var header = $"{BuildCurrentPullTitle()}###CurrentPullDeaths";
-        if (HasPendingDeathSelection(plugin.CurrentDeaths))
+        if (HasPendingDeathSelection(plugin.CurrentDeaths, DeathSelectionSource.Current))
         {
             ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         }
@@ -299,7 +303,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawDeathTimeline(deaths, idSuffix);
-        DrawDeathDetails(deaths, idSuffix);
+        DrawDeathDetails(deaths, idSuffix, selectionSource: DeathSelectionSource.Current);
     }
 
     private void DrawCurrentPullWidgetContent(IReadOnlyList<PartyDeathRecord> deaths, string title, string idSuffix)
@@ -440,7 +444,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             var pullId = $"{snapshot.PullNumber}:{snapshot.CapturedAtUtc.Ticks}";
             var header = $"Pull {pullNumber} - {snapshot.TerritoryName} - Timer {FormatCombatTimer(snapshot.PullElapsedSeconds)}###RecordedPull{pullId}";
-            if (HasPendingDeathSelection(snapshot.Deaths))
+            if (HasPendingDeathSelection(snapshot.Deaths, DeathSelectionSource.Recorded, snapshot))
             {
                 ImGui.SetNextItemOpen(true, ImGuiCond.Always);
             }
@@ -457,7 +461,7 @@ public sealed class RecapWindow : Window, IDisposable
             using var recordedPullIndent = new ImGuiIndentScope(PullBodyIndent);
             ImGui.TextDisabled($"{snapshot.Reason} - {FormatLocalClockTime(snapshot.CapturedAtUtc)}");
             DrawDeathTimeline(snapshot.Deaths, $"Pull{pullId}");
-            DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}");
+            DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}", selectionSource: DeathSelectionSource.Recorded, recordedPull: snapshot);
         }
 
         collapseRecordedPullsRequested = false;
@@ -1041,14 +1045,19 @@ public sealed class RecapWindow : Window, IDisposable
         return DisabledColor;
     }
 
-    private void DrawDeathDetails(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix, bool useCollapsers = true)
+    private void DrawDeathDetails(
+        IReadOnlyList<PartyDeathRecord> deaths,
+        string idSuffix,
+        bool useCollapsers = true,
+        DeathSelectionSource selectionSource = DeathSelectionSource.Current,
+        PullDeathSnapshot? recordedPull = null)
     {
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
         {
             var death = orderedDeaths[i];
             var deathNumber = i + 1;
-            var isSelectedDeath = IsPendingDeathSelection(death);
+            var isSelectedDeath = IsPendingDeathSelection(death, selectionSource, recordedPull);
             if (!HasDeathDetails(death))
             {
                 if (isSelectedDeath)
@@ -3387,25 +3396,75 @@ public sealed class RecapWindow : Window, IDisposable
             : $"{bytes:N0} B";
     }
 
-    private bool HasPendingDeathSelection(IReadOnlyList<PartyDeathRecord> deaths)
+    private DeathSelectionTarget? ResolveDeathSelectionTarget(long deathSeenAtTicks, uint memberKeyHash)
     {
-        return pendingDeathSelection is { } target && ContainsDeath(deaths, target);
+        if (ContainsDeath(plugin.CurrentDeaths, deathSeenAtTicks, memberKeyHash))
+        {
+            return new DeathSelectionTarget(deathSeenAtTicks, memberKeyHash, DeathSelectionSource.Current, null, null, null);
+        }
+
+        var recordedPull = plugin.RecordedPulls.FirstOrDefault(snapshot => ContainsDeath(snapshot.Deaths, deathSeenAtTicks, memberKeyHash));
+        if (recordedPull is not null)
+        {
+            return new DeathSelectionTarget(
+                deathSeenAtTicks,
+                memberKeyHash,
+                DeathSelectionSource.Recorded,
+                recordedPull.PullNumber,
+                recordedPull.CapturedAtUtc.Ticks,
+                recordedPull.TerritoryId);
+        }
+
+        return ContainsDeath(GetExampleDeaths(), deathSeenAtTicks, memberKeyHash)
+            ? new DeathSelectionTarget(deathSeenAtTicks, memberKeyHash, DeathSelectionSource.Example, null, null, null)
+            : null;
     }
 
-    private bool IsPendingDeathSelection(PartyDeathRecord death)
+    private bool HasPendingDeathSelection(
+        IReadOnlyList<PartyDeathRecord> deaths,
+        DeathSelectionSource source,
+        PullDeathSnapshot? recordedPull = null)
     {
-        return pendingDeathSelection is { } target && IsDeathTarget(death, target);
+        return pendingDeathSelection is { } target &&
+            DeathSelectionSourceMatches(target, source, recordedPull) &&
+            ContainsDeath(deaths, target.DeathSeenAtTicks, target.MemberKeyHash);
     }
 
-    private static bool ContainsDeath(IReadOnlyList<PartyDeathRecord> deaths, DeathSelectionTarget target)
+    private bool IsPendingDeathSelection(
+        PartyDeathRecord death,
+        DeathSelectionSource source,
+        PullDeathSnapshot? recordedPull = null)
     {
-        return deaths.Any(death => IsDeathTarget(death, target));
+        return pendingDeathSelection is { } target &&
+            DeathSelectionSourceMatches(target, source, recordedPull) &&
+            IsDeathTarget(death, target.DeathSeenAtTicks, target.MemberKeyHash);
     }
 
-    private static bool IsDeathTarget(PartyDeathRecord death, DeathSelectionTarget target)
+    private static bool DeathSelectionSourceMatches(
+        DeathSelectionTarget target,
+        DeathSelectionSource source,
+        PullDeathSnapshot? recordedPull)
     {
-        return death.SeenAtUtc.Ticks == target.DeathSeenAtTicks &&
-            Plugin.GetMemberKeyHash(death.MemberKey) == target.MemberKeyHash;
+        if (target.Source != source)
+        {
+            return false;
+        }
+
+        return source != DeathSelectionSource.Recorded ||
+            (recordedPull is not null &&
+                target.RecordedPullNumber == recordedPull.PullNumber &&
+                target.RecordedPullCapturedAtTicks == recordedPull.CapturedAtUtc.Ticks);
+    }
+
+    private static bool ContainsDeath(IReadOnlyList<PartyDeathRecord> deaths, long deathSeenAtTicks, uint memberKeyHash)
+    {
+        return deaths.Any(death => IsDeathTarget(death, deathSeenAtTicks, memberKeyHash));
+    }
+
+    private static bool IsDeathTarget(PartyDeathRecord death, long deathSeenAtTicks, uint memberKeyHash)
+    {
+        return death.SeenAtUtc.Ticks == deathSeenAtTicks &&
+            Plugin.GetMemberKeyHash(death.MemberKey) == memberKeyHash;
     }
 
     private enum RecordedPullSort
@@ -3415,9 +3474,22 @@ public sealed class RecapWindow : Window, IDisposable
         DutyNewestFirst,
     }
 
+    private enum DeathSelectionSource
+    {
+        Current,
+        Recorded,
+        Example,
+    }
+
     private sealed record RecordedPullDutyOption(uint TerritoryId, string TerritoryName, int PullCount);
 
-    private sealed record DeathSelectionTarget(long DeathSeenAtTicks, uint MemberKeyHash);
+    private sealed record DeathSelectionTarget(
+        long DeathSeenAtTicks,
+        uint MemberKeyHash,
+        DeathSelectionSource Source,
+        long? RecordedPullNumber,
+        long? RecordedPullCapturedAtTicks,
+        uint? RecordedPullTerritoryId);
 
     private static void DrawNotesTab()
     {
