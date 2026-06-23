@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.82";
+    private const string CurrentChangelogVersion = "0.1.0.84";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -86,6 +86,17 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> NearbyHpStatuses,
         CombatEventRecord? Event,
         string? HpTooltipDetail);
+
+    private sealed record DerivedHpState(
+        DateTime EventSeenAtUtc,
+        string SourceName,
+        string ActionName,
+        uint Amount,
+        uint SourceCurrentHp,
+        uint SourceShieldHp,
+        uint SourceMaxHp,
+        uint DerivedCurrentHp,
+        uint DerivedShieldHp);
 
     private sealed record OverkillDisplay(
         string Text,
@@ -1106,13 +1117,13 @@ public sealed class RecapWindow : Window, IDisposable
             }
             else
             {
-                ImGui.TextColored(WarningColor, "Unavailable. No reliable HP sample was captured before the likely hit.");
+                ImGui.TextColored(WarningColor, "No HP sample was captured before the likely hit.");
             }
         }
         else
         {
             ImGui.BulletText("HP + shields before likely hit");
-            ImGui.TextColored(WarningColor, "Unavailable. No likely hit was captured inside the configured cause window.");
+            ImGui.TextColored(WarningColor, "No likely hit was captured inside the configured cause window.");
         }
 
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
@@ -1411,6 +1422,7 @@ public sealed class RecapWindow : Window, IDisposable
         var rows = new List<LeadUpTimelineRow>();
         var historyIndex = 0;
         var eventIndex = 0;
+        DerivedHpState? pendingDerivedHp = null;
 
         while (historyIndex < history.Count || eventIndex < events.Count)
         {
@@ -1419,8 +1431,15 @@ public sealed class RecapWindow : Window, IDisposable
             if (shouldTakeHistory)
             {
                 var snapshot = history[historyIndex++];
-                var timelineRow = CreateHpSampleTimelineRow(snapshot);
+                var timelineRow = CreateHpSampleTimelineRow(snapshot, pendingDerivedHp, displayAnchorSeenAtUtc);
                 rows.Add(timelineRow);
+
+                if (pendingDerivedHp is not null &&
+                    snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
+                    !IsStalePostHitSample(snapshot, pendingDerivedHp))
+                {
+                    pendingDerivedHp = null;
+                }
 
                 continue;
             }
@@ -1437,14 +1456,41 @@ public sealed class RecapWindow : Window, IDisposable
                 GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
                 combatEvent,
                 hpDisplay.TooltipDetail));
+
+            pendingDerivedHp = TryCreateDerivedHpState(combatEvent, hpDisplay) ?? pendingDerivedHp;
         }
 
         return rows;
     }
 
     private static LeadUpTimelineRow CreateHpSampleTimelineRow(
-        HpHistorySnapshot snapshot)
+        HpHistorySnapshot snapshot,
+        DerivedHpState? pendingDerivedHp,
+        DateTime displayAnchorSeenAtUtc)
     {
+        if (pendingDerivedHp is not null &&
+            snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
+            IsStalePostHitSample(snapshot, pendingDerivedHp))
+        {
+            var displayShieldHp = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
+                ? pendingDerivedHp.DerivedShieldHp
+                : snapshot.ShieldHp;
+            var shieldSourceText = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
+                ? "shield was also derived from the hit"
+                : "shield came from the captured sample";
+            var tooltip = $"Derived HP after {pendingDerivedHp.SourceName}: {pendingDerivedHp.ActionName} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
+            return new LeadUpTimelineRow(
+                snapshot.SeenAtUtc,
+                snapshot.PullElapsedSeconds,
+                pendingDerivedHp.DerivedCurrentHp,
+                displayShieldHp,
+                snapshot.MaxHp > 0 ? snapshot.MaxHp : pendingDerivedHp.SourceMaxHp,
+                snapshot.Statuses,
+                snapshot.Statuses,
+                null,
+                tooltip);
+        }
+
         return new LeadUpTimelineRow(
             snapshot.SeenAtUtc,
             snapshot.PullElapsedSeconds,
@@ -1455,6 +1501,41 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.Statuses,
             null,
             null);
+    }
+
+    private static bool IsStalePostHitSample(HpHistorySnapshot snapshot, DerivedHpState pendingDerivedHp)
+    {
+        return snapshot.CurrentHp == pendingDerivedHp.SourceCurrentHp &&
+            (snapshot.MaxHp == 0 || pendingDerivedHp.SourceMaxHp == 0 || snapshot.MaxHp == pendingDerivedHp.SourceMaxHp);
+    }
+
+    private static DerivedHpState? TryCreateDerivedHpState(CombatEventRecord combatEvent, EventHpDisplay hpDisplay)
+    {
+        if (combatEvent.Kind != DeathEventKind.Damage || combatEvent.Amount == 0 || hpDisplay.MaxHp == 0)
+        {
+            return null;
+        }
+
+        var remainingDamage = (ulong)combatEvent.Amount;
+        var derivedShieldHp = (ulong)hpDisplay.ShieldHp;
+        var shieldDamage = Math.Min(derivedShieldHp, remainingDamage);
+        derivedShieldHp -= shieldDamage;
+        remainingDamage -= shieldDamage;
+
+        var derivedCurrentHp = (ulong)hpDisplay.CurrentHp;
+        var hpDamage = Math.Min(derivedCurrentHp, remainingDamage);
+        derivedCurrentHp -= hpDamage;
+
+        return new DerivedHpState(
+            combatEvent.SeenAtUtc,
+            combatEvent.SourceName,
+            combatEvent.ActionName,
+            combatEvent.Amount,
+            hpDisplay.CurrentHp,
+            hpDisplay.ShieldHp,
+            hpDisplay.MaxHp,
+            (uint)derivedCurrentHp,
+            (uint)derivedShieldHp);
     }
 
     private static IReadOnlyList<StatusSnapshot> GetNearbyHpHistoryStatuses(
@@ -2579,10 +2660,13 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TextDisabled(
-            $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
+            $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
 
         ImGui.Separator();
         DrawDebugStatusSnapshots();
+
+        ImGui.Separator();
+        DrawDebugEffectResultSnapshots();
 
         ImGui.Separator();
         DrawDebugLog();
@@ -2671,6 +2755,101 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
+    private void DrawDebugEffectResultSnapshots()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "EffectResult packet table");
+        ImGui.TextDisabled("Memory-only. Shows the latest packet-side HP, shield percent, MP, related action sequence, replay flag, and status entries per target.");
+
+        if (!configuration.DebugLogEnabled)
+        {
+            ImGui.TextDisabled("Enable debug capture to see EffectResult packets.");
+            return;
+        }
+
+        if (!plugin.DebugEffectResultHookEnabled)
+        {
+            ImGui.TextColored(WarningColor, "EffectResult hook is not enabled. The signature may be unavailable on this client build.");
+            return;
+        }
+
+        var snapshots = plugin.DebugEffectResultSnapshots;
+        if (snapshots.Count == 0)
+        {
+            ImGui.TextDisabled("No EffectResult packets captured yet. Enter combat in a duty with tracked characters visible.");
+            return;
+        }
+
+        foreach (var snapshot in snapshots)
+        {
+            ImGui.PushID($"DebugEffectResult{snapshot.TargetId}{snapshot.ActorId}{snapshot.TargetName}");
+            var label = $"{snapshot.TargetName} - {snapshot.Statuses.Count:N0}/{snapshot.EffectCount:N0} packet statuses###DebugEffectResultSnapshot";
+            if (ImGui.TreeNode(label))
+            {
+                var shieldText = snapshot.ShieldHp > 0
+                    ? $" ({snapshot.ShieldHp:N0})"
+                    : string.Empty;
+                ImGui.TextDisabled(
+                    $"Last packet {snapshot.SeenAtUtc:HH:mm:ss} UTC | Pull {FormatCombatTimer(snapshot.PullElapsedSeconds)} | HP {snapshot.CurrentHp:N0} / {snapshot.MaxHp:N0} | Shield {snapshot.ShieldPercent:N0}%{shieldText} | MP {snapshot.CurrentMp:N0} | Seq {snapshot.RelatedActionSequence} | Replay {FormatDebugBool(snapshot.IsReplay)}");
+                ImGui.TextDisabled(
+                    $"Target {FormatDebugStatusSource(snapshot.TargetId)} | Actor {FormatDebugStatusSource(snapshot.ActorId)}");
+
+                if (snapshot.Statuses.Count == 0)
+                {
+                    ImGui.TextDisabled("Packet carried no status entries.");
+                }
+                else
+                {
+                    DrawDebugEffectResultStatusTable(snapshot);
+                }
+
+                ImGui.TreePop();
+            }
+
+            ImGui.PopID();
+        }
+    }
+
+    private void DrawDebugEffectResultStatusTable(DebugEffectResultSnapshot snapshot)
+    {
+        if (!ImGui.BeginTable("##DebugEffectResultStatuses", 8, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed, Math.Clamp(configuration.StatusIconSize, 16.0f, 32.0f) + 10.0f);
+        ImGui.TableSetupColumn("Index", ImGuiTableColumnFlags.WidthStretch, 0.45f);
+        ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 1.7f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        ImGui.TableSetupColumn("Source name", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Duration", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+        DrawCenteredTableHeader("Icon", "Index", "ID", "Name", "Source", "Source name", "Stacks", "Duration");
+
+        foreach (var status in snapshot.Statuses)
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            DrawCenteredGameIcon(status.IconId, Math.Clamp(configuration.StatusIconSize, 16.0f, 32.0f), FormatDebugEffectResultStatusTooltip(status));
+            ImGui.TableNextColumn();
+            DrawCenteredText(status.EffectIndex.ToString());
+            ImGui.TableNextColumn();
+            DrawCenteredText(status.EffectId.ToString());
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(status.Name);
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugStatusSource(status.SourceActorId));
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(status.SourceName);
+            ImGui.TableNextColumn();
+            DrawCenteredText(status.StackCount == 0 ? "-" : status.StackCount.ToString());
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugEffectResultDuration(status.Duration));
+        }
+
+        ImGui.EndTable();
+    }
+
     private void DrawDebugLog()
     {
         var entries = plugin.DebugLogEntries;
@@ -2721,6 +2900,20 @@ public sealed class RecapWindow : Window, IDisposable
     private static string FormatDebugStatusTooltip(StatusSnapshot status)
     {
         return $"{status.Name} ({status.Id})\nSource: {FormatDebugStatusSource(status.SourceId)}\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nRemaining: {FormatStatusDuration(status, true, true, "-")}";
+    }
+
+    private static string FormatDebugEffectResultStatusTooltip(DebugEffectResultStatus status)
+    {
+        return $"{status.Name} ({status.EffectId})\nEffect index: {status.EffectIndex}\nSource: {status.SourceName} ({FormatDebugStatusSource(status.SourceActorId)})\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nDuration: {FormatDebugEffectResultDuration(status.Duration)}";
+    }
+
+    private static string FormatDebugEffectResultDuration(float duration)
+    {
+        return duration < 0.0f
+            ? "remove"
+            : duration <= 0.0f
+                ? "-"
+                : $"{duration:0.0}s";
     }
 
     private bool HasPendingDeathSelection(IReadOnlyList<PartyDeathRecord> deaths)
@@ -2797,13 +2990,21 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.84");
+        ImGui.TextDisabled("Testing EffectResult hook capture.");
+        DrawBreathingGoldBullet("Added an EffectResult signature hook for testing packet-side HP, shield, MP, related action sequence, and status data.");
+        DrawBreathingGoldBullet("Debug now has an EffectResult packet table so captured hook data can be validated in-game before it feeds recaps.");
+        DrawWrappedBullet("The EffectResult hook fails gracefully if the signature is unavailable instead of blocking Better Deaths from loading.");
+        DrawWrappedBullet("Hook capture currently feeds Debug only; death recap selection is unchanged while this data is validated.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.82");
         ImGui.TextDisabled("Testing HP capture refactor and recorded pull sorting.");
         DrawBreathingGoldBullet("Action-effect capture now uses a bounded raw queue resolved on the framework tick, keeping the hook path lightweight.");
-        DrawBreathingGoldBullet("Headline HP before hit now requires a close prior HP sample instead of mathematical guesswork.");
+        DrawBreathingGoldBullet("Headline HP before hit now keeps the existing mathematical correction path, then falls back to the best prior HP sample.");
         DrawWrappedBullet("Repeated hits now keep separate event identities, while duplicate stored copies collapse correctly.");
-        DrawWrappedBullet("Chat posts and Player Death Information now show HP unavailable when no reliable pre-hit sample exists.");
-        DrawWrappedBullet("Removed unvalidated derived post-hit HP from the 10-second lead-up.");
+        DrawWrappedBullet("Chat posts and Player Death Information no longer print empty HP placeholders when no HP row exists.");
+        DrawWrappedBullet("10-second HP history keeps derived post-hit rows when later HP samples are stale after a captured hit.");
         DrawWrappedBullet("Duty, newest first now keeps the duty with the newest recorded pull at the top after older pulls are removed by the Recorded pulls kept limit.");
 
         ImGui.Separator();

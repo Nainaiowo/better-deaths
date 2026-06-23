@@ -165,6 +165,33 @@ public sealed record DebugStatusSnapshot(
     bool IsPartyMember,
     IReadOnlyList<StatusSnapshot> Statuses);
 
+public sealed record DebugEffectResultStatus(
+    byte EffectIndex,
+    ushort EffectId,
+    string Name,
+    uint IconId,
+    ushort StackCount,
+    float Duration,
+    uint SourceActorId,
+    string SourceName);
+
+public sealed record DebugEffectResultSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    uint TargetId,
+    string TargetName,
+    string? MemberKey,
+    uint ActorId,
+    uint CurrentHp,
+    uint MaxHp,
+    ushort CurrentMp,
+    byte ShieldPercent,
+    uint ShieldHp,
+    byte EffectCount,
+    uint RelatedActionSequence,
+    bool IsReplay,
+    IReadOnlyList<DebugEffectResultStatus> Statuses);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

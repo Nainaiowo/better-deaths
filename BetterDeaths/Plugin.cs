@@ -24,6 +24,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -59,9 +60,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int RawCombatLogRetentionSeconds = 10;
     private const int MaxRawActionEffectPackets = 256;
     private const int MaxRawCombatLogMessages = 256;
+    private const int MaxRawEffectResultPackets = 256;
     private const int MaxActionEffectTargets = 32;
+    private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
+    private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
     public const float MinWidgetIconSize = 12.0f;
@@ -87,7 +91,7 @@ public sealed partial class Plugin : IDalamudPlugin
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.\s+HP before hit unavailable\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+likely walled/non-hit KO\.(?:\s+HP before KO:\s+.+\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
@@ -142,6 +146,57 @@ public sealed partial class Plugin : IDalamudPlugin
         string ActionName,
         uint Amount);
 
+    private sealed record RawEffectResultPacket(
+        long Sequence,
+        DateTime SeenAtUtc,
+        uint TargetId,
+        uint RelatedActionSequence,
+        uint ActorId,
+        uint CurrentHp,
+        uint MaxHp,
+        ushort CurrentMp,
+        byte ShieldPercent,
+        byte EffectCount,
+        byte IsReplay,
+        IReadOnlyList<RawEffectResultStatus> Statuses);
+
+    private sealed record RawEffectResultStatus(
+        byte EffectIndex,
+        ushort EffectId,
+        ushort StackCount,
+        float Duration,
+        uint SourceActorId);
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private unsafe struct EffectResultPacket
+    {
+        public uint Unknown1;
+        public uint RelatedActionSequence;
+        public uint ActorId;
+        public uint CurrentHp;
+        public uint MaxHp;
+        public ushort CurrentMp;
+        public ushort Unknown3;
+        public byte DamageShield;
+        public byte EffectCount;
+        public ushort Unknown6;
+        public fixed byte Effects[64];
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct EffectResultStatusEntry
+    {
+        public byte EffectIndex;
+        public byte Unknown1;
+        public ushort EffectId;
+        public ushort StackCount;
+        public ushort Unknown3;
+        public float Duration;
+        public uint SourceActorId;
+    }
+
+    private delegate void ProcessPacketEffectResultDelegate(uint targetId, IntPtr actionIntegrityData, byte isReplay);
+
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
@@ -164,6 +219,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<PullDeathSnapshot> recordedPulls = [];
     private readonly List<DebugLogEntry> debugLogEntries = [];
     private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
@@ -185,8 +241,10 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly object rawCombatQueueLock = new();
     private readonly Queue<RawActionEffectPacket> rawActionEffectPackets = [];
     private readonly Queue<RawCombatLogMessage> rawCombatLogMessages = [];
+    private readonly Queue<RawEffectResultPacket> rawEffectResultPackets = [];
     private long nextRawActionEffectSequence = 1;
     private long nextRawCombatLogSequence = 1;
+    private long nextRawEffectResultSequence = 1;
     private long nextResolvedCombatEventOrdinal = 1;
     private DateTime? pendingDeathRecapLinksDueAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
@@ -200,6 +258,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private string? pendingUpdateNoticeKey;
     private string? lastSavedRecordedPullHistoryJson;
     private bool updateCheckInProgress;
+    private bool effectResultHookEnabled;
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -259,6 +318,7 @@ public sealed partial class Plugin : IDalamudPlugin
     ];
 
     private Hook<ActionEffectHandler.Delegates.Receive>? actionEffectHook;
+    private Hook<ProcessPacketEffectResultDelegate>? effectResultHook;
     private DateTime? pullStartedAtUtc;
     private DateTime? lastInCombatAtUtc;
     private float lastKnownPullElapsedSeconds;
@@ -289,6 +349,11 @@ public sealed partial class Plugin : IDalamudPlugin
         .ThenBy(snapshot => snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    public IReadOnlyList<DebugEffectResultSnapshot> DebugEffectResultSnapshots => debugEffectResultSnapshotsByTarget.Values
+        .OrderBy(snapshot => snapshot.PullElapsedSeconds)
+        .ThenBy(snapshot => snapshot.TargetName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
     public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
 
     public bool DebugIsPvPCaptureBlocked => IsPvPCaptureBlocked();
@@ -296,6 +361,8 @@ public sealed partial class Plugin : IDalamudPlugin
     public bool DebugIsInCombat => Condition[ConditionFlag.InCombat];
 
     public bool DebugShouldCaptureLiveCombat => ShouldCaptureLiveCombat(DateTime.UtcNow);
+
+    public bool DebugEffectResultHookEnabled => effectResultHookEnabled;
 
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
@@ -364,6 +431,21 @@ public sealed partial class Plugin : IDalamudPlugin
             OnReceiveActionEffect);
         actionEffectHook.Enable();
 
+        try
+        {
+            effectResultHook = GameInteropProvider.HookFromSignature<ProcessPacketEffectResultDelegate>(
+                EffectResultSignature,
+                OnProcessPacketEffectResult);
+            effectResultHook.Enable();
+            effectResultHookEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            effectResultHookEnabled = false;
+            effectResultHook = null;
+            Log.Warning(ex, "Better Deaths EffectResult debug hook could not be enabled.");
+        }
+
         DutyState.DutyStarted += OnDutyReset;
         DutyState.DutyWiped += OnDutyReset;
         DutyState.DutyRecommenced += OnDutyReset;
@@ -389,6 +471,7 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyRecommenced -= OnDutyReset;
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyReset;
+        effectResultHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
         CommandManager.RemoveHandler(ShortWidgetCommandName);
@@ -470,6 +553,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
+        debugEffectResultSnapshotsByTarget.Clear();
     }
 
     public void ClearRecordedPulls()
@@ -558,7 +642,10 @@ public sealed partial class Plugin : IDalamudPlugin
         if (causeEvents.Count == 0)
         {
             RememberOwnSharedDeathPost(death);
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: likely walled/non-hit KO. HP before hit unavailable.");
+            var hpSuffix = selection.Snapshot is null
+                ? string.Empty
+                : $" HP before KO: {FormatEffectiveHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: likely walled/non-hit KO.{hpSuffix}");
             QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
             QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
             return;
@@ -1225,6 +1312,29 @@ public sealed partial class Plugin : IDalamudPlugin
         return (uint)Math.Round(maxHp * shieldPercentage / 100.0, MidpointRounding.AwayFromZero);
     }
 
+    private static uint CalculateShieldHpFromPercent(uint maxHp, byte shieldPercent)
+    {
+        if (maxHp == 0 || shieldPercent == 0)
+        {
+            return 0;
+        }
+
+        var shieldPercentage = Math.Clamp((double)shieldPercent, 0.0, 100.0);
+        return (uint)Math.Round(maxHp * shieldPercentage / 100.0, MidpointRounding.AwayFromZero);
+    }
+
+    private static string GetEffectResultDebugKey(DebugEffectResultSnapshot snapshot)
+    {
+        if (!string.IsNullOrWhiteSpace(snapshot.MemberKey))
+        {
+            return snapshot.MemberKey;
+        }
+
+        return snapshot.TargetId != 0
+            ? $"target:{snapshot.TargetId:X8}"
+            : $"actor:{snapshot.ActorId:X8}";
+    }
+
     private unsafe void OnReceiveActionEffect(
         uint casterEntityId,
         Character* casterPtr,
@@ -1243,6 +1353,65 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         actionEffectHook?.Original(casterEntityId, casterPtr, targetPos, header, effects, targetEntityIds);
+    }
+
+    private unsafe void OnProcessPacketEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
+    {
+        effectResultHook?.Original(targetId, actionIntegrityData, isReplay);
+
+        try
+        {
+            EnqueueRawEffectResult(targetId, actionIntegrityData, isReplay);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not process Better Deaths EffectResult packet.");
+        }
+    }
+
+    private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
+    {
+        var now = DateTime.UtcNow;
+        if (!Configuration.DebugLogEnabled ||
+            !ShouldAcceptRawCombatCapture(now) ||
+            actionIntegrityData == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var packet = (EffectResultPacket*)actionIntegrityData;
+        var effectCount = Math.Min(packet->EffectCount, (byte)MaxEffectResultEntries);
+        var statuses = new List<RawEffectResultStatus>(effectCount);
+        var effects = (EffectResultStatusEntry*)packet->Effects;
+        for (var i = 0; i < effectCount; i++)
+        {
+            var effect = effects[i];
+            if (effect.EffectId == 0)
+            {
+                continue;
+            }
+
+            statuses.Add(new RawEffectResultStatus(
+                effect.EffectIndex,
+                effect.EffectId,
+                effect.StackCount,
+                effect.Duration,
+                effect.SourceActorId));
+        }
+
+        EnqueueRawEffectResultPacket(new RawEffectResultPacket(
+            GetNextRawEffectResultSequence(),
+            now,
+            targetId,
+            packet->RelatedActionSequence,
+            packet->ActorId,
+            packet->CurrentHp,
+            packet->MaxHp,
+            packet->CurrentMp,
+            packet->DamageShield,
+            packet->EffectCount,
+            isReplay,
+            statuses));
     }
 
     private unsafe void EnqueueRawActionEffects(
@@ -1325,6 +1494,14 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private long GetNextRawEffectResultSequence()
+    {
+        lock (rawCombatQueueLock)
+        {
+            return nextRawEffectResultSequence++;
+        }
+    }
+
     private void EnqueueRawActionEffectPacket(RawActionEffectPacket packet)
     {
         lock (rawCombatQueueLock)
@@ -1349,6 +1526,18 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private void EnqueueRawEffectResultPacket(RawEffectResultPacket packet)
+    {
+        lock (rawCombatQueueLock)
+        {
+            rawEffectResultPackets.Enqueue(packet);
+            while (rawEffectResultPackets.Count > MaxRawEffectResultPackets)
+            {
+                rawEffectResultPackets.Dequeue();
+            }
+        }
+    }
+
     private void ResolveRawCombatQueues(DateTime now)
     {
         var actionPackets = DrainRawActionEffectPackets(now);
@@ -1361,6 +1550,12 @@ public sealed partial class Plugin : IDalamudPlugin
         foreach (var message in combatLogMessages.OrderBy(message => message.Sequence))
         {
             ResolveRawCombatLogMessage(message);
+        }
+
+        var effectResultPackets = DrainRawEffectResultPackets(now);
+        foreach (var packet in effectResultPackets.OrderBy(packet => packet.Sequence))
+        {
+            ResolveRawEffectResultPacket(packet);
         }
     }
 
@@ -1403,6 +1598,27 @@ public sealed partial class Plugin : IDalamudPlugin
             var messages = rawCombatLogMessages.ToList();
             rawCombatLogMessages.Clear();
             return messages;
+        }
+    }
+
+    private IReadOnlyList<RawEffectResultPacket> DrainRawEffectResultPackets(DateTime now)
+    {
+        lock (rawCombatQueueLock)
+        {
+            var cutoff = now - TimeSpan.FromSeconds(RawCombatLogRetentionSeconds);
+            while (rawEffectResultPackets.Count > 0 && rawEffectResultPackets.Peek().SeenAtUtc < cutoff)
+            {
+                rawEffectResultPackets.Dequeue();
+            }
+
+            if (rawEffectResultPackets.Count == 0)
+            {
+                return [];
+            }
+
+            var packets = rawEffectResultPackets.ToList();
+            rawEffectResultPackets.Clear();
+            return packets;
         }
     }
 
@@ -1516,6 +1732,60 @@ public sealed partial class Plugin : IDalamudPlugin
             message.ActionName,
             message.Amount);
         AddRecentCombatLogEvent(record);
+    }
+
+    private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
+    {
+        if (!Configuration.DebugLogEnabled)
+        {
+            return;
+        }
+
+        var member = currentMembers.FirstOrDefault(member =>
+            member.EntityId != 0 &&
+            (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
+        if (member is null && !Configuration.CaptureOtherDeaths)
+        {
+            return;
+        }
+
+        var targetName = member?.MemberName ??
+            GetEntityDisplayName(packet.TargetId != 0 ? packet.TargetId : packet.ActorId);
+        var shieldHp = CalculateShieldHpFromPercent(packet.MaxHp, packet.ShieldPercent);
+        var statuses = packet.Statuses
+            .Select(status => new DebugEffectResultStatus(
+                status.EffectIndex,
+                status.EffectId,
+                GetStatusName(status.EffectId),
+                GetStatusIconId(status.EffectId),
+                status.StackCount,
+                status.Duration,
+                status.SourceActorId,
+                GetStatusSourceName(status.SourceActorId)))
+            .OrderBy(status => status.EffectIndex)
+            .ThenBy(status => status.EffectId)
+            .ToList();
+
+        var snapshot = new DebugEffectResultSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            packet.TargetId,
+            targetName,
+            member?.MemberKey,
+            packet.ActorId,
+            packet.CurrentHp,
+            packet.MaxHp,
+            packet.CurrentMp,
+            packet.ShieldPercent,
+            shieldHp,
+            packet.EffectCount,
+            packet.RelatedActionSequence,
+            packet.IsReplay != 0,
+            statuses);
+        debugEffectResultSnapshotsByTarget[GetEffectResultDebugKey(snapshot)] = snapshot;
+
+        AddDebugLog(
+            $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
@@ -2188,6 +2458,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             rawActionEffectPackets.Clear();
             rawCombatLogMessages.Clear();
+            rawEffectResultPackets.Clear();
         }
 
         currentMemberKeyScratch.Clear();
@@ -2370,13 +2641,15 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ClearDebugStatusSnapshotsForNewCombat()
     {
-        if (debugStatusSnapshotsByMember.Count == 0)
+        if (debugStatusSnapshotsByMember.Count == 0 &&
+            debugEffectResultSnapshotsByTarget.Count == 0)
         {
             return;
         }
 
         debugStatusSnapshotsByMember.Clear();
-        AddDebugLog("Cleared debug status table for new combat.");
+        debugEffectResultSnapshotsByTarget.Clear();
+        AddDebugLog("Cleared debug status and EffectResult tables for new combat.");
     }
 
     private float CalculatePullElapsed(DateTime now)
@@ -3079,20 +3352,28 @@ public sealed partial class Plugin : IDalamudPlugin
     private static string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
     {
         var hpText = FormatDeathChatHp(snapshot, cause);
+        var hpSuffix = hpText is null
+            ? string.Empty
+            : cause.Kind == DeathEventKind.Status
+                ? $" HP before KO: {hpText}."
+                : $" HP before hit: {hpText}.";
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {cause.SourceName}. HP before KO: {hpText}."
-            : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}. HP before hit: {hpText}.";
+            ? $"{cause.ActionName} from {cause.SourceName}.{hpSuffix}"
+            : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}.{hpSuffix}";
     }
 
     private static string FormatDeathChatMultiHitLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
     {
         var hpText = FormatDeathChatHp(snapshot, damageEvents[0]);
+        var hpSuffix = hpText is null
+            ? string.Empty
+            : $" HP before hit: {hpText}.";
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
         var sourceName = GetSharedDamageSourceName(damageEvents);
-        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}. HP before hit: {hpText}.";
+        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}.{hpSuffix}";
     }
 
-    private static string FormatDeathChatHp(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
+    private static string? FormatDeathChatHp(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
     {
         if (snapshot is not null)
         {
@@ -3103,7 +3384,7 @@ public sealed partial class Plugin : IDalamudPlugin
             fallbackEvent.MaxHp > 0 &&
             (fallbackEvent.CurrentHp > 0 || fallbackEvent.ShieldHp > 0)
             ? FormatEffectiveHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp)
-            : "unavailable";
+            : null;
     }
 
     private static string GetSharedDamageSourceName(IReadOnlyList<CombatEventRecord> damageEvents)
