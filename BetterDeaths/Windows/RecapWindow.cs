@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.85";
+    private const string CurrentChangelogVersion = "0.1.0.86";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3094,19 +3094,24 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.86");
+        ImGui.TextDisabled("Changelog wording fixes.");
+        DrawWrappedBullet("Cleaned up changelog wording.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.85");
-        ImGui.TextDisabled("Testing ActorControl debug capture.");
-        DrawBreathingGoldBullet("Added an ActorControl signature hook for testing death, DoT, HoT, tether, target, and status/control event timing.");
-        DrawBreathingGoldBullet("Debug now has an ActorControl packet table so raw categories, params, entity IDs, and target IDs can be validated in-game.");
-        DrawWrappedBullet("The ActorControl hook fails gracefully if the signature is unavailable instead of blocking Better Deaths from loading.");
-        DrawWrappedBullet("ActorControl capture currently feeds Debug only; death recap selection is unchanged while this data is validated.");
+        ImGui.TextDisabled("Testing signature-based control event capture.");
+        DrawBreathingGoldBullet("Added signature-based capture for testing death, DoT, HoT, tether, target, and status/control event timing.");
+        DrawBreathingGoldBullet("Debug now has a control event packet table so raw categories, params, entity IDs, and target IDs can be validated in-game.");
+        DrawWrappedBullet("The new capture path fails gracefully if unavailable instead of blocking Better Deaths from loading.");
+        DrawWrappedBullet("This capture path currently feeds Debug only; death recap selection is unchanged while this data is validated.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.84");
-        ImGui.TextDisabled("Testing EffectResult hook capture.");
-        DrawBreathingGoldBullet("Added an EffectResult signature hook for testing packet-side HP, shield, MP, related action sequence, and status data.");
-        DrawBreathingGoldBullet("Debug now has an EffectResult packet table so captured hook data can be validated in-game before it feeds recaps.");
-        DrawWrappedBullet("The EffectResult hook fails gracefully if the signature is unavailable instead of blocking Better Deaths from loading.");
+        ImGui.TextDisabled("Testing signature-based packet capture.");
+        DrawBreathingGoldBullet("Added signature-based capture for testing packet-side HP, shield, MP, related action sequence, and status data.");
+        DrawBreathingGoldBullet("Debug now has a packet capture table so captured data can be validated in-game before it feeds recaps.");
+        DrawWrappedBullet("The new capture path fails gracefully if unavailable instead of blocking Better Deaths from loading.");
         DrawWrappedBullet("Hook capture currently feeds Debug only; death recap selection is unchanged while this data is validated.");
 
         ImGui.Separator();
