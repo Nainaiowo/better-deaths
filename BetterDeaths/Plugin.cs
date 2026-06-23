@@ -46,7 +46,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int QueuedChatDelayMs = 750;
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
-    private const int MaxDebugLogEntries = 500;
+    private const int MaxDebugLogEntries = 1000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
     private const int RecordedPullHistorySchemaVersion = 2;
     private const int RecordedPullHistoryRollingBackupCount = 5;
@@ -62,7 +62,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRawCombatLogMessages = 256;
     private const int MaxRawEffectResultPackets = 256;
     private const int MaxRawActorControlPackets = 256;
-    private const int MaxDebugActorControlEvents = 200;
+    private const int MaxDebugEffectResultEvents = 1000;
+    private const int MaxDebugActorControlEvents = 1000;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
@@ -253,6 +254,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<DebugLogEntry> debugLogEntries = [];
     private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
+    private readonly List<DebugEffectResultSnapshot> debugEffectResultHistory = [];
     private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
@@ -296,6 +298,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool updateCheckInProgress;
     private bool effectResultHookEnabled;
     private bool actorControlHookEnabled;
+    private bool debugFreezeOnDeathEnabled;
+    private bool debugCaptureFrozen;
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -392,6 +396,11 @@ public sealed partial class Plugin : IDalamudPlugin
         .ThenBy(snapshot => snapshot.TargetName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    public IReadOnlyList<DebugEffectResultSnapshot> DebugEffectResultHistory => debugEffectResultHistory
+        .OrderBy(snapshot => snapshot.SeenAtUtc)
+        .ThenBy(snapshot => snapshot.TargetName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
     public IReadOnlyList<DebugActorControlEvent> DebugActorControlEvents => debugActorControlEvents
         .OrderBy(entry => entry.SeenAtUtc)
         .ThenBy(entry => entry.Category)
@@ -408,6 +417,10 @@ public sealed partial class Plugin : IDalamudPlugin
     public bool DebugEffectResultHookEnabled => effectResultHookEnabled;
 
     public bool DebugActorControlHookEnabled => actorControlHookEnabled;
+
+    public bool DebugFreezeOnDeathEnabled => debugFreezeOnDeathEnabled;
+
+    public bool DebugCaptureFrozen => debugCaptureFrozen;
 
     public PluginUpdateStatus PluginUpdateStatus => new(
         pluginUpdateCheckState,
@@ -506,7 +519,7 @@ public sealed partial class Plugin : IDalamudPlugin
             Log.Warning(ex, "Better Deaths EffectResult debug hook could not be enabled.");
         }
 
-        DutyState.DutyStarted += OnDutyReset;
+        DutyState.DutyStarted += OnDutyStarted;
         DutyState.DutyWiped += OnDutyReset;
         DutyState.DutyRecommenced += OnDutyReset;
         ChatGui.ChatMessage += OnChatMessage;
@@ -530,7 +543,7 @@ public sealed partial class Plugin : IDalamudPlugin
         ChatGui.ChatMessage -= OnChatMessage;
         DutyState.DutyRecommenced -= OnDutyReset;
         DutyState.DutyWiped -= OnDutyReset;
-        DutyState.DutyStarted -= OnDutyReset;
+        DutyState.DutyStarted -= OnDutyStarted;
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
@@ -610,12 +623,35 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetDebugFreezeOnDeathEnabled(bool enabled)
+    {
+        debugFreezeOnDeathEnabled = enabled;
+        if (!enabled && debugCaptureFrozen)
+        {
+            debugCaptureFrozen = false;
+            AddDebugLog("Debug capture resumed.");
+        }
+    }
+
+    public void SetDebugCaptureFrozen(bool frozen)
+    {
+        if (debugCaptureFrozen == frozen)
+        {
+            return;
+        }
+
+        debugCaptureFrozen = frozen;
+        AddDebugLog(frozen ? "Debug capture frozen." : "Debug capture resumed.");
+    }
+
     public void ClearDebugLog()
     {
         debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
+        debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
+        debugCaptureFrozen = false;
     }
 
     public void ClearRecordedPulls()
@@ -1473,6 +1509,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         var now = DateTime.UtcNow;
         if (!Configuration.DebugLogEnabled ||
+            debugCaptureFrozen ||
             !ShouldAcceptRawCombatCapture(now))
         {
             return;
@@ -1499,6 +1536,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         var now = DateTime.UtcNow;
         if (!Configuration.DebugLogEnabled ||
+            debugCaptureFrozen ||
             !ShouldAcceptRawCombatCapture(now) ||
             actionIntegrityData == IntPtr.Zero)
         {
@@ -1909,7 +1947,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
     {
-        if (!Configuration.DebugLogEnabled)
+        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
@@ -1956,6 +1994,11 @@ public sealed partial class Plugin : IDalamudPlugin
             packet.IsReplay != 0,
             statuses);
         debugEffectResultSnapshotsByTarget[GetEffectResultDebugKey(snapshot)] = snapshot;
+        debugEffectResultHistory.Add(snapshot);
+        while (debugEffectResultHistory.Count > MaxDebugEffectResultEvents)
+        {
+            debugEffectResultHistory.RemoveAt(0);
+        }
 
         AddDebugLog(
             $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
@@ -1963,7 +2006,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
-        if (!Configuration.DebugLogEnabled)
+        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
@@ -2006,6 +2049,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
         AddDebugLog(
             $"ActorControl {categoryName} for {entityName}: p1 {packet.Param1}, p2 {packet.Param2}, target {FormatDebugActorControlTarget(packet.TargetId)}.");
+        if (debugFreezeOnDeathEnabled && packet.Category == 0x6)
+        {
+            SetDebugCaptureFrozen(true);
+        }
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
@@ -2452,7 +2499,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
     {
-        if (!Configuration.DebugLogEnabled)
+        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
@@ -2624,6 +2671,12 @@ public sealed partial class Plugin : IDalamudPlugin
         ArchiveCurrentPullForReview("Duty reset");
         currentTerritoryId = ClientState.TerritoryType;
         currentTerritoryName = GetTerritoryName(currentTerritoryId);
+    }
+
+    private void OnDutyStarted(IDutyStateEventArgs args)
+    {
+        ClearDebugDataForDutyEnter();
+        OnDutyReset(args);
     }
 
     private void ArchiveCurrentPullForReview(string reason, bool suppressResetStateDeaths = true)
@@ -2869,15 +2922,9 @@ public sealed partial class Plugin : IDalamudPlugin
         var inCombat = Condition[ConditionFlag.InCombat];
         if (inCombat)
         {
-            var startedNewCombat = !combatTimerRunning;
             if (currentPullClosedForReview)
             {
                 ResetCurrentPull(suppressResetStateDeaths: false);
-            }
-
-            if (startedNewCombat)
-            {
-                ClearDebugStatusSnapshotsForNewCombat();
             }
 
             lastInCombatAtUtc = now;
@@ -2901,19 +2948,25 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private void ClearDebugStatusSnapshotsForNewCombat()
+    private void ClearDebugDataForDutyEnter()
     {
         if (debugStatusSnapshotsByMember.Count == 0 &&
             debugEffectResultSnapshotsByTarget.Count == 0 &&
-            debugActorControlEvents.Count == 0)
+            debugEffectResultHistory.Count == 0 &&
+            debugActorControlEvents.Count == 0 &&
+            debugLogEntries.Count == 0 &&
+            !debugCaptureFrozen)
         {
             return;
         }
 
+        debugLogEntries.Clear();
         debugStatusSnapshotsByMember.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
+        debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
-        AddDebugLog("Cleared debug status, EffectResult, and ActorControl tables for new combat.");
+        debugCaptureFrozen = false;
+        AddDebugLog("Cleared debug data for duty enter.");
     }
 
     private float CalculatePullElapsed(DateTime now)

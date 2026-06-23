@@ -23,6 +23,8 @@ public sealed class RecapWindow : Window, IDisposable
     private bool clearPendingDeathSelection;
     private bool collapseRecordedPullsRequested;
     private bool showDebugTab;
+    private string debugTextFilter = string.Empty;
+    private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
     private static readonly Vector4 DamageColor = new(1.0f, 0.35f, 0.25f, 1.0f);
     private static readonly Vector4 HealColor = new(0.25f, 1.0f, 0.45f, 1.0f);
@@ -40,7 +42,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.86";
+    private const string CurrentChangelogVersion = "0.1.0.87";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -48,6 +50,16 @@ public sealed class RecapWindow : Window, IDisposable
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
+    private static readonly string[] DebugActorControlCategoryFilters =
+    [
+        "All",
+        "Death",
+        "DoT",
+        "HoT",
+        "Status gain/update/loss",
+        "Tether/target",
+        "Other",
+    ];
 
     private sealed record HpHistoryDisplayRow(
         HpHistorySnapshot FirstSnapshot,
@@ -2644,8 +2656,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDebugTab()
     {
-        ImGui.TextWrapped("Debug shows raw statuses captured for each tracked character during the current combat, plus the internal capture log. Use this to verify whether Dalamud exposes a status before Better Deaths filters it for recaps.");
+        ImGui.TextWrapped("Debug shows raw statuses and packet/control captures for tracked characters in the current duty, plus the internal capture log. Use this to verify whether Dalamud exposes data before Better Deaths filters it for recaps.");
         ImGui.TextColored(SpamWarningColor, "Warning: this is for troubleshooting only and can get noisy while combat events are happening.");
+        ImGui.TextDisabled("Debug data stays until duty enter or manual clear. New pulls inside the same duty will append to the same history.");
 
         var debugEnabled = configuration.DebugLogEnabled;
         if (ImGui.Checkbox("Enable debug capture", ref debugEnabled))
@@ -2658,6 +2671,31 @@ public sealed class RecapWindow : Window, IDisposable
         {
             plugin.ClearDebugLog();
         }
+
+        ImGui.SameLine();
+        var freezeOnDeath = plugin.DebugFreezeOnDeathEnabled;
+        if (ImGui.Checkbox("Freeze on death", ref freezeOnDeath))
+        {
+            plugin.SetDebugFreezeOnDeathEnabled(freezeOnDeath);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("When enabled, Debug records the death control event and then stops accepting new debug rows until resumed or cleared.");
+        }
+
+        if (plugin.DebugCaptureFrozen)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(WarningColor, "Frozen");
+            ImGui.SameLine();
+            if (ImGui.Button("Resume debug capture"))
+            {
+                plugin.SetDebugCaptureFrozen(false);
+            }
+        }
+
+        DrawDebugFilters();
 
         ImGui.TextDisabled(
             $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | ActorControl hook {FormatDebugBool(plugin.DebugActorControlHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
@@ -2675,10 +2713,126 @@ public sealed class RecapWindow : Window, IDisposable
         DrawDebugLog();
     }
 
+    private void DrawDebugFilters()
+    {
+        ImGui.SetNextItemWidth(MathF.Max(180.0f, ImGui.GetContentRegionAvail().X * 0.35f));
+        ImGui.InputText("Player/text filter##DebugTextFilter", ref debugTextFilter, 128);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Filters Debug rows by player, target, source, category, action/status text, or raw IDs shown in the row.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(debugTextFilter))
+        {
+            ImGui.SameLine();
+            if (ImGui.Button("Clear filter"))
+            {
+                debugTextFilter = string.Empty;
+            }
+        }
+
+        ImGui.SetNextItemWidth(MathF.Max(180.0f, ImGui.GetContentRegionAvail().X * 0.35f));
+        var currentLabel = DebugActorControlCategoryFilters[Math.Clamp(debugActorControlCategoryFilterIndex, 0, DebugActorControlCategoryFilters.Length - 1)];
+        if (ImGui.BeginCombo("Control category##DebugActorControlCategory", currentLabel))
+        {
+            for (var i = 0; i < DebugActorControlCategoryFilters.Length; i++)
+            {
+                var selected = debugActorControlCategoryFilterIndex == i;
+                if (ImGui.Selectable(DebugActorControlCategoryFilters[i], selected))
+                {
+                    debugActorControlCategoryFilterIndex = i;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+    }
+
+    private bool MatchesDebugStatusSnapshot(DebugStatusSnapshot snapshot)
+    {
+        return MatchesDebugText(
+            snapshot.MemberName,
+            snapshot.ClassJobName,
+            snapshot.PartyIndex.ToString(),
+            FormatDebugStatusSource(snapshot.ClassJobId),
+            string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.Id} {FormatDebugStatusSource(status.SourceId)}")));
+    }
+
+    private bool MatchesDebugEffectResultSnapshot(DebugEffectResultSnapshot snapshot)
+    {
+        return MatchesDebugText(
+            snapshot.TargetName,
+            FormatDebugStatusSource(snapshot.TargetId),
+            FormatDebugStatusSource(snapshot.ActorId),
+            snapshot.RelatedActionSequence.ToString(),
+            string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.EffectId} {status.SourceName} {FormatDebugStatusSource(status.SourceActorId)}")));
+    }
+
+    private bool MatchesDebugActorControlEvent(DebugActorControlEvent entry)
+    {
+        return MatchesDebugActorControlCategory(entry) &&
+            MatchesDebugText(
+                entry.EntityName,
+                entry.TargetName,
+                entry.CategoryName,
+                entry.Category.ToString(),
+                FormatDebugStatusSource(entry.EntityId),
+                FormatDebugActorControlTarget(entry.TargetId),
+                entry.Param1.ToString(),
+                entry.Param2.ToString(),
+                entry.Param3.ToString(),
+                entry.Param4.ToString(),
+                entry.Param5.ToString(),
+                entry.Param6.ToString(),
+                entry.Param7.ToString(),
+                entry.Param8.ToString(),
+                entry.Param9.ToString());
+    }
+
+    private bool MatchesDebugLogEntry(DebugLogEntry entry)
+    {
+        return MatchesDebugText(
+            entry.SeenAtUtc.ToString("HH:mm:ss"),
+            FormatCombatTimer(entry.PullElapsedSeconds),
+            entry.Message);
+    }
+
+    private bool MatchesDebugText(params string?[] values)
+    {
+        var filter = debugTextFilter.Trim();
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        return values.Any(value =>
+            !string.IsNullOrWhiteSpace(value) &&
+            value.Contains(filter, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool MatchesDebugActorControlCategory(DebugActorControlEvent entry)
+    {
+        return debugActorControlCategoryFilterIndex switch
+        {
+            1 => entry.Category == 0x6,
+            2 => entry.Category == 0x605,
+            3 => entry.Category == 0x604,
+            4 => entry.Category is 0x14 or 0x15 or 0x16,
+            5 => entry.Category is 0x22 or 0x23 or 0x36 or 0x1F6,
+            6 => entry.Category is not (0x6 or 0x604 or 0x605 or 0x14 or 0x15 or 0x16 or 0x22 or 0x23 or 0x36 or 0x1F6),
+            _ => true,
+        };
+    }
+
     private void DrawDebugStatusSnapshots()
     {
         ImGui.TextColored(LeadUpGoldColor, "Captured raw status table");
-        ImGui.TextDisabled("Memory-only. Respects Capture Party and Capture Others settings. Statuses stay listed until new combat or manual clear.");
+        ImGui.TextDisabled("Memory-only. Respects Capture Party and Capture Others settings. Statuses stay listed until duty enter or manual clear.");
 
         if (!configuration.DebugLogEnabled)
         {
@@ -2686,10 +2840,19 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var snapshots = plugin.DebugStatusSnapshots;
-        if (snapshots.Count == 0)
+        var allSnapshots = plugin.DebugStatusSnapshots;
+        var snapshots = allSnapshots
+            .Where(MatchesDebugStatusSnapshot)
+            .ToList();
+        if (allSnapshots.Count == 0)
         {
             ImGui.TextDisabled("No tracked status snapshots yet. Enter an active duty with tracked characters visible.");
+            return;
+        }
+
+        if (snapshots.Count == 0)
+        {
+            ImGui.TextDisabled("No raw status rows match the current filter.");
             return;
         }
 
@@ -2761,7 +2924,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawDebugEffectResultSnapshots()
     {
         ImGui.TextColored(LeadUpGoldColor, "EffectResult packet table");
-        ImGui.TextDisabled("Memory-only. Shows the latest packet-side HP, shield percent, MP, related action sequence, replay flag, and status entries per target.");
+        ImGui.TextDisabled("Memory-only. Shows latest-per-target packet data and a rolling packet history for the current duty.");
 
         if (!configuration.DebugLogEnabled)
         {
@@ -2775,11 +2938,26 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var snapshots = plugin.DebugEffectResultSnapshots;
-        if (snapshots.Count == 0)
+        var allSnapshots = plugin.DebugEffectResultSnapshots;
+        var snapshots = allSnapshots
+            .Where(MatchesDebugEffectResultSnapshot)
+            .ToList();
+        var allHistory = plugin.DebugEffectResultHistory;
+        var history = allHistory
+            .Where(MatchesDebugEffectResultSnapshot)
+            .ToList();
+
+        if (allSnapshots.Count == 0 && allHistory.Count == 0)
         {
             ImGui.TextDisabled("No EffectResult packets captured yet. Enter combat in a duty with tracked characters visible.");
             return;
+        }
+
+        ImGui.TextDisabled($"Latest per target: {snapshots.Count:N0}/{allSnapshots.Count:N0} visible. Rolling history: {history.Count:N0}/{allHistory.Count:N0} visible.");
+
+        if (snapshots.Count == 0)
+        {
+            ImGui.TextDisabled("No latest-per-target packet rows match the current filter.");
         }
 
         foreach (var snapshot in snapshots)
@@ -2810,6 +2988,66 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.PopID();
         }
+
+        ImGui.Spacing();
+        DrawDebugEffectResultHistoryTable(history, allHistory.Count);
+    }
+
+    private void DrawDebugEffectResultHistoryTable(IReadOnlyList<DebugEffectResultSnapshot> history, int totalHistoryCount)
+    {
+        ImGui.TextColored(LeadUpGoldColor, "EffectResult rolling history");
+        if (totalHistoryCount == 0)
+        {
+            ImGui.TextDisabled("No packet history captured yet.");
+            return;
+        }
+
+        if (history.Count == 0)
+        {
+            ImGui.TextDisabled("No packet history rows match the current filter.");
+            return;
+        }
+
+        if (!ImGui.BeginTable("##DebugEffectResultHistory", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("UTC", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Pull", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("HP", ImGuiTableColumnFlags.WidthStretch, 1.05f);
+        ImGui.TableSetupColumn("Shield", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+        ImGui.TableSetupColumn("MP", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Seq", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+        ImGui.TableSetupColumn("Replay", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Statuses", ImGuiTableColumnFlags.WidthStretch, 2.2f);
+        DrawCenteredTableHeader("UTC", "Pull", "Target", "HP", "Shield", "MP", "Seq", "Replay", "Statuses");
+
+        foreach (var snapshot in history)
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            DrawCenteredText(snapshot.SeenAtUtc.ToString("HH:mm:ss"));
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatCombatTimer(snapshot.PullElapsedSeconds));
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(snapshot.TargetName);
+            ImGui.TableNextColumn();
+            DrawCenteredText($"{snapshot.CurrentHp:N0}/{snapshot.MaxHp:N0}");
+            ImGui.TableNextColumn();
+            DrawCenteredText(snapshot.ShieldHp > 0 ? $"{snapshot.ShieldPercent:N0}% ({snapshot.ShieldHp:N0})" : $"{snapshot.ShieldPercent:N0}%");
+            ImGui.TableNextColumn();
+            DrawCenteredText(snapshot.CurrentMp.ToString("N0"));
+            ImGui.TableNextColumn();
+            DrawCenteredText(snapshot.RelatedActionSequence.ToString());
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatDebugBool(snapshot.IsReplay));
+            ImGui.TableNextColumn();
+            ImGui.TextWrapped(FormatDebugEffectResultStatusSummary(snapshot));
+        }
+
+        ImGui.EndTable();
     }
 
     private void DrawDebugEffectResultStatusTable(DebugEffectResultSnapshot snapshot)
@@ -2870,10 +3108,20 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var events = plugin.DebugActorControlEvents;
-        if (events.Count == 0)
+        var allEvents = plugin.DebugActorControlEvents;
+        var events = allEvents
+            .Where(MatchesDebugActorControlEvent)
+            .ToList();
+        if (allEvents.Count == 0)
         {
             ImGui.TextDisabled("No ActorControl packets captured yet. Enter combat in a duty with tracked characters visible.");
+            return;
+        }
+
+        ImGui.TextDisabled($"{events.Count:N0}/{allEvents.Count:N0} control event rows visible.");
+        if (events.Count == 0)
+        {
+            ImGui.TextDisabled("No ActorControl rows match the current filter.");
             return;
         }
 
@@ -2942,12 +3190,21 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDebugLog()
     {
-        var entries = plugin.DebugLogEntries;
+        var allEntries = plugin.DebugLogEntries;
+        var entries = allEntries
+            .Where(MatchesDebugLogEntry)
+            .ToList();
         ImGui.TextColored(LeadUpGoldColor, "Internal capture log");
-        ImGui.TextDisabled($"{entries.Count:N0} debug rows kept. The newest 500 rows are retained.");
-        if (entries.Count == 0)
+        ImGui.TextDisabled($"{entries.Count:N0}/{allEntries.Count:N0} debug rows visible. The newest 1,000 rows are retained.");
+        if (allEntries.Count == 0)
         {
             ImGui.TextDisabled("No debug entries captured.");
+            return;
+        }
+
+        if (entries.Count == 0)
+        {
+            ImGui.TextDisabled("No debug log rows match the current filter.");
             return;
         }
 
@@ -3009,6 +3266,17 @@ public sealed class RecapWindow : Window, IDisposable
     private static string FormatDebugEffectResultStatusTooltip(DebugEffectResultStatus status)
     {
         return $"{status.Name} ({status.EffectId})\nEffect index: {status.EffectIndex}\nSource: {status.SourceName} ({FormatDebugStatusSource(status.SourceActorId)})\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nDuration: {FormatDebugEffectResultDuration(status.Duration)}";
+    }
+
+    private static string FormatDebugEffectResultStatusSummary(DebugEffectResultSnapshot snapshot)
+    {
+        if (snapshot.Statuses.Count == 0)
+        {
+            return "-";
+        }
+
+        return string.Join("; ", snapshot.Statuses.Select(status =>
+            $"{status.Name} ({status.EffectId}) {FormatDebugEffectResultDuration(status.Duration)} from {status.SourceName}"));
     }
 
     private static string FormatDebugEffectResultDuration(float duration)
@@ -3094,41 +3362,34 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.87");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.86");
-        ImGui.TextDisabled("Changelog wording fixes.");
-        DrawWrappedBullet("Cleaned up changelog wording.");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.85");
-        ImGui.TextDisabled("Testing signature-based control event capture.");
-        DrawBreathingGoldBullet("Added signature-based capture for testing death, DoT, HoT, tether, target, and status/control event timing.");
-        DrawBreathingGoldBullet("Debug now has a control event packet table so raw categories, params, entity IDs, and target IDs can be validated in-game.");
-        DrawWrappedBullet("The new capture path fails gracefully if unavailable instead of blocking Better Deaths from loading.");
-        DrawWrappedBullet("This capture path currently feeds Debug only; death recap selection is unchanged while this data is validated.");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.84");
-        ImGui.TextDisabled("Testing signature-based packet capture.");
-        DrawBreathingGoldBullet("Added signature-based capture for testing packet-side HP, shield, MP, related action sequence, and status data.");
-        DrawBreathingGoldBullet("Debug now has a packet capture table so captured data can be validated in-game before it feeds recaps.");
-        DrawWrappedBullet("The new capture path fails gracefully if unavailable instead of blocking Better Deaths from loading.");
-        DrawWrappedBullet("Hook capture currently feeds Debug only; death recap selection is unchanged while this data is validated.");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.82");
-        ImGui.TextDisabled("Testing HP capture refactor and recorded pull sorting.");
-        DrawBreathingGoldBullet("Action-effect capture now uses a bounded raw queue resolved on the framework tick, keeping the hook path lightweight.");
-        DrawBreathingGoldBullet("Headline HP before hit now keeps the existing mathematical correction path, then falls back to the best prior HP sample.");
-        DrawWrappedBullet("Repeated hits now keep separate event identities, while duplicate stored copies collapse correctly.");
-        DrawWrappedBullet("Chat posts and Player Death Information no longer print empty HP placeholders when no HP row exists.");
-        DrawWrappedBullet("10-second HP history keeps derived post-hit rows when later HP samples are stale after a captured hit.");
-        DrawWrappedBullet("Duty, newest first now keeps the duty with the newest recorded pull at the top after older pulls are removed by the Recorded pulls kept limit.");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.81");
-        ImGui.TextDisabled("Improved debug status retention.");
-        DrawWrappedBullet("Debug status rows now stay open while new statuses are captured.");
-        DrawWrappedBullet("Captured debug statuses remain visible until new combat starts or debug data is manually cleared.");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.79");
