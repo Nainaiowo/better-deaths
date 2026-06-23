@@ -47,6 +47,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool RemoveChatBranding { get; set; }
 
+    public bool PostDeathRecapLinksOnDeath { get; set; }
+
     public bool CapturePartyDeaths { get; set; } = true;
 
     public bool CaptureOtherDeaths { get; set; }

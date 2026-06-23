@@ -2383,6 +2383,14 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.SetRemoveChatBranding(removeChatBranding);
         }
 
+        var postDeathRecapLinksOnDeath = configuration.PostDeathRecapLinksOnDeath;
+        if (ImGui.Checkbox("Post recap link when deaths are captured", ref postDeathRecapLinksOnDeath))
+        {
+            plugin.SetPostDeathRecapLinksOnDeath(postDeathRecapLinksOnDeath);
+        }
+
+        DrawSettingsTooltip("Opt-in. When enabled, Better Deaths posts a clickable recap link to chat after captured deaths. Manual chat posts still include their own recap link.");
+
         ImGui.Separator();
         ImGui.TextUnformatted("Capture Settings");
 

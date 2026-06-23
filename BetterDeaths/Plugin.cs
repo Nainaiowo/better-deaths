@@ -46,6 +46,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const float StatusDeathRemainingWindowSeconds = 5.0f;
     private const int OwnSharedRecapSuppressionSeconds = 5;
     private const int QueuedChatDelayMs = 750;
+    private const int DetectedSharedRecapLinkDelayMs = 2200;
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
     private const int MaxDebugLogEntries = 1000;
@@ -701,6 +702,12 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetPostDeathRecapLinksOnDeath(bool enabled)
+    {
+        Configuration.PostDeathRecapLinksOnDeath = enabled;
+        SaveConfiguration();
+    }
+
     public void SetCapturePartyDeaths(bool enabled)
     {
         Configuration.CapturePartyDeaths = enabled;
@@ -896,7 +903,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
         QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
-        PrintDeathRecapLink(death);
+        QueueDeathRecapLinkMessage(death);
     }
 
     public static string GetChatChannelLabel(DeathChatChannel channel)
@@ -1066,7 +1073,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     return;
                 }
 
-                PrintDetectedSharedRecapLink(death);
+                QueueDetectedSharedRecapLink(death);
                 AddDebugLog($"Linked shared Better Deaths recap for {death.MemberName}.");
                 return;
             }
@@ -4687,6 +4694,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void QueueDeathRecapLink(PartyDeathRecord death, DateTime now)
     {
+        if (!Configuration.PostDeathRecapLinksOnDeath)
+        {
+            return;
+        }
+
         if (!HasDeathRecapDetails(death))
         {
             return;
@@ -4761,9 +4773,13 @@ public sealed partial class Plugin : IDalamudPlugin
         PrintDeathRecapLink(death, death.MemberName);
     }
 
-    private void PrintDetectedSharedRecapLink(PartyDeathRecord death)
+    private void QueueDetectedSharedRecapLink(PartyDeathRecord death)
     {
-        PrintDeathRecapLink(death, "Pull link detected", "[ Open Recap ]");
+        QueueDeathRecapLinkMessage(
+            death,
+            "Pull link detected",
+            "[ Open Recap ]",
+            DateTime.UtcNow.AddMilliseconds(DetectedSharedRecapLinkDelayMs));
     }
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel)
@@ -4773,6 +4789,25 @@ public sealed partial class Plugin : IDalamudPlugin
     }
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel, string label)
+    {
+        ChatGui.Print(BuildDeathRecapLinkEntry(death, batchLabel, label));
+    }
+
+    private void QueueDeathRecapLinkMessage(PartyDeathRecord death)
+    {
+        QueueDeathRecapLinkMessage(
+            death,
+            death.MemberName,
+            Configuration.RemoveChatBranding ? "[ Open recap ]" : "[ Open Better Deaths recap ]",
+            DateTime.MinValue);
+    }
+
+    private void QueueDeathRecapLinkMessage(PartyDeathRecord death, string batchLabel, string label, DateTime notBeforeUtc)
+    {
+        queuedChatMessages.Enqueue(QueuedChatMessage.Local(BuildDeathRecapLinkEntry(death, batchLabel, label), notBeforeUtc));
+    }
+
+    private XivChatEntry BuildDeathRecapLinkEntry(PartyDeathRecord death, string batchLabel, string label)
     {
         var batchText = string.IsNullOrWhiteSpace(batchLabel) ? string.Empty : $"{batchLabel} ";
         var message = new SeString(
@@ -4785,11 +4820,11 @@ public sealed partial class Plugin : IDalamudPlugin
             new DeathChatLinkPayload(death.SeenAtUtc.Ticks, GetMemberKeyHash(death.MemberKey)),
             RawPayload.LinkTerminator);
 
-        ChatGui.Print(new XivChatEntry
+        return new XivChatEntry
         {
             Type = XivChatType.Echo,
             Message = message,
-        });
+        };
     }
 
     private void QueueChat(DeathChatChannel channel, string message)
@@ -4797,7 +4832,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var effectiveChannel = GetChatChannelOption(channel).Channel;
         foreach (var line in SplitChatMessage(SanitizeChatText(message)))
         {
-            queuedChatMessages.Enqueue(new QueuedChatMessage(effectiveChannel, line));
+            queuedChatMessages.Enqueue(QueuedChatMessage.Outgoing(effectiveChannel, line));
         }
     }
 
@@ -4808,8 +4843,22 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
-        var nextMessage = queuedChatMessages.Dequeue();
-        SendChat(nextMessage.Channel, nextMessage.Message);
+        var nextMessage = queuedChatMessages.Peek();
+        if (nextMessage.NotBeforeUtc > now)
+        {
+            return;
+        }
+
+        queuedChatMessages.Dequeue();
+        if (nextMessage.LocalEntry is { } localEntry)
+        {
+            ChatGui.Print(localEntry);
+        }
+        else
+        {
+            SendChat(nextMessage.Channel, nextMessage.Message);
+        }
+
         nextQueuedChatMessageAtUtc = now.AddMilliseconds(QueuedChatDelayMs);
     }
 
@@ -4899,7 +4948,20 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private readonly record struct QueuedChatMessage(
         DeathChatChannel Channel,
-        string Message);
+        string Message,
+        XivChatEntry? LocalEntry,
+        DateTime NotBeforeUtc)
+    {
+        public static QueuedChatMessage Outgoing(DeathChatChannel channel, string message)
+        {
+            return new QueuedChatMessage(channel, message, null, DateTime.MinValue);
+        }
+
+        public static QueuedChatMessage Local(XivChatEntry entry, DateTime notBeforeUtc)
+        {
+            return new QueuedChatMessage(DeathChatChannel.Echo, string.Empty, entry, notBeforeUtc);
+        }
+    }
 
     private sealed record StatusObservation(
         DateTime SeenAtUtc,
