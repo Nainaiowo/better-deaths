@@ -34,7 +34,6 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 DisabledColor = new(0.65f, 0.65f, 0.65f, 1.0f);
     private static readonly Vector4 UpdateBannerBgColor = new(0.16f, 0.24f, 0.12f, 0.95f);
     private static readonly Vector4 UpdateBannerTextColor = new(0.35f, 1.0f, 0.45f, 1.0f);
-    private static readonly Vector4 NoticeBgColor = new(0.03f, 0.15f, 0.15f, 0.96f);
     private static readonly Vector4 NoticeBorderColor = new(0.37f, 0.92f, 0.83f, 1.0f);
     private static readonly Vector4 NoticeTextColor = new(0.84f, 1.0f, 0.97f, 1.0f);
     private static readonly Vector4 NoticeButtonColor = new(0.04f, 0.34f, 0.32f, 1.0f);
@@ -2648,13 +2647,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawOneTimeThankYouNotice()
     {
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, NoticeBgColor);
         ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
         ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
 
         if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
         {
-            ImGui.TextColored(NoticeBorderColor, "Hey! Nainai here!");
+            ImGui.TextColored(NoticeBorderColor, "Hey! Nainai here~");
             ImGui.Spacing();
             ImGui.TextWrapped("I just wanted to give a short message to the users that have been helping me with the development of this project. With this update, I've released a big change!");
             ImGui.Spacing();
@@ -2679,7 +2677,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
-        ImGui.PopStyleColor();
         ImGui.PopStyleColor();
         ImGui.PopStyleColor();
     }
