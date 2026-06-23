@@ -26,6 +26,13 @@ public enum DamageType
     LimitBreak,
 }
 
+public enum CombatEventHpSource
+{
+    UnknownLegacy,
+    LatestPriorSample,
+    NoPreHitSample,
+}
+
 public sealed record StatusSnapshot(
     uint Id,
     string Name,
@@ -72,7 +79,14 @@ public sealed record CombatEventRecord(
     bool Parried,
     string Detail,
     IReadOnlyList<StatusSnapshot> Statuses,
-    IReadOnlyList<StatusSnapshot> SourceStatuses);
+    IReadOnlyList<StatusSnapshot> SourceStatuses)
+{
+    public string? EventIdentity { get; init; }
+
+    public uint EventOrdinal { get; init; }
+
+    public CombatEventHpSource HpSource { get; init; }
+}
 
 public sealed record CombatLogEventRecord(
     DateTime SeenAtUtc,

@@ -40,7 +40,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.81";
+    private const string CurrentChangelogVersion = "0.1.0.82";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -86,17 +86,6 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> NearbyHpStatuses,
         CombatEventRecord? Event,
         string? HpTooltipDetail);
-
-    private sealed record DerivedHpState(
-        DateTime EventSeenAtUtc,
-        string SourceName,
-        string ActionName,
-        uint Amount,
-        uint SourceCurrentHp,
-        uint SourceShieldHp,
-        uint SourceMaxHp,
-        uint DerivedCurrentHp,
-        uint DerivedShieldHp);
 
     private sealed record OverkillDisplay(
         string Text,
@@ -561,7 +550,9 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawRecordedPullSortControl()
     {
         ImGui.SetNextItemWidth(180.0f);
-        if (!ImGui.BeginCombo("Sort##RecordedPullSort", GetRecordedPullSortLabel(recordedPullSort)))
+        var sortComboOpen = ImGui.BeginCombo("Sort##RecordedPullSort", GetRecordedPullSortLabel(recordedPullSort));
+        DrawRecordedPullSortTooltip();
+        if (!sortComboOpen)
         {
             return;
         }
@@ -570,6 +561,18 @@ public sealed class RecapWindow : Window, IDisposable
         DrawRecordedPullSortOption(RecordedPullSort.OldestFirst);
         DrawRecordedPullSortOption(RecordedPullSort.DutyNewestFirst);
         ImGui.EndCombo();
+    }
+
+    private static void DrawRecordedPullSortTooltip()
+    {
+        if (!ImGui.IsItemHovered())
+        {
+            return;
+        }
+
+        ImGui.SetTooltip(
+            "Controls visible pull order.\n" +
+            "Duty, newest first keeps duties grouped and puts the duty with the newest recorded pull first, even after older pulls are removed by the Recorded pulls kept limit.");
     }
 
     private void DrawRecordedPullSortOption(RecordedPullSort sort)
@@ -671,8 +674,13 @@ public sealed class RecapWindow : Window, IDisposable
         {
             RecordedPullSort.OldestFirst => pulls.OrderBy(entry => entry.PullNumber),
             RecordedPullSort.DutyNewestFirst => pulls
-                .OrderBy(entry => entry.Snapshot.TerritoryName, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(entry => entry.PullNumber),
+                .GroupBy(entry => entry.Snapshot.TerritoryId)
+                .OrderByDescending(group => group.Max(entry => entry.PullNumber))
+                .ThenBy(group => group
+                    .Select(entry => entry.Snapshot.TerritoryName)
+                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty,
+                    StringComparer.OrdinalIgnoreCase)
+                .SelectMany(group => group.OrderByDescending(entry => entry.PullNumber)),
             _ => pulls.OrderByDescending(entry => entry.PullNumber),
         };
     }
@@ -1081,16 +1089,25 @@ public sealed class RecapWindow : Window, IDisposable
         else if (causeEvents.Count > 0)
         {
             var cause = causeEvents[^1];
+            var hpDisplay = GetEventHpDisplay(death, cause);
             ImGui.BulletText(cause.Kind == DeathEventKind.Status
                 ? "HP + shields before likely KO"
                 : "HP + shields before likely hit");
-            DrawHpShieldBar(
-                cause.CurrentHp,
-                cause.ShieldHp,
-                cause.MaxHp,
-                $"CauseHp{death.MemberKey}{death.SeenAtUtc.Ticks}",
-                GetIncomingDamageAmount(cause),
-                true);
+            if (hpDisplay.MaxHp > 0)
+            {
+                DrawHpShieldBar(
+                    hpDisplay.CurrentHp,
+                    hpDisplay.ShieldHp,
+                    hpDisplay.MaxHp,
+                    $"CauseHp{death.MemberKey}{death.SeenAtUtc.Ticks}",
+                    GetIncomingDamageAmount(cause),
+                    true,
+                    tooltipDetail: hpDisplay.TooltipDetail);
+            }
+            else
+            {
+                ImGui.TextColored(WarningColor, "Unavailable. No reliable HP sample was captured before the likely hit.");
+            }
         }
         else
         {
@@ -1276,9 +1293,17 @@ public sealed class RecapWindow : Window, IDisposable
             return null;
         }
 
-        var row = selection.Snapshot is null
-            ? rows[^1]
-            : rows.LastOrDefault(row => row.LastSnapshot.SeenAtUtc == selection.Snapshot.SeenAtUtc) ?? rows[^1];
+        if (selection.Snapshot is null)
+        {
+            return null;
+        }
+
+        var row = rows.LastOrDefault(row => row.LastSnapshot.SeenAtUtc == selection.Snapshot.SeenAtUtc);
+        if (row is null)
+        {
+            return null;
+        }
+
         var events = selection.Events.Count > 0 ? selection.Events : row.Events;
         return new LeadUpSummaryRow(anchorSeenAtUtc, row, events);
     }
@@ -1386,7 +1411,6 @@ public sealed class RecapWindow : Window, IDisposable
         var rows = new List<LeadUpTimelineRow>();
         var historyIndex = 0;
         var eventIndex = 0;
-        DerivedHpState? pendingDerivedHp = null;
 
         while (historyIndex < history.Count || eventIndex < events.Count)
         {
@@ -1395,14 +1419,8 @@ public sealed class RecapWindow : Window, IDisposable
             if (shouldTakeHistory)
             {
                 var snapshot = history[historyIndex++];
-                var timelineRow = CreateHpSampleTimelineRow(snapshot, pendingDerivedHp, displayAnchorSeenAtUtc);
+                var timelineRow = CreateHpSampleTimelineRow(snapshot);
                 rows.Add(timelineRow);
-
-                if (pendingDerivedHp is not null && snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
-                    !IsStalePostHitSample(snapshot, pendingDerivedHp))
-                {
-                    pendingDerivedHp = null;
-                }
 
                 continue;
             }
@@ -1419,41 +1437,14 @@ public sealed class RecapWindow : Window, IDisposable
                 GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
                 combatEvent,
                 hpDisplay.TooltipDetail));
-
-            pendingDerivedHp = TryCreateDerivedHpState(combatEvent, hpDisplay) ?? pendingDerivedHp;
         }
 
         return rows;
     }
 
     private static LeadUpTimelineRow CreateHpSampleTimelineRow(
-        HpHistorySnapshot snapshot,
-        DerivedHpState? pendingDerivedHp,
-        DateTime displayAnchorSeenAtUtc)
+        HpHistorySnapshot snapshot)
     {
-        if (pendingDerivedHp is not null &&
-            snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
-            IsStalePostHitSample(snapshot, pendingDerivedHp))
-        {
-            var displayShieldHp = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
-                ? pendingDerivedHp.DerivedShieldHp
-                : snapshot.ShieldHp;
-            var shieldSourceText = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
-                ? "shield was also derived from the hit"
-                : "shield came from the captured sample";
-            var tooltip = $"Derived HP after {pendingDerivedHp.SourceName}: {pendingDerivedHp.ActionName} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
-            return new LeadUpTimelineRow(
-                snapshot.SeenAtUtc,
-                snapshot.PullElapsedSeconds,
-                pendingDerivedHp.DerivedCurrentHp,
-                displayShieldHp,
-                snapshot.MaxHp > 0 ? snapshot.MaxHp : pendingDerivedHp.SourceMaxHp,
-                snapshot.Statuses,
-                snapshot.Statuses,
-                null,
-                tooltip);
-        }
-
         return new LeadUpTimelineRow(
             snapshot.SeenAtUtc,
             snapshot.PullElapsedSeconds,
@@ -1490,41 +1481,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return statuses;
-    }
-
-    private static bool IsStalePostHitSample(HpHistorySnapshot snapshot, DerivedHpState pendingDerivedHp)
-    {
-        return snapshot.CurrentHp == pendingDerivedHp.SourceCurrentHp &&
-            (snapshot.MaxHp == 0 || pendingDerivedHp.SourceMaxHp == 0 || snapshot.MaxHp == pendingDerivedHp.SourceMaxHp);
-    }
-
-    private static DerivedHpState? TryCreateDerivedHpState(CombatEventRecord combatEvent, EventHpDisplay hpDisplay)
-    {
-        if (combatEvent.Kind != DeathEventKind.Damage || combatEvent.Amount == 0 || hpDisplay.MaxHp == 0)
-        {
-            return null;
-        }
-
-        var remainingDamage = (ulong)combatEvent.Amount;
-        var derivedShieldHp = (ulong)hpDisplay.ShieldHp;
-        var shieldDamage = Math.Min(derivedShieldHp, remainingDamage);
-        derivedShieldHp -= shieldDamage;
-        remainingDamage -= shieldDamage;
-
-        var derivedCurrentHp = (ulong)hpDisplay.CurrentHp;
-        var hpDamage = Math.Min(derivedCurrentHp, remainingDamage);
-        derivedCurrentHp -= hpDamage;
-
-        return new DerivedHpState(
-            combatEvent.SeenAtUtc,
-            combatEvent.SourceName,
-            combatEvent.ActionName,
-            combatEvent.Amount,
-            hpDisplay.CurrentHp,
-            hpDisplay.ShieldHp,
-            hpDisplay.MaxHp,
-            (uint)derivedCurrentHp,
-            (uint)derivedShieldHp);
     }
 
     private static void DrawTimelineEventCell(CombatEventRecord? combatEvent)
@@ -1951,13 +1907,18 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static EventHpDisplay GetEventHpDisplay(PartyDeathRecord death, CombatEventRecord combatEvent)
     {
-        if (combatEvent.MaxHp > 0 && (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0))
+        if (combatEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
+            combatEvent.MaxHp > 0 &&
+            (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0))
         {
+            var tooltip = combatEvent.HpSource == CombatEventHpSource.LatestPriorSample
+                ? "HP from the latest captured sample before this combat event."
+                : "HP captured with this combat event by the legacy capture path.";
             return new EventHpDisplay(
                 combatEvent.CurrentHp,
                 combatEvent.ShieldHp,
                 combatEvent.MaxHp,
-                "HP captured with this combat event.");
+                tooltip);
         }
 
         var priorSample = death.HpHistory
@@ -1975,9 +1936,9 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return new EventHpDisplay(
-            combatEvent.CurrentHp,
-            combatEvent.ShieldHp,
-            combatEvent.MaxHp > 0 ? combatEvent.MaxHp : death.MaxHp,
+            0,
+            0,
+            0,
             "No HP sample before this event was available.");
     }
 
@@ -2373,7 +2334,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsInfoLine("Fatal sequence", "A compact set of captured hits and combat-log confirmations around the HP transition into KO.");
         DrawSettingsInfoLine("Likely walled/non-hit KO", "Kept in the death timeline, but no player detail panel is shown because no likely hit or KO status context was captured.");
         DrawSettingsInfoLine("Recorded pulls", "Created on duty reset, wipe, recommence, and territory changes when the pull had at least one death.");
-        DrawSettingsInfoLine("Recorded pull sort", "Controls the order of visible pull groups.");
+        DrawSettingsInfoLine("Recorded pull sort", "Controls visible pull order. Duty, newest first keeps duties grouped and puts the duty with the newest pull first.");
         DrawSettingsInfoLine("Duty dropdown", "A filter: All duties shows everything, while a selected duty only shows pulls from that duty.");
         ImGui.TextColored(SpamWarningColor, "Only functions in duties, not overworld or PvP.");
         DrawDebugTabAccessButton();
@@ -2836,6 +2797,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.82");
+        ImGui.TextDisabled("Testing HP capture refactor and recorded pull sorting.");
+        DrawBreathingGoldBullet("Action-effect capture now uses a bounded raw queue resolved on the framework tick, keeping the hook path lightweight.");
+        DrawBreathingGoldBullet("Headline HP before hit now requires a close prior HP sample instead of mathematical guesswork.");
+        DrawWrappedBullet("Repeated hits now keep separate event identities, while duplicate stored copies collapse correctly.");
+        DrawWrappedBullet("Chat posts and Player Death Information now show HP unavailable when no reliable pre-hit sample exists.");
+        DrawWrappedBullet("Removed unvalidated derived post-hit HP from the 10-second lead-up.");
+        DrawWrappedBullet("Duty, newest first now keeps the duty with the newest recorded pull at the top after older pulls are removed by the Recorded pulls kept limit.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.81");
         ImGui.TextDisabled("Improved debug status retention.");
         DrawWrappedBullet("Debug status rows now stay open while new statuses are captured.");

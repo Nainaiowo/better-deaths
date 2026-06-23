@@ -55,6 +55,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int CombatLogEventRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
+    private const int RawActionEffectRetentionSeconds = 5;
+    private const int RawCombatLogRetentionSeconds = 10;
+    private const int MaxRawActionEffectPackets = 256;
+    private const int MaxRawCombatLogMessages = 256;
+    private const int MaxActionEffectTargets = 32;
+    private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
@@ -102,6 +108,40 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private sealed record RecordedPullHistoryFile(int SchemaVersion, List<PullDeathSnapshot> Pulls);
 
+    private sealed record RawActionEffectPacket(
+        long Sequence,
+        DateTime SeenAtUtc,
+        uint CasterEntityId,
+        uint ActionId,
+        IReadOnlyList<RawActionEffectTarget> Targets);
+
+    private sealed record RawActionEffectTarget(
+        int TargetIndex,
+        RawTargetId TargetId,
+        IReadOnlyList<RawActionEffectSlot> Effects);
+
+    private sealed record RawTargetId(ulong Id, uint ObjectId);
+
+    private sealed record RawActionEffectSlot(
+        int EffectIndex,
+        byte Type,
+        uint Param0,
+        uint Param1,
+        uint Param3,
+        uint Param4,
+        uint Value);
+
+    private sealed record RawCombatLogMessage(
+        long Sequence,
+        DateTime SeenAtUtc,
+        uint LogMessageId,
+        string SourceName,
+        bool SourceIsPlayer,
+        string TargetName,
+        bool TargetIsPlayer,
+        string ActionName,
+        uint Amount);
+
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
@@ -142,6 +182,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<RecentOwnSharedDeathPost> recentOwnSharedDeathPosts = [];
     private readonly List<PartyDeathRecord> pendingDeathRecapLinks = [];
     private readonly Queue<QueuedChatMessage> queuedChatMessages = [];
+    private readonly object rawCombatQueueLock = new();
+    private readonly Queue<RawActionEffectPacket> rawActionEffectPackets = [];
+    private readonly Queue<RawCombatLogMessage> rawCombatLogMessages = [];
+    private long nextRawActionEffectSequence = 1;
+    private long nextRawCombatLogSequence = 1;
+    private long nextResolvedCombatEventOrdinal = 1;
     private DateTime? pendingDeathRecapLinksDueAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
     private DateTime nextPluginUpdateCheckAtUtc = DateTime.MinValue;
@@ -731,7 +777,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private void CaptureCombatLogMessage(ILogMessage message)
     {
         var now = DateTime.UtcNow;
-        if (!ShouldCaptureLiveCombat(now) || currentMembers.Count == 0)
+        if (!ShouldAcceptRawCombatCapture(now))
         {
             return;
         }
@@ -749,13 +795,6 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
-        var targetName = FormatLogEntityName(target);
-        var member = FindCurrentMemberByName(targetName);
-        if (member is null)
-        {
-            return;
-        }
-
         if (!TryGetCombatLogAmount(message, out var amount) || amount == 0)
         {
             return;
@@ -765,18 +804,17 @@ public sealed partial class Plugin : IDalamudPlugin
             !string.IsNullOrWhiteSpace(parsedActionName)
             ? parsedActionName
             : "Attack";
-        var record = new CombatLogEventRecord(
+        var targetName = FormatLogEntityName(target);
+        EnqueueRawCombatLogMessage(new RawCombatLogMessage(
+            GetNextRawCombatLogSequence(),
             now,
-            CurrentPullElapsedSeconds,
-            member.MemberKey,
-            member.MemberName,
-            member.PartyIndex,
-            FormatLogEntityName(source),
-            targetName,
             logMessageId,
+            FormatLogEntityName(source),
+            source.IsPlayer,
+            targetName,
+            target.IsPlayer,
             actionName,
-            amount);
-        AddRecentCombatLogEvent(record);
+            amount));
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -984,6 +1022,11 @@ public sealed partial class Plugin : IDalamudPlugin
         var now = DateTime.UtcNow;
         TrackDebugStatusSnapshots(currentMembers, now);
         UpdatePostResetDeathSuppression();
+        if (ShouldAcceptRawCombatCapture(now))
+        {
+            ResolveRawCombatQueues(now);
+        }
+
         if (!ShouldCaptureLiveCombat(now))
         {
             return;
@@ -1192,7 +1235,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            CaptureActionEffects(casterEntityId, casterPtr, header, effects, targetEntityIds);
+            EnqueueRawActionEffects(casterEntityId, header, effects, targetEntityIds);
         }
         catch (Exception ex)
         {
@@ -1202,41 +1245,194 @@ public sealed partial class Plugin : IDalamudPlugin
         actionEffectHook?.Original(casterEntityId, casterPtr, targetPos, header, effects, targetEntityIds);
     }
 
-    private unsafe void CaptureActionEffects(
+    private unsafe void EnqueueRawActionEffects(
         uint casterEntityId,
-        Character* casterPtr,
         ActionEffectHandler.Header* header,
         ActionEffectHandler.TargetEffects* effects,
         GameObjectId* targetEntityIds)
     {
         var now = DateTime.UtcNow;
-        if (!ShouldCaptureLiveCombat(now))
+        if (!ShouldAcceptRawCombatCapture(now) ||
+            header is null ||
+            effects is null ||
+            targetEntityIds is null ||
+            header->NumTargets == 0)
         {
             return;
         }
 
-        if (header is null || effects is null || targetEntityIds is null || header->NumTargets == 0)
+        var targetCount = Math.Min((int)header->NumTargets, MaxActionEffectTargets);
+        var targets = new List<RawActionEffectTarget>(targetCount);
+        for (var targetIndex = 0; targetIndex < targetCount; targetIndex++)
+        {
+            var rawEffects = new List<RawActionEffectSlot>(8);
+            for (var effectIndex = 0; effectIndex < 8; effectIndex++)
+            {
+                ref var effect = ref effects[targetIndex].Effects[effectIndex];
+                if (effect.Type == (byte)ActionEffectKind.Nothing)
+                {
+                    continue;
+                }
+
+                rawEffects.Add(new RawActionEffectSlot(
+                    effectIndex,
+                    (byte)effect.Type,
+                    (uint)effect.Param0,
+                    (uint)effect.Param1,
+                    (uint)effect.Param3,
+                    (uint)effect.Param4,
+                    (uint)effect.Value));
+            }
+
+            if (rawEffects.Count == 0)
+            {
+                continue;
+            }
+
+            var targetId = targetEntityIds[targetIndex];
+            targets.Add(new RawActionEffectTarget(
+                targetIndex,
+                new RawTargetId(targetId.Id, targetId.ObjectId),
+                rawEffects));
+        }
+
+        if (targets.Count == 0)
         {
             return;
         }
 
-        var actionId = header->ActionId;
-        var actionName = GetActionName(actionId);
-        var sourceName = casterPtr is null ? $"Entity {casterEntityId:X8}" : casterPtr->NameString;
-        var sourceStatuses = GetBossMitigationStatuses(BuildSourceStatusSnapshots(casterEntityId));
+        EnqueueRawActionEffectPacket(new RawActionEffectPacket(
+            GetNextRawActionEffectSequence(),
+            now,
+            casterEntityId,
+            header->ActionId,
+            targets));
+    }
+
+    private long GetNextRawActionEffectSequence()
+    {
+        lock (rawCombatQueueLock)
+        {
+            return nextRawActionEffectSequence++;
+        }
+    }
+
+    private long GetNextRawCombatLogSequence()
+    {
+        lock (rawCombatQueueLock)
+        {
+            return nextRawCombatLogSequence++;
+        }
+    }
+
+    private void EnqueueRawActionEffectPacket(RawActionEffectPacket packet)
+    {
+        lock (rawCombatQueueLock)
+        {
+            rawActionEffectPackets.Enqueue(packet);
+            while (rawActionEffectPackets.Count > MaxRawActionEffectPackets)
+            {
+                rawActionEffectPackets.Dequeue();
+            }
+        }
+    }
+
+    private void EnqueueRawCombatLogMessage(RawCombatLogMessage message)
+    {
+        lock (rawCombatQueueLock)
+        {
+            rawCombatLogMessages.Enqueue(message);
+            while (rawCombatLogMessages.Count > MaxRawCombatLogMessages)
+            {
+                rawCombatLogMessages.Dequeue();
+            }
+        }
+    }
+
+    private void ResolveRawCombatQueues(DateTime now)
+    {
+        var actionPackets = DrainRawActionEffectPackets(now);
+        foreach (var packet in actionPackets.OrderBy(packet => packet.Sequence))
+        {
+            ResolveRawActionEffectPacket(packet);
+        }
+
+        var combatLogMessages = DrainRawCombatLogMessages(now);
+        foreach (var message in combatLogMessages.OrderBy(message => message.Sequence))
+        {
+            ResolveRawCombatLogMessage(message);
+        }
+    }
+
+    private IReadOnlyList<RawActionEffectPacket> DrainRawActionEffectPackets(DateTime now)
+    {
+        lock (rawCombatQueueLock)
+        {
+            var cutoff = now - TimeSpan.FromSeconds(RawActionEffectRetentionSeconds);
+            while (rawActionEffectPackets.Count > 0 && rawActionEffectPackets.Peek().SeenAtUtc < cutoff)
+            {
+                rawActionEffectPackets.Dequeue();
+            }
+
+            if (rawActionEffectPackets.Count == 0)
+            {
+                return [];
+            }
+
+            var packets = rawActionEffectPackets.ToList();
+            rawActionEffectPackets.Clear();
+            return packets;
+        }
+    }
+
+    private IReadOnlyList<RawCombatLogMessage> DrainRawCombatLogMessages(DateTime now)
+    {
+        lock (rawCombatQueueLock)
+        {
+            var cutoff = now - TimeSpan.FromSeconds(RawCombatLogRetentionSeconds);
+            while (rawCombatLogMessages.Count > 0 && rawCombatLogMessages.Peek().SeenAtUtc < cutoff)
+            {
+                rawCombatLogMessages.Dequeue();
+            }
+
+            if (rawCombatLogMessages.Count == 0)
+            {
+                return [];
+            }
+
+            var messages = rawCombatLogMessages.ToList();
+            rawCombatLogMessages.Clear();
+            return messages;
+        }
+    }
+
+    private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
+    {
+        var actionName = GetActionName(packet.ActionId);
+        var actionIconId = GetActionIconId(packet.ActionId);
+        var sourceName = GetEntityDisplayName(packet.CasterEntityId);
+        var sourceStatuses = GetBossMitigationStatuses(BuildSourceStatusSnapshots(packet.CasterEntityId));
         var foundRelevantEffect = false;
 
-        for (var targetIndex = 0; targetIndex < header->NumTargets; targetIndex++)
+        foreach (var target in packet.Targets)
         {
-            var member = FindCurrentMemberByTargetId(targetEntityIds[targetIndex]);
+            var member = FindCurrentMemberByTargetId(target.TargetId);
             if (member is null)
             {
                 continue;
             }
 
-            for (var effectIndex = 0; effectIndex < 8; effectIndex++)
+            var priorHp = GetLatestPriorHpSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
+            var hpSource = priorHp is null
+                ? CombatEventHpSource.NoPreHitSample
+                : CombatEventHpSource.LatestPriorSample;
+            var playerStatuses = GetRelevantDeathStatuses(priorHp?.Statuses ?? member.Statuses);
+            var eventCurrentHp = priorHp?.CurrentHp ?? 0;
+            var eventShieldHp = priorHp?.ShieldHp ?? 0;
+            var eventMaxHp = priorHp?.MaxHp ?? member.MaxHp;
+
+            foreach (var effect in target.Effects)
             {
-                ref var effect = ref effects[targetIndex].Effects[effectIndex];
                 var kind = GetEventKind((ActionEffectKind)effect.Type);
                 if (kind is null)
                 {
@@ -1244,50 +1440,90 @@ public sealed partial class Plugin : IDalamudPlugin
                 }
 
                 foundRelevantEffect = true;
-                EnsurePullStarted(now);
+                EnsurePullStarted(packet.SeenAtUtc);
 
-                var amount = (uint)effect.Value;
+                var amount = effect.Value;
                 if ((effect.Param4 & 0x40) == 0x40)
                 {
-                    amount += (uint)effect.Param3 << 16;
+                    amount += effect.Param3 << 16;
                 }
 
-                var liveMember = GetFreshMemberSnapshotForEvent(member);
+                var eventOrdinal = nextResolvedCombatEventOrdinal > uint.MaxValue
+                    ? uint.MaxValue
+                    : (uint)nextResolvedCombatEventOrdinal++;
                 var record = new CombatEventRecord(
-                    now,
-                    CurrentPullElapsedSeconds,
-                    liveMember.MemberKey,
-                    liveMember.MemberName,
-                    liveMember.PartyIndex,
-                    casterEntityId,
+                    packet.SeenAtUtc,
+                    CalculatePullElapsed(packet.SeenAtUtc),
+                    member.MemberKey,
+                    member.MemberName,
+                    member.PartyIndex,
+                    packet.CasterEntityId,
                     sourceName,
-                    actionId,
+                    packet.ActionId,
                     actionName,
-                    GetActionIconId(actionId),
+                    actionIconId,
                     kind.Value,
                     amount,
-                    liveMember.CurrentHp,
-                    liveMember.ShieldHp,
-                    liveMember.MaxHp,
+                    eventCurrentHp,
+                    eventShieldHp,
+                    eventMaxHp,
                     (DamageType)(effect.Param1 & 0xF),
                     (effect.Param0 & 0x20) == 0x20,
                     (effect.Param0 & 0x40) == 0x40,
                     effect.Type == (byte)ActionEffectKind.BlockedDamage,
                     effect.Type == (byte)ActionEffectKind.ParriedDamage,
                     BuildEffectDetail((ActionEffectKind)effect.Type),
-                    GetRelevantDeathStatuses(liveMember.Statuses),
-                    sourceStatuses);
+                    playerStatuses,
+                    sourceStatuses)
+                {
+                    EventIdentity = $"{packet.Sequence}:{target.TargetIndex}:{effect.EffectIndex}:{member.MemberKey}:{packet.ActionId}",
+                    EventOrdinal = eventOrdinal,
+                    HpSource = hpSource,
+                };
                 AddRecentEvent(record);
             }
         }
 
         if (foundRelevantEffect)
         {
-            AddDebugLog($"Captured {actionName} ({actionId}).");
+            AddDebugLog($"Captured {actionName} ({packet.ActionId}).");
         }
     }
 
+    private void ResolveRawCombatLogMessage(RawCombatLogMessage message)
+    {
+        if (message.SourceIsPlayer || !message.TargetIsPlayer)
+        {
+            return;
+        }
+
+        var member = FindCurrentMemberByName(message.TargetName);
+        if (member is null)
+        {
+            return;
+        }
+
+        EnsurePullStarted(message.SeenAtUtc);
+        var record = new CombatLogEventRecord(
+            message.SeenAtUtc,
+            CalculatePullElapsed(message.SeenAtUtc),
+            member.MemberKey,
+            member.MemberName,
+            member.PartyIndex,
+            message.SourceName,
+            message.TargetName,
+            message.LogMessageId,
+            message.ActionName,
+            message.Amount);
+        AddRecentCombatLogEvent(record);
+    }
+
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
+    {
+        return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member));
+    }
+
+    private PartyMemberSnapshot? FindCurrentMemberByTargetId(RawTargetId targetId)
     {
         return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member));
     }
@@ -1296,6 +1532,45 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         return currentMembers.FirstOrDefault(member =>
             string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private HpHistorySnapshot? GetLatestPriorHpSnapshot(string memberKey, DateTime seenAtUtc, TimeSpan maxAge)
+    {
+        if (!recentHpHistoryByMember.TryGetValue(memberKey, out var history))
+        {
+            return null;
+        }
+
+        return history
+            .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
+            .Where(snapshot => seenAtUtc - snapshot.SeenAtUtc <= maxAge)
+            .Where(snapshot => snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .LastOrDefault();
+    }
+
+    private static string GetEntityDisplayName(uint entityId)
+    {
+        if (entityId == 0)
+        {
+            return "Unknown source";
+        }
+
+        try
+        {
+            var gameObject = ObjectTable.SearchByEntityId(entityId);
+            var name = gameObject?.Name.TextValue;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not resolve Better Deaths source name for {EntityId:X8}.", entityId);
+        }
+
+        return $"Entity {entityId:X8}";
     }
 
     private static string FormatLogEntityName(ILogMessageEntity entity)
@@ -1362,6 +1637,22 @@ public sealed partial class Plugin : IDalamudPlugin
     }
 
     private static bool TargetMatchesMember(GameObjectId targetId, PartyMemberSnapshot member)
+    {
+        if (targetId.ObjectId != 0 && member.EntityId == targetId.ObjectId)
+        {
+            return true;
+        }
+
+        if (targetId.Id <= uint.MaxValue)
+        {
+            var shortId = (uint)targetId.Id;
+            return shortId != 0 && member.EntityId == shortId;
+        }
+
+        return false;
+    }
+
+    private static bool TargetMatchesMember(RawTargetId targetId, PartyMemberSnapshot member)
     {
         if (targetId.ObjectId != 0 && member.EntityId == targetId.ObjectId)
         {
@@ -1543,6 +1834,10 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         events.Add(record);
+        while (events.Count > MaxRecentEventsPerMember)
+        {
+            events.RemoveAt(0);
+        }
     }
 
     private void AddRecentCombatLogEvent(CombatLogEventRecord record)
@@ -1889,6 +2184,12 @@ public sealed partial class Plugin : IDalamudPlugin
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
         lastHpHistorySampleByMember.Clear();
+        lock (rawCombatQueueLock)
+        {
+            rawActionEffectPackets.Clear();
+            rawCombatLogMessages.Clear();
+        }
+
         currentMemberKeyScratch.Clear();
         deadMemberKeys.Clear();
     }
@@ -1917,6 +2218,21 @@ public sealed partial class Plugin : IDalamudPlugin
 
         return lastInCombatAtUtc is { } lastInCombat &&
             now - lastInCombat <= PostCombatCaptureGrace;
+    }
+
+    private bool ShouldAcceptRawCombatCapture(DateTime now)
+    {
+        if (IsPvPCaptureBlocked() ||
+            !IsDutyCaptureActive() ||
+            (!Configuration.CapturePartyDeaths && !Configuration.CaptureOtherDeaths))
+        {
+            return false;
+        }
+
+        return Condition[ConditionFlag.InCombat] ||
+            pullStartedAtUtc is not null ||
+            lastInCombatAtUtc is { } lastInCombat && now - lastInCombat <= PostCombatCaptureGrace ||
+            currentMembers.Count > 0;
     }
 
     private void StartPostResetDeathSuppression()
@@ -2762,22 +3078,32 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
     {
-        var currentHp = snapshot?.CurrentHp ?? cause.CurrentHp;
-        var shieldHp = snapshot?.ShieldHp ?? cause.ShieldHp;
-        var maxHp = snapshot?.MaxHp ?? cause.MaxHp;
+        var hpText = FormatDeathChatHp(snapshot, cause);
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {cause.SourceName}. HP before KO: {FormatEffectiveHp(currentHp, shieldHp, maxHp)}."
-            : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}. HP before hit: {FormatEffectiveHp(currentHp, shieldHp, maxHp)}.";
+            ? $"{cause.ActionName} from {cause.SourceName}. HP before KO: {hpText}."
+            : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}. HP before hit: {hpText}.";
     }
 
     private static string FormatDeathChatMultiHitLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
     {
-        var currentHp = snapshot?.CurrentHp ?? damageEvents[0].CurrentHp;
-        var shieldHp = snapshot?.ShieldHp ?? damageEvents[0].ShieldHp;
-        var maxHp = snapshot?.MaxHp ?? damageEvents[0].MaxHp;
+        var hpText = FormatDeathChatHp(snapshot, damageEvents[0]);
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
         var sourceName = GetSharedDamageSourceName(damageEvents);
-        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}. HP before hit: {FormatEffectiveHp(currentHp, shieldHp, maxHp)}.";
+        return $"{totalDamage:N0} damage by {damageEvents.Count} hits from {sourceName}. HP before hit: {hpText}.";
+    }
+
+    private static string FormatDeathChatHp(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
+    {
+        if (snapshot is not null)
+        {
+            return FormatEffectiveHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp);
+        }
+
+        return fallbackEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
+            fallbackEvent.MaxHp > 0 &&
+            (fallbackEvent.CurrentHp > 0 || fallbackEvent.ShieldHp > 0)
+            ? FormatEffectiveHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp)
+            : "unavailable";
     }
 
     private static string GetSharedDamageSourceName(IReadOnlyList<CombatEventRecord> damageEvents)

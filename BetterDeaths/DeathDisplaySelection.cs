@@ -12,13 +12,14 @@ public sealed record DeathDisplaySelection(
 public static class DeathDisplaySelector
 {
     private const float LeadUpHistorySeconds = 10.0f;
+    private static readonly TimeSpan MaxHeadlineHpSampleAge = TimeSpan.FromMilliseconds(1500);
 
     public static DeathDisplaySelection Select(PartyDeathRecord death)
     {
         var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
         var events = GetStoredLikelyCauseEvents(death);
-        var snapshot = GetMathematicallyFittingSnapshot(death, anchorSeenAtUtc, events) ??
-            GetFallbackSnapshot(death, anchorSeenAtUtc, events);
+        var snapshot = GetReliablePriorSnapshot(death, anchorSeenAtUtc, events) ??
+            (events.Count == 0 ? GetFallbackSnapshot(death, anchorSeenAtUtc, events) : null);
 
         return new DeathDisplaySelection(anchorSeenAtUtc, snapshot, events);
     }
@@ -38,19 +39,13 @@ public static class DeathDisplaySelector
             events = events.Append(likelyCause);
         }
 
-        return events
+        var orderedEvents = events
             .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= displayAnchorSeenAtUtc)
             .Where(IsDeathRelevantLeadUpEvent)
-            .GroupBy(combatEvent => (
-                combatEvent.SeenAtUtc,
-                combatEvent.MemberKey,
-                combatEvent.SourceEntityId,
-                combatEvent.ActionId,
-                combatEvent.Kind,
-                combatEvent.Amount))
-            .Select(group => group.First())
             .OrderBy(combatEvent => combatEvent.SeenAtUtc)
             .ToList();
+
+        return DeduplicateStoredEvents(orderedEvents);
     }
 
     public static bool IsLikelyDeathCauseEvent(CombatEventRecord combatEvent)
@@ -59,24 +54,57 @@ public static class DeathDisplaySelector
             (combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0);
     }
 
-    private static HpHistorySnapshot? GetMathematicallyFittingSnapshot(
+    private static HpHistorySnapshot? GetReliablePriorSnapshot(
         PartyDeathRecord death,
         DateTime anchorSeenAtUtc,
         IReadOnlyList<CombatEventRecord> events)
     {
-        if (events.Count == 0 || GetIncomingDamageAmount(events) is not { } incomingDamage)
-        {
-            return null;
-        }
-
-        var firstCauseSeenAtUtc = events
-            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
-            .First()
-            .SeenAtUtc;
+        var latestAllowedAtUtc = events.Count > 0
+            ? events.OrderBy(combatEvent => combatEvent.SeenAtUtc).First().SeenAtUtc
+            : anchorSeenAtUtc;
 
         return GetLeadUpHpHistory(death, anchorSeenAtUtc)
-            .Where(snapshot => snapshot.SeenAtUtc <= firstCauseSeenAtUtc)
-            .LastOrDefault(snapshot => SnapshotHpAndShields(snapshot) <= incomingDamage);
+            .Where(snapshot => snapshot.SeenAtUtc <= latestAllowedAtUtc)
+            .Where(snapshot => latestAllowedAtUtc - snapshot.SeenAtUtc <= MaxHeadlineHpSampleAge)
+            .LastOrDefault();
+    }
+
+    private static IReadOnlyList<CombatEventRecord> DeduplicateStoredEvents(IReadOnlyList<CombatEventRecord> orderedEvents)
+    {
+        if (orderedEvents.Count == 0)
+        {
+            return [];
+        }
+
+        var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
+        var seenLegacyKeys = new HashSet<(DateTime SeenAtUtc, string MemberKey, uint SourceEntityId, uint ActionId, DeathEventKind Kind, uint Amount)>();
+        var deduplicated = new List<CombatEventRecord>(orderedEvents.Count);
+        foreach (var combatEvent in orderedEvents)
+        {
+            if (!string.IsNullOrWhiteSpace(combatEvent.EventIdentity))
+            {
+                if (seenIdentities.Add(combatEvent.EventIdentity))
+                {
+                    deduplicated.Add(combatEvent);
+                }
+
+                continue;
+            }
+
+            var legacyKey = (
+                combatEvent.SeenAtUtc,
+                combatEvent.MemberKey,
+                combatEvent.SourceEntityId,
+                combatEvent.ActionId,
+                combatEvent.Kind,
+                combatEvent.Amount);
+            if (seenLegacyKeys.Add(legacyKey))
+            {
+                deduplicated.Add(combatEvent);
+            }
+        }
+
+        return deduplicated;
     }
 
     private static HpHistorySnapshot? GetFallbackSnapshot(
@@ -118,7 +146,7 @@ public static class DeathDisplaySelector
                 .ToList();
             if (sequenceEvents.Count > 0)
             {
-                return sequenceEvents;
+                return DeduplicateStoredEvents(sequenceEvents);
             }
         }
 
@@ -152,16 +180,4 @@ public static class DeathDisplaySelector
         return combatEvent.Kind is DeathEventKind.Damage or DeathEventKind.Miss or DeathEventKind.Invulnerable or DeathEventKind.Status;
     }
 
-    private static ulong? GetIncomingDamageAmount(IReadOnlyList<CombatEventRecord> events)
-    {
-        var total = events
-            .Where(combatEvent => combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0)
-            .Aggregate(0UL, (sum, combatEvent) => sum + combatEvent.Amount);
-        return total == 0 ? null : total;
-    }
-
-    private static ulong SnapshotHpAndShields(HpHistorySnapshot snapshot)
-    {
-        return snapshot.CurrentHp + (ulong)snapshot.ShieldHp;
-    }
 }
