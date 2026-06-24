@@ -108,6 +108,13 @@ public sealed record HpHistorySnapshot(
     uint MaxHp,
     IReadOnlyList<StatusSnapshot> Statuses);
 
+public sealed record SourceMitigationSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    uint SourceEntityId,
+    string SourceName,
+    IReadOnlyList<StatusSnapshot> Statuses);
+
 public sealed record FatalSequenceRecord(
     DateTime StartAtUtc,
     DateTime EndAtUtc,
@@ -132,6 +139,8 @@ public sealed record PartyDeathRecord(
     IReadOnlyList<StatusSnapshot> StatusesAtDeath)
 {
     public FatalSequenceRecord? FatalSequence { get; init; }
+
+    public IReadOnlyList<SourceMitigationSnapshot> SourceMitigationHistory { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(

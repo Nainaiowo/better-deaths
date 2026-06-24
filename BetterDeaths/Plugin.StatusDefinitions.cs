@@ -6,8 +6,8 @@ using System.Linq;
 
 public sealed partial class Plugin
 {
-    private const uint PhysicalDamageReductionIconId = 60011;
-    private const uint MagicDamageReductionIconId = 60012;
+    internal const uint PhysicalDamageReductionIconId = 60011;
+    internal const uint MagicDamageReductionIconId = 60012;
     private const string IncomingAllDamageReductionTooltip = "Reduces all incoming damage.";
     private const string IncomingPhysicalDamageReductionTooltip = "Reduces incoming physical damage.";
     private const string IncomingMagicDamageReductionTooltip = "Reduces incoming magic damage.";

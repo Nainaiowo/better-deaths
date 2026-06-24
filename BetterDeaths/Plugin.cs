@@ -45,8 +45,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int RecentStatusHistorySeconds = 20;
     private const float StatusDeathRemainingWindowSeconds = 5.0f;
     private const int OwnSharedRecapSuppressionSeconds = 5;
-    private const int QueuedChatDelayMs = 750;
-    private const int DetectedSharedRecapLinkDelayMs = 2200;
+    private const int QueuedChatDelayMs = 200;
+    private const int DetectedSharedRecapLinkDelayMs = 800;
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
     private const int MaxDebugLogEntries = 1000;
@@ -55,14 +55,15 @@ public sealed partial class Plugin : IDalamudPlugin
     private const long DebugCaptureTrimTargetBytes = 20L * 1024L * 1024L;
     private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
-    private const int RecordedPullHistorySchemaVersion = 2;
-    private const int CurrentConfigurationVersion = 2;
+    private const int RecordedPullHistorySchemaVersion = 3;
+    private const int CurrentConfigurationVersion = 3;
     private const int RecordedPullHistoryRollingBackupCount = 5;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
     private const ushort ChatGreenColorKey = 45;
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
+    private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int CombatLogEventRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int RawActionEffectRetentionSeconds = 5;
     private const int RawCombatLogRetentionSeconds = 10;
@@ -73,6 +74,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxDebugEffectResultEvents = 1000;
     private const int MaxDebugActorControlEvents = 1000;
     private const int MaxRecentHpHistoryPerMember = 240;
+    private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
@@ -87,6 +89,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
+    public const float DeathRecapPopupMinBackgroundOpacity = 0.20f;
+    public const float DeathRecapPopupMaxBackgroundOpacity = 1.0f;
     public const float MinWidgetIconSize = 12.0f;
     public const float MaxWidgetIconSize = 32.0f;
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
@@ -311,6 +315,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem = new("BetterDeaths");
     private readonly RecapWindow recapWindow;
     private readonly CurrentPullWidgetWindow currentPullWidgetWindow;
+    private readonly DeathRecapPopupWindow deathRecapPopupWindow;
     private readonly List<PartyMemberSnapshot> currentMembers = [];
     private readonly List<PartyDeathRecord> currentDeaths = [];
     private readonly List<PullDeathSnapshot> recordedPulls = [];
@@ -327,6 +332,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<StatusObservation>> recentStatusesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<HpHistorySnapshot>> recentHpHistoryByMember = new(StringComparer.Ordinal);
+    private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
@@ -545,6 +551,9 @@ public sealed partial class Plugin : IDalamudPlugin
         };
         windowSystem.AddWindow(recapWindow);
 
+        deathRecapPopupWindow = new DeathRecapPopupWindow(this, recapWindow);
+        windowSystem.AddWindow(deathRecapPopupWindow);
+
         currentPullWidgetWindow = new CurrentPullWidgetWindow(this, recapWindow)
         {
             IsOpen = Configuration.ShowCurrentPullWidget,
@@ -684,6 +693,30 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetDeathRecapPopupBackgroundOpacity(float opacity)
+    {
+        Configuration.DeathRecapPopupBackgroundOpacity = Math.Clamp(
+            opacity,
+            DeathRecapPopupMinBackgroundOpacity,
+            DeathRecapPopupMaxBackgroundOpacity);
+        SaveConfiguration();
+    }
+
+    public void SaveDeathRecapPopupPosition(Vector2 position)
+    {
+        if (Configuration.HasDeathRecapPopupPosition &&
+            MathF.Abs(Configuration.DeathRecapPopupPositionX - position.X) <= 0.5f &&
+            MathF.Abs(Configuration.DeathRecapPopupPositionY - position.Y) <= 0.5f)
+        {
+            return;
+        }
+
+        Configuration.HasDeathRecapPopupPosition = true;
+        Configuration.DeathRecapPopupPositionX = position.X;
+        Configuration.DeathRecapPopupPositionY = position.Y;
+        SaveConfiguration();
+    }
+
     public bool ShouldShowThankYouNotice()
     {
         return !string.Equals(Configuration.LastAcknowledgedNoticeId, ThankYouNoticeId, StringComparison.Ordinal);
@@ -709,6 +742,12 @@ public sealed partial class Plugin : IDalamudPlugin
     public void SetPostDeathRecapLinksOnDeath(bool enabled)
     {
         Configuration.PostDeathRecapLinksOnDeath = enabled;
+        SaveConfiguration();
+    }
+
+    public void SetShowDeathRecapPopup(bool enabled)
+    {
+        Configuration.ShowDeathRecapPopup = enabled;
         SaveConfiguration();
     }
 
@@ -1050,6 +1089,12 @@ public sealed partial class Plugin : IDalamudPlugin
                 : Configuration.CurrentPullWidgetBackgroundOpacity,
             CurrentPullWidgetMinBackgroundOpacity,
             CurrentPullWidgetMaxBackgroundOpacity);
+        var deathRecapPopupBackgroundOpacity = Math.Clamp(
+            Configuration.DeathRecapPopupBackgroundOpacity <= 0.0f
+                ? 0.85f
+                : Configuration.DeathRecapPopupBackgroundOpacity,
+            DeathRecapPopupMinBackgroundOpacity,
+            DeathRecapPopupMaxBackgroundOpacity);
         const float pullBrowserWidth = 300.0f;
         var recentEventSeconds = Math.Clamp(Configuration.RecentEventSeconds, 5, 60);
         var deathCauseSeconds = Math.Clamp(Configuration.DeathCauseSeconds, 5, 60);
@@ -1076,6 +1121,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (MathF.Abs(Configuration.CurrentPullWidgetBackgroundOpacity - widgetBackgroundOpacity) > 0.01f)
         {
             Configuration.CurrentPullWidgetBackgroundOpacity = widgetBackgroundOpacity;
+            changed = true;
+        }
+
+        if (MathF.Abs(Configuration.DeathRecapPopupBackgroundOpacity - deathRecapPopupBackgroundOpacity) > 0.01f)
+        {
+            Configuration.DeathRecapPopupBackgroundOpacity = deathRecapPopupBackgroundOpacity;
             changed = true;
         }
 
@@ -1550,7 +1601,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 member.MaxHP,
                 isDead,
                 true,
-                BuildStatusSnapshots(member.Statuses)));
+                BuildCharacterStatusSnapshots(member.GameObject, member.Statuses)));
             partyIndex++;
         }
 
@@ -1580,9 +1631,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     continue;
                 }
 
-                var statusSnapshots = player is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
-                    ? BuildStatusSnapshots(battleChara.StatusList)
-                    : [];
+                var statusSnapshots = BuildCharacterStatusSnapshots(player, []);
                 var classJobId = player.ClassJob.RowId;
                 members.Add(new PartyMemberSnapshot(
                     $"entity:{player.EntityId:X8}",
@@ -1630,9 +1679,7 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
-        var statusSnapshots = localPlayer is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
-            ? BuildStatusSnapshots(battleChara.StatusList)
-            : [];
+        var statusSnapshots = BuildCharacterStatusSnapshots(localPlayer, []);
         var classJobId = localPlayer.ClassJob.RowId;
         members.Add(new PartyMemberSnapshot(
             $"entity:{localPlayer.EntityId:X8}",
@@ -1650,6 +1697,24 @@ public sealed partial class Plugin : IDalamudPlugin
             statusSnapshots));
         trackedEntityIds.Add(localPlayer.EntityId);
         trackedNames.Add(memberName);
+    }
+
+    private IReadOnlyList<StatusSnapshot> BuildCharacterStatusSnapshots(
+        Dalamud.Game.ClientState.Objects.Types.IGameObject? gameObject,
+        IEnumerable<IStatus> fallbackStatuses)
+    {
+        return gameObject is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
+            ? BuildStatusSnapshots(battleChara.StatusList)
+            : BuildStatusSnapshots(fallbackStatuses);
+    }
+
+    private IReadOnlyList<StatusSnapshot> BuildCharacterStatusSnapshotsOrFallback(
+        Dalamud.Game.ClientState.Objects.Types.IGameObject? gameObject,
+        IReadOnlyList<StatusSnapshot> fallbackStatuses)
+    {
+        return gameObject is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
+            ? BuildStatusSnapshots(battleChara.StatusList)
+            : fallbackStatuses;
     }
 
     private static uint CalculateShieldHp(Dalamud.Game.ClientState.Objects.Types.IGameObject? gameObject, uint maxHp)
@@ -2097,6 +2162,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var sourceName = GetEntityDisplayName(packet.CasterEntityId);
         var sourceStatuses = GetBossMitigationStatuses(BuildSourceStatusSnapshots(packet.CasterEntityId));
         var foundRelevantEffect = false;
+        var trackedSourceStatuses = false;
 
         foreach (var target in packet.Targets)
         {
@@ -2127,6 +2193,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
                 foundRelevantEffect = true;
                 EnsurePullStarted(packet.SeenAtUtc);
+                if (!trackedSourceStatuses)
+                {
+                    TrackRecentSourceMitigationSnapshot(packet.CasterEntityId, sourceName, packet.SeenAtUtc, sourceStatuses);
+                    trackedSourceStatuses = true;
+                }
 
                 var amount = effect.Value;
                 if ((effect.Param4 & 0x40) == 0x40)
@@ -2421,6 +2492,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var sourceStatuses = sourceEntityId == 0
             ? []
             : GetBossMitigationStatuses(BuildSourceStatusSnapshots(sourceEntityId));
+        TrackRecentSourceMitigationSnapshot(sourceEntityId, sourceName, packet.SeenAtUtc, sourceStatuses);
         var statusSource = priorHp is null
             ? GetBestKnownStatuses(member, packet.SeenAtUtc)
             : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
@@ -2680,9 +2752,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             if (ObjectTable.SearchByEntityId(member.EntityId) is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player)
             {
-                var statuses = player is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara
-                    ? BuildStatusSnapshots(battleChara.StatusList)
-                    : member.Statuses;
+                var statuses = BuildCharacterStatusSnapshotsOrFallback(player, member.Statuses);
                 return member with
                 {
                     CurrentHp = player.CurrentHp,
@@ -2754,15 +2824,32 @@ public sealed partial class Plugin : IDalamudPlugin
         EnsurePullStarted(deathSeenAtUtc);
         var death = CreateDeathRecord(member, deathSeenAtUtc);
         currentDeaths.Add(death);
+        if (Configuration.ShowDeathRecapPopup && IsLocalPlayer(member))
+        {
+            deathRecapPopupWindow.DisplayDeath(death);
+        }
+
         QueueDeathRecapLink(death, DateTime.UtcNow);
         AddDebugLog($"{member.MemberName} died to {FormatCause(DeathDisplaySelector.Select(death).Events)} via {signalSource}.");
         return true;
+    }
+
+    private static bool IsLocalPlayer(PartyMemberSnapshot member)
+    {
+        var localPlayer = ObjectTable.LocalPlayer;
+        return localPlayer is not null &&
+            localPlayer.EntityId != 0 &&
+            member.EntityId == localPlayer.EntityId;
     }
 
     private PartyDeathRecord CreateDeathRecord(PartyMemberSnapshot member, DateTime deathSeenAtUtc)
     {
         var events = GetRecentEvents(member.MemberKey, Math.Max(Configuration.RecentEventSeconds, BetterDeathsLeadUpCaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, BetterDeathsLeadUpCaptureSeconds);
+        var sourceMitigationHistory = GetRecentSourceMitigationHistory(
+            events.Select(combatEvent => combatEvent.SourceEntityId),
+            deathSeenAtUtc,
+            BetterDeathsLeadUpCaptureSeconds);
         var fatalSequence = CreateFatalSequence(member.MemberKey, deathSeenAtUtc, events, hpHistory);
         var causeCutoff = deathSeenAtUtc - TimeSpan.FromSeconds(Configuration.DeathCauseSeconds);
         var sequenceCause = fatalSequence is not null
@@ -2798,6 +2885,7 @@ public sealed partial class Plugin : IDalamudPlugin
             GetRelevantDeathStatuses(member.Statuses))
         {
             FatalSequence = fatalSequence,
+            SourceMitigationHistory = sourceMitigationHistory,
         };
     }
 
@@ -3093,6 +3181,69 @@ public sealed partial class Plugin : IDalamudPlugin
         lastHpHistorySampleByMember[memberKey] = snapshot.SeenAtUtc;
     }
 
+    private void TrackRecentSourceMitigationSnapshot(
+        uint sourceEntityId,
+        string sourceName,
+        DateTime seenAtUtc,
+        IEnumerable<StatusSnapshot> statuses)
+    {
+        if (sourceEntityId == 0)
+        {
+            return;
+        }
+
+        var sourceStatuses = GetBossMitigationStatuses(statuses)
+            .Where(status => status.RemainingTime > 0.0f)
+            .ToList();
+        if (sourceStatuses.Count == 0)
+        {
+            return;
+        }
+
+        if (!recentSourceMitigationHistoryBySource.TryGetValue(sourceEntityId, out var history))
+        {
+            history = [];
+            recentSourceMitigationHistoryBySource[sourceEntityId] = history;
+        }
+
+        history.Add(new SourceMitigationSnapshot(
+            seenAtUtc,
+            CalculatePullElapsed(seenAtUtc),
+            sourceEntityId,
+            sourceName,
+            sourceStatuses));
+        while (history.Count > MaxSourceMitigationHistoryPerSource)
+        {
+            history.RemoveAt(0);
+        }
+    }
+
+    private IReadOnlyList<SourceMitigationSnapshot> GetRecentSourceMitigationHistory(
+        IEnumerable<uint> sourceEntityIds,
+        DateTime seenAtUtc,
+        int seconds)
+    {
+        var sourceIds = sourceEntityIds
+            .Where(sourceEntityId => sourceEntityId != 0)
+            .Distinct()
+            .ToList();
+        if (sourceIds.Count == 0 || recentSourceMitigationHistoryBySource.Count == 0)
+        {
+            return [];
+        }
+
+        var cutoff = seenAtUtc - TimeSpan.FromSeconds(seconds);
+        var endAtUtc = seenAtUtc + FatalSequenceEndBuffer;
+        return sourceIds
+            .Where(recentSourceMitigationHistoryBySource.ContainsKey)
+            .SelectMany(sourceEntityId => recentSourceMitigationHistoryBySource[sourceEntityId])
+            .Where(snapshot => snapshot.SeenAtUtc >= cutoff && snapshot.SeenAtUtc <= endAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(snapshot => snapshot.SourceEntityId)
+            .ToList();
+    }
+
     private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
     {
         if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
@@ -3284,6 +3435,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PruneRecentCombatLogEvents(now);
         PruneRecentStatuses(now);
         PruneRecentHpHistory(now);
+        PruneRecentSourceMitigationHistory(now);
     }
 
     private void PruneRecentEvents(DateTime now)
@@ -3319,6 +3471,24 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 recentHpHistoryByMember.Remove(key);
                 lastHpHistorySampleByMember.Remove(key);
+            }
+        }
+    }
+
+    private void PruneRecentSourceMitigationHistory(DateTime now)
+    {
+        if (recentSourceMitigationHistoryBySource.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = now - TimeSpan.FromSeconds(SourceMitigationHistoryRetentionSeconds);
+        foreach (var sourceEntityId in recentSourceMitigationHistoryBySource.Keys.ToList())
+        {
+            recentSourceMitigationHistoryBySource[sourceEntityId].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
+            if (recentSourceMitigationHistoryBySource[sourceEntityId].Count == 0)
+            {
+                recentSourceMitigationHistoryBySource.Remove(sourceEntityId);
             }
         }
     }
@@ -3451,6 +3621,7 @@ public sealed partial class Plugin : IDalamudPlugin
         recentCombatLogEventsByMember.Clear();
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
+        recentSourceMitigationHistoryBySource.Clear();
         lastHpHistorySampleByMember.Clear();
         lock (rawCombatQueueLock)
         {

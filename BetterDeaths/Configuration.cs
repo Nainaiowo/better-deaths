@@ -39,7 +39,7 @@ public enum ClockDisplayMode
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
 
     public bool ShowWindow { get; set; } = true;
 
@@ -54,6 +54,16 @@ public sealed class Configuration : IPluginConfiguration
     public bool RemoveChatBranding { get; set; }
 
     public bool PostDeathRecapLinksOnDeath { get; set; }
+
+    public bool ShowDeathRecapPopup { get; set; } = true;
+
+    public float DeathRecapPopupBackgroundOpacity { get; set; } = 0.85f;
+
+    public bool HasDeathRecapPopupPosition { get; set; }
+
+    public float DeathRecapPopupPositionX { get; set; }
+
+    public float DeathRecapPopupPositionY { get; set; }
 
     public bool CapturePartyDeaths { get; set; } = true;
 
