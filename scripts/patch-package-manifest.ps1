@@ -24,46 +24,39 @@ function ConvertTo-AbsolutePath {
     return [System.IO.Path]::GetFullPath((Join-Path $BasePath $Path))
 }
 
-function Set-JsonProperty {
+function Remove-JsonProperty {
     param(
         [pscustomobject] $Target,
-        [string] $Name,
-        [object] $Value
+        [string] $Name
     )
 
-    if ($Target.PSObject.Properties.Name -contains $Name) {
-        $Target.$Name = $Value
-        return
+    if ($Target.PSObject.Properties.Name -notcontains $Name) {
+        return $false
     }
 
-    $Target | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
+    $Target.PSObject.Properties.Remove($Name)
+    return $true
 }
 
 function Update-Manifest {
     param(
-        [string] $SourceManifestPath,
         [string] $TargetManifestPath
     )
 
-    if (-not (Test-Path -LiteralPath $SourceManifestPath) -or -not (Test-Path -LiteralPath $TargetManifestPath)) {
+    if (-not (Test-Path -LiteralPath $TargetManifestPath)) {
         return $false
     }
 
-    $source = Get-Content -Raw -LiteralPath $SourceManifestPath | ConvertFrom-Json
     $target = Get-Content -Raw -LiteralPath $TargetManifestPath | ConvertFrom-Json
 
-    $copied = $false
+    $removed = $false
     foreach ($propertyName in @("DownloadCount")) {
-        $property = $source.PSObject.Properties[$propertyName]
-        if ($null -eq $property) {
-            continue
+        if (Remove-JsonProperty -Target $target -Name $propertyName) {
+            $removed = $true
         }
-
-        Set-JsonProperty -Target $target -Name $propertyName -Value $property.Value
-        $copied = $true
     }
 
-    if (-not $copied) {
+    if (-not $removed) {
         return $false
     }
 
@@ -74,10 +67,9 @@ function Update-Manifest {
 
 $projectFullPath = ConvertTo-AbsolutePath -BasePath (Get-Location).Path -Path $ProjectDir
 $outputFullPath = ConvertTo-AbsolutePath -BasePath $projectFullPath -Path $OutputPath
-$sourceManifestPath = Join-Path $projectFullPath "$AssemblyName.json"
 $generatedManifestPath = Join-Path $outputFullPath "$AssemblyName.json"
 
-$updatedManifest = Update-Manifest -SourceManifestPath $sourceManifestPath -TargetManifestPath $generatedManifestPath
+$updatedManifest = Update-Manifest -TargetManifestPath $generatedManifestPath
 if ($updatedManifest) {
     Write-Host "Patched $generatedManifestPath"
 }
@@ -92,7 +84,7 @@ New-Item -ItemType Directory -Path $tempPath | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempPath -Force
     $zipManifestPath = Join-Path $tempPath "$AssemblyName.json"
-    $updatedZipManifest = Update-Manifest -SourceManifestPath $sourceManifestPath -TargetManifestPath $zipManifestPath
+    $updatedZipManifest = Update-Manifest -TargetManifestPath $zipManifestPath
     if (-not $updatedZipManifest) {
         return
     }
