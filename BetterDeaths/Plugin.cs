@@ -723,6 +723,12 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetClockDisplayMode(ClockDisplayMode mode)
+    {
+        Configuration.ClockDisplayMode = mode;
+        SaveConfiguration();
+    }
+
     public void SetDebugLogEnabled(bool enabled)
     {
         Configuration.DebugLogEnabled = enabled;

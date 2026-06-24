@@ -23,6 +23,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool clearPendingDeathSelection;
     private bool collapseRecordedPullsRequested;
     private bool showDebugTab;
+    private bool showThankYouNoticeOnDemand;
     private string debugTextFilter = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -58,11 +59,12 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.100";
+    private const string CurrentChangelogVersion = "0.1.0.101";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
+    private const float ReviewPaneContentIndent = 8.0f;
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
@@ -228,9 +230,9 @@ public sealed class RecapWindow : Window, IDisposable
     {
         DrawPluginUpdateBanner();
 
-        if (plugin.ShouldShowThankYouNotice())
+        if (showThankYouNoticeOnDemand || plugin.ShouldShowThankYouNotice())
         {
-            DrawOneTimeThankYouNotice();
+            DrawOneTimeThankYouNotice(showThankYouNoticeOnDemand);
             return;
         }
 
@@ -487,7 +489,7 @@ public sealed class RecapWindow : Window, IDisposable
             return new ReviewPull(
                 BuildRecordedPullKey(snapshot),
                 $"Pull {entry.PullNumber}",
-                $"{snapshot.TerritoryName} - Timer {FormatCombatTimer(snapshot.PullElapsedSeconds)} - {snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}",
+                $"{snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}",
                 entry.PullNumber,
                 snapshot.TerritoryId,
                 snapshot.TerritoryName,
@@ -666,7 +668,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawReviewPane(string id, Vector2 size, Action draw)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(7.0f, 6.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 6.0f));
         if (ImGui.BeginChild(id, size, false))
         {
             draw();
@@ -779,6 +781,7 @@ public sealed class RecapWindow : Window, IDisposable
         string idPrefix,
         ReviewSelectionState selection)
     {
+        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawModernSectionTitle(pull.Title, pull.Subtitle);
         if (pull.Deaths.Count == 0)
         {
@@ -819,7 +822,10 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.TableNextColumn();
-            if (ImGui.Selectable($"{i + 1}##SelectDeath{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}", rowSelected, ImGuiSelectableFlags.SpanAllColumns))
+            if (DrawCenteredRowSelectable(
+                (i + 1).ToString(),
+                $"SelectDeath{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}",
+                rowSelected))
             {
                 SelectDeath(death, selection);
             }
@@ -839,6 +845,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawSelectedDeathPanel(ReviewPull pull, PartyDeathRecord? death, string idPrefix)
     {
+        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawModernSectionTitle("Selected Death", pull.Title);
         if (death is null)
         {
@@ -865,6 +872,29 @@ public sealed class RecapWindow : Window, IDisposable
                 DrawCauseSummary(death);
                 break;
         }
+    }
+
+    private static bool DrawCenteredRowSelectable(string text, string id, bool selected)
+    {
+        var cellStart = ImGui.GetCursorScreenPos();
+        var cellWidth = ImGui.GetContentRegionAvail().X;
+        var rowHeight = ImGui.GetTextLineHeightWithSpacing();
+        var clicked = ImGui.Selectable(
+            $"##{id}",
+            selected,
+            ImGuiSelectableFlags.SpanAllColumns,
+            new Vector2(0.0f, rowHeight));
+
+        var textSize = ImGui.CalcTextSize(text);
+        var textPosition = new Vector2(
+            cellStart.X + MathF.Max(0.0f, (cellWidth - textSize.X) * 0.5f),
+            cellStart.Y + MathF.Max(0.0f, (rowHeight - textSize.Y) * 0.5f));
+        ImGui.GetWindowDrawList().AddText(
+            textPosition,
+            ImGui.GetColorU32(ImGuiCol.Text),
+            text);
+
+        return clicked;
     }
 
     private void DrawDeathDetailSwitcher(string deathId)
@@ -1238,7 +1268,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             using var recordedPullIndent = new ImGuiIndentScope(PullBodyIndent);
-            ImGui.TextDisabled($"{snapshot.Reason} - {FormatLocalClockTime(snapshot.CapturedAtUtc)}");
+            ImGui.TextDisabled($"{snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}");
             DrawDeathTimeline(snapshot.Deaths, $"Pull{pullId}");
             DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}", selectionSource: DeathSelectionSource.Recorded, recordedPull: snapshot);
         }
@@ -3319,26 +3349,38 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.TextUnformatted("Capture Settings");
 
-        var captureParty = configuration.CapturePartyDeaths;
-        if (ImGui.Checkbox("Capture party", ref captureParty))
+        if (ImGui.BeginTable("##CaptureClockSettings", 2, ImGuiTableFlags.SizingStretchProp))
         {
-            plugin.SetCapturePartyDeaths(captureParty);
-        }
+            ImGui.TableSetupColumn("Capture", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableSetupColumn("Clock", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Includes your own character.");
-        }
+            var captureParty = configuration.CapturePartyDeaths;
+            if (ImGui.Checkbox("Capture party", ref captureParty))
+            {
+                plugin.SetCapturePartyDeaths(captureParty);
+            }
 
-        var captureOthers = configuration.CaptureOtherDeaths;
-        if (ImGui.Checkbox("Capture others", ref captureOthers))
-        {
-            plugin.SetCaptureOtherDeaths(captureOthers);
-        }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Includes your own character.");
+            }
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Tracks non-party player characters visible to your client.");
+            var captureOthers = configuration.CaptureOtherDeaths;
+            if (ImGui.Checkbox("Capture others", ref captureOthers))
+            {
+                plugin.SetCaptureOtherDeaths(captureOthers);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Tracks non-party player characters visible to your client.");
+            }
+
+            ImGui.TableNextColumn();
+            DrawClockDisplaySetting();
+            ImGui.EndTable();
         }
 
         var maxPulls = pendingMaxRecordedPulls ?? configuration.MaxRecordedPulls;
@@ -3381,15 +3423,30 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.Spacing();
         ImGui.TextDisabled("Developer tools");
+        ImGui.SameLine();
 
         var buttonLabel = showDebugTab ? "Hide debug tab" : "Show debug tab";
+        var style = ImGui.GetStyle();
         var buttonWidth = ImGui.CalcTextSize(buttonLabel).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var starButtonWidth = ImGui.GetFrameHeight();
+        var totalButtonWidth = starButtonWidth + style.ItemSpacing.X + buttonWidth;
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        if (availableWidth > buttonWidth)
+        if (availableWidth > totalButtonWidth)
         {
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableWidth - buttonWidth);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableWidth - totalButtonWidth);
         }
 
+        if (ImGuiComponents.IconButton("ShowAcknowledgementNotice", FontAwesomeIcon.Star))
+        {
+            showThankYouNoticeOnDemand = true;
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Show the Better Deaths acknowledgement message again.");
+        }
+
+        ImGui.SameLine();
         if (ImGui.Button(buttonLabel))
         {
             showDebugTab = !showDebugTab;
@@ -3578,7 +3635,38 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawOneTimeThankYouNotice()
+    private void DrawClockDisplaySetting()
+    {
+        ImGui.TextUnformatted("Clock Display");
+        var currentMode = configuration.ClockDisplayMode;
+        var preview = currentMode == ClockDisplayMode.TwelveHour
+            ? "12-hour"
+            : "24-hour";
+        if (ImGui.BeginCombo("##ClockDisplayMode", preview))
+        {
+            DrawClockDisplayModeOption("24-hour", ClockDisplayMode.TwentyFourHour);
+            DrawClockDisplayModeOption("12-hour", ClockDisplayMode.TwelveHour);
+            ImGui.EndCombo();
+        }
+
+        DrawSettingsTooltip("Controls local clock times shown in recorded pull descriptions.");
+    }
+
+    private void DrawClockDisplayModeOption(string label, ClockDisplayMode mode)
+    {
+        var selected = configuration.ClockDisplayMode == mode;
+        if (ImGui.Selectable(label, selected))
+        {
+            plugin.SetClockDisplayMode(mode);
+        }
+
+        if (selected)
+        {
+            ImGui.SetItemDefaultFocus();
+        }
+    }
+
+    private void DrawOneTimeThankYouNotice(bool onDemand)
     {
         ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
         ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
@@ -3602,7 +3690,14 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, NoticeButtonHoveredColor);
             if (ImGui.Button("Continue to Better Deaths"))
             {
-                plugin.MarkThankYouNoticeAcknowledged();
+                if (onDemand)
+                {
+                    showThankYouNoticeOnDemand = false;
+                }
+                else
+                {
+                    plugin.MarkThankYouNoticeAcknowledged();
+                }
             }
 
             ImGui.PopStyleColor();
@@ -4465,6 +4560,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.101");
+        ImGui.TextDisabled("Testing layout and settings refinements.");
+        DrawBreathingGoldBullet("Added a Clock Display setting for 24-hour or 12-hour local pull times.");
+        DrawBreathingGoldBullet("Added a star button under Developer tools to reopen the acknowledgement message on demand.");
+        DrawWrappedBullet("Recorded pull subtitles now avoid repeating duty name and timer, showing only the reset/capture time.");
+        DrawWrappedBullet("Timeline number cells and selected death details have cleaner indentation away from separators.");
+        DrawWrappedBullet("Moved the debug button onto the Developer tools row to reduce settings clutter.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.100");
         ImGui.TextDisabled("Cleaner testing review surface.");
         DrawBreathingGoldBullet("Review and Example now use one continuous review surface instead of separate boxed containers.");
@@ -5789,7 +5893,7 @@ public sealed class RecapWindow : Window, IDisposable
         return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
     }
 
-    private static string FormatLocalClockTime(DateTime utcDateTime)
+    private string FormatLocalClockTime(DateTime utcDateTime)
     {
         var localDateTime = utcDateTime.Kind switch
         {
@@ -5798,7 +5902,9 @@ public sealed class RecapWindow : Window, IDisposable
             _ => DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc).ToLocalTime(),
         };
 
-        return $"{localDateTime:HH:mm:ss} local";
+        return configuration.ClockDisplayMode == ClockDisplayMode.TwelveHour
+            ? $"{localDateTime:h:mm:ss tt} local"
+            : $"{localDateTime:HH:mm:ss} local";
     }
 
     private static string FormatRelativeToDeath(DateTime deathSeenAtUtc, DateTime eventSeenAtUtc)

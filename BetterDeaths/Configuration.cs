@@ -30,6 +30,12 @@ public enum WidgetDisplayMode
     Concise,
 }
 
+public enum ClockDisplayMode
+{
+    TwentyFourHour,
+    TwelveHour,
+}
+
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
@@ -52,6 +58,8 @@ public sealed class Configuration : IPluginConfiguration
     public bool CapturePartyDeaths { get; set; } = true;
 
     public bool CaptureOtherDeaths { get; set; }
+
+    public ClockDisplayMode ClockDisplayMode { get; set; } = ClockDisplayMode.TwentyFourHour;
 
     public bool DebugLogEnabled { get; set; }
 
