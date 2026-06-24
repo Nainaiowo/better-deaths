@@ -28,6 +28,8 @@ public sealed class RecapWindow : Window, IDisposable
     private int? pendingMaxRecordedPulls;
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
+    private MainPage currentMainPage = MainPage.Review;
+    private DeathDetailPage selectedDeathDetailPage = DeathDetailPage.Summary;
     private static readonly Vector4 DamageColor = new(1.0f, 0.35f, 0.25f, 1.0f);
     private static readonly Vector4 HealColor = new(0.25f, 1.0f, 0.45f, 1.0f);
     private static readonly Vector4 WarningColor = new(1.0f, 0.7f, 0.25f, 1.0f);
@@ -45,10 +47,17 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 BarBackgroundColor = new(0.18f, 0.18f, 0.18f, 1.0f);
     private static readonly Vector4 BarBorderColor = new(0.45f, 0.45f, 0.45f, 1.0f);
     private static readonly Vector4 OverkillColor = new(1.0f, 0.05f, 0.05f, 1.0f);
+    private static readonly Vector4 ModernShellColor = new(0.055f, 0.06f, 0.068f, 0.84f);
+    private static readonly Vector4 ModernPanelColor = new(0.085f, 0.092f, 0.104f, 0.88f);
+    private static readonly Vector4 ModernPanelAltColor = new(0.11f, 0.118f, 0.132f, 0.90f);
+    private static readonly Vector4 ModernPanelBorderColor = new(0.22f, 0.25f, 0.28f, 0.95f);
+    private static readonly Vector4 ModernAccentColor = new(0.36f, 0.92f, 0.82f, 1.0f);
+    private static readonly Vector4 ModernAccentSoftColor = new(0.10f, 0.34f, 0.31f, 0.92f);
+    private static readonly Vector4 ModernMutedTextColor = new(0.68f, 0.72f, 0.76f, 1.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.98";
+    private const string CurrentChangelogVersion = "0.1.0.99";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -143,6 +152,48 @@ public sealed class RecapWindow : Window, IDisposable
         public uint? DeathMemberKeyHash { get; set; }
     }
 
+    private readonly struct ModernStyleScope : IDisposable
+    {
+        public ModernStyleScope()
+        {
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernShellColor);
+            ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernPanelAltColor);
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.16f, 0.18f, 0.20f, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 10.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12.0f, 10.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8.0f, 7.0f));
+        }
+
+        public void Dispose()
+        {
+            ImGui.PopStyleVar(4);
+            ImGui.PopStyleColor(5);
+        }
+    }
+
+    private readonly struct ModernPanelScope : IDisposable
+    {
+        public ModernPanelScope()
+        {
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelColor);
+            ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+            ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 9.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10.0f, 9.0f));
+        }
+
+        public void Dispose()
+        {
+            ImGui.PopStyleVar(3);
+            ImGui.PopStyleColor(4);
+        }
+    }
+
     private readonly struct ImGuiIndentScope : IDisposable
     {
         private readonly float width;
@@ -182,52 +233,8 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTabBar("##BetterDeathsTabs"))
-        {
-            return;
-        }
-
-        var selectExampleTab = pendingDeathSelection is { Source: DeathSelectionSource.Example };
-        var selectDeathRecapTab = pendingDeathSelection is not null && !selectExampleTab;
-        if (ImGui.BeginTabItem("Death Recap", selectDeathRecapTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
-        {
-            DrawDeathRecapTab();
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("Example Pull", selectExampleTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
-        {
-            DrawExamplePullTab();
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("Settings"))
-        {
-            DrawSettingsTab();
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("Widget"))
-        {
-            DrawWidgetTab();
-            ImGui.EndTabItem();
-        }
-
-        if (showDebugTab && ImGui.BeginTabItem("Debug"))
-        {
-            DrawDebugTab();
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("Notes"))
-        {
-            DrawNotesTab();
-            ImGui.EndTabItem();
-        }
-
-        DrawChangelogTabItem();
-
-        ImGui.EndTabBar();
+        ApplyPendingSelectionPage();
+        DrawModernShell();
 
         if (clearPendingDeathSelection)
         {
@@ -245,6 +252,9 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         pendingDeathSelection = target;
+        currentMainPage = target.Source == DeathSelectionSource.Example
+            ? MainPage.Example
+            : MainPage.Review;
         if (target.Source == DeathSelectionSource.Recorded &&
             target.RecordedPullTerritoryId is { } territoryId)
         {
@@ -254,6 +264,167 @@ public sealed class RecapWindow : Window, IDisposable
         clearPendingDeathSelection = false;
         IsOpen = true;
         return true;
+    }
+
+    private void ApplyPendingSelectionPage()
+    {
+        if (pendingDeathSelection is not { } target)
+        {
+            return;
+        }
+
+        currentMainPage = target.Source == DeathSelectionSource.Example
+            ? MainPage.Example
+            : MainPage.Review;
+    }
+
+    private void DrawModernShell()
+    {
+        using var shellStyle = new ModernStyleScope();
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, true))
+        {
+            DrawModernHeader();
+            DrawModernNavigation();
+            ImGui.Spacing();
+            DrawModernPageContent();
+        }
+
+        ImGui.EndChild();
+    }
+
+    private void DrawModernHeader()
+    {
+        ImGui.TextColored(ModernAccentColor, "Better Deaths");
+        ImGui.SameLine();
+        ImGui.TextDisabled("Pull review that starts simple and opens detail only when needed.");
+
+        var status = plugin.PluginUpdateStatus;
+        var statusText = GetPluginUpdateStatusText(status);
+        if (!string.IsNullOrWhiteSpace(statusText))
+        {
+            ImGui.SameLine();
+            DrawModernPill(statusText, ShouldDrawPluginUpdateBanner(status) ? WarningColor : ModernMutedTextColor);
+        }
+    }
+
+    private void DrawModernNavigation()
+    {
+        DrawModernNavButton("Review", MainPage.Review);
+        ImGui.SameLine();
+        DrawModernNavButton("Example", MainPage.Example);
+        ImGui.SameLine();
+        DrawModernNavButton("Customize", MainPage.Customize);
+        ImGui.SameLine();
+        DrawModernNavButton("Updates", MainPage.Updates, ShouldHighlightChangelogTab());
+        if (showDebugTab)
+        {
+            ImGui.SameLine();
+            DrawModernNavButton("Debug", MainPage.Debug);
+        }
+    }
+
+    private void DrawModernPageContent()
+    {
+        switch (currentMainPage)
+        {
+            case MainPage.Example:
+                DrawExamplePullTab();
+                break;
+            case MainPage.Customize:
+                DrawCustomizePage();
+                break;
+            case MainPage.Updates:
+                plugin.MarkChangelogVersionSeen(CurrentChangelogVersion);
+                DrawUpdatesPage();
+                break;
+            case MainPage.Debug:
+                DrawReviewPanel("##DebugModern", Vector2.Zero, DrawDebugTab);
+                break;
+            default:
+                DrawDeathRecapTab();
+                break;
+        }
+    }
+
+    private void DrawCustomizePage()
+    {
+        var available = ImGui.GetContentRegionAvail();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        if (available.X >= 980.0f)
+        {
+            var leftWidth = MathF.Max(420.0f, (available.X - spacing) * 0.48f);
+            DrawReviewPanel(
+                "##CustomizeSettings",
+                new Vector2(leftWidth, available.Y),
+                DrawSettingsTab);
+            ImGui.SameLine();
+            DrawReviewPanel(
+                "##CustomizeWidget",
+                Vector2.Zero,
+                DrawWidgetTab);
+            return;
+        }
+
+        DrawReviewPanel("##CustomizeSettingsStacked", new Vector2(0.0f, MathF.Min(360.0f, MathF.Max(240.0f, available.Y * 0.48f))), DrawSettingsTab);
+        DrawReviewPanel("##CustomizeWidgetStacked", Vector2.Zero, DrawWidgetTab);
+    }
+
+    private void DrawUpdatesPage()
+    {
+        var available = ImGui.GetContentRegionAvail();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        if (available.X >= 980.0f)
+        {
+            var leftWidth = MathF.Max(390.0f, (available.X - spacing) * 0.42f);
+            DrawReviewPanel(
+                "##UpdatesNotes",
+                new Vector2(leftWidth, available.Y),
+                DrawNotesTab);
+            ImGui.SameLine();
+            DrawReviewPanel(
+                "##UpdatesChangelog",
+                Vector2.Zero,
+                DrawChangelogTab);
+            return;
+        }
+
+        DrawReviewPanel("##UpdatesChangelogStacked", new Vector2(0.0f, MathF.Min(420.0f, MathF.Max(260.0f, available.Y * 0.55f))), DrawChangelogTab);
+        DrawReviewPanel("##UpdatesNotesStacked", Vector2.Zero, DrawNotesTab);
+    }
+
+    private void DrawModernNavButton(string label, MainPage page, bool highlight = false)
+    {
+        var selected = currentMainPage == page;
+        var buttonColor = selected
+            ? ModernAccentSoftColor
+            : ModernPanelAltColor;
+        var hoveredColor = selected
+            ? new Vector4(0.14f, 0.45f, 0.40f, 1.0f)
+            : new Vector4(0.16f, 0.18f, 0.20f, 1.0f);
+        var textColor = highlight
+            ? LeadUpGoldColor
+            : selected ? ModernAccentColor : Vector4.One;
+
+        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+        if (ImGui.Button($"{label}##MainNav{page}", new Vector2(118.0f, 30.0f)))
+        {
+            currentMainPage = page;
+        }
+
+        if (highlight)
+        {
+            DrawChangelogTabHighlightBorder();
+        }
+
+        ImGui.PopStyleColor(4);
+    }
+
+    private static void DrawModernPill(string text, Vector4 color)
+    {
+        ImGui.TextColored(color, text);
     }
 
     private void DrawDeathRecapTab()
@@ -451,6 +622,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawReviewPanel(string id, Vector2 size, Action draw)
     {
+        using var panelStyle = new ModernPanelScope();
         if (ImGui.BeginChild(id, size, true))
         {
             draw();
@@ -609,30 +781,50 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSelectedDeathHeader(death);
         var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
-        if (!ImGui.BeginTabBar($"##SelectedDeathTabs{deathId}"))
+        DrawDeathDetailSwitcher(deathId);
+        ImGui.Spacing();
+
+        switch (selectedDeathDetailPage)
         {
-            return;
+            case DeathDetailPage.Mitigation:
+                DrawExtraMitigationContext(death, deathId);
+                break;
+            case DeathDetailPage.LeadUp:
+                DrawBetterDeathsInformationContent(death, deathId);
+                break;
+            default:
+                DrawCauseSummary(death);
+                break;
+        }
+    }
+
+    private void DrawDeathDetailSwitcher(string deathId)
+    {
+        DrawDeathDetailButton("Summary", DeathDetailPage.Summary, deathId);
+        ImGui.SameLine();
+        DrawDeathDetailButton("Mitigation", DeathDetailPage.Mitigation, deathId);
+        ImGui.SameLine();
+        DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
+    }
+
+    private void DrawDeathDetailButton(string label, DeathDetailPage page, string deathId)
+    {
+        var selected = selectedDeathDetailPage == page;
+        var buttonColor = selected ? ModernAccentSoftColor : ModernPanelAltColor;
+        var hoveredColor = selected
+            ? new Vector4(0.14f, 0.45f, 0.40f, 1.0f)
+            : new Vector4(0.16f, 0.18f, 0.20f, 1.0f);
+
+        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? ModernAccentColor : Vector4.One);
+        if (ImGui.Button($"{label}##DeathDetail{deathId}{page}", new Vector2(112.0f, 28.0f)))
+        {
+            selectedDeathDetailPage = page;
         }
 
-        if (ImGui.BeginTabItem("Summary"))
-        {
-            DrawCauseSummary(death);
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("Mitigation"))
-        {
-            DrawExtraMitigationContext(death, deathId);
-            ImGui.EndTabItem();
-        }
-
-        if (ImGui.BeginTabItem("10s Lead-up"))
-        {
-            DrawBetterDeathsInformationContent(death, deathId);
-            ImGui.EndTabItem();
-        }
-
-        ImGui.EndTabBar();
+        ImGui.PopStyleColor(4);
     }
 
     private void DrawSelectedDeathHeader(PartyDeathRecord death)
@@ -4136,6 +4328,22 @@ public sealed class RecapWindow : Window, IDisposable
         Example,
     }
 
+    private enum MainPage
+    {
+        Review,
+        Example,
+        Customize,
+        Updates,
+        Debug,
+    }
+
+    private enum DeathDetailPage
+    {
+        Summary,
+        Mitigation,
+        LeadUp,
+    }
+
     private sealed record RecordedPullDutyOption(uint TerritoryId, string TerritoryName, int PullCount);
 
     private sealed record DeathSelectionTarget(
@@ -4188,6 +4396,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.99");
+        ImGui.TextDisabled("Cleaner testing UI direction.");
+        DrawBreathingGoldBullet("Replaced the default tab strip with a cleaner Review / Example / Customize / Updates shell.");
+        DrawBreathingGoldBullet("Selected death review now uses guided detail controls instead of nested tabs.");
+        DrawWrappedBullet("Customize combines Settings and Widget controls into one responsive page.");
+        DrawWrappedBullet("Updates combines Notes and Changelog into one support page.");
+        DrawWrappedBullet("Review panels now use a custom visual style for a cleaner testing concept.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.98");
         ImGui.TextDisabled("Testing UI overhaul concept.");
         DrawBreathingGoldBullet("Death Recap now uses a master-detail review workspace instead of stacked pull collapsers.");
