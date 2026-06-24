@@ -18,6 +18,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
 
         Size = new Vector2(620.0f, 360.0f);
         SizeCondition = ImGuiCond.FirstUseEver;
+        Flags |= ImGuiWindowFlags.NoScrollbar;
     }
 
     public void Dispose()

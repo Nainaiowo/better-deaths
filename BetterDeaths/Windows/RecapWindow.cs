@@ -60,7 +60,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.102";
+    private const string CurrentChangelogVersion = "0.1.0.103";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -229,6 +229,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         Size = new Vector2(780, 560);
         SizeCondition = ImGuiCond.FirstUseEver;
+        Flags |= ImGuiWindowFlags.NoScrollbar;
     }
 
     public void Dispose()
@@ -293,7 +294,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope();
-        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false))
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawModernHeader();
             DrawModernNavigation();
@@ -579,16 +580,17 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var available = ImGui.GetContentRegionAvail();
         const float dividerWidth = 1.0f;
-        var rightWidth = Math.Clamp(available.X * 0.34f, 430.0f, 640.0f);
         var pullBrowserCollapsed = showPullBrowser && configuration.PullBrowserCollapsed;
+        var rightWidth = pullBrowserCollapsed
+            ? 0.0f
+            : Math.Clamp(available.X * 0.34f, 430.0f, 640.0f);
         var pullBrowserWidth = 0.0f;
         var pullBrowserControlWidth = 0.0f;
         if (showPullBrowser)
         {
             if (pullBrowserCollapsed)
             {
-                pullBrowserWidth = PullBrowserCollapsedWidth;
-                pullBrowserControlWidth = pullBrowserWidth + dividerWidth;
+                pullBrowserControlWidth = PullBrowserCollapsedWidth;
             }
             else
             {
@@ -615,7 +617,18 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        var centerWidth = available.X - rightWidth - pullBrowserControlWidth - dividerWidth;
+        var centerWidth = 0.0f;
+        if (pullBrowserCollapsed)
+        {
+            var reviewWidth = available.X - pullBrowserControlWidth - dividerWidth;
+            centerWidth = MathF.Max(0.0f, reviewWidth * 0.5f);
+            rightWidth = MathF.Max(0.0f, reviewWidth - centerWidth);
+        }
+        else
+        {
+            centerWidth = available.X - rightWidth - pullBrowserControlWidth - dividerWidth;
+        }
+
         if (centerWidth < MinimumTimelinePaneWidth)
         {
             DrawStackedReviewWorkspace(
@@ -630,29 +643,19 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (showPullBrowser)
         {
-            DrawReviewPane(
-                $"##{idPrefix}PullBrowser",
-                new Vector2(pullBrowserWidth, available.Y),
-                () =>
-                {
-                    if (pullBrowserCollapsed)
-                    {
-                        DrawCollapsedPullBrowser(idPrefix);
-                        return;
-                    }
-
-                    DrawPullBrowser(
-                        pulls,
-                        idPrefix,
-                        selection);
-                });
-
             if (pullBrowserCollapsed)
             {
-                DrawVerticalReviewDivider($"{idPrefix}PullBrowserDivider", available.Y);
+                DrawCollapsedPullBrowserDivider($"{idPrefix}PullBrowserDivider", available.Y);
             }
             else
             {
+                DrawReviewPane(
+                    $"##{idPrefix}PullBrowser",
+                    new Vector2(pullBrowserWidth, available.Y),
+                    () => DrawPullBrowser(
+                        pulls,
+                        idPrefix,
+                        selection));
                 DrawPullBrowserResizeHandle($"{idPrefix}PullBrowserResize", available.Y, pullBrowserWidth);
             }
         }
@@ -730,7 +733,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        if (ImGui.BeginChild(id, size, false))
+        if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
             draw();
         }
@@ -744,7 +747,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 6.0f));
-        if (ImGui.BeginChild(id, size, false))
+        if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
             draw();
         }
@@ -798,7 +801,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernDividerColor);
-        ImGui.BeginChild($"##{id}", new Vector2(1.0f, height), false);
+        ImGui.BeginChild($"##{id}", new Vector2(1.0f, height), false, ImGuiWindowFlags.NoScrollbar);
         ImGui.EndChild();
         ImGui.PopStyleColor();
         ImGui.SameLine(0.0f, 0.0f);
@@ -832,7 +835,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false))
+        if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
         {
             foreach (var pull in pulls)
             {
@@ -906,6 +909,42 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.SetTooltip("Expand pulls");
         }
+    }
+
+    private void DrawCollapsedPullBrowserDivider(string id, float height)
+    {
+        var position = ImGui.GetCursorScreenPos();
+        var size = new Vector2(PullBrowserCollapsedWidth, height);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        if (ImGui.BeginChild($"##{id}", size, false, ImGuiWindowFlags.NoScrollbar))
+        {
+            var buttonSize = ImGui.GetFrameHeight();
+            var buttonX = MathF.Max(0.0f, (PullBrowserCollapsedWidth - buttonSize) * 0.5f);
+            ImGui.SetCursorPos(new Vector2(buttonX, 4.0f));
+
+            ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+            if (ImGuiComponents.IconButton($"ExpandPullBrowser{id}", FontAwesomeIcon.ChevronRight))
+            {
+                plugin.SetPullBrowserCollapsed(false);
+            }
+
+            ImGui.PopStyleColor();
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Expand pulls");
+            }
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
+
+        var lineX = position.X + size.X - 1.0f;
+        ImGui.GetWindowDrawList().AddLine(
+            new Vector2(lineX, position.Y),
+            new Vector2(lineX, position.Y + size.Y),
+            ImGui.GetColorU32(ModernDividerColor),
+            1.0f);
+        ImGui.SameLine(0.0f, 0.0f);
     }
 
     private void DrawClearRecordedPullsButton(string id, bool clearSelection)
@@ -3799,7 +3838,7 @@ public sealed class RecapWindow : Window, IDisposable
         var previewHeight = MathF.Min(420.0f, MathF.Max(260.0f, ImGui.GetContentRegionAvail().Y));
         var opacity = GetCurrentPullWidgetBackgroundOpacity();
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-        if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false))
+        if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawWidgetPreviewBackground(opacity);
             DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - Timer 04:53", "WidgetPreview");
@@ -3860,7 +3899,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, UpdateBannerBgColor);
-        if (ImGui.BeginChild("##BetterDeathsUpdateBanner", new Vector2(0.0f, 52.0f), true))
+        if (ImGui.BeginChild("##BetterDeathsUpdateBanner", new Vector2(0.0f, 52.0f), true, ImGuiWindowFlags.NoScrollbar))
         {
             ImGui.TextColored(UpdateBannerTextColor, GetPluginUpdateStatusText(status));
             ImGui.TextDisabled("Open the Dalamud plugin installer to update Better Deaths.");
@@ -3923,7 +3962,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
         ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
 
-        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
+        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true, ImGuiWindowFlags.NoScrollbar))
         {
             ImGui.TextColored(NoticeBorderColor, "Hey! NaiLa here~");
             ImGui.Spacing();
@@ -4365,7 +4404,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable("##DebugEffectResultHistory", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY))
+        if (!ImGui.BeginTable("##DebugEffectResultHistory", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
             return;
         }
@@ -4482,7 +4521,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable("##DebugActorControlEvents", 16, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY))
+        if (!ImGui.BeginTable("##DebugActorControlEvents", 16, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
             return;
         }
@@ -4565,7 +4604,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable("##BetterDeathsDebugLog", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+        if (!ImGui.BeginTable("##BetterDeathsDebugLog", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
@@ -4812,6 +4851,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.103");
+        ImGui.TextDisabled("Testing review drawer and scrollbar refinements.");
+        DrawBreathingGoldBullet("Collapsed Pulls now expands from the separator edge instead of taking its own mini panel.");
+        DrawWrappedBullet("Review splits the remaining space evenly between the death timeline and selected death details while Pulls is collapsed.");
+        DrawWrappedBullet("Visible scrollbars are hidden across the recap UI while content remains mouse-wheel scrollable.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.102");
         ImGui.TextDisabled("Testing review drawer and persistence refinements.");
         DrawBreathingGoldBullet("Pulls now slide in and out from the left side of Review with matching expand and collapse arrows.");
