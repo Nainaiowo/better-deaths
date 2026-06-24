@@ -63,7 +63,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.115";
+    private const string CurrentChangelogVersion = "0.1.0.116";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1504,9 +1504,9 @@ public sealed class RecapWindow : Window, IDisposable
         var conciseMode = IsWidgetConciseMode();
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.05f : 1.35f);
-        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.95f : 1.25f);
-        ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 1.25f);
-        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.2f : 1.6f);
+        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.75f : 0.95f);
+        ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.85f : 2.35f);
         DrawCenteredTableHeader("Time", "Player", "Cause", "Overkill", "Mits/Debuffs");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
@@ -4503,7 +4503,7 @@ public sealed class RecapWindow : Window, IDisposable
         var previewHeight = MathF.Min(420.0f, MathF.Max(260.0f, ImGui.GetContentRegionAvail().Y));
         var opacity = GetCurrentPullWidgetBackgroundOpacity();
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 7.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawWidgetPreviewBackground(opacity);
@@ -5596,6 +5596,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.116");
+        ImGui.TextDisabled("Testing widget polish.");
+        DrawBreathingGoldBullet("Current pull widget now fills the window without the inset border look.");
+        DrawWrappedBullet("Mits/Debuffs gets more room by taking space from Cause and Overkill.");
+        DrawWrappedBullet("Added a matching bottom-left resize indicator to the widget.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.115");
         ImGui.TextDisabled("Testing UI polish.");
         DrawBreathingGoldBullet("Better Deaths background now matches the main review surface.");

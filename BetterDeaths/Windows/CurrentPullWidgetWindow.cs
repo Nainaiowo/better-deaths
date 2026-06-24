@@ -53,6 +53,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
     public override void Draw()
     {
         recapWindow.DrawCurrentPullWidgetContent();
+        DrawBottomLeftResizeGrip();
     }
 
     public override void OnClose()
@@ -77,7 +78,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ResizeGripActive, WidgetResizeGripActiveColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1.0f);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 7.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
         stylePushed = true;
     }
@@ -92,5 +93,41 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         ImGui.PopStyleVar(4);
         ImGui.PopStyleColor(8);
         stylePushed = false;
+    }
+
+    private static void DrawBottomLeftResizeGrip()
+    {
+        const float gripSize = 18.0f;
+        const float inset = 5.0f;
+        const float lineSpacing = 4.0f;
+        const float thickness = 1.3f;
+
+        var position = ImGui.GetWindowPos();
+        var size = ImGui.GetWindowSize();
+        var mousePosition = ImGui.GetIO().MousePos;
+        var gripMin = new Vector2(position.X, position.Y + size.Y - gripSize);
+        var gripMax = new Vector2(position.X + gripSize, position.Y + size.Y);
+        var hovered = mousePosition.X >= gripMin.X &&
+            mousePosition.X <= gripMax.X &&
+            mousePosition.Y >= gripMin.Y &&
+            mousePosition.Y <= gripMax.Y;
+        var color = ImGui.GetColorU32(
+            hovered
+                ? ImGui.IsMouseDown(ImGuiMouseButton.Left)
+                    ? WidgetResizeGripActiveColor
+                    : WidgetResizeGripHoveredColor
+                : WidgetResizeGripColor);
+        var origin = new Vector2(position.X + inset, position.Y + size.Y - inset);
+        var drawList = ImGui.GetWindowDrawList();
+
+        for (var lineIndex = 0; lineIndex < 3; lineIndex++)
+        {
+            var offset = lineIndex * lineSpacing;
+            drawList.AddLine(
+                new Vector2(origin.X + offset, origin.Y),
+                new Vector2(origin.X, origin.Y - offset),
+                color,
+                thickness);
+        }
     }
 }
