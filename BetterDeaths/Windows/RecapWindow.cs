@@ -59,16 +59,18 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.105";
+    private const string CurrentChangelogVersion = "0.1.0.106";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
     private const float ReviewPaneContentIndent = 8.0f;
+    private const float ReviewPaneHorizontalPadding = 9.0f;
     private const float PullBrowserCollapsedWidth = 60.0f;
-    private const float PullBrowserExpandedWidth = 300.0f;
-    private const float MinimumTimelinePaneWidth = 360.0f;
     private const float RecordedPullDutyFilterComboWidth = 260.0f;
+    private const float PullBrowserExpandedWidth = RecordedPullDutyFilterComboWidth + (ReviewPaneHorizontalPadding * 2.0f);
+    private const float PullBrowserHeaderButtonInset = 6.0f;
+    private const float MinimumTimelinePaneWidth = 360.0f;
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
@@ -741,7 +743,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawReviewPane(string id, Vector2 size, Action draw)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 6.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneHorizontalPadding, 6.0f));
         if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
             draw();
@@ -821,12 +823,9 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
 
         var style = ImGui.GetStyle();
-        var trashIcon = FontAwesomeIcon.Trash.ToIconString();
-        var collapseIcon = FontAwesomeIcon.ChevronLeft.ToIconString();
-        var trashButtonWidth = ImGui.CalcTextSize(trashIcon).X + (style.FramePadding.X * 2.0f);
-        var collapseButtonWidth = ImGui.CalcTextSize(collapseIcon).X + (style.FramePadding.X * 2.0f);
-        var buttonWidth = trashButtonWidth + style.ItemSpacing.X + collapseButtonWidth;
-        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - buttonWidth;
+        var iconButtonWidth = ImGui.GetFrameHeight();
+        var buttonWidth = (iconButtonWidth * 2.0f) + style.ItemSpacing.X;
+        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset;
 
         ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + style.ItemSpacing.X, buttonX));
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
@@ -4796,6 +4795,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.106");
+        ImGui.TextDisabled("Pulls drawer fit and header polish.");
+        DrawWrappedBullet("Tightened the Pulls drawer so the duty filter defines the width instead of leaving extra empty space.");
+        DrawWrappedBullet("Pulled the trash and collapse buttons back from the edge so they stop getting clipped by the window border.");
+        DrawWrappedBullet("This one is small, but it matters: Review should feel intentional and usable in the middle of prog, not like the UI is fighting for every pixel.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.105");
         ImGui.TextDisabled("Testing Pulls drawer spacing refinements.");
         DrawWrappedBullet("Pulls drawer now uses a fixed 300px width and no longer has a resize handle.");
