@@ -63,7 +63,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.118";
+    private const string CurrentChangelogVersion = "0.1.0.119";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -4751,24 +4751,24 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
         {
-            ImGui.TextWrapped("Hiya! NaiLa here again!");
+            DrawWrappedText("Hiya! NaiLa here again!");
             ImGui.Spacing();
-            ImGui.TextWrapped("The second and final major push is here: UI POLISH");
+            DrawWrappedText("The second and final major push is here: UI POLISH");
             ImGui.Spacing();
-            ImGui.TextWrapped("We've completely revamped the look and flow as we get ready for v1.0. I'm so proud of how far we've come, and I'm genuinely grateful for all the effort everyone has put into testing and giving me feedback.");
+            DrawWrappedText("We've completely revamped the look and flow as we get ready for v1.0. I'm so proud of how far we've come, and I'm genuinely grateful for all the effort everyone has put into testing and giving me feedback.");
             ImGui.Spacing();
-            ImGui.TextWrapped("Seeing this grow from a little idea into something people actually use and care about means more to me than I can really put into words.. Every bit of feedback, every bug report, and every tiny detail you all helped me chase down has made this feel less like something I've been building alone \u2665");
+            DrawWrappedText("Seeing this grow from a little idea into something people actually use and care about means more to me than I can really put into words.. Every bit of feedback, every bug report, and every tiny detail you all helped me chase down has made this feel less like something I've been building alone \u2665");
             ImGui.Spacing();
-            ImGui.TextWrapped("I'm happy to say that this project is likely nearing the end. Once we're all set and ready, Better Deaths should move more into maintenance as we go through future patches and expansions.");
+            DrawWrappedText("I'm happy to say that this project is likely nearing the end. Once we're all set and ready, Better Deaths should move more into maintenance as we go through future patches and expansions.");
             ImGui.Spacing();
-            ImGui.TextWrapped("Currently on the docket, we have some remaining items that I want to add before I'm comfortable with a release.");
+            DrawWrappedText("Currently on the docket, we have some remaining items that I want to add before I'm comfortable with a release.");
             DrawWrappedBullet("The first being themes so you aren't stuck with the current color scheme. I'll try my best to add a variety, but no promises on deliverables.");
             DrawWrappedBullet("Second, I want to go through and fix a lot of hard-coded values. Currently, we have some hard-coded values that we can change to be dynamically grabbed or resolved.");
-            ImGui.TextColored(NoticeBorderColor, "There's still a lot of work to be done, but I hope this UI refinement makes you all happy. It definitely is making me happy! Thank you all again so much for your hard work and for allowing me to do this for you \u2665");
+            DrawWrappedText("There's still a lot of work to be done, but I hope this UI refinement makes you all happy. It definitely is making me happy! Thank you all again so much for your hard work and for allowing me to do this for you \u2665", NoticeBorderColor);
             ImGui.Spacing();
-            ImGui.TextColored(NoticeBorderColor, "This will be the final message that I send here. I appreciate every single one of you very much!");
+            DrawWrappedText("This will be the final message that I send here. I appreciate every single one of you very much!", NoticeBorderColor);
             ImGui.Spacing();
-            ImGui.TextColored(NoticeBorderColor, "Signing off with love and deep appreciation, NaiLa");
+            DrawWrappedText("Signing off with love and deep appreciation, NaiLa", NoticeBorderColor);
             ImGui.Spacing();
             ImGui.Separator();
             ImGui.Spacing();
@@ -4813,6 +4813,21 @@ public sealed class RecapWindow : Window, IDisposable
             PluginUpdateCheckState.Error => $"Could not check for Better Deaths updates{(string.IsNullOrWhiteSpace(status.Error) ? "." : $": {status.Error}")}",
             _ => "Better Deaths has not checked for updates yet.",
         };
+    }
+
+    private static void DrawWrappedText(string text, Vector4? color = null)
+    {
+        if (color is { } textColor)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+        }
+
+        ImGui.TextWrapped(text);
+
+        if (color is not null)
+        {
+            ImGui.PopStyleColor();
+        }
     }
 
     private void DrawDebugTab()
@@ -5709,6 +5724,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.119");
+        ImGui.TextDisabled("Acknowledgement fix.");
+        DrawWrappedBullet("Acknowledgement text now wraps correctly.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.118");
         ImGui.TextDisabled("Testing polish.");
         DrawBreathingGoldBullet("Added the final UI polish acknowledgement message.");
