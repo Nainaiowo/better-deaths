@@ -24,6 +24,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool collapseRecordedPullsRequested;
     private bool showDebugTab;
     private bool showThankYouNoticeOnDemand;
+    private bool windowStylePushed;
     private string debugTextFilter = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -62,7 +63,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.114";
+    private const string CurrentChangelogVersion = "0.1.0.115";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -270,6 +271,16 @@ public sealed class RecapWindow : Window, IDisposable
     {
     }
 
+    public override void PreDraw()
+    {
+        PushWindowStyle();
+    }
+
+    public override void PostDraw()
+    {
+        PopWindowStyle();
+    }
+
     public override void Draw()
     {
         DrawPluginUpdateBanner();
@@ -334,6 +345,28 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+    }
+
+    private void PushWindowStyle()
+    {
+        if (windowStylePushed)
+        {
+            return;
+        }
+
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, ModernShellColor);
+        windowStylePushed = true;
+    }
+
+    private void PopWindowStyle()
+    {
+        if (!windowStylePushed)
+        {
+            return;
+        }
+
+        ImGui.PopStyleColor();
+        windowStylePushed = false;
     }
 
     private void DrawModernHeader()
@@ -2801,6 +2834,11 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(FormatPreciseRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
+            }
+
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(row.PullElapsedSeconds));
             ImGui.TableNextColumn();
@@ -5558,6 +5596,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.115");
+        ImGui.TextDisabled("Testing UI polish.");
+        DrawBreathingGoldBullet("Better Deaths background now matches the main review surface.");
+        DrawWrappedBullet("10s lead-up timer hover now shows the exact timer.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.114");
         ImGui.TextDisabled("Lead-up cleanup and resource pass.");
         DrawBreathingGoldBullet("10 second HP history shows fewer duplicate-looking rows.");
@@ -7003,5 +7048,13 @@ public sealed class RecapWindow : Window, IDisposable
         return deltaSeconds >= 0
             ? $"-{deltaSeconds:0.00}s"
             : $"+{Math.Abs(deltaSeconds):0.00}s";
+    }
+
+    private static string FormatPreciseRelativeToDeath(DateTime deathSeenAtUtc, DateTime eventSeenAtUtc)
+    {
+        var deltaSeconds = (deathSeenAtUtc - eventSeenAtUtc).TotalSeconds;
+        return deltaSeconds >= 0
+            ? $"-{deltaSeconds:0.000}s"
+            : $"+{Math.Abs(deltaSeconds):0.000}s";
     }
 }
