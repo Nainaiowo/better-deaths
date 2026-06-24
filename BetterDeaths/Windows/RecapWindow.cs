@@ -60,7 +60,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.109";
+    private const string CurrentChangelogVersion = "0.1.0.110";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1850,8 +1850,6 @@ public sealed class RecapWindow : Window, IDisposable
             .Select(FormatTimelineCauseLine)
             .ToList();
         var isExpanded = expandedTimelineCauseRows.Contains(id);
-        var arrowText = isExpanded ? "v" : "<";
-        var arrowTextSize = ImGui.CalcTextSize(arrowText);
         var summaryTextSize = ImGui.CalcTextSize(summary);
         var controlWidth = MathF.Max(0.0f, availableWidth);
         var controlSize = new Vector2(controlWidth, MathF.Max(ImGui.GetFrameHeight(), summaryTextSize.Y));
@@ -1861,12 +1859,32 @@ public sealed class RecapWindow : Window, IDisposable
         var clicked = ImGui.InvisibleButton($"##TimelineCause{id}", controlSize);
         var drawList = ImGui.GetWindowDrawList();
         var textY = controlPosition.Y + MathF.Max(0.0f, (controlSize.Y - summaryTextSize.Y) * 0.5f);
-        var arrowPosition = new Vector2(controlPosition.X + style.FramePadding.X, textY);
-        var summaryMinX = arrowPosition.X + arrowTextSize.X + style.ItemInnerSpacing.X;
+        var arrowSize = MathF.Min(8.0f, MathF.Max(5.0f, summaryTextSize.Y * 0.55f));
+        var arrowX = controlPosition.X + style.FramePadding.X;
+        var arrowCenterY = controlPosition.Y + (controlSize.Y * 0.5f);
+        var arrowHalfSize = arrowSize * 0.5f;
+        var summaryMinX = arrowX + arrowSize + style.ItemInnerSpacing.X;
         var summaryPosition = new Vector2(
             MathF.Max(summaryMinX, controlPosition.X + MathF.Max(0.0f, (controlSize.X - summaryTextSize.X) * 0.5f)),
             textY);
-        drawList.AddText(arrowPosition, ImGui.GetColorU32(textColor), arrowText);
+        var arrowColor = ImGui.GetColorU32(textColor);
+        if (isExpanded)
+        {
+            drawList.AddTriangleFilled(
+                new Vector2(arrowX, arrowCenterY - arrowHalfSize),
+                new Vector2(arrowX + arrowSize, arrowCenterY - arrowHalfSize),
+                new Vector2(arrowX + arrowHalfSize, arrowCenterY + arrowHalfSize),
+                arrowColor);
+        }
+        else
+        {
+            drawList.AddTriangleFilled(
+                new Vector2(arrowX, arrowCenterY - arrowHalfSize),
+                new Vector2(arrowX, arrowCenterY + arrowHalfSize),
+                new Vector2(arrowX + arrowSize, arrowCenterY),
+                arrowColor);
+        }
+
         drawList.AddText(summaryPosition, ImGui.GetColorU32(textColor), summary);
 
         if (clicked)
@@ -4828,6 +4846,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.110");
+        ImGui.TextDisabled("Timeline arrow polish.");
+        DrawWrappedBullet("Multi-cause timeline rows use the original disclosure arrow shape again: right when closed, down when open.");
+        DrawWrappedBullet("The arrow stays on the left and still has no background, so it reads like part of the row instead of another button.");
+        DrawWrappedBullet("Tiny visual details can scrape at you forever when they are wrong. This one should finally sit where it belongs.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.109");
         ImGui.TextDisabled("Pulls starts tucked away.");
         DrawWrappedBullet("Review now starts with the Pulls drawer collapsed, so the timeline and selected death have room first.");
