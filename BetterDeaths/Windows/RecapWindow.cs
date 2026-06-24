@@ -59,7 +59,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.106";
+    private const string CurrentChangelogVersion = "0.1.0.107";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1848,26 +1848,57 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var summary = BuildTimelineCauseSummary(causeEvents);
         var textColor = GetWidgetCauseColor(causeEvents);
+        var style = ImGui.GetStyle();
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var causeLines = causeEvents
+            .Select(FormatTimelineCauseLine)
+            .ToList();
+        var maxCauseLineWidth = causeLines
+            .Select(line => ImGui.CalcTextSize(line).X)
+            .DefaultIfEmpty(0.0f)
+            .Max();
+        var comboWidth = MathF.Min(
+            availableWidth,
+            ImGui.CalcTextSize(summary).X + (style.FramePadding.X * 2.0f) + ImGui.GetFrameHeight());
+        var popupWidth = MathF.Min(
+            availableWidth,
+            MathF.Max(comboWidth, maxCauseLineWidth + (style.WindowPadding.X * 2.0f)));
+        CenterNextItem(comboWidth);
+        ImGui.SetNextItemWidth(comboWidth);
+        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0.0f), ImGuiCond.Appearing);
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        var expanded = ImGui.CollapsingHeader($"{summary}###TimelineCause{id}");
-        ImGui.PopStyleColor();
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.Header, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.HeaderActive, Vector4.Zero);
+        var expanded = ImGui.BeginCombo($"##TimelineCause{id}", summary);
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Expand to show each likely cause.");
+            ImGui.SetTooltip("Open to show each likely cause.");
         }
 
         if (!expanded)
         {
+            ImGui.PopStyleColor(7);
             return;
         }
 
-        using var indent = new ImGuiIndentScope(6.0f);
-        foreach (var causeEvent in causeEvents)
+        for (var causeIndex = 0; causeIndex < causeEvents.Count; causeIndex++)
         {
-            DrawCenteredOrWrappedText(FormatTimelineCauseLine(causeEvent), GetEventColor(causeEvent.Kind));
+            var causeEvent = causeEvents[causeIndex];
+            var line = causeLines[causeIndex];
+            CenterNextItem(ImGui.CalcTextSize(line).X);
+            ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(causeEvent.Kind));
+            ImGui.Selectable($"{line}##TimelineCause{id}{causeIndex}", false);
+            ImGui.PopStyleColor();
             DrawLikelyAutoAttackTooltip(causeEvent);
         }
+
+        ImGui.EndCombo();
+        ImGui.PopStyleColor(7);
     }
 
     private static string BuildTimelineCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -4795,6 +4826,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.107");
+        ImGui.TextDisabled("Timeline cause dropdown polish.");
+        DrawWrappedBullet("Multi-cause death timeline rows now open as actual dropdowns instead of pretending to be one.");
+        DrawWrappedBullet("The dropdown stays centered, transparent, and compact while showing each captured likely cause cleanly.");
+        DrawWrappedBullet("Small UI details like this matter. Review should feel precise, especially when the pull already hurt enough.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.106");
         ImGui.TextDisabled("Pulls drawer fit and header polish.");
         DrawWrappedBullet("Tightened the Pulls drawer so the duty filter defines the width instead of leaving extra empty space.");
