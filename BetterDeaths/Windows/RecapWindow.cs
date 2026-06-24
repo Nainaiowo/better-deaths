@@ -26,6 +26,8 @@ public sealed class RecapWindow : Window, IDisposable
     private string debugTextFilter = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
+    private readonly ReviewSelectionState recapReviewSelection = new();
+    private readonly ReviewSelectionState exampleReviewSelection = new();
     private static readonly Vector4 DamageColor = new(1.0f, 0.35f, 0.25f, 1.0f);
     private static readonly Vector4 HealColor = new(0.25f, 1.0f, 0.45f, 1.0f);
     private static readonly Vector4 WarningColor = new(1.0f, 0.7f, 0.25f, 1.0f);
@@ -46,7 +48,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.97";
+    private const string CurrentChangelogVersion = "0.1.0.98";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -119,6 +121,27 @@ public sealed class RecapWindow : Window, IDisposable
         string CompactText,
         Vector4 Color,
         string TooltipLine);
+
+    private sealed record ReviewPull(
+        string Key,
+        string Title,
+        string Subtitle,
+        long? PullNumber,
+        uint TerritoryId,
+        string TerritoryName,
+        float PullElapsedSeconds,
+        IReadOnlyList<PartyDeathRecord> Deaths,
+        DeathSelectionSource Source,
+        PullDeathSnapshot? RecordedPull);
+
+    private sealed class ReviewSelectionState
+    {
+        public string? PullKey { get; set; }
+
+        public long? DeathSeenAtTicks { get; set; }
+
+        public uint? DeathMemberKeyHash { get; set; }
+    }
 
     private readonly struct ImGuiIndentScope : IDisposable
     {
@@ -235,19 +258,508 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDeathRecapTab()
     {
-        DrawCurrentPull();
-        DrawRecordedPulls();
+        var pulls = BuildDeathRecapReviewPulls();
+        DrawReviewWorkspace(
+            pulls,
+            "DeathRecap",
+            showPullBrowser: true,
+            recapReviewSelection);
     }
 
     private void DrawExamplePullTab()
     {
         var deaths = GetExampleDeaths();
-        ImGui.TextUnformatted("Example pull - Sigmascape V4.0 - Timer 04:53");
-        ImGui.TextDisabled("Names are redacted into static party-role labels.");
-        using var examplePullIndent = new ImGuiIndentScope(PullBodyIndent);
-        DrawDeathTimeline(deaths, "ExamplePull");
+        var pulls = new List<ReviewPull>
+        {
+            new(
+                "ExamplePull",
+                "Example pull",
+                "Sigmascape V4.0 - Timer 04:53",
+                null,
+                0,
+                "Sigmascape V4.0",
+                293.0f,
+                deaths,
+                DeathSelectionSource.Example,
+                null),
+        };
+
+        ImGui.TextDisabled("Names are redacted into static party-role labels. This example uses the same review workspace as real pulls.");
+        DrawReviewWorkspace(
+            pulls,
+            "ExamplePull",
+            showPullBrowser: false,
+            exampleReviewSelection);
+    }
+
+    private List<ReviewPull> BuildDeathRecapReviewPulls()
+    {
+        var pulls = new List<ReviewPull>
+        {
+            new(
+                "Current",
+                plugin.CurrentPullClosedForReview ? "Last Pull Review" : "Current pull",
+                $"{plugin.CurrentPullTerritoryName} - Timer {FormatCombatTimer(plugin.CurrentPullElapsedSeconds)}{BuildCurrentPullSavedText()}",
+                plugin.CurrentPullRecordedPullNumber > 0 ? plugin.CurrentPullRecordedPullNumber : null,
+                plugin.CurrentTerritoryId,
+                plugin.CurrentPullTerritoryName,
+                plugin.CurrentPullElapsedSeconds,
+                plugin.CurrentDeaths,
+                DeathSelectionSource.Current,
+                null),
+        };
+
+        pulls.AddRange(GetVisibleRecordedPulls().Select(entry =>
+        {
+            var snapshot = entry.Snapshot;
+            return new ReviewPull(
+                BuildRecordedPullKey(snapshot),
+                $"Pull {entry.PullNumber}",
+                $"{snapshot.TerritoryName} - Timer {FormatCombatTimer(snapshot.PullElapsedSeconds)} - {snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}",
+                entry.PullNumber,
+                snapshot.TerritoryId,
+                snapshot.TerritoryName,
+                snapshot.PullElapsedSeconds,
+                snapshot.Deaths,
+                DeathSelectionSource.Recorded,
+                snapshot);
+        }));
+
+        return pulls;
+    }
+
+    private string BuildCurrentPullSavedText()
+    {
+        return plugin.CurrentPullClosedForReview && plugin.CurrentPullRecordedPullNumber > 0
+            ? $" - saved as Pull {plugin.CurrentPullRecordedPullNumber}"
+            : string.Empty;
+    }
+
+    private static string BuildRecordedPullKey(PullDeathSnapshot snapshot)
+    {
+        return $"Recorded:{snapshot.PullNumber}:{snapshot.CapturedAtUtc.Ticks}";
+    }
+
+    private void DrawReviewWorkspace(
+        IReadOnlyList<ReviewPull> pulls,
+        string idPrefix,
+        bool showPullBrowser,
+        ReviewSelectionState selection)
+    {
+        ApplyPendingSelectionToReviewWorkspace(pulls, selection);
+        EnsureReviewSelection(pulls, selection);
+
+        if (pulls.Count == 0)
+        {
+            ImGui.TextDisabled("No pull data is available yet.");
+            return;
+        }
+
+        var selectedPull = GetSelectedReviewPull(pulls, selection.PullKey) ?? pulls[0];
+        var selectedDeath = GetSelectedReviewDeath(selectedPull, selection);
+        var available = ImGui.GetContentRegionAvail();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var wideLayout = available.X >= (showPullBrowser ? 1120.0f : 860.0f);
+
+        if (!wideLayout)
+        {
+            DrawStackedReviewWorkspace(
+                pulls,
+                selectedPull,
+                selectedDeath,
+                idPrefix,
+                showPullBrowser,
+                selection);
+            return;
+        }
+
+        var leftWidth = showPullBrowser
+            ? Math.Clamp(available.X * 0.24f, 270.0f, 380.0f)
+            : 0.0f;
+        var rightWidth = Math.Clamp(available.X * 0.34f, 430.0f, 640.0f);
+        var centerWidth = available.X - rightWidth - (showPullBrowser ? leftWidth + (spacing * 2.0f) : spacing);
+        if (centerWidth < 360.0f)
+        {
+            DrawStackedReviewWorkspace(
+                pulls,
+                selectedPull,
+                selectedDeath,
+                idPrefix,
+                showPullBrowser,
+                selection);
+            return;
+        }
+
+        if (showPullBrowser)
+        {
+            DrawReviewPanel(
+                $"##{idPrefix}PullBrowser",
+                new Vector2(leftWidth, available.Y),
+                () => DrawPullBrowser(
+                    pulls,
+                    idPrefix,
+                    selection));
+            ImGui.SameLine();
+        }
+
+        DrawReviewPanel(
+            $"##{idPrefix}Timeline",
+            new Vector2(centerWidth, available.Y),
+            () => DrawSelectedPullTimeline(
+                selectedPull,
+                idPrefix,
+                selection));
+        ImGui.SameLine();
+        DrawReviewPanel(
+            $"##{idPrefix}DeathDetails",
+            new Vector2(rightWidth, available.Y),
+            () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
+    }
+
+    private void DrawStackedReviewWorkspace(
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewPull selectedPull,
+        PartyDeathRecord? selectedDeath,
+        string idPrefix,
+        bool showPullBrowser,
+        ReviewSelectionState selection)
+    {
+        var available = ImGui.GetContentRegionAvail();
+        if (showPullBrowser)
+        {
+            DrawReviewPanel(
+                $"##{idPrefix}PullBrowserStacked",
+                new Vector2(0.0f, MathF.Min(260.0f, MathF.Max(170.0f, available.Y * 0.28f))),
+                () => DrawPullBrowser(
+                    pulls,
+                    idPrefix,
+                    selection));
+        }
+
+        DrawReviewPanel(
+            $"##{idPrefix}TimelineStacked",
+            new Vector2(0.0f, MathF.Min(330.0f, MathF.Max(210.0f, available.Y * 0.35f))),
+            () => DrawSelectedPullTimeline(
+                selectedPull,
+                idPrefix,
+                selection));
+        DrawReviewPanel(
+            $"##{idPrefix}DeathDetailsStacked",
+            Vector2.Zero,
+            () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
+    }
+
+    private static void DrawReviewPanel(string id, Vector2 size, Action draw)
+    {
+        if (ImGui.BeginChild(id, size, true))
+        {
+            draw();
+        }
+
+        ImGui.EndChild();
+    }
+
+    private void DrawPullBrowser(
+        IReadOnlyList<ReviewPull> pulls,
+        string idPrefix,
+        ReviewSelectionState selection)
+    {
+        DrawModernSectionTitle("Pulls", "Choose a pull to review.");
+        DrawRecordedPullControls();
+        DrawPullBrowserActions();
         ImGui.Separator();
-        DrawDeathDetails(deaths, "ExamplePull", selectionSource: DeathSelectionSource.Example);
+
+        if (pulls.Count == 0)
+        {
+            ImGui.TextDisabled("No pull data available.");
+            return;
+        }
+
+        if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false))
+        {
+            foreach (var pull in pulls)
+            {
+                var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
+                var deathCount = pull.Deaths.Count;
+                var rowLabel = $"{pull.Title}###PullRow{idPrefix}{pull.Key}";
+                if (ImGui.Selectable(rowLabel, selected))
+                {
+                    selection.PullKey = pull.Key;
+                    SelectDefaultDeathForPull(pull, selection);
+                }
+
+                var detailText = deathCount == 1
+                    ? "1 death"
+                    : $"{deathCount} deaths";
+                ImGui.TextDisabled($"{pull.TerritoryName} - {FormatCombatTimer(pull.PullElapsedSeconds)} - {detailText}");
+                if (!string.IsNullOrWhiteSpace(pull.Subtitle))
+                {
+                    ImGui.TextDisabled(pull.Subtitle);
+                }
+
+                ImGui.Spacing();
+            }
+        }
+
+        ImGui.EndChild();
+    }
+
+    private void DrawPullBrowserActions()
+    {
+        var hasRecordedPulls = plugin.RecordedPulls.Count > 0;
+        if (!hasRecordedPulls)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        if (ImGuiComponents.IconButton("ClearRecordedPullsModern", FontAwesomeIcon.Trash) &&
+            ImGui.GetIO().KeyCtrl)
+        {
+            plugin.ClearRecordedPulls();
+            recapReviewSelection.PullKey = null;
+            recapReviewSelection.DeathSeenAtTicks = null;
+            recapReviewSelection.DeathMemberKeyHash = null;
+            pendingDeathSelection = null;
+        }
+
+        if (!hasRecordedPulls)
+        {
+            ImGui.EndDisabled();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Ctrl+click to delete stored death recaps");
+        }
+    }
+
+    private void DrawSelectedPullTimeline(
+        ReviewPull pull,
+        string idPrefix,
+        ReviewSelectionState selection)
+    {
+        DrawModernSectionTitle(pull.Title, pull.Subtitle);
+        if (pull.Deaths.Count == 0)
+        {
+            ImGui.TextDisabled("No deaths recorded for this pull.");
+            return;
+        }
+
+        DrawSelectableDeathTimeline(pull, idPrefix, selection);
+    }
+
+    private void DrawSelectableDeathTimeline(
+        ReviewPull pull,
+        string idPrefix,
+        ReviewSelectionState selection)
+    {
+        if (!ImGui.BeginTable($"##ModernDeathTimeline{idPrefix}{pull.Key}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.32f);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.62f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.72f);
+        ImGui.TableSetupColumn("Likely cause", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Likely cause");
+
+        var orderedDeaths = GetDeathsInTimelineOrder(pull.Deaths);
+        for (var i = 0; i < orderedDeaths.Count; i++)
+        {
+            var death = orderedDeaths[i];
+            var rowSelected = IsSelectedReviewDeath(death, selection);
+            var causeEvents = GetTimelineCauseEvents(death);
+            ImGui.TableNextRow();
+            if (rowSelected)
+            {
+                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.28f, 0.22f, 0.10f, 0.55f)));
+            }
+
+            ImGui.TableNextColumn();
+            if (ImGui.Selectable($"{i + 1}##SelectDeath{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}", rowSelected, ImGuiSelectableFlags.SpanAllColumns))
+            {
+                SelectDeath(death, selection);
+            }
+
+            ImGui.TableNextColumn();
+            DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
+            ImGui.TableNextColumn();
+            DrawCenteredText(death.MemberName);
+            ImGui.TableNextColumn();
+            DrawJobCell(death);
+            ImGui.TableNextColumn();
+            DrawTimelineCauseText(causeEvents);
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawSelectedDeathPanel(ReviewPull pull, PartyDeathRecord? death, string idPrefix)
+    {
+        DrawModernSectionTitle("Selected Death", pull.Title);
+        if (death is null)
+        {
+            ImGui.TextDisabled(pull.Deaths.Count == 0
+                ? "This pull has no recorded deaths."
+                : "Select a death from the timeline to inspect details.");
+            return;
+        }
+
+        DrawSelectedDeathHeader(death);
+        var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+        if (!ImGui.BeginTabBar($"##SelectedDeathTabs{deathId}"))
+        {
+            return;
+        }
+
+        if (ImGui.BeginTabItem("Summary"))
+        {
+            DrawCauseSummary(death);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Mitigation"))
+        {
+            DrawExtraMitigationContext(death, deathId);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("10s Lead-up"))
+        {
+            DrawBetterDeathsInformationContent(death, deathId);
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
+    }
+
+    private void DrawSelectedDeathHeader(PartyDeathRecord death)
+    {
+        var iconId = GetClassJobIconId(death.ClassJobId);
+        if (iconId != 0)
+        {
+            DrawGameIcon(iconId, Math.Clamp(configuration.ActionIconSize, 16.0f, 32.0f), death.ClassJobName);
+            ImGui.SameLine();
+        }
+
+        ImGui.TextUnformatted($"{death.MemberName} ({death.ClassJobName})");
+        ImGui.TextDisabled($"Death at {FormatCombatTimer(death.PullElapsedSeconds)}");
+        ImGui.Separator();
+    }
+
+    private static void DrawModernSectionTitle(string title, string? subtitle = null)
+    {
+        ImGui.TextColored(LeadUpGoldColor, title);
+        if (!string.IsNullOrWhiteSpace(subtitle))
+        {
+            ImGui.TextDisabled(subtitle);
+        }
+    }
+
+    private void ApplyPendingSelectionToReviewWorkspace(
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewSelectionState selection)
+    {
+        if (pendingDeathSelection is not { } target)
+        {
+            return;
+        }
+
+        var matchingPull = pulls.FirstOrDefault(pull =>
+            DeathSelectionSourceMatches(target, pull.Source, pull.RecordedPull) &&
+            ContainsDeath(pull.Deaths, target.DeathSeenAtTicks, target.MemberKeyHash));
+        if (matchingPull is null)
+        {
+            return;
+        }
+
+        selection.PullKey = matchingPull.Key;
+        selection.DeathSeenAtTicks = target.DeathSeenAtTicks;
+        selection.DeathMemberKeyHash = target.MemberKeyHash;
+        clearPendingDeathSelection = true;
+    }
+
+    private static void EnsureReviewSelection(
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewSelectionState selection)
+    {
+        if (pulls.Count == 0)
+        {
+            selection.PullKey = null;
+            selection.DeathSeenAtTicks = null;
+            selection.DeathMemberKeyHash = null;
+            return;
+        }
+
+        var selectedPull = GetSelectedReviewPull(pulls, selection.PullKey);
+        if (selectedPull is null)
+        {
+            selectedPull = pulls.FirstOrDefault(pull => pull.Deaths.Count > 0) ?? pulls[0];
+            selection.PullKey = selectedPull.Key;
+            SelectDefaultDeathForPull(selectedPull, selection);
+            return;
+        }
+
+        if (GetSelectedReviewDeath(selectedPull, selection) is null)
+        {
+            SelectDefaultDeathForPull(selectedPull, selection);
+        }
+    }
+
+    private static ReviewPull? GetSelectedReviewPull(IReadOnlyList<ReviewPull> pulls, string? selectedPullKey)
+    {
+        return selectedPullKey is null
+            ? null
+            : pulls.FirstOrDefault(pull => string.Equals(pull.Key, selectedPullKey, StringComparison.Ordinal));
+    }
+
+    private static PartyDeathRecord? GetSelectedReviewDeath(
+        ReviewPull pull,
+        ReviewSelectionState selection)
+    {
+        if (selection.DeathSeenAtTicks is null || selection.DeathMemberKeyHash is null)
+        {
+            return null;
+        }
+
+        return pull.Deaths.FirstOrDefault(death =>
+            IsDeathTarget(death, selection.DeathSeenAtTicks.Value, selection.DeathMemberKeyHash.Value));
+    }
+
+    private static void SelectDefaultDeathForPull(
+        ReviewPull pull,
+        ReviewSelectionState selection)
+    {
+        var death = GetDeathsInTimelineOrder(pull.Deaths)
+            .FirstOrDefault(HasDeathDetails) ??
+            GetDeathsInTimelineOrder(pull.Deaths).FirstOrDefault();
+        if (death is null)
+        {
+            selection.DeathSeenAtTicks = null;
+            selection.DeathMemberKeyHash = null;
+            return;
+        }
+
+        SelectDeath(death, selection);
+    }
+
+    private static void SelectDeath(
+        PartyDeathRecord death,
+        ReviewSelectionState selection)
+    {
+        selection.DeathSeenAtTicks = death.SeenAtUtc.Ticks;
+        selection.DeathMemberKeyHash = Plugin.GetMemberKeyHash(death.MemberKey);
+    }
+
+    private static bool IsSelectedReviewDeath(
+        PartyDeathRecord death,
+        ReviewSelectionState selection)
+    {
+        return selection.DeathSeenAtTicks is not null &&
+            selection.DeathMemberKeyHash is not null &&
+            IsDeathTarget(death, selection.DeathSeenAtTicks.Value, selection.DeathMemberKeyHash.Value);
     }
 
     private void DrawCurrentPull()
@@ -1462,6 +1974,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        DrawBetterDeathsInformationContent(death, idSuffix);
+    }
+
+    private void DrawBetterDeathsInformationContent(PartyDeathRecord death, string idSuffix)
+    {
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP is sampled while alive; action rows show captured hits/events at their actual timestamps.");
         ImGui.TextColored(LeadUpGoldColor, "Mitigation/debuff cells show relevant player defensives, shields, encounter debuffs, and boss-targeted mitigations when tied to a captured event.");
@@ -3671,6 +4188,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.98");
+        ImGui.TextDisabled("Testing UI overhaul concept.");
+        DrawBreathingGoldBullet("Death Recap now uses a master-detail review workspace instead of stacked pull collapsers.");
+        DrawBreathingGoldBullet("Selected death details are split into Summary, Mitigation, and 10s Lead-up tabs.");
+        DrawWrappedBullet("Recorded pulls now live in a pull browser with the existing duty filter and sort controls.");
+        DrawWrappedBullet("Example Pull uses the same review workspace as real recorded pulls so the preview matches the active recap flow.");
+        DrawWrappedBullet("The recap layout responds to available width by switching between side-by-side panes and stacked sections.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.97");
         ImGui.TextDisabled("Improved widget readability, chat summaries, and mitigation display.");
         DrawBreathingGoldBullet("Current Pull widget now has Normal and Concise display options.");
