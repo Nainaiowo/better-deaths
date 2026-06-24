@@ -61,6 +61,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public ClockDisplayMode ClockDisplayMode { get; set; } = ClockDisplayMode.TwentyFourHour;
 
+    public bool PullBrowserCollapsed { get; set; }
+
+    public float PullBrowserWidth { get; set; } = 340.0f;
+
+    public bool ShowDebugTab { get; set; }
+
     public bool DebugLogEnabled { get; set; }
 
     public bool DebugSaveToFileEnabled { get; set; } = true;

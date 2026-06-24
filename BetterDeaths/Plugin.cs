@@ -534,7 +534,7 @@ public sealed partial class Plugin : IDalamudPlugin
     public unsafe Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        NormalizeIconSizeConfiguration();
+        NormalizeUserConfiguration();
         LoadRecordedPullHistory();
         deathChatLinkPayload = ChatGui.AddChatLinkHandler(0, OnDeathChatLinkClick);
 
@@ -726,6 +726,40 @@ public sealed partial class Plugin : IDalamudPlugin
     public void SetClockDisplayMode(ClockDisplayMode mode)
     {
         Configuration.ClockDisplayMode = mode;
+        SaveConfiguration();
+    }
+
+    public void SetPullBrowserCollapsed(bool collapsed)
+    {
+        if (Configuration.PullBrowserCollapsed == collapsed)
+        {
+            return;
+        }
+
+        Configuration.PullBrowserCollapsed = collapsed;
+        SaveConfiguration();
+    }
+
+    public void SetPullBrowserWidth(float width)
+    {
+        var pullBrowserWidth = Math.Clamp(width, 340.0f, 680.0f);
+        if (Math.Abs(Configuration.PullBrowserWidth - pullBrowserWidth) < 0.5f)
+        {
+            return;
+        }
+
+        Configuration.PullBrowserWidth = pullBrowserWidth;
+        SaveConfiguration();
+    }
+
+    public void SetShowDebugTab(bool show)
+    {
+        if (Configuration.ShowDebugTab == show)
+        {
+            return;
+        }
+
+        Configuration.ShowDebugTab = show;
         SaveConfiguration();
     }
 
@@ -1012,24 +1046,98 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration.Save();
     }
 
-    private void NormalizeIconSizeConfiguration()
+    private void NormalizeUserConfiguration()
     {
+        var changed = false;
         var iconSize = Math.Clamp(MathF.Max(Configuration.ActionIconSize, Configuration.StatusIconSize), 12.0f, 48.0f);
         var widgetIconSize = Math.Clamp(
             Configuration.WidgetIconSize <= 0.0f ? 20.0f : Configuration.WidgetIconSize,
             MinWidgetIconSize,
             MaxWidgetIconSize);
-        if (MathF.Abs(Configuration.ActionIconSize - iconSize) <= 0.01f &&
-            MathF.Abs(Configuration.StatusIconSize - iconSize) <= 0.01f &&
-            MathF.Abs(Configuration.WidgetIconSize - widgetIconSize) <= 0.01f)
+        var widgetBackgroundOpacity = Math.Clamp(
+            Configuration.CurrentPullWidgetBackgroundOpacity <= 0.0f
+                ? CurrentPullWidgetMaxBackgroundOpacity
+                : Configuration.CurrentPullWidgetBackgroundOpacity,
+            CurrentPullWidgetMinBackgroundOpacity,
+            CurrentPullWidgetMaxBackgroundOpacity);
+        var pullBrowserWidth = Math.Clamp(
+            Configuration.PullBrowserWidth <= 0.0f ? 340.0f : Configuration.PullBrowserWidth,
+            340.0f,
+            680.0f);
+        var recentEventSeconds = Math.Clamp(Configuration.RecentEventSeconds, 5, 60);
+        var deathCauseSeconds = Math.Clamp(Configuration.DeathCauseSeconds, 5, 60);
+        var maxRecordedPulls = Math.Clamp(Configuration.MaxRecordedPulls, 1, 100);
+
+        if (MathF.Abs(Configuration.ActionIconSize - iconSize) > 0.01f)
         {
-            return;
+            Configuration.ActionIconSize = iconSize;
+            changed = true;
         }
 
-        Configuration.ActionIconSize = iconSize;
-        Configuration.StatusIconSize = iconSize;
-        Configuration.WidgetIconSize = widgetIconSize;
-        SaveConfiguration();
+        if (MathF.Abs(Configuration.StatusIconSize - iconSize) > 0.01f)
+        {
+            Configuration.StatusIconSize = iconSize;
+            changed = true;
+        }
+
+        if (MathF.Abs(Configuration.WidgetIconSize - widgetIconSize) > 0.01f)
+        {
+            Configuration.WidgetIconSize = widgetIconSize;
+            changed = true;
+        }
+
+        if (MathF.Abs(Configuration.CurrentPullWidgetBackgroundOpacity - widgetBackgroundOpacity) > 0.01f)
+        {
+            Configuration.CurrentPullWidgetBackgroundOpacity = widgetBackgroundOpacity;
+            changed = true;
+        }
+
+        if (MathF.Abs(Configuration.PullBrowserWidth - pullBrowserWidth) > 0.5f)
+        {
+            Configuration.PullBrowserWidth = pullBrowserWidth;
+            changed = true;
+        }
+
+        if (Configuration.RecentEventSeconds != recentEventSeconds)
+        {
+            Configuration.RecentEventSeconds = recentEventSeconds;
+            changed = true;
+        }
+
+        if (Configuration.DeathCauseSeconds != deathCauseSeconds)
+        {
+            Configuration.DeathCauseSeconds = deathCauseSeconds;
+            changed = true;
+        }
+
+        if (Configuration.MaxRecordedPulls != maxRecordedPulls)
+        {
+            Configuration.MaxRecordedPulls = maxRecordedPulls;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.WidgetDisplayMode))
+        {
+            Configuration.WidgetDisplayMode = WidgetDisplayMode.Normal;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.ClockDisplayMode))
+        {
+            Configuration.ClockDisplayMode = ClockDisplayMode.TwentyFourHour;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.DeathChatChannel))
+        {
+            Configuration.DeathChatChannel = DeathChatChannel.Party;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            SaveConfiguration();
+        }
     }
 
     private void OnCommand(string command, string args)
