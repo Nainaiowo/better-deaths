@@ -62,7 +62,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.113";
+    private const string CurrentChangelogVersion = "0.1.0.114";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -78,6 +78,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
+    private static readonly TimeSpan LeadUpEventDuplicateWindow = TimeSpan.FromMilliseconds(5);
+    private static readonly TimeSpan LeadUpHpDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly string[] DebugActorControlCategoryFilters =
     [
         "All",
@@ -2832,19 +2835,20 @@ public sealed class RecapWindow : Window, IDisposable
             .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= anchorSeenAtUtc)
             .OrderBy(combatEvent => combatEvent.SeenAtUtc)
             .ToList();
+        var displayHistory = GetDisplayLeadUpHpHistory(history, events);
 
         var rows = new List<LeadUpTimelineRow>();
         var historyIndex = 0;
         var eventIndex = 0;
         DerivedHpState? pendingDerivedHp = null;
 
-        while (historyIndex < history.Count || eventIndex < events.Count)
+        while (historyIndex < displayHistory.Count || eventIndex < events.Count)
         {
-            var shouldTakeHistory = historyIndex < history.Count &&
-                (eventIndex >= events.Count || history[historyIndex].SeenAtUtc <= events[eventIndex].SeenAtUtc);
+            var shouldTakeHistory = historyIndex < displayHistory.Count &&
+                (eventIndex >= events.Count || displayHistory[historyIndex].SeenAtUtc <= events[eventIndex].SeenAtUtc);
             if (shouldTakeHistory)
             {
-                var snapshot = history[historyIndex++];
+                var snapshot = displayHistory[historyIndex++];
                 var timelineRow = CreateHpSampleTimelineRow(
                     snapshot,
                     pendingDerivedHp,
@@ -2880,6 +2884,98 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return rows;
+    }
+
+    private static IReadOnlyList<HpHistorySnapshot> GetDisplayLeadUpHpHistory(
+        IReadOnlyList<HpHistorySnapshot> history,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        if (history.Count == 0)
+        {
+            return [];
+        }
+
+        var displayHistory = new List<HpHistorySnapshot>(history.Count);
+        foreach (var snapshot in history)
+        {
+            if (IsHpSampleCoveredByNearbyEvent(snapshot, events))
+            {
+                continue;
+            }
+
+            if (displayHistory.Count > 0 &&
+                CanMergeDisplayHpHistorySnapshot(displayHistory[^1], snapshot))
+            {
+                displayHistory[^1] = SelectPreferredDisplayHpHistorySnapshot(displayHistory[^1], snapshot);
+                continue;
+            }
+
+            displayHistory.Add(snapshot);
+        }
+
+        return displayHistory;
+    }
+
+    private static bool IsHpSampleCoveredByNearbyEvent(
+        HpHistorySnapshot snapshot,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        foreach (var combatEvent in events)
+        {
+            if (!IsWithinLeadUpEventHpSampleWindow(snapshot.SeenAtUtc, combatEvent.SeenAtUtc))
+            {
+                continue;
+            }
+
+            if (EventHasCapturedHp(combatEvent) ||
+                snapshot.SeenAtUtc <= combatEvent.SeenAtUtc)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool EventHasCapturedHp(CombatEventRecord combatEvent)
+    {
+        return combatEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
+            combatEvent.MaxHp > 0 &&
+            (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0);
+    }
+
+    private static bool IsWithinLeadUpEventHpSampleWindow(DateTime first, DateTime second)
+    {
+        return Duration(first, second) <= LeadUpEventHpSampleWindow;
+    }
+
+    private static bool CanMergeDisplayHpHistorySnapshot(HpHistorySnapshot existing, HpHistorySnapshot snapshot)
+    {
+        return Duration(existing.SeenAtUtc, snapshot.SeenAtUtc) <= LeadUpHpDuplicateWindow &&
+            existing.CurrentHp == snapshot.CurrentHp &&
+            existing.ShieldHp == snapshot.ShieldHp &&
+            existing.MaxHp == snapshot.MaxHp &&
+            StatusListsMatchForHistoryMerge(existing.Statuses, snapshot.Statuses);
+    }
+
+    private static HpHistorySnapshot SelectPreferredDisplayHpHistorySnapshot(HpHistorySnapshot existing, HpHistorySnapshot snapshot)
+    {
+        if (snapshot.Statuses.Count > existing.Statuses.Count)
+        {
+            return snapshot;
+        }
+
+        if (existing.Statuses.Count > snapshot.Statuses.Count)
+        {
+            return existing;
+        }
+
+        return snapshot.SeenAtUtc >= existing.SeenAtUtc ? snapshot : existing;
+    }
+
+    private static TimeSpan Duration(DateTime first, DateTime second)
+    {
+        return first >= second ? first - second : second - first;
     }
 
     private static void AddLeadUpTimelineRow(List<LeadUpTimelineRow> rows, LeadUpTimelineRow row)
@@ -3595,7 +3691,58 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
     {
-        return DeathDisplaySelector.GetLeadUpEvents(death);
+        return DeduplicateLeadUpDisplayEvents(DeathDisplaySelector.GetLeadUpEvents(death));
+    }
+
+    private static IReadOnlyList<CombatEventRecord> DeduplicateLeadUpDisplayEvents(IReadOnlyList<CombatEventRecord> events)
+    {
+        if (events.Count < 2)
+        {
+            return events;
+        }
+
+        var deduplicated = new List<CombatEventRecord>(events.Count);
+        foreach (var combatEvent in events)
+        {
+            if (deduplicated.Count > 0 &&
+                CanMergeLeadUpDisplayEvent(deduplicated[^1], combatEvent))
+            {
+                continue;
+            }
+
+            deduplicated.Add(combatEvent);
+        }
+
+        return deduplicated;
+    }
+
+    private static bool CanMergeLeadUpDisplayEvent(CombatEventRecord previous, CombatEventRecord next)
+    {
+        return Duration(previous.SeenAtUtc, next.SeenAtUtc) <= LeadUpEventDuplicateWindow &&
+            previous.MemberKey == next.MemberKey &&
+            SourceMatchesForLeadUpDisplay(previous, next) &&
+            previous.ActionId == next.ActionId &&
+            previous.Kind == next.Kind &&
+            previous.Amount == next.Amount &&
+            previous.CurrentHp == next.CurrentHp &&
+            previous.ShieldHp == next.ShieldHp &&
+            previous.MaxHp == next.MaxHp &&
+            previous.DamageType == next.DamageType &&
+            previous.Critical == next.Critical &&
+            previous.DirectHit == next.DirectHit &&
+            previous.Blocked == next.Blocked &&
+            previous.Parried == next.Parried &&
+            string.Equals(previous.ActionName, next.ActionName, StringComparison.Ordinal) &&
+            string.Equals(previous.SourceName, next.SourceName, StringComparison.Ordinal) &&
+            string.Equals(previous.Detail, next.Detail, StringComparison.Ordinal) &&
+            StatusListsMatchForHistoryMerge(previous.Statuses, next.Statuses) &&
+            StatusListsMatchForHistoryMerge(previous.SourceStatuses, next.SourceStatuses);
+    }
+
+    private static bool SourceMatchesForLeadUpDisplay(CombatEventRecord previous, CombatEventRecord next)
+    {
+        return previous.SourceEntityId == next.SourceEntityId ||
+            string.Equals(previous.SourceName, next.SourceName, StringComparison.Ordinal);
     }
 
     private static bool IsLikelyDeathCauseEvent(CombatEventRecord combatEvent)
@@ -5411,13 +5558,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.113");
-        ImGui.TextDisabled("Testing cleanup and resource pass.");
-        DrawBreathingGoldBullet("10 second HP history is quieter and easier to read.");
+        ImGui.TextUnformatted("v0.1.0.114");
+        ImGui.TextDisabled("Lead-up cleanup and resource pass.");
+        DrawBreathingGoldBullet("10 second HP history shows fewer duplicate-looking rows.");
         DrawWrappedBullet("Removed extra lead-up explanation text.");
         DrawWrappedBullet("HP history mouseovers now only show HP plus shield over max HP.");
         DrawWrappedBullet("Mitigation and debuff icons in HP history now wrap at 4 per line.");
-        DrawWrappedBullet("Repeated HP-only rows now collapse when the captured state is the same.");
+        DrawWrappedBullet("Fixed unresolved issues in the 10s lead-up.");
         DrawWrappedBullet("Runtime capture paths now do less avoidable work without changing tracked-player capture.");
 
         ImGui.Separator();

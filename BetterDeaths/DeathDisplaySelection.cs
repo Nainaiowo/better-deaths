@@ -198,7 +198,12 @@ public static class DeathDisplaySelector
 
     private static bool IsDeathRelevantLeadUpEvent(CombatEventRecord combatEvent)
     {
-        return combatEvent.Kind is DeathEventKind.Damage or DeathEventKind.Miss or DeathEventKind.Invulnerable or DeathEventKind.Status;
+        return combatEvent.Kind switch
+        {
+            DeathEventKind.Damage => combatEvent.Amount > 0,
+            DeathEventKind.Miss or DeathEventKind.Invulnerable or DeathEventKind.Status => true,
+            _ => false,
+        };
     }
 
     private static ulong? GetIncomingDamageAmount(IReadOnlyList<CombatEventRecord> events)

@@ -98,6 +98,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DebugCaptureFlushInterval = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
@@ -3195,13 +3196,99 @@ public sealed partial class Plugin : IDalamudPlugin
             recentHpHistoryByMember[memberKey] = history;
         }
 
+        for (var index = history.Count - 1; index >= 0; index--)
+        {
+            var existing = history[index];
+            if (!CanMergeCapturedHpHistorySnapshot(existing, snapshot))
+            {
+                continue;
+            }
+
+            history[index] = SelectPreferredHpHistorySnapshot(existing, snapshot);
+            UpdateLastHpHistorySample(memberKey, snapshot.SeenAtUtc);
+            return;
+        }
+
         history.Add(snapshot);
         while (history.Count > MaxRecentHpHistoryPerMember)
         {
             history.RemoveAt(0);
         }
 
-        lastHpHistorySampleByMember[memberKey] = snapshot.SeenAtUtc;
+        UpdateLastHpHistorySample(memberKey, snapshot.SeenAtUtc);
+    }
+
+    private static bool CanMergeCapturedHpHistorySnapshot(HpHistorySnapshot existing, HpHistorySnapshot snapshot)
+    {
+        return IsWithinHpHistoryDuplicateWindow(existing.SeenAtUtc, snapshot.SeenAtUtc) &&
+            existing.CurrentHp == snapshot.CurrentHp &&
+            existing.ShieldHp == snapshot.ShieldHp &&
+            existing.MaxHp == snapshot.MaxHp &&
+            StatusListsMatchForHpHistoryCapture(existing.Statuses, snapshot.Statuses);
+    }
+
+    private static bool IsWithinHpHistoryDuplicateWindow(DateTime first, DateTime second)
+    {
+        return Duration(first, second) <= HpHistoryDuplicateWindow;
+    }
+
+    private static TimeSpan Duration(DateTime first, DateTime second)
+    {
+        return first >= second ? first - second : second - first;
+    }
+
+    private static HpHistorySnapshot SelectPreferredHpHistorySnapshot(HpHistorySnapshot existing, HpHistorySnapshot snapshot)
+    {
+        if (snapshot.Statuses.Count > existing.Statuses.Count)
+        {
+            return snapshot;
+        }
+
+        if (existing.Statuses.Count > snapshot.Statuses.Count)
+        {
+            return existing;
+        }
+
+        return snapshot.SeenAtUtc >= existing.SeenAtUtc ? snapshot : existing;
+    }
+
+    private static bool StatusListsMatchForHpHistoryCapture(
+        IReadOnlyList<StatusSnapshot> first,
+        IReadOnlyList<StatusSnapshot> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        var firstOrdered = first
+            .OrderBy(status => status.Id)
+            .ThenBy(status => status.SourceId)
+            .ThenBy(status => status.StackCount)
+            .ThenBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var secondOrdered = second
+            .OrderBy(status => status.Id)
+            .ThenBy(status => status.SourceId)
+            .ThenBy(status => status.StackCount)
+            .ThenBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return firstOrdered.Zip(secondOrdered).All(pair =>
+            pair.First.Id == pair.Second.Id &&
+            pair.First.IconId == pair.Second.IconId &&
+            pair.First.SourceId == pair.Second.SourceId &&
+            pair.First.StackCount == pair.Second.StackCount &&
+            string.Equals(pair.First.Name, pair.Second.Name, StringComparison.Ordinal));
+    }
+
+    private void UpdateLastHpHistorySample(string memberKey, DateTime seenAtUtc)
+    {
+        if (!lastHpHistorySampleByMember.TryGetValue(memberKey, out var lastSampleAt) ||
+            seenAtUtc > lastSampleAt)
+        {
+            lastHpHistorySampleByMember[memberKey] = seenAtUtc;
+        }
     }
 
     private void TrackRecentSourceMitigationSnapshot(
