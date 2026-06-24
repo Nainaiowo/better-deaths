@@ -26,7 +26,19 @@ public sealed partial class Plugin
 
     internal sealed record MitigationTypeDisplay(string Label, uint IconId = 0, string? Tooltip = null);
 
-    internal sealed record MitigationPercentDisplay(string Text, uint IconId = 0, string? Tooltip = null);
+    internal enum MitigationPercentScope
+    {
+        All,
+        Physical,
+        Magic,
+    }
+
+    internal sealed record MitigationPercentDisplay(
+        string Text,
+        float Percent,
+        MitigationPercentScope Scope,
+        uint IconId = 0,
+        string? Tooltip = null);
 
     internal sealed record InducedMitigationDisplay(uint StatusId, string Name);
 
@@ -349,17 +361,31 @@ public sealed partial class Plugin
         var parts = new List<MitigationPercentDisplay>();
         if (allPercent is not null)
         {
-            parts.Add(new(FormatMitigationPercentValue(allPercent.Value, variable), Tooltip: allTooltip));
+            parts.Add(new(
+                FormatMitigationPercentValue(allPercent.Value, variable),
+                allPercent.Value,
+                MitigationPercentScope.All,
+                Tooltip: allTooltip));
         }
 
         if (physicalPercent is not null)
         {
-            parts.Add(new(FormatMitigationPercentValue(physicalPercent.Value, variable), PhysicalDamageReductionIconId, physicalTooltip));
+            parts.Add(new(
+                FormatMitigationPercentValue(physicalPercent.Value, variable),
+                physicalPercent.Value,
+                MitigationPercentScope.Physical,
+                PhysicalDamageReductionIconId,
+                physicalTooltip));
         }
 
         if (magicPercent is not null)
         {
-            parts.Add(new(FormatMitigationPercentValue(magicPercent.Value, variable), MagicDamageReductionIconId, magicTooltip));
+            parts.Add(new(
+                FormatMitigationPercentValue(magicPercent.Value, variable),
+                magicPercent.Value,
+                MitigationPercentScope.Magic,
+                MagicDamageReductionIconId,
+                magicTooltip));
         }
 
         return parts;

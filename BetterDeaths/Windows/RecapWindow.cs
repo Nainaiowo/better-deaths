@@ -57,10 +57,12 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 ModernAccentSoftColor = new(0.10f, 0.34f, 0.31f, 0.92f);
     private static readonly Vector4 ModernMutedTextColor = new(0.68f, 0.72f, 0.76f, 1.0f);
     private static readonly Vector4 ModernDividerColor = new(1.0f, 1.0f, 1.0f, 0.10f);
+    private static readonly Vector4 TimelineSelectedRowColor = new(0.28f, 0.22f, 0.10f, 0.55f);
+    private static readonly Vector4 TimelinePressedRowColor = new(0.42f, 0.33f, 0.13f, 0.78f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.110";
+    private const string CurrentChangelogVersion = "0.1.0.111";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -142,6 +144,15 @@ public sealed class RecapWindow : Window, IDisposable
         Vector4 Color,
         string TooltipLine);
 
+    private sealed record MitigationTotalDisplay(
+        double AllReduction,
+        double PhysicalReduction,
+        double MagicReduction,
+        bool HasTypedReduction,
+        bool AllVariable,
+        bool PhysicalVariable,
+        bool MagicVariable);
+
     private sealed record ReviewPull(
         string Key,
         string Title,
@@ -201,6 +212,27 @@ public sealed class RecapWindow : Window, IDisposable
         public void Dispose()
         {
             ImGui.PopStyleVar(3);
+            ImGui.PopStyleColor(4);
+        }
+    }
+
+    private readonly struct ModernWidgetScope : IDisposable
+    {
+        public ModernWidgetScope()
+        {
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+            ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+            ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 9.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(9.0f, 7.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(6.0f, 4.0f));
+        }
+
+        public void Dispose()
+        {
+            ImGui.PopStyleVar(4);
             ImGui.PopStyleColor(4);
         }
     }
@@ -474,20 +506,21 @@ public sealed class RecapWindow : Window, IDisposable
 
     private List<ReviewPull> BuildDeathRecapReviewPulls()
     {
-        var pulls = new List<ReviewPull>
+        var pulls = new List<ReviewPull>();
+        if (!plugin.CurrentPullClosedForReview)
         {
-            new(
+            pulls.Add(new ReviewPull(
                 "Current",
-                plugin.CurrentPullClosedForReview ? "Last Pull Review" : "Current pull",
-                $"{plugin.CurrentPullTerritoryName} - Timer {FormatCombatTimer(plugin.CurrentPullElapsedSeconds)}{BuildCurrentPullSavedText()}",
-                plugin.CurrentPullRecordedPullNumber > 0 ? plugin.CurrentPullRecordedPullNumber : null,
+                "Current pull",
+                $"{plugin.CurrentPullTerritoryName} - Timer {FormatCombatTimer(plugin.CurrentPullElapsedSeconds)}",
+                null,
                 plugin.CurrentTerritoryId,
                 plugin.CurrentPullTerritoryName,
                 plugin.CurrentPullElapsedSeconds,
                 plugin.CurrentDeaths,
                 DeathSelectionSource.Current,
-                null),
-        };
+                null));
+        }
 
         pulls.AddRange(GetVisibleRecordedPulls().Select(entry =>
         {
@@ -495,7 +528,7 @@ public sealed class RecapWindow : Window, IDisposable
             return new ReviewPull(
                 BuildRecordedPullKey(snapshot),
                 $"Pull {entry.PullNumber}",
-                $"{snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}",
+                FormatRecordedPullCapturedTime(snapshot),
                 entry.PullNumber,
                 snapshot.TerritoryId,
                 snapshot.TerritoryName,
@@ -508,16 +541,14 @@ public sealed class RecapWindow : Window, IDisposable
         return pulls;
     }
 
-    private string BuildCurrentPullSavedText()
-    {
-        return plugin.CurrentPullClosedForReview && plugin.CurrentPullRecordedPullNumber > 0
-            ? $" - saved as Pull {plugin.CurrentPullRecordedPullNumber}"
-            : string.Empty;
-    }
-
     private static string BuildRecordedPullKey(PullDeathSnapshot snapshot)
     {
         return $"Recorded:{snapshot.PullNumber}:{snapshot.CapturedAtUtc.Ticks}";
+    }
+
+    private string FormatRecordedPullCapturedTime(PullDeathSnapshot snapshot)
+    {
+        return FormatLocalClockTime(snapshot.CapturedAtUtc);
     }
 
     private void DrawReviewWorkspace(
@@ -1059,19 +1090,32 @@ public sealed class RecapWindow : Window, IDisposable
             var death = orderedDeaths[i];
             var rowSelected = IsSelectedReviewDeath(death, selection);
             var causeEvents = GetTimelineCauseEvents(death);
-            ImGui.TableNextRow();
+            var causeId = $"ModernCause{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+            var rowHeight = GetTimelineRowHeight(causeEvents, causeId);
+            var previousPullKey = selection.PullKey;
+            var previousDeathSeenAtTicks = selection.DeathSeenAtTicks;
+            var previousDeathMemberKeyHash = selection.DeathMemberKeyHash;
+            var rowPressed = false;
+            ImGui.TableNextRow(ImGuiTableRowFlags.None, rowHeight);
             if (rowSelected)
             {
-                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.28f, 0.22f, 0.10f, 0.55f)));
+                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(TimelineSelectedRowColor));
             }
 
             ImGui.TableNextColumn();
             if (DrawCenteredRowSelectable(
                 (i + 1).ToString(),
                 $"SelectDeath{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}",
-                rowSelected))
+                rowSelected,
+                rowHeight,
+                out var rowSelectablePressed))
             {
+                rowPressed = true;
                 SelectDeath(death, selection);
+            }
+            else if (rowSelectablePressed)
+            {
+                rowPressed = true;
             }
 
             ImGui.TableNextColumn();
@@ -1081,7 +1125,26 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawJobCell(death);
             ImGui.TableNextColumn();
-            DrawTimelineCauseText(causeEvents, $"ModernCause{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}");
+            if (DrawTimelineCauseText(
+                    causeEvents,
+                    causeId,
+                    () =>
+                    {
+                        rowPressed = true;
+                        SelectDeath(death, selection);
+                    },
+                    () => rowPressed = true))
+            {
+                rowPressed = false;
+                selection.PullKey = previousPullKey;
+                selection.DeathSeenAtTicks = previousDeathSeenAtTicks;
+                selection.DeathMemberKeyHash = previousDeathMemberKeyHash;
+            }
+
+            if (rowPressed)
+            {
+                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(TimelinePressedRowColor));
+            }
         }
 
         ImGui.EndTable();
@@ -1118,17 +1181,19 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static bool DrawCenteredRowSelectable(string text, string id, bool selected)
+    private static bool DrawCenteredRowSelectable(string text, string id, bool selected, float rowHeight, out bool pressed)
     {
         var cellStart = ImGui.GetCursorScreenPos();
         var cellWidth = ImGui.GetContentRegionAvail().X;
-        var rowHeight = ImGui.GetTextLineHeightWithSpacing();
+        ImGui.PushStyleColor(ImGuiCol.HeaderActive, TimelinePressedRowColor);
         var clicked = ImGui.Selectable(
             $"##{id}",
             selected,
             ImGuiSelectableFlags.SpanAllColumns,
             new Vector2(0.0f, rowHeight));
+        pressed = ImGui.IsItemActive();
         ImGui.SetItemAllowOverlap();
+        ImGui.PopStyleColor();
 
         var textSize = ImGui.CalcTextSize(text);
         var textPosition = new Vector2(
@@ -1324,7 +1389,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         DrawCurrentPullWidgetContent(
             plugin.CurrentDeaths,
-            BuildCurrentPullTitle(),
+            BuildCurrentPullWidgetTitle(),
             "CurrentWidget");
     }
 
@@ -1335,6 +1400,15 @@ public sealed class RecapWindow : Window, IDisposable
             ? $" - saved as Pull {plugin.CurrentPullRecordedPullNumber}"
             : string.Empty;
         return $"{label} - {plugin.CurrentPullTerritoryName} - Timer {FormatCombatTimer(plugin.CurrentPullElapsedSeconds)}{savedText}";
+    }
+
+    private string BuildCurrentPullWidgetTitle()
+    {
+        var label = plugin.CurrentPullClosedForReview ? "Last Pull Review" : "Current pull";
+        var savedText = plugin.CurrentPullClosedForReview && plugin.CurrentPullRecordedPullNumber > 0
+            ? $" - saved as Pull {plugin.CurrentPullRecordedPullNumber}"
+            : string.Empty;
+        return $"{label} - {plugin.CurrentPullTerritoryName} - {FormatCombatTimer(plugin.CurrentPullElapsedSeconds)}{savedText}";
     }
 
     private void DrawCurrentPullContent(string idSuffix)
@@ -1356,24 +1430,40 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCurrentPullWidgetContent(IReadOnlyList<PartyDeathRecord> deaths, string title, string idSuffix)
     {
-        ImGui.TextUnformatted(title);
-        if (deaths.Count == 0)
+        using var widgetStyle = new ModernWidgetScope();
+        if (ImGui.BeginChild($"##CurrentPullWidgetModernShell{idSuffix}", Vector2.Zero, true, ImGuiWindowFlags.NoScrollbar))
         {
-            ImGui.TextDisabled("No deaths recorded this pull.");
-            return;
-        }
+            DrawModernWidgetTitle(title);
+            ImGui.Spacing();
 
-        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
-        {
-            DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
+            if (deaths.Count == 0)
+            {
+                ImGui.TextDisabled("No deaths recorded this pull.");
+            }
+            else
+            {
+                if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+                {
+                    DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
+                }
+
+                ImGui.EndChild();
+            }
         }
 
         ImGui.EndChild();
     }
 
+    private static void DrawModernWidgetTitle(string title)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        ImGui.TextWrapped(title);
+        ImGui.PopStyleColor();
+    }
+
     private void DrawCurrentPullWidgetDeathTable(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix)
     {
-        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
             return;
         }
@@ -1513,7 +1603,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             using var recordedPullIndent = new ImGuiIndentScope(PullBodyIndent);
-            ImGui.TextDisabled($"{snapshot.Reason} at {FormatLocalClockTime(snapshot.CapturedAtUtc)}");
+            ImGui.TextDisabled(FormatRecordedPullCapturedTime(snapshot));
             DrawDeathTimeline(snapshot.Deaths, $"Pull{pullId}");
             DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}", selectionSource: DeathSelectionSource.Recorded, recordedPull: snapshot);
         }
@@ -1819,28 +1909,66 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private void DrawTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
+    private float GetTimelineRowHeight(IReadOnlyList<CombatEventRecord> causeEvents, string causeId)
+    {
+        var baseRowHeight = MathF.Max(ImGui.GetTextLineHeightWithSpacing(), ImGui.GetFrameHeight());
+        if (causeEvents.Count <= 1 || !expandedTimelineCauseRows.Contains(causeId))
+        {
+            return baseRowHeight;
+        }
+
+        var style = ImGui.GetStyle();
+        return baseRowHeight +
+            MathF.Max(1.0f, style.ItemInnerSpacing.Y * 0.5f) +
+            style.ItemSpacing.Y +
+            (causeEvents.Count * ImGui.GetTextLineHeightWithSpacing());
+    }
+
+    private bool DrawTimelineCauseText(
+        IReadOnlyList<CombatEventRecord> causeEvents,
+        string id,
+        Action? selectDeath = null,
+        Action? markDeathPressed = null)
     {
         if (causeEvents.Count == 0)
         {
             DrawCenteredOrWrappedText("Likely walled/non-hit KO", WarningColor);
-            return;
+            return false;
         }
 
         if (causeEvents.Count > 1)
         {
-            DrawCollapsedTimelineCauseText(causeEvents, id);
-            return;
+            return DrawCollapsedTimelineCauseText(causeEvents, id, selectDeath, markDeathPressed);
         }
 
         foreach (var causeEvent in causeEvents)
         {
-            DrawCenteredOrWrappedText(FormatTimelineCauseLine(causeEvent), GetEventColor(causeEvent.Kind));
+            var line = FormatTimelineCauseLine(causeEvent);
+            if (selectDeath is not null)
+            {
+                DrawSelectableCenteredOrWrappedTimelineText(
+                    $"TimelineCause{id}",
+                    line,
+                    GetEventColor(causeEvent.Kind),
+                    selectDeath,
+                    markDeathPressed);
+            }
+            else
+            {
+                DrawCenteredOrWrappedText(line, GetEventColor(causeEvent.Kind));
+            }
+
             DrawLikelyAutoAttackTooltip(causeEvent);
         }
+
+        return false;
     }
 
-    private void DrawCollapsedTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
+    private bool DrawCollapsedTimelineCauseText(
+        IReadOnlyList<CombatEventRecord> causeEvents,
+        string id,
+        Action? selectDeath,
+        Action? markDeathPressed)
     {
         var summary = BuildTimelineCauseSummary(causeEvents);
         var textColor = GetWidgetCauseColor(causeEvents);
@@ -1856,10 +1984,13 @@ public sealed class RecapWindow : Window, IDisposable
 
         CenterNextItem(controlWidth);
         var controlPosition = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton($"##TimelineCause{id}", controlSize);
+        var arrowSize = MathF.Min(8.0f, MathF.Max(5.0f, summaryTextSize.Y * 0.55f));
+        var arrowHitWidth = arrowSize + (style.FramePadding.X * 2.0f);
+        var arrowClicked = ImGui.InvisibleButton($"##TimelineCauseArrow{id}", new Vector2(arrowHitWidth, controlSize.Y));
+        var arrowHovered = ImGui.IsItemHovered();
+        var afterArrowCursor = ImGui.GetCursorPos();
         var drawList = ImGui.GetWindowDrawList();
         var textY = controlPosition.Y + MathF.Max(0.0f, (controlSize.Y - summaryTextSize.Y) * 0.5f);
-        var arrowSize = MathF.Min(8.0f, MathF.Max(5.0f, summaryTextSize.Y * 0.55f));
         var arrowX = controlPosition.X + style.FramePadding.X;
         var arrowCenterY = controlPosition.Y + (controlSize.Y * 0.5f);
         var arrowHalfSize = arrowSize * 0.5f;
@@ -1885,9 +2016,24 @@ public sealed class RecapWindow : Window, IDisposable
                 arrowColor);
         }
 
-        drawList.AddText(summaryPosition, ImGui.GetColorU32(textColor), summary);
+        if (selectDeath is not null)
+        {
+            ImGui.SetCursorScreenPos(new Vector2(summaryPosition.X, controlPosition.Y));
+            if (ImGui.InvisibleButton($"##TimelineCauseSummary{id}", new Vector2(summaryTextSize.X, controlSize.Y)))
+            {
+                selectDeath();
+            }
 
-        if (clicked)
+            if (ImGui.IsItemActive())
+            {
+                markDeathPressed?.Invoke();
+            }
+        }
+
+        drawList.AddText(summaryPosition, ImGui.GetColorU32(textColor), summary);
+        ImGui.SetCursorPos(afterArrowCursor);
+
+        if (arrowClicked)
         {
             if (isExpanded)
             {
@@ -1901,14 +2047,14 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        if (ImGui.IsItemHovered())
+        if (arrowHovered)
         {
             ImGui.SetTooltip(isExpanded ? "Collapse likely causes." : "Expand likely causes.");
         }
 
         if (!isExpanded)
         {
-            return;
+            return arrowClicked;
         }
 
         ImGui.Dummy(new Vector2(0.0f, MathF.Max(1.0f, style.ItemInnerSpacing.Y * 0.5f)));
@@ -1916,9 +2062,61 @@ public sealed class RecapWindow : Window, IDisposable
         {
             var causeEvent = causeEvents[causeIndex];
             var line = causeLines[causeIndex];
-            DrawCenteredOrWrappedText(line, GetEventColor(causeEvent.Kind));
+            if (selectDeath is not null)
+            {
+                DrawSelectableCenteredOrWrappedTimelineText(
+                    $"TimelineCause{id}{causeIndex}",
+                    line,
+                    GetEventColor(causeEvent.Kind),
+                    selectDeath,
+                    markDeathPressed);
+            }
+            else
+            {
+                DrawCenteredOrWrappedText(line, GetEventColor(causeEvent.Kind));
+            }
+
             DrawLikelyAutoAttackTooltip(causeEvent);
         }
+
+        return arrowClicked;
+    }
+
+    private static void DrawSelectableCenteredOrWrappedTimelineText(
+        string id,
+        string text,
+        Vector4 color,
+        Action selectDeath,
+        Action? markDeathPressed)
+    {
+        var textWidth = ImGui.CalcTextSize(text).X;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var lines = textWidth <= availableWidth
+            ? [text]
+            : WrapTextForWidth(text, availableWidth).ToList();
+        var drawList = ImGui.GetWindowDrawList();
+
+        ImGui.BeginGroup();
+        for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        {
+            var line = lines[lineIndex];
+            var lineSize = ImGui.CalcTextSize(line);
+            CenterNextItem(lineSize.X);
+            var linePosition = ImGui.GetCursorScreenPos();
+            if (ImGui.InvisibleButton($"##{id}{lineIndex}", new Vector2(lineSize.X, MathF.Max(lineSize.Y, ImGui.GetTextLineHeight()))))
+            {
+                selectDeath();
+            }
+
+            if (ImGui.IsItemActive())
+            {
+                markDeathPressed?.Invoke();
+            }
+
+            drawList.AddText(linePosition, ImGui.GetColorU32(color), line);
+        }
+
+        ImGui.EndGroup();
     }
 
     private static string BuildTimelineCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -2927,6 +3125,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndTable();
+        DrawMitigationTotal(statuses);
     }
 
     private void DrawMitigationTypeCell(IReadOnlyList<Plugin.MitigationTypeDisplay> types)
@@ -2938,33 +3137,29 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 22.0f);
+        foreach (var type in types)
+        {
+            DrawMitigationTypeLine(type, iconSize);
+        }
+    }
+
+    private static void DrawMitigationTypeLine(Plugin.MitigationTypeDisplay type, float iconSize)
+    {
         var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var groupWidth = types.Aggregate(0.0f, (width, type) =>
-            width + (width > 0.0f ? spacing : 0.0f) +
-            (type.IconId == 0 ? 0.0f : iconSize + spacing) +
-            ImGui.CalcTextSize(type.Label).X);
-        CenterNextItem(groupWidth);
+        var lineWidth = (type.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(type.Label).X;
+        CenterNextItem(lineWidth);
 
         ImGui.BeginGroup();
-        for (var i = 0; i < types.Count; i++)
+        if (type.IconId != 0)
         {
-            if (i > 0)
-            {
-                ImGui.SameLine();
-            }
+            DrawGameIcon(type.IconId, iconSize, type.Tooltip ?? type.Label);
+            ImGui.SameLine();
+        }
 
-            var type = types[i];
-            if (type.IconId != 0)
-            {
-                DrawGameIcon(type.IconId, iconSize, type.Tooltip ?? type.Label);
-                ImGui.SameLine();
-            }
-
-            ImGui.TextUnformatted(type.Label);
-            if (ImGui.IsItemHovered() && type.Tooltip is not null)
-            {
-                ImGui.SetTooltip(type.Tooltip);
-            }
+        ImGui.TextUnformatted(type.Label);
+        if (ImGui.IsItemHovered() && type.Tooltip is not null)
+        {
+            ImGui.SetTooltip(type.Tooltip);
         }
 
         ImGui.EndGroup();
@@ -2979,29 +3174,37 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var iconSize = Math.Clamp(ImGui.GetTextLineHeight(), 12.0f, 18.0f);
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var separatorText = "/";
-        var separatorWidth = ImGui.CalcTextSize(separatorText).X;
-        var groupWidth = displayInfo.MitigationPercents.Aggregate(0.0f, (width, part) =>
+        if (displayInfo.MitigationPercents.Count > 1)
         {
-            var partWidth = (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X;
-            return width + (width > 0.0f ? spacing + separatorWidth + spacing : 0.0f) + partWidth;
-        });
+            foreach (var part in displayInfo.MitigationPercents)
+            {
+                DrawMitigationPercentLine(part, iconSize, displayInfo);
+            }
+
+            return;
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var percentPart = displayInfo.MitigationPercents[0];
+        var groupWidth = (percentPart.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(percentPart.Text).X;
         CenterNextItem(groupWidth);
 
         ImGui.BeginGroup();
-        for (var i = 0; i < displayInfo.MitigationPercents.Count; i++)
-        {
-            if (i > 0)
-            {
-                ImGui.SameLine();
-                ImGui.TextUnformatted(separatorText);
-                ImGui.SameLine();
-            }
+        DrawMitigationPercentPart(percentPart, iconSize, displayInfo);
+        ImGui.EndGroup();
+    }
 
-            DrawMitigationPercentPart(displayInfo.MitigationPercents[i], iconSize, displayInfo);
-        }
+    private static void DrawMitigationPercentLine(
+        Plugin.MitigationPercentDisplay part,
+        float iconSize,
+        Plugin.MitigationDisplayInfo displayInfo)
+    {
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var lineWidth = (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X;
+        CenterNextItem(lineWidth);
 
+        ImGui.BeginGroup();
+        DrawMitigationPercentPart(part, iconSize, displayInfo);
         ImGui.EndGroup();
     }
 
@@ -3041,6 +3244,93 @@ public sealed class RecapWindow : Window, IDisposable
             (null, not null) => second,
             _ => $"{first}\n{second}",
         };
+    }
+
+    private static void DrawMitigationTotal(IReadOnlyList<StatusSnapshot> statuses)
+    {
+        var total = CalculateMitigationTotal(statuses);
+        if (total is null)
+        {
+            return;
+        }
+
+        ImGui.Spacing();
+        ImGui.TextColored(LeadUpGoldColor, "Mit total:");
+        ImGui.SameLine();
+        ImGui.TextUnformatted(total.HasTypedReduction
+            ? $"Physical {FormatMitigationTotalPercent(total.PhysicalReduction, total.PhysicalVariable)} / Magic {FormatMitigationTotalPercent(total.MagicReduction, total.MagicVariable)}"
+            : FormatMitigationTotalPercent(total.AllReduction, total.AllVariable));
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Calculated multiplicatively: 1 - ((1 - mit A) x (1 - mit B) ...). Shields, regens, healing bonuses, and debuff-only statuses are not included in this percent total.");
+        }
+    }
+
+    private static MitigationTotalDisplay? CalculateMitigationTotal(IReadOnlyList<StatusSnapshot> statuses)
+    {
+        var allRemaining = 1.0;
+        var physicalRemaining = 1.0;
+        var magicRemaining = 1.0;
+        var hasAnyReduction = false;
+        var hasPhysicalReduction = false;
+        var hasMagicReduction = false;
+        var allVariable = false;
+        var physicalVariable = false;
+        var magicVariable = false;
+
+        foreach (var status in statuses)
+        {
+            var displayInfo = Plugin.GetMitigationDisplayInfo(status);
+            foreach (var part in displayInfo.MitigationPercents)
+            {
+                if (part.Percent <= 0.0f)
+                {
+                    continue;
+                }
+
+                var remaining = 1.0 - (Math.Clamp(part.Percent, 0.0f, 100.0f) / 100.0);
+                hasAnyReduction = true;
+
+                switch (part.Scope)
+                {
+                    case Plugin.MitigationPercentScope.Physical:
+                        physicalRemaining *= remaining;
+                        hasPhysicalReduction = true;
+                        physicalVariable |= displayInfo.HasVariableMitigationPercent;
+                        break;
+                    case Plugin.MitigationPercentScope.Magic:
+                        magicRemaining *= remaining;
+                        hasMagicReduction = true;
+                        magicVariable |= displayInfo.HasVariableMitigationPercent;
+                        break;
+                    default:
+                        allRemaining *= remaining;
+                        allVariable |= displayInfo.HasVariableMitigationPercent;
+                        break;
+                }
+            }
+        }
+
+        if (!hasAnyReduction)
+        {
+            return null;
+        }
+
+        return new MitigationTotalDisplay(
+            1.0 - allRemaining,
+            1.0 - (allRemaining * physicalRemaining),
+            1.0 - (allRemaining * magicRemaining),
+            hasPhysicalReduction || hasMagicReduction,
+            allVariable,
+            allVariable || physicalVariable,
+            allVariable || magicVariable);
+    }
+
+    private static string FormatMitigationTotalPercent(double reduction, bool variable)
+    {
+        var clampedPercent = Math.Clamp(reduction, 0.0, 1.0) * 100.0;
+        return $"{clampedPercent:0.#}%{(variable ? "+" : string.Empty)}";
     }
 
     private void DrawInducedStatusesCell(IReadOnlyList<Plugin.InducedMitigationDisplay> inducedStatuses)
@@ -3843,7 +4133,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawWidgetPreviewBackground(opacity);
-            DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - Timer 04:53", "WidgetPreview");
+            DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - 04:53", "WidgetPreview");
         }
 
         ImGui.EndChild();
@@ -3856,6 +4146,29 @@ public sealed class RecapWindow : Window, IDisposable
         var position = ImGui.GetWindowPos();
         var size = ImGui.GetWindowSize();
         var end = position + size;
+        const float tileSize = 28.0f;
+        var darkTileColor = ImGui.GetColorU32(new Vector4(0.09f, 0.10f, 0.12f, 1.0f));
+        var lightTileColor = ImGui.GetColorU32(new Vector4(0.18f, 0.18f, 0.16f, 1.0f));
+        var rowIndex = 0;
+
+        for (var y = position.Y; y < end.Y; y += tileSize)
+        {
+            var columnIndex = 0;
+            for (var x = position.X; x < end.X; x += tileSize)
+            {
+                var tileEnd = new Vector2(
+                    MathF.Min(x + tileSize, end.X),
+                    MathF.Min(y + tileSize, end.Y));
+                drawList.AddRectFilled(
+                    new Vector2(x, y),
+                    tileEnd,
+                    ((rowIndex + columnIndex) & 1) == 0 ? darkTileColor : lightTileColor);
+                columnIndex++;
+            }
+
+            rowIndex++;
+        }
+
         drawList.AddRectFilled(position, end, ImGui.GetColorU32(new Vector4(0.06f, 0.06f, 0.06f, opacity)), 4.0f);
     }
 
@@ -4846,6 +5159,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.111");
+        ImGui.TextDisabled("Testing review, widget, and mitigation polish.");
+        DrawBreathingGoldBullet("Mitigation now shows a real Mit total under the active table. FFXIV stacks those reductions multiplicatively, so Better Deaths finally does the painful math instead of making you piece the total together by hand.");
+        DrawWrappedBullet("Split physical/magic mitigation rows now grow vertically in Mit Type and Mit%, so Feint/Addle-style values stop disappearing in narrower windows.");
+        DrawWrappedBullet("Death timeline multi-cause rows now keep row selection separate from the disclosure arrow: the arrow expands, while the cause text and expanded lines open that death's details.");
+        DrawWrappedBullet("Expanded timeline rows now carry the same hover and click brightness across the full grown row.");
+        DrawWrappedBullet("Recorded pull subtitles now show only the local reset/capture time, and Review stops duplicating a saved last pull in Now while the widget still keeps that quick last-pull view.");
+        DrawWrappedBullet("Current pull widget now uses the newer UI, and removes redundant wording.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.110");
         ImGui.TextDisabled("Timeline arrow polish.");
         DrawWrappedBullet("Multi-cause timeline rows use the original disclosure arrow shape again: right when closed, down when open.");
