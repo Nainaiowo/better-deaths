@@ -63,7 +63,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool PullBrowserCollapsed { get; set; }
 
-    public float PullBrowserWidth { get; set; } = 340.0f;
+    public float PullBrowserWidth { get; set; } = 300.0f;
 
     public bool ShowDebugTab { get; set; }
 

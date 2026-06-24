@@ -740,18 +740,6 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
-    public void SetPullBrowserWidth(float width)
-    {
-        var pullBrowserWidth = Math.Clamp(width, 340.0f, 460.0f);
-        if (Math.Abs(Configuration.PullBrowserWidth - pullBrowserWidth) < 0.5f)
-        {
-            return;
-        }
-
-        Configuration.PullBrowserWidth = pullBrowserWidth;
-        SaveConfiguration();
-    }
-
     public void SetShowDebugTab(bool show)
     {
         if (Configuration.ShowDebugTab == show)
@@ -1060,10 +1048,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 : Configuration.CurrentPullWidgetBackgroundOpacity,
             CurrentPullWidgetMinBackgroundOpacity,
             CurrentPullWidgetMaxBackgroundOpacity);
-        var pullBrowserWidth = Math.Clamp(
-            Configuration.PullBrowserWidth <= 0.0f ? 340.0f : Configuration.PullBrowserWidth,
-            340.0f,
-            460.0f);
+        const float pullBrowserWidth = 300.0f;
         var recentEventSeconds = Math.Clamp(Configuration.RecentEventSeconds, 5, 60);
         var deathCauseSeconds = Math.Clamp(Configuration.DeathCauseSeconds, 5, 60);
         var maxRecordedPulls = Math.Clamp(Configuration.MaxRecordedPulls, 1, 100);
