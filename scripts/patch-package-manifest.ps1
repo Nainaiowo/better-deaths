@@ -6,7 +6,9 @@ param(
     [string] $OutputPath,
 
     [Parameter(Mandatory = $true)]
-    [string] $AssemblyName
+    [string] $AssemblyName,
+
+    [string] $RepoJsonUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,33 +41,48 @@ function Set-JsonProperty {
     $Target | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
 }
 
-function Update-Manifest {
+function Get-RepoDownloadCount {
     param(
-        [string] $SourceManifestPath,
-        [string] $TargetManifestPath
+        [string] $InternalName,
+        [string] $Url
     )
 
-    if (-not (Test-Path -LiteralPath $SourceManifestPath) -or -not (Test-Path -LiteralPath $TargetManifestPath)) {
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        return $null
+    }
+
+    try {
+        $repo = Invoke-RestMethod -Uri $Url -Headers @{ "Cache-Control" = "no-cache" } -Method Get
+        foreach ($plugin in @($repo)) {
+            if ($plugin.InternalName -eq $InternalName -and $null -ne $plugin.DownloadCount) {
+                return [int] $plugin.DownloadCount
+            }
+        }
+    }
+    catch {
+        Write-Warning "Could not read DownloadCount from $Url`: $($_.Exception.Message)"
+    }
+
+    return $null
+}
+
+function Update-Manifest {
+    param(
+        [string] $TargetManifestPath,
+        [Nullable[int]] $DownloadCount
+    )
+
+    if (-not (Test-Path -LiteralPath $TargetManifestPath)) {
         return $false
     }
 
-    $source = Get-Content -Raw -LiteralPath $SourceManifestPath | ConvertFrom-Json
     $target = Get-Content -Raw -LiteralPath $TargetManifestPath | ConvertFrom-Json
 
-    $copied = $false
-    foreach ($propertyName in @("DownloadCount")) {
-        $property = $source.PSObject.Properties[$propertyName]
-        if ($null -eq $property) {
-            continue
-        }
-
-        Set-JsonProperty -Target $target -Name $propertyName -Value $property.Value
-        $copied = $true
-    }
-
-    if (-not $copied) {
+    if ($null -eq $DownloadCount) {
         return $false
     }
+
+    Set-JsonProperty -Target $target -Name "DownloadCount" -Value $DownloadCount
 
     $json = ConvertTo-Json -InputObject $target -Depth 20
     [System.IO.File]::WriteAllText($TargetManifestPath, $json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
@@ -74,10 +91,17 @@ function Update-Manifest {
 
 $projectFullPath = ConvertTo-AbsolutePath -BasePath (Get-Location).Path -Path $ProjectDir
 $outputFullPath = ConvertTo-AbsolutePath -BasePath $projectFullPath -Path $OutputPath
-$sourceManifestPath = Join-Path $projectFullPath "$AssemblyName.json"
 $generatedManifestPath = Join-Path $outputFullPath "$AssemblyName.json"
+$downloadCount = Get-RepoDownloadCount -InternalName $AssemblyName -Url $RepoJsonUrl
 
-$updatedManifest = Update-Manifest -SourceManifestPath $sourceManifestPath -TargetManifestPath $generatedManifestPath
+if ($null -eq $downloadCount) {
+    Write-Warning "DownloadCount unavailable for $AssemblyName; package manifest will keep its generated value."
+}
+else {
+    Write-Host "Using DownloadCount $downloadCount from $RepoJsonUrl"
+}
+
+$updatedManifest = Update-Manifest -TargetManifestPath $generatedManifestPath -DownloadCount $downloadCount
 if ($updatedManifest) {
     Write-Host "Patched $generatedManifestPath"
 }
@@ -92,7 +116,7 @@ New-Item -ItemType Directory -Path $tempPath | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempPath -Force
     $zipManifestPath = Join-Path $tempPath "$AssemblyName.json"
-    $updatedZipManifest = Update-Manifest -SourceManifestPath $sourceManifestPath -TargetManifestPath $zipManifestPath
+    $updatedZipManifest = Update-Manifest -TargetManifestPath $zipManifestPath -DownloadCount $downloadCount
     if (-not $updatedZipManifest) {
         return
     }
