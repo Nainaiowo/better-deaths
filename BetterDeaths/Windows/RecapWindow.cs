@@ -62,7 +62,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.112";
+    private const string CurrentChangelogVersion = "0.1.0.113";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2761,8 +2761,6 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawBetterDeathsInformationContent(PartyDeathRecord death, string idSuffix)
     {
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        ImGui.TextColored(LeadUpGoldColor, "Captured lead-up data. HP is sampled while alive; action rows show captured hits/events at their actual timestamps.");
-        ImGui.TextColored(LeadUpGoldColor, "Mitigation/debuff cells show relevant player defensives, shields, encounter debuffs, and boss-targeted mitigations when tied to a captured event.");
         ImGui.TextDisabled("Older saved pulls may show less detail if that data was not captured at the time.");
         DrawHpHistory(death, idSuffix);
         ImGui.Separator();
@@ -2809,7 +2807,7 @@ public sealed class RecapWindow : Window, IDisposable
                 row.MaxHp,
                 $"HpHistoryBar{idSuffix}{row.SeenAtUtc.Ticks}{i}",
                 row.Event is not null ? GetIncomingDamageAmount(row.Event) : null,
-                tooltipDetail: row.HpTooltipDetail);
+                valueOnlyTooltip: true);
             ImGui.TableNextColumn();
             DrawTimelineEventCell(row.Event);
             ImGui.TableNextColumn();
@@ -2852,7 +2850,7 @@ public sealed class RecapWindow : Window, IDisposable
                     pendingDerivedHp,
                     displayAnchorSeenAtUtc,
                     GetActiveSourceMitigationStatuses(death, snapshot.SeenAtUtc));
-                rows.Add(timelineRow);
+                AddLeadUpTimelineRow(rows, timelineRow);
 
                 if (pendingDerivedHp is not null &&
                     snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
@@ -2866,7 +2864,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             var combatEvent = events[eventIndex++];
             var hpDisplay = GetEventHpDisplay(death, combatEvent);
-            rows.Add(new LeadUpTimelineRow(
+            AddLeadUpTimelineRow(rows, new LeadUpTimelineRow(
                 combatEvent.SeenAtUtc,
                 combatEvent.PullElapsedSeconds,
                 hpDisplay.CurrentHp,
@@ -2882,6 +2880,30 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return rows;
+    }
+
+    private static void AddLeadUpTimelineRow(List<LeadUpTimelineRow> rows, LeadUpTimelineRow row)
+    {
+        if (rows.Count > 0 && CanMergeLeadUpTimelineRow(rows[^1], row))
+        {
+            rows[^1] = row;
+            return;
+        }
+
+        rows.Add(row);
+    }
+
+    private static bool CanMergeLeadUpTimelineRow(LeadUpTimelineRow previous, LeadUpTimelineRow next)
+    {
+        return previous.Event is null &&
+            next.Event is null &&
+            previous.CurrentHp == next.CurrentHp &&
+            previous.ShieldHp == next.ShieldHp &&
+            previous.MaxHp == next.MaxHp &&
+            string.Equals(previous.HpTooltipDetail, next.HpTooltipDetail, StringComparison.Ordinal) &&
+            StatusListsMatchForHistoryMerge(previous.Statuses, next.Statuses) &&
+            StatusListsMatchForHistoryMerge(previous.NearbyHpStatuses, next.NearbyHpStatuses) &&
+            StatusListsMatchForHistoryMerge(previous.SourceStatuses, next.SourceStatuses);
     }
 
     private static LeadUpTimelineRow CreateHpSampleTimelineRow(
@@ -3702,7 +3724,8 @@ public sealed class RecapWindow : Window, IDisposable
     {
         DrawCombinedMitigationDebuffCell(
             row.Statuses.Concat(row.NearbyHpStatuses),
-            row.SourceStatuses);
+            row.SourceStatuses,
+            maxStatusesPerRow: 4);
     }
 
     private IReadOnlyList<StatusSnapshot> GetMergedPlayerStatusesForEvent(
@@ -3715,7 +3738,8 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCombinedMitigationDebuffCell(
         IEnumerable<StatusSnapshot> playerStatusSource,
-        IEnumerable<StatusSnapshot> bossStatusSource)
+        IEnumerable<StatusSnapshot> bossStatusSource,
+        int? maxStatusesPerRow = null)
     {
         var statuses = GetCombinedMitigationDebuffStatuses(playerStatusSource, bossStatusSource, out var bossStatusKeys);
 
@@ -3724,7 +3748,8 @@ public sealed class RecapWindow : Window, IDisposable
             true,
             status => bossStatusKeys.Contains(GetStatusKey(status)) ||
                 Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
-            true);
+            true,
+            maxStatusesPerRow);
     }
 
     private IReadOnlyList<StatusSnapshot> GetLeadUpSummaryMitigationDebuffStatuses(
@@ -3873,7 +3898,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> statuses,
         bool showTenthsOverTenSeconds = false,
         Func<StatusSnapshot, bool>? shouldShowTimer = null,
-        bool centerContent = false)
+        bool centerContent = false,
+        int? maxStatusesPerRow = null)
     {
         if (statuses.Count == 0)
         {
@@ -3910,7 +3936,8 @@ public sealed class RecapWindow : Window, IDisposable
         {
             var showTimer = ShouldShowStatusTimer(status, shouldShowTimer);
             var stackWidth = GetStatusIconStackWidth(status, configuration.StatusIconSize, showTenthsOverTenSeconds, showTimer);
-            if (currentRow.Count > 0 && currentRowWidth + spacing + stackWidth > availableWidth)
+            var reachedRowLimit = maxStatusesPerRow.HasValue && currentRow.Count >= maxStatusesPerRow.Value;
+            if (currentRow.Count > 0 && (reachedRowLimit || currentRowWidth + spacing + stackWidth > availableWidth))
             {
                 rows.Add(currentRow);
                 rowWidths.Add(currentRowWidth);
@@ -4622,61 +4649,93 @@ public sealed class RecapWindow : Window, IDisposable
 
     private bool MatchesDebugStatusSnapshot(DebugStatusSnapshot snapshot)
     {
-        return MatchesDebugText(
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
             snapshot.MemberName,
             snapshot.ClassJobName,
             snapshot.PartyIndex.ToString(),
-            FormatDebugStatusSource(snapshot.ClassJobId),
-            string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.Id} {FormatDebugStatusSource(status.SourceId)}")));
+            FormatDebugStatusSource(snapshot.ClassJobId)) ||
+            MatchesDebugTextFilter(
+                filter,
+                string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.Id} {FormatDebugStatusSource(status.SourceId)}")));
     }
 
     private bool MatchesDebugEffectResultSnapshot(DebugEffectResultSnapshot snapshot)
     {
-        return MatchesDebugText(
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
             snapshot.TargetName,
             FormatDebugStatusSource(snapshot.TargetId),
             FormatDebugStatusSource(snapshot.ActorId),
-            snapshot.RelatedActionSequence.ToString(),
-            string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.EffectId} {status.SourceName} {FormatDebugStatusSource(status.SourceActorId)}")));
+            snapshot.RelatedActionSequence.ToString(CultureInfo.InvariantCulture)) ||
+            MatchesDebugTextFilter(
+                filter,
+                string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.EffectId} {status.SourceName} {FormatDebugStatusSource(status.SourceActorId)}")));
     }
 
     private bool MatchesDebugActorControlEvent(DebugActorControlEvent entry)
     {
-        return MatchesDebugActorControlCategory(entry) &&
-            MatchesDebugText(
-                entry.EntityName,
-                entry.TargetName,
-                entry.CategoryName,
-                entry.Category.ToString(),
-                FormatDebugStatusSource(entry.EntityId),
-                FormatDebugActorControlTarget(entry.TargetId),
-                entry.Param1.ToString(),
-                entry.Param2.ToString(),
-                entry.Param3.ToString(),
-                entry.Param4.ToString(),
-                entry.Param5.ToString(),
-                entry.Param6.ToString(),
-                entry.Param7.ToString(),
-                entry.Param8.ToString(),
-                entry.Param9.ToString());
+        if (!MatchesDebugActorControlCategory(entry))
+        {
+            return false;
+        }
+
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            entry.EntityName,
+            entry.TargetName,
+            entry.CategoryName,
+            entry.Category.ToString(CultureInfo.InvariantCulture),
+            FormatDebugStatusSource(entry.EntityId),
+            FormatDebugActorControlTarget(entry.TargetId),
+            entry.Param1.ToString(CultureInfo.InvariantCulture),
+            entry.Param2.ToString(CultureInfo.InvariantCulture),
+            entry.Param3.ToString(CultureInfo.InvariantCulture),
+            entry.Param4.ToString(CultureInfo.InvariantCulture),
+            entry.Param5.ToString(CultureInfo.InvariantCulture),
+            entry.Param6.ToString(CultureInfo.InvariantCulture),
+            entry.Param7.ToString(CultureInfo.InvariantCulture),
+            entry.Param8.ToString(CultureInfo.InvariantCulture),
+            entry.Param9.ToString(CultureInfo.InvariantCulture));
     }
 
     private bool MatchesDebugLogEntry(DebugLogEntry entry)
     {
-        return MatchesDebugText(
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
             entry.SeenAtUtc.ToString("HH:mm:ss"),
             FormatCombatTimer(entry.PullElapsedSeconds),
             entry.Message);
     }
 
-    private bool MatchesDebugText(params string?[] values)
+    private bool TryGetDebugTextFilter(out string filter)
     {
-        var filter = debugTextFilter.Trim();
-        if (string.IsNullOrWhiteSpace(filter))
-        {
-            return true;
-        }
+        filter = debugTextFilter.Trim();
+        return !string.IsNullOrWhiteSpace(filter);
+    }
 
+    private static bool MatchesDebugTextFilter(string filter, params string?[] values)
+    {
         return values.Any(value =>
             !string.IsNullOrWhiteSpace(value) &&
             value.Contains(filter, StringComparison.OrdinalIgnoreCase));
@@ -5352,6 +5411,17 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.113");
+        ImGui.TextDisabled("Testing cleanup and resource pass.");
+        DrawBreathingGoldBullet("10 second HP history is quieter and easier to read.");
+        DrawWrappedBullet("Removed extra lead-up explanation text.");
+        DrawWrappedBullet("HP history mouseovers now only show HP plus shield over max HP.");
+        DrawWrappedBullet("Mitigation and debuff icons in HP history now wrap at 4 per line.");
+        DrawWrappedBullet("Repeated HP-only rows now collapse when the captured state is the same.");
+        DrawWrappedBullet("Runtime capture paths now do less avoidable work without changing tracked-player capture.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.112");
         ImGui.TextDisabled("Testing review, widget, mitigation, and recap polish.");
         DrawBreathingGoldBullet("Boss-targeted debuffs now stay visible through the lead-up while they are still active.");
@@ -6507,7 +6577,7 @@ public sealed class RecapWindow : Window, IDisposable
         return total == 0 ? null : total;
     }
 
-    private static void DrawHpShieldBar(uint currentHp, uint shieldHp, uint maxHp, string id, ulong? incomingDamage = null, bool showOverkillLine = false, bool centerLabel = false, string? tooltipDetail = null)
+    private static void DrawHpShieldBar(uint currentHp, uint shieldHp, uint maxHp, string id, ulong? incomingDamage = null, bool showOverkillLine = false, bool centerLabel = false, string? tooltipDetail = null, bool valueOnlyTooltip = false)
     {
         if (maxHp == 0)
         {
@@ -6574,13 +6644,15 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            var tooltip = FormatHp(currentHp, shieldHp, maxHp);
-            if (!string.IsNullOrWhiteSpace(tooltipDetail))
+            var tooltip = valueOnlyTooltip
+                ? FormatHpValueOnly(currentHp, shieldHp, maxHp)
+                : FormatHp(currentHp, shieldHp, maxHp);
+            if (!valueOnlyTooltip && !string.IsNullOrWhiteSpace(tooltipDetail))
             {
                 tooltip += $"\n{tooltipDetail}";
             }
 
-            if (clearlyUnsurvivable)
+            if (!valueOnlyTooltip && clearlyUnsurvivable)
             {
                 tooltip += "\nRed text means a likely failed mechanic or vastly insufficient mitigation related death.";
             }
@@ -6712,6 +6784,13 @@ public sealed class RecapWindow : Window, IDisposable
         return maxHp == 0
             ? $"{currentHp:N0} + {shieldHp:N0} shield"
             : $"{currentHp:N0} + {shieldHp:N0} shield / {maxHp:N0} ({(double)effectiveHp / maxHp:P0})";
+    }
+
+    private static string FormatHpValueOnly(uint currentHp, uint shieldHp, uint maxHp)
+    {
+        return maxHp == 0
+            ? $"{currentHp:N0} + {shieldHp:N0} shield"
+            : $"{currentHp:N0} + {shieldHp:N0} shield / {maxHp:N0}";
     }
 
     private static string FormatEventFlags(CombatEventRecord combatEvent)

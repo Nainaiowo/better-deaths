@@ -2047,31 +2047,35 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawCombatQueues(DateTime now)
     {
         var actionPackets = DrainRawActionEffectPackets(now);
-        foreach (var packet in actionPackets.OrderBy(packet => packet.Sequence))
+        actionPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
+        foreach (var packet in actionPackets)
         {
             ResolveRawActionEffectPacket(packet);
         }
 
         var combatLogMessages = DrainRawCombatLogMessages(now);
-        foreach (var message in combatLogMessages.OrderBy(message => message.Sequence))
+        combatLogMessages.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
+        foreach (var message in combatLogMessages)
         {
             ResolveRawCombatLogMessage(message);
         }
 
         var effectResultPackets = DrainRawEffectResultPackets(now);
-        foreach (var packet in effectResultPackets.OrderBy(packet => packet.Sequence))
+        effectResultPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
+        foreach (var packet in effectResultPackets)
         {
             ResolveRawEffectResultPacket(packet);
         }
 
         var actorControlPackets = DrainRawActorControlPackets(now);
-        foreach (var packet in actorControlPackets.OrderBy(packet => packet.Sequence))
+        actorControlPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
+        foreach (var packet in actorControlPackets)
         {
             ResolveRawActorControlPacket(packet);
         }
     }
 
-    private IReadOnlyList<RawActionEffectPacket> DrainRawActionEffectPackets(DateTime now)
+    private List<RawActionEffectPacket> DrainRawActionEffectPackets(DateTime now)
     {
         lock (rawCombatQueueLock)
         {
@@ -2092,7 +2096,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private IReadOnlyList<RawCombatLogMessage> DrainRawCombatLogMessages(DateTime now)
+    private List<RawCombatLogMessage> DrainRawCombatLogMessages(DateTime now)
     {
         lock (rawCombatQueueLock)
         {
@@ -2113,7 +2117,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private IReadOnlyList<RawEffectResultPacket> DrainRawEffectResultPackets(DateTime now)
+    private List<RawEffectResultPacket> DrainRawEffectResultPackets(DateTime now)
     {
         lock (rawCombatQueueLock)
         {
@@ -2134,7 +2138,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private IReadOnlyList<RawActorControlPacket> DrainRawActorControlPackets(DateTime now)
+    private List<RawActorControlPacket> DrainRawActorControlPackets(DateTime now)
     {
         lock (rawCombatQueueLock)
         {
@@ -2157,10 +2161,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
-        var actionName = GetActionName(packet.ActionId);
-        var actionIconId = GetActionIconId(packet.ActionId);
-        var sourceName = GetEntityDisplayName(packet.CasterEntityId);
-        var sourceStatuses = GetBossMitigationStatuses(BuildSourceStatusSnapshots(packet.CasterEntityId));
+        string? actionName = null;
+        uint? actionIconId = null;
+        string? sourceName = null;
+        IReadOnlyList<StatusSnapshot>? sourceStatuses = null;
         var foundRelevantEffect = false;
         var trackedSourceStatuses = false;
 
@@ -2193,9 +2197,13 @@ public sealed partial class Plugin : IDalamudPlugin
 
                 foundRelevantEffect = true;
                 EnsurePullStarted(packet.SeenAtUtc);
+                var resolvedActionName = actionName ??= GetActionName(packet.ActionId);
+                var resolvedActionIconId = actionIconId ??= GetActionIconId(packet.ActionId);
+                var resolvedSourceName = sourceName ??= GetEntityDisplayName(packet.CasterEntityId);
+                var resolvedSourceStatuses = sourceStatuses ??= GetBossMitigationStatuses(BuildSourceStatusSnapshots(packet.CasterEntityId));
                 if (!trackedSourceStatuses)
                 {
-                    TrackRecentSourceMitigationSnapshot(packet.CasterEntityId, sourceName, packet.SeenAtUtc, sourceStatuses);
+                    TrackRecentSourceMitigationSnapshot(packet.CasterEntityId, resolvedSourceName, packet.SeenAtUtc, resolvedSourceStatuses);
                     trackedSourceStatuses = true;
                 }
 
@@ -2213,10 +2221,10 @@ public sealed partial class Plugin : IDalamudPlugin
                     member.MemberName,
                     member.PartyIndex,
                     packet.CasterEntityId,
-                    sourceName,
+                    resolvedSourceName,
                     packet.ActionId,
-                    actionName,
-                    actionIconId,
+                    resolvedActionName,
+                    resolvedActionIconId,
                     kind.Value,
                     amount,
                     eventCurrentHp,
@@ -2229,7 +2237,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     effect.Type == (byte)ActionEffectKind.ParriedDamage,
                     BuildEffectDetail((ActionEffectKind)effect.Type),
                     playerStatuses,
-                    sourceStatuses)
+                    resolvedSourceStatuses)
                 {
                     EventIdentity = $"{packet.Sequence}:{target.TargetIndex}:{effect.EffectIndex}:{member.MemberKey}:{packet.ActionId}",
                     EventOrdinal = eventOrdinal,
@@ -2277,6 +2285,14 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
     {
         var member = FindCurrentMemberByEffectResultPacket(packet);
+        var shouldRecordDebug = Configuration.DebugLogEnabled &&
+            !debugCaptureFrozen &&
+            (member is not null || Configuration.CaptureOtherDeaths);
+        if (member is null && !shouldRecordDebug)
+        {
+            return;
+        }
+
         var packetStatuses = BuildEffectResultStatusSnapshots(packet);
         var mergedStatuses = member is null
             ? packetStatuses
@@ -2302,12 +2318,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
         }
 
-        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
-        {
-            return;
-        }
-
-        if (member is null && !Configuration.CaptureOtherDeaths)
+        if (!shouldRecordDebug)
         {
             return;
         }
@@ -2452,12 +2463,24 @@ public sealed partial class Plugin : IDalamudPlugin
             return null;
         }
 
-        return history
-            .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
-            .Where(snapshot => seenAtUtc - snapshot.SeenAtUtc <= maxAge)
-            .Where(snapshot => snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0)
-            .OrderBy(snapshot => snapshot.SeenAtUtc)
-            .LastOrDefault();
+        HpHistorySnapshot? latest = null;
+        for (var index = history.Count - 1; index >= 0; index--)
+        {
+            var snapshot = history[index];
+            if (snapshot.SeenAtUtc > seenAtUtc ||
+                seenAtUtc - snapshot.SeenAtUtc > maxAge ||
+                snapshot.CurrentHp == 0 && snapshot.ShieldHp == 0)
+            {
+                continue;
+            }
+
+            if (latest is null || snapshot.SeenAtUtc > latest.SeenAtUtc)
+            {
+                latest = snapshot;
+            }
+        }
+
+        return latest;
     }
 
     private IReadOnlyList<StatusSnapshot> GetBestKnownStatuses(PartyMemberSnapshot member, DateTime seenAtUtc)
@@ -4286,7 +4309,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static bool IsDefensiveStatus(StatusSnapshot status)
     {
-        return ContainsExact(status.Name, DefensiveStatusNames);
+        return DefensiveStatusNames.Contains(status.Name);
     }
 
     private static bool IsPlayerDebuffStatus(StatusSnapshot status)
@@ -4303,11 +4326,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private static bool ContainsAny(string value, IEnumerable<string> fragments)
     {
         return fragments.Any(fragment => value.Contains(fragment, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ContainsExact(string value, IEnumerable<string> names)
-    {
-        return names.Any(name => string.Equals(value, name, StringComparison.OrdinalIgnoreCase));
     }
 
     private string GetActionName(uint actionId)
