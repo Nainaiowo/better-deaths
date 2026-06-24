@@ -27,6 +27,7 @@ public sealed class RecapWindow : Window, IDisposable
     private string debugTextFilter = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
+    private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
     private MainPage currentMainPage = MainPage.Review;
@@ -59,7 +60,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.107";
+    private const string CurrentChangelogVersion = "0.1.0.108";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1133,6 +1134,7 @@ public sealed class RecapWindow : Window, IDisposable
             selected,
             ImGuiSelectableFlags.SpanAllColumns,
             new Vector2(0.0f, rowHeight));
+        ImGui.SetItemAllowOverlap();
 
         var textSize = ImGui.CalcTextSize(text);
         var textPosition = new Vector2(
@@ -1823,7 +1825,7 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private static void DrawTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
+    private void DrawTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
     {
         if (causeEvents.Count == 0)
         {
@@ -1844,7 +1846,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static void DrawCollapsedTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
+    private void DrawCollapsedTimelineCauseText(IReadOnlyList<CombatEventRecord> causeEvents, string id)
     {
         var summary = BuildTimelineCauseSummary(causeEvents);
         var textColor = GetWidgetCauseColor(causeEvents);
@@ -1853,52 +1855,58 @@ public sealed class RecapWindow : Window, IDisposable
         var causeLines = causeEvents
             .Select(FormatTimelineCauseLine)
             .ToList();
-        var maxCauseLineWidth = causeLines
-            .Select(line => ImGui.CalcTextSize(line).X)
-            .DefaultIfEmpty(0.0f)
-            .Max();
-        var comboWidth = MathF.Min(
-            availableWidth,
-            ImGui.CalcTextSize(summary).X + (style.FramePadding.X * 2.0f) + ImGui.GetFrameHeight());
-        var popupWidth = MathF.Min(
-            availableWidth,
-            MathF.Max(comboWidth, maxCauseLineWidth + (style.WindowPadding.X * 2.0f)));
-        CenterNextItem(comboWidth);
-        ImGui.SetNextItemWidth(comboWidth);
-        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0.0f), ImGuiCond.Appearing);
-        ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        ImGui.PushStyleColor(ImGuiCol.FrameBg, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.Header, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.HeaderActive, Vector4.Zero);
-        var expanded = ImGui.BeginCombo($"##TimelineCause{id}", summary);
+        var isExpanded = expandedTimelineCauseRows.Contains(id);
+        var arrowText = isExpanded ? "v" : "<";
+        var arrowTextSize = ImGui.CalcTextSize(arrowText);
+        var summaryTextSize = ImGui.CalcTextSize(summary);
+        var controlWidth = MathF.Max(0.0f, availableWidth);
+        var controlSize = new Vector2(controlWidth, MathF.Max(ImGui.GetFrameHeight(), summaryTextSize.Y));
+
+        CenterNextItem(controlWidth);
+        var controlPosition = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##TimelineCause{id}", controlSize);
+        var drawList = ImGui.GetWindowDrawList();
+        var textY = controlPosition.Y + MathF.Max(0.0f, (controlSize.Y - summaryTextSize.Y) * 0.5f);
+        var arrowPosition = new Vector2(controlPosition.X + style.FramePadding.X, textY);
+        var summaryMinX = arrowPosition.X + arrowTextSize.X + style.ItemInnerSpacing.X;
+        var summaryPosition = new Vector2(
+            MathF.Max(summaryMinX, controlPosition.X + MathF.Max(0.0f, (controlSize.X - summaryTextSize.X) * 0.5f)),
+            textY);
+        drawList.AddText(arrowPosition, ImGui.GetColorU32(textColor), arrowText);
+        drawList.AddText(summaryPosition, ImGui.GetColorU32(textColor), summary);
+
+        if (clicked)
+        {
+            if (isExpanded)
+            {
+                expandedTimelineCauseRows.Remove(id);
+                isExpanded = false;
+            }
+            else
+            {
+                expandedTimelineCauseRows.Add(id);
+                isExpanded = true;
+            }
+        }
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Open to show each likely cause.");
+            ImGui.SetTooltip(isExpanded ? "Collapse likely causes." : "Expand likely causes.");
         }
 
-        if (!expanded)
+        if (!isExpanded)
         {
-            ImGui.PopStyleColor(7);
             return;
         }
 
+        ImGui.Dummy(new Vector2(0.0f, MathF.Max(1.0f, style.ItemInnerSpacing.Y * 0.5f)));
         for (var causeIndex = 0; causeIndex < causeEvents.Count; causeIndex++)
         {
             var causeEvent = causeEvents[causeIndex];
             var line = causeLines[causeIndex];
-            CenterNextItem(ImGui.CalcTextSize(line).X);
-            ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(causeEvent.Kind));
-            ImGui.Selectable($"{line}##TimelineCause{id}{causeIndex}", false);
-            ImGui.PopStyleColor();
+            DrawCenteredOrWrappedText(line, GetEventColor(causeEvent.Kind));
             DrawLikelyAutoAttackTooltip(causeEvent);
         }
-
-        ImGui.EndCombo();
-        ImGui.PopStyleColor(7);
     }
 
     private static string BuildTimelineCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -4826,6 +4834,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.108");
+        ImGui.TextDisabled("Timeline cause rows expand inline.");
+        DrawWrappedBullet("Multi-cause death timeline rows now expand in place instead of opening a floating popup.");
+        DrawWrappedBullet("The toggle is transparent again, with the arrow back on the left where it belongs.");
+        DrawWrappedBullet("Small UI details hurt when they are wrong. This should feel calmer and clearer when the pull already did enough damage.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.107");
         ImGui.TextDisabled("Timeline cause dropdown polish.");
         DrawWrappedBullet("Multi-cause death timeline rows now open as actual dropdowns instead of pretending to be one.");
