@@ -60,7 +60,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.108";
+    private const string CurrentChangelogVersion = "0.1.0.109";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -268,12 +268,6 @@ public sealed class RecapWindow : Window, IDisposable
         currentMainPage = target.Source == DeathSelectionSource.Example
             ? MainPage.Example
             : MainPage.Review;
-        if (target.Source == DeathSelectionSource.Recorded &&
-            target.RecordedPullTerritoryId is { } territoryId)
-        {
-            recordedPullDutyFilter = territoryId;
-        }
-
         clearPendingDeathSelection = false;
         IsOpen = true;
         return true;
@@ -4834,6 +4828,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.109");
+        ImGui.TextDisabled("Pulls starts tucked away.");
+        DrawWrappedBullet("Review now starts with the Pulls drawer collapsed, so the timeline and selected death have room first.");
+        DrawWrappedBullet("The duty filter stays on All duties by default unless you choose a different duty yourself.");
+        DrawWrappedBullet("It is a small default, but it matters. The window should get out of the way before the pull has even finished hurting.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.108");
         ImGui.TextDisabled("Timeline cause rows expand inline.");
         DrawWrappedBullet("Multi-cause death timeline rows now expand in place instead of opening a floating popup.");

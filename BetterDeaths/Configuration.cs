@@ -39,7 +39,7 @@ public enum ClockDisplayMode
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     public bool ShowWindow { get; set; } = true;
 
@@ -61,7 +61,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public ClockDisplayMode ClockDisplayMode { get; set; } = ClockDisplayMode.TwentyFourHour;
 
-    public bool PullBrowserCollapsed { get; set; }
+    public bool PullBrowserCollapsed { get; set; } = true;
 
     public float PullBrowserWidth { get; set; } = 300.0f;
 

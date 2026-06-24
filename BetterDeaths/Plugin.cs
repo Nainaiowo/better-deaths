@@ -56,6 +56,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
     private const int RecordedPullHistorySchemaVersion = 2;
+    private const int CurrentConfigurationVersion = 2;
     private const int RecordedPullHistoryRollingBackupCount = 5;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
     private const ushort ChatGreenColorKey = 45;
@@ -1037,6 +1038,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private void NormalizeUserConfiguration()
     {
         var changed = false;
+        var loadedConfigurationVersion = Configuration.Version;
         var iconSize = Math.Clamp(MathF.Max(Configuration.ActionIconSize, Configuration.StatusIconSize), 12.0f, 48.0f);
         var widgetIconSize = Math.Clamp(
             Configuration.WidgetIconSize <= 0.0f ? 20.0f : Configuration.WidgetIconSize,
@@ -1083,6 +1085,12 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (loadedConfigurationVersion < 2)
+        {
+            Configuration.PullBrowserCollapsed = true;
+            changed = true;
+        }
+
         if (Configuration.RecentEventSeconds != recentEventSeconds)
         {
             Configuration.RecentEventSeconds = recentEventSeconds;
@@ -1116,6 +1124,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.DeathChatChannel))
         {
             Configuration.DeathChatChannel = DeathChatChannel.Party;
+            changed = true;
+        }
+
+        if (Configuration.Version != CurrentConfigurationVersion)
+        {
+            Configuration.Version = CurrentConfigurationVersion;
             changed = true;
         }
 
