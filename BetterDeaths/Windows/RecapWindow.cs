@@ -63,7 +63,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.117";
+    private const string CurrentChangelogVersion = "0.1.0.118";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2359,23 +2359,17 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawConciseWidgetMitIcons(IReadOnlyList<WidgetMitStatus> statuses)
     {
-        const int MaxVisibleStatuses = 3;
-
         var iconSize = GetWidgetIconSize();
         var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var visibleStatuses = statuses.Take(MaxVisibleStatuses).ToList();
+        var visibleCount = GetVisibleWidgetMitIconCount(
+            statuses.Count,
+            iconSize,
+            spacing,
+            ImGui.GetContentRegionAvail().X);
+        var visibleStatuses = statuses.Take(visibleCount).ToList();
         var extraCount = Math.Max(0, statuses.Count - visibleStatuses.Count);
         var extraText = extraCount > 0 ? $"+{extraCount}" : string.Empty;
-        var groupWidth = visibleStatuses.Count * iconSize;
-        if (visibleStatuses.Count > 1)
-        {
-            groupWidth += (visibleStatuses.Count - 1) * spacing;
-        }
-
-        if (!string.IsNullOrEmpty(extraText))
-        {
-            groupWidth += (visibleStatuses.Count > 0 ? spacing : 0.0f) + ImGui.CalcTextSize(extraText).X;
-        }
+        var groupWidth = GetWidgetMitOverflowGroupWidth(visibleStatuses.Count, extraText, iconSize, spacing);
 
         CenterNextItem(groupWidth);
         ImGui.BeginGroup();
@@ -2399,15 +2393,123 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TextUnformatted(extraText);
             if (ImGui.IsItemHovered())
             {
-                var remainingLines = statuses
-                    .Skip(MaxVisibleStatuses)
-                    .Select(FormatWidgetMitTooltip)
-                    .ToList();
-                ImGui.SetTooltip(string.Join(Environment.NewLine, remainingLines));
+                DrawWidgetHiddenMitIconsTooltip(statuses.Skip(visibleStatuses.Count).ToList(), iconSize);
             }
         }
 
         ImGui.EndGroup();
+    }
+
+    private static int GetVisibleWidgetMitIconCount(int statusCount, float iconSize, float spacing, float availableWidth)
+    {
+        if (statusCount <= 0)
+        {
+            return 0;
+        }
+
+        var maxIconsWithoutOverflow = GetWidgetMitIconFitCount(statusCount, iconSize, spacing, availableWidth);
+        if (statusCount <= maxIconsWithoutOverflow)
+        {
+            return statusCount;
+        }
+
+        var startingVisibleCount = Math.Min(statusCount - 1, maxIconsWithoutOverflow);
+        for (var visibleCount = startingVisibleCount; visibleCount >= 0; visibleCount--)
+        {
+            var extraText = $"+{statusCount - visibleCount}";
+            var groupWidth = GetWidgetMitOverflowGroupWidth(visibleCount, extraText, iconSize, spacing);
+            if (groupWidth <= availableWidth || visibleCount == 0)
+            {
+                return visibleCount;
+            }
+        }
+
+        return 0;
+    }
+
+    private static int GetWidgetMitIconFitCount(int statusCount, float iconSize, float spacing, float availableWidth)
+    {
+        if (statusCount <= 0 || availableWidth < iconSize)
+        {
+            return 0;
+        }
+
+        return Math.Min(statusCount, (int)MathF.Floor((availableWidth + spacing) / (iconSize + spacing)));
+    }
+
+    private static float GetWidgetMitOverflowGroupWidth(int visibleCount, string extraText, float iconSize, float spacing)
+    {
+        var groupWidth = visibleCount * iconSize;
+        if (visibleCount > 1)
+        {
+            groupWidth += (visibleCount - 1) * spacing;
+        }
+
+        if (!string.IsNullOrEmpty(extraText))
+        {
+            groupWidth += (visibleCount > 0 ? spacing : 0.0f) + ImGui.CalcTextSize(extraText).X;
+        }
+
+        return groupWidth;
+    }
+
+    private static void DrawWidgetHiddenMitIconsTooltip(IReadOnlyList<WidgetMitStatus> statuses, float configuredIconSize)
+    {
+        if (statuses.Count == 0)
+        {
+            return;
+        }
+
+        var iconSize = Math.Clamp(configuredIconSize, 12.0f, 48.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var maxWidth = MathF.Max(iconSize, iconSize * 6.0f + spacing * 5.0f);
+        var rowWidth = 0.0f;
+
+        ImGui.BeginTooltip();
+        for (var statusIndex = 0; statusIndex < statuses.Count; statusIndex++)
+        {
+            var needsSameLine = rowWidth > 0.0f && rowWidth + spacing + iconSize <= maxWidth;
+            if (needsSameLine)
+            {
+                ImGui.SameLine();
+                rowWidth += spacing;
+            }
+            else
+            {
+                rowWidth = 0.0f;
+            }
+
+            DrawTooltipStatusIcon(statuses[statusIndex].Status.IconId, iconSize);
+            rowWidth += iconSize;
+        }
+
+        ImGui.EndTooltip();
+    }
+
+    private static void DrawTooltipStatusIcon(uint iconId, float iconSize)
+    {
+        if (iconId == 0)
+        {
+            ImGui.Dummy(new Vector2(iconSize));
+            return;
+        }
+
+        try
+        {
+            var texture = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(iconId));
+            var wrap = texture.GetWrapOrDefault();
+            if (wrap is not null)
+            {
+                ImGui.Image(wrap.Handle, new Vector2(iconSize));
+                return;
+            }
+        }
+        catch
+        {
+            // Fall through to the placeholder.
+        }
+
+        ImGui.Dummy(new Vector2(iconSize));
     }
 
     private void DrawWidgetMitIcon(WidgetMitStatus status, float iconSize)
@@ -4483,7 +4585,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.EndCombo();
         }
 
-        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only causes, and limits visible mitigation/debuff icons to three with a +x count.");
+        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only causes, and fits mitigation/debuff icons to available space with a +x count.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Widget preview");
@@ -4647,17 +4749,26 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
         ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
 
-        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
         {
-            ImGui.TextColored(NoticeBorderColor, "Hey! NaiLa here~");
+            ImGui.TextWrapped("Hiya! NaiLa here again!");
             ImGui.Spacing();
-            ImGui.TextWrapped("I just wanted to give a short message to the users that have been helping me with the development of this project. With this update, I've released a big change!");
+            ImGui.TextWrapped("The second and final major push is here: UI POLISH");
             ImGui.Spacing();
-            ImGui.TextWrapped("Up until now, for over 90 updates, we've been at the mercy of FFXIV snapshotting information. Dalamud and its API help a little bit, but in terms of having ACCURATE information available constantly for your recap use, I've done the best that I can.");
+            ImGui.TextWrapped("We've completely revamped the look and flow as we get ready for v1.0. I'm so proud of how far we've come, and I'm genuinely grateful for all the effort everyone has put into testing and giving me feedback.");
             ImGui.Spacing();
-            ImGui.TextWrapped("We now use real-time HP and death information. Tracking has improved considerably with these changes, and we should now have almost (if not exactly) FF Logs-level accuracy. This will be one of two major updates along the way toward an actual release to v1.0.");
+            ImGui.TextWrapped("Seeing this grow from a little idea into something people actually use and care about means more to me than I can really put into words.. Every bit of feedback, every bug report, and every tiny detail you all helped me chase down has made this feel less like something I've been building alone \u2665");
             ImGui.Spacing();
-            ImGui.TextColored(NoticeBorderColor, "I appreciate you all so much for your help and your continued feedback ♥ w ♥");
+            ImGui.TextWrapped("I'm happy to say that this project is likely nearing the end. Once we're all set and ready, Better Deaths should move more into maintenance as we go through future patches and expansions.");
+            ImGui.Spacing();
+            ImGui.TextWrapped("Currently on the docket, we have some remaining items that I want to add before I'm comfortable with a release.");
+            DrawWrappedBullet("The first being themes so you aren't stuck with the current color scheme. I'll try my best to add a variety, but no promises on deliverables.");
+            DrawWrappedBullet("Second, I want to go through and fix a lot of hard-coded values. Currently, we have some hard-coded values that we can change to be dynamically grabbed or resolved.");
+            ImGui.TextColored(NoticeBorderColor, "There's still a lot of work to be done, but I hope this UI refinement makes you all happy. It definitely is making me happy! Thank you all again so much for your hard work and for allowing me to do this for you \u2665");
+            ImGui.Spacing();
+            ImGui.TextColored(NoticeBorderColor, "This will be the final message that I send here. I appreciate every single one of you very much!");
+            ImGui.Spacing();
+            ImGui.TextColored(NoticeBorderColor, "Signing off with love and deep appreciation, NaiLa");
             ImGui.Spacing();
             ImGui.Separator();
             ImGui.Spacing();
@@ -5598,6 +5709,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.118");
+        ImGui.TextDisabled("Testing polish.");
+        DrawBreathingGoldBullet("Added the final UI polish acknowledgement message.");
+        DrawWrappedBullet("Widget Mits/Debuffs icons now fit the available space before showing +x.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.117");
         ImGui.TextDisabled("Testing widget polish.");
         DrawBreathingGoldBullet("Current pull widget text is indented while the table stays full width.");
@@ -5605,16 +5723,12 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
 
         ImGui.TextUnformatted("v0.1.0.116");
-        ImGui.TextDisabled("Testing widget polish.");
-        DrawBreathingGoldBullet("Current pull widget now fills the window without the inset border look.");
-        DrawWrappedBullet("Mits/Debuffs gets more room by taking space from Cause and Overkill.");
-        DrawWrappedBullet("Added a matching bottom-left resize indicator to the widget.");
+        ImGui.TextDisabled("Widget adjustments.");
 
         ImGui.Separator();
 
         ImGui.TextUnformatted("v0.1.0.115");
         ImGui.TextDisabled("Testing UI polish.");
-        DrawBreathingGoldBullet("Better Deaths background now matches the main review surface.");
         DrawWrappedBullet("10s lead-up timer hover now shows the exact timer.");
 
         ImGui.Separator();

@@ -39,7 +39,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string ShortCommandName = "/bd";
     private const string WidgetCommandName = "/betterdeathswidget";
     private const string ShortWidgetCommandName = "/bdwidget";
-    private const string ThankYouNoticeId = "live-capture-rework-thank-you-2026-06";
+    private const string ThankYouNoticeId = "ui-polish-thank-you-2026-06";
     private const string SharedRecapPrefix = "Recap:";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
     private const int RecentStatusHistorySeconds = 20;
