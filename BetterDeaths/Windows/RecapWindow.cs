@@ -63,7 +63,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.116";
+    private const string CurrentChangelogVersion = "0.1.0.117";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1469,22 +1469,24 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCurrentPullWidgetContent(IReadOnlyList<PartyDeathRecord> deaths, string title, string idSuffix)
     {
         using var widgetStyle = new ModernWidgetScope();
-        DrawModernWidgetTitle(title);
-        ImGui.Spacing();
+        using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
+        {
+            DrawModernWidgetTitle(title);
+            ImGui.Spacing();
 
-        if (deaths.Count == 0)
-        {
-            ImGui.TextDisabled("No deaths recorded this pull.");
-        }
-        else
-        {
-            if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+            if (deaths.Count == 0)
             {
-                DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
+                ImGui.TextDisabled("No deaths recorded this pull.");
+                return;
             }
-
-            ImGui.EndChild();
         }
+
+        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+        {
+            DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
+        }
+
+        ImGui.EndChild();
     }
 
     private static void DrawModernWidgetTitle(string title)
@@ -5596,6 +5598,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.117");
+        ImGui.TextDisabled("Testing widget polish.");
+        DrawBreathingGoldBullet("Current pull widget text is indented while the table stays full width.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.116");
         ImGui.TextDisabled("Testing widget polish.");
         DrawBreathingGoldBullet("Current pull widget now fills the window without the inset border look.");
