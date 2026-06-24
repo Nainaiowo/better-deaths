@@ -54,10 +54,11 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 ModernAccentColor = new(0.36f, 0.92f, 0.82f, 1.0f);
     private static readonly Vector4 ModernAccentSoftColor = new(0.10f, 0.34f, 0.31f, 0.92f);
     private static readonly Vector4 ModernMutedTextColor = new(0.68f, 0.72f, 0.76f, 1.0f);
+    private static readonly Vector4 ModernDividerColor = new(1.0f, 1.0f, 1.0f, 0.10f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.99";
+    private const string CurrentChangelogVersion = "0.1.0.100";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -163,8 +164,8 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 10.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12.0f, 10.0f));
-            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8.0f, 7.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(6.0f, 6.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(7.0f, 6.0f));
         }
 
         public void Dispose()
@@ -184,7 +185,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 9.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10.0f, 9.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 7.0f));
         }
 
         public void Dispose()
@@ -281,7 +282,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope();
-        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, true))
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false))
         {
             DrawModernHeader();
             DrawModernNavigation();
@@ -529,7 +530,6 @@ public sealed class RecapWindow : Window, IDisposable
         var selectedPull = GetSelectedReviewPull(pulls, selection.PullKey) ?? pulls[0];
         var selectedDeath = GetSelectedReviewDeath(selectedPull, selection);
         var available = ImGui.GetContentRegionAvail();
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
         var wideLayout = available.X >= (showPullBrowser ? 1120.0f : 860.0f);
 
         if (!wideLayout)
@@ -544,11 +544,34 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        DrawReviewPanel(
+            $"##{idPrefix}UnifiedReview",
+            available,
+            () => DrawWideUnifiedReviewWorkspace(
+                pulls,
+                selectedPull,
+                selectedDeath,
+                idPrefix,
+                showPullBrowser,
+                selection));
+    }
+
+    private void DrawWideUnifiedReviewWorkspace(
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewPull selectedPull,
+        PartyDeathRecord? selectedDeath,
+        string idPrefix,
+        bool showPullBrowser,
+        ReviewSelectionState selection)
+    {
+        var available = ImGui.GetContentRegionAvail();
+        const float dividerWidth = 1.0f;
         var leftWidth = showPullBrowser
             ? Math.Clamp(available.X * 0.24f, 270.0f, 380.0f)
             : 0.0f;
         var rightWidth = Math.Clamp(available.X * 0.34f, 430.0f, 640.0f);
-        var centerWidth = available.X - rightWidth - (showPullBrowser ? leftWidth + (spacing * 2.0f) : spacing);
+        var dividerTotalWidth = showPullBrowser ? dividerWidth * 2.0f : dividerWidth;
+        var centerWidth = available.X - rightWidth - (showPullBrowser ? leftWidth : 0.0f) - dividerTotalWidth;
         if (centerWidth < 360.0f)
         {
             DrawStackedReviewWorkspace(
@@ -563,25 +586,25 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (showPullBrowser)
         {
-            DrawReviewPanel(
+            DrawReviewPane(
                 $"##{idPrefix}PullBrowser",
                 new Vector2(leftWidth, available.Y),
                 () => DrawPullBrowser(
                     pulls,
                     idPrefix,
                     selection));
-            ImGui.SameLine();
+            DrawVerticalReviewDivider($"{idPrefix}PullBrowserDivider", available.Y);
         }
 
-        DrawReviewPanel(
+        DrawReviewPane(
             $"##{idPrefix}Timeline",
             new Vector2(centerWidth, available.Y),
             () => DrawSelectedPullTimeline(
                 selectedPull,
                 idPrefix,
                 selection));
-        ImGui.SameLine();
-        DrawReviewPanel(
+        DrawVerticalReviewDivider($"{idPrefix}TimelineDivider", available.Y);
+        DrawReviewPane(
             $"##{idPrefix}DeathDetails",
             new Vector2(rightWidth, available.Y),
             () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
@@ -596,28 +619,37 @@ public sealed class RecapWindow : Window, IDisposable
         ReviewSelectionState selection)
     {
         var available = ImGui.GetContentRegionAvail();
-        if (showPullBrowser)
-        {
-            DrawReviewPanel(
-                $"##{idPrefix}PullBrowserStacked",
-                new Vector2(0.0f, MathF.Min(260.0f, MathF.Max(170.0f, available.Y * 0.28f))),
-                () => DrawPullBrowser(
-                    pulls,
-                    idPrefix,
-                    selection));
-        }
+        DrawReviewPanel(
+            $"##{idPrefix}UnifiedReviewStacked",
+            available,
+            () =>
+            {
+                var innerAvailable = ImGui.GetContentRegionAvail();
+                if (showPullBrowser)
+                {
+                    DrawReviewPane(
+                        $"##{idPrefix}PullBrowserStacked",
+                        new Vector2(0.0f, MathF.Min(260.0f, MathF.Max(170.0f, innerAvailable.Y * 0.28f))),
+                        () => DrawPullBrowser(
+                            pulls,
+                            idPrefix,
+                            selection));
+                    DrawHorizontalReviewDivider(innerAvailable.X);
+                }
 
-        DrawReviewPanel(
-            $"##{idPrefix}TimelineStacked",
-            new Vector2(0.0f, MathF.Min(330.0f, MathF.Max(210.0f, available.Y * 0.35f))),
-            () => DrawSelectedPullTimeline(
-                selectedPull,
-                idPrefix,
-                selection));
-        DrawReviewPanel(
-            $"##{idPrefix}DeathDetailsStacked",
-            Vector2.Zero,
-            () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
+                DrawReviewPane(
+                    $"##{idPrefix}TimelineStacked",
+                    new Vector2(0.0f, MathF.Min(330.0f, MathF.Max(210.0f, innerAvailable.Y * 0.35f))),
+                    () => DrawSelectedPullTimeline(
+                        selectedPull,
+                        idPrefix,
+                        selection));
+                DrawHorizontalReviewDivider(innerAvailable.X);
+                DrawReviewPane(
+                    $"##{idPrefix}DeathDetailsStacked",
+                    Vector2.Zero,
+                    () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
+            });
     }
 
     private static void DrawReviewPanel(string id, Vector2 size, Action draw)
@@ -629,6 +661,43 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+    }
+
+    private static void DrawReviewPane(string id, Vector2 size, Action draw)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(7.0f, 6.0f));
+        if (ImGui.BeginChild(id, size, false))
+        {
+            draw();
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor();
+    }
+
+    private static void DrawVerticalReviewDivider(string id, float height)
+    {
+        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernDividerColor);
+        ImGui.BeginChild($"##{id}", new Vector2(1.0f, height), false);
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
+        ImGui.SameLine(0.0f, 0.0f);
+    }
+
+    private static void DrawHorizontalReviewDivider(float width)
+    {
+        var cursor = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var y = cursor.Y + 3.0f;
+        drawList.AddLine(
+            new Vector2(cursor.X, y),
+            new Vector2(cursor.X + MathF.Max(0.0f, width), y),
+            ImGui.GetColorU32(ModernDividerColor),
+            1.0f);
+        ImGui.Dummy(new Vector2(width, 7.0f));
     }
 
     private void DrawPullBrowser(
@@ -4396,6 +4465,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.100");
+        ImGui.TextDisabled("Cleaner testing review surface.");
+        DrawBreathingGoldBullet("Review and Example now use one continuous review surface instead of separate boxed containers.");
+        DrawBreathingGoldBullet("Pulls, timeline, and death details are separated by thin translucent dividers to recover space.");
+        DrawWrappedBullet("Reduced the outer shell padding so the recap content sits closer to the window edges.");
+        DrawWrappedBullet("Removed the visible shell border so the custom UI blends more naturally into the window.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.99");
         ImGui.TextDisabled("Cleaner testing UI direction.");
         DrawBreathingGoldBullet("Replaced the default tab strip with a cleaner Review / Example / Customize / Updates shell.");
