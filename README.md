@@ -38,6 +38,10 @@ It also includes:
 
 ![Better Deaths player death information](assets/readme/player-death-information.png)
 
+### Mitigation Context
+
+![Better Deaths mitigation context](assets/readme/mitigation-context.png)
+
 ### 10 Second Lead-Up
 
 ![Better Deaths 10 second lead-up history](assets/readme/lead-up-history.png)
