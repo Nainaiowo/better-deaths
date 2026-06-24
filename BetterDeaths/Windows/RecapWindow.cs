@@ -18,7 +18,6 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly Configuration configuration;
     private IReadOnlyList<PartyDeathRecord>? exampleDeaths;
     private DeathSelectionTarget? pendingDeathSelection;
-    private RecordedPullSort recordedPullSort = RecordedPullSort.DutyNewestFirst;
     private uint recordedPullDutyFilter = AllRecordedPullDuties;
     private bool clearPendingDeathSelection;
     private bool collapseRecordedPullsRequested;
@@ -60,7 +59,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.103";
+    private const string CurrentChangelogVersion = "0.1.0.104";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -68,11 +67,10 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReviewPaneContentIndent = 8.0f;
     private const float PullBrowserCollapsedWidth = 34.0f;
     private const float PullBrowserMinWidth = 340.0f;
-    private const float PullBrowserMaxWidth = 560.0f;
+    private const float PullBrowserMaxWidth = 460.0f;
     private const float PullBrowserResizeHandleWidth = 7.0f;
     private const float MinimumTimelinePaneWidth = 360.0f;
     private const float RecordedPullDutyFilterComboWidth = 260.0f;
-    private const float RecordedPullSortComboWidth = 180.0f;
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
@@ -869,15 +867,10 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
 
         var style = ImGui.GetStyle();
-        var collapseIcon = FontAwesomeIcon.ChevronLeft.ToIconString();
-        var trashIcon = FontAwesomeIcon.Trash.ToIconString();
-        var collapseButtonWidth = ImGui.CalcTextSize(collapseIcon).X + (style.FramePadding.X * 2.0f);
-        var clearButtonWidth = ImGui.CalcTextSize(trashIcon).X + (style.FramePadding.X * 2.0f);
-        var buttonWidth = collapseButtonWidth + clearButtonWidth + style.ItemSpacing.X;
-        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - buttonWidth;
-
-        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + style.ItemSpacing.X, buttonX));
+        ImGui.SameLine(0.0f, style.ItemSpacing.X);
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        DrawClearRecordedPullsButton($"ClearRecordedPullsModern{idPrefix}", clearSelection: true);
+        ImGui.SameLine(0.0f, style.ItemSpacing.X);
         if (ImGuiComponents.IconButton($"CollapsePullBrowser{idPrefix}", FontAwesomeIcon.ChevronLeft))
         {
             pendingPullBrowserWidth = null;
@@ -889,8 +882,6 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SetTooltip("Collapse pulls");
         }
 
-        ImGui.SameLine();
-        DrawClearRecordedPullsButton($"ClearRecordedPullsModern{idPrefix}", clearSelection: true);
         ImGui.PopStyleColor();
 
         ImGui.TextDisabled("Choose a pull to review.");
@@ -1608,19 +1599,6 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawRecordedPullControls()
     {
         DrawRecordedPullDutyFilterControl();
-        if (CanPlaceRecordedPullControlOnSameLine("Sort", RecordedPullSortComboWidth))
-        {
-            ImGui.SameLine();
-        }
-
-        DrawRecordedPullSortControl();
-    }
-
-    private static bool CanPlaceRecordedPullControlOnSameLine(string label, float comboWidth)
-    {
-        var style = ImGui.GetStyle();
-        var requiredWidth = ImGui.CalcTextSize(label).X + style.ItemSpacing.X + comboWidth;
-        return ImGui.GetContentRegionAvail().X >= requiredWidth + style.ItemSpacing.X;
     }
 
     private static float GetRecordedPullComboWidth(string label, float preferredWidth)
@@ -1629,52 +1607,6 @@ public sealed class RecapWindow : Window, IDisposable
         var labelWidth = ImGui.CalcTextSize(label).X + style.ItemSpacing.X;
         var availableWidth = MathF.Max(120.0f, ImGui.GetContentRegionAvail().X - labelWidth);
         return MathF.Min(preferredWidth, availableWidth);
-    }
-
-    private void DrawRecordedPullSortControl()
-    {
-        const string label = "Sort";
-        var comboWidth = GetRecordedPullComboWidth(label, RecordedPullSortComboWidth);
-        ImGui.TextDisabled(label);
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(comboWidth);
-        var sortComboOpen = ImGui.BeginCombo("##RecordedPullSort", GetRecordedPullSortLabel(recordedPullSort));
-        DrawRecordedPullSortTooltip();
-        if (!sortComboOpen)
-        {
-            return;
-        }
-
-        DrawRecordedPullSortOption(RecordedPullSort.NewestFirst);
-        DrawRecordedPullSortOption(RecordedPullSort.OldestFirst);
-        DrawRecordedPullSortOption(RecordedPullSort.DutyNewestFirst);
-        ImGui.EndCombo();
-    }
-
-    private static void DrawRecordedPullSortTooltip()
-    {
-        if (!ImGui.IsItemHovered())
-        {
-            return;
-        }
-
-        ImGui.SetTooltip(
-            "Controls visible pull order.\n" +
-            "Duty, newest first keeps duties grouped and puts the duty with the newest recorded pull first, even after older pulls are removed by the Recorded pulls kept limit.");
-    }
-
-    private void DrawRecordedPullSortOption(RecordedPullSort sort)
-    {
-        var selected = recordedPullSort == sort;
-        if (ImGui.Selectable(GetRecordedPullSortLabel(sort), selected))
-        {
-            recordedPullSort = sort;
-        }
-
-        if (selected)
-        {
-            ImGui.SetItemDefaultFocus();
-        }
     }
 
     private void DrawRecordedPullDutyFilterControl()
@@ -1762,29 +1694,14 @@ public sealed class RecapWindow : Window, IDisposable
             pulls = pulls.Where(entry => entry.Snapshot.TerritoryId == recordedPullDutyFilter);
         }
 
-        return recordedPullSort switch
-        {
-            RecordedPullSort.OldestFirst => pulls.OrderBy(entry => entry.PullNumber),
-            RecordedPullSort.DutyNewestFirst => pulls
-                .GroupBy(entry => entry.Snapshot.TerritoryId)
-                .OrderByDescending(group => group.Max(entry => entry.PullNumber))
-                .ThenBy(group => group
-                    .Select(entry => entry.Snapshot.TerritoryName)
-                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty,
-                    StringComparer.OrdinalIgnoreCase)
-                .SelectMany(group => group.OrderByDescending(entry => entry.PullNumber)),
-            _ => pulls.OrderByDescending(entry => entry.PullNumber),
-        };
-    }
-
-    private static string GetRecordedPullSortLabel(RecordedPullSort sort)
-    {
-        return sort switch
-        {
-            RecordedPullSort.OldestFirst => "Oldest first",
-            RecordedPullSort.DutyNewestFirst => "Duty, newest first",
-            _ => "Newest first",
-        };
+        return pulls
+            .GroupBy(entry => entry.Snapshot.TerritoryId)
+            .OrderByDescending(group => group.Max(entry => entry.PullNumber))
+            .ThenBy(group => group
+                .Select(entry => entry.Snapshot.TerritoryName)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase)
+            .SelectMany(group => group.OrderByDescending(entry => entry.PullNumber));
     }
 
     private void DrawDeathTimeline(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix)
@@ -3702,7 +3619,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsInfoLine("Fatal sequence", "A compact set of captured hits and combat-log confirmations around the HP transition into KO.");
         DrawSettingsInfoLine("Likely walled/non-hit KO", "Kept in the death timeline, but no player detail panel is shown because no likely hit or KO status context was captured.");
         DrawSettingsInfoLine("Recorded pulls", "Created on duty reset, wipe, recommence, and territory changes when the pull had at least one death.");
-        DrawSettingsInfoLine("Recorded pull sort", "Controls visible pull order. Duty, newest first keeps duties grouped and puts the duty with the newest pull first.");
+        DrawSettingsInfoLine("Recorded pull order", "Recorded pulls are grouped by duty, with the duty containing the newest pull shown first.");
         DrawSettingsInfoLine("Duty dropdown", "A filter: All duties shows everything, while a selected duty only shows pulls from that duty.");
         ImGui.TextColored(SpamWarningColor, "Only functions in duties, not overworld or PvP.");
         DrawDebugTabAccessButton();
@@ -4769,13 +4686,6 @@ public sealed class RecapWindow : Window, IDisposable
             Plugin.GetMemberKeyHash(death.MemberKey) == memberKeyHash;
     }
 
-    private enum RecordedPullSort
-    {
-        NewestFirst,
-        OldestFirst,
-        DutyNewestFirst,
-    }
-
     private enum DeathSelectionSource
     {
         Current,
@@ -4851,6 +4761,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.104");
+        ImGui.TextDisabled("Testing Pulls drawer cleanup.");
+        DrawWrappedBullet("Removed the pull order dropdown while keeping the Duty filter.");
+        DrawWrappedBullet("Recorded pulls now always use duty-grouped newest-first ordering.");
+        DrawWrappedBullet("Pulls header controls now sit beside the title with delete before collapse.");
+        DrawWrappedBullet("Reduced the Pulls drawer maximum width for a tighter review layout.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.103");
         ImGui.TextDisabled("Testing review drawer and scrollbar refinements.");
         DrawBreathingGoldBullet("Collapsed Pulls now expands from the separator edge instead of taking its own mini panel.");
