@@ -812,11 +812,11 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
-    public void SetWidgetPlayerNameDisplayMode(WidgetPlayerNameDisplayMode mode)
+    public void SetWidgetDisplayMode(WidgetDisplayMode mode)
     {
-        Configuration.WidgetPlayerNameDisplayMode = Enum.IsDefined(mode)
+        Configuration.WidgetDisplayMode = Enum.IsDefined(mode)
             ? mode
-            : WidgetPlayerNameDisplayMode.FullName;
+            : WidgetDisplayMode.Normal;
         SaveConfiguration();
     }
 
@@ -884,7 +884,7 @@ public sealed partial class Plugin : IDalamudPlugin
             RememberOwnSharedDeathPost(death);
             var hpSuffix = selection.Snapshot is null
                 ? string.Empty
-                : $" HP before KO: {FormatEffectiveHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
+                : $" HP before KO: {FormatDeathChatHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
             QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: non-hit KO.{hpSuffix}");
             QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
             QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
@@ -4369,12 +4369,12 @@ public sealed partial class Plugin : IDalamudPlugin
             : $"{causes.Count} causes";
     }
 
-    private static string FormatEffectiveHp(uint currentHp, uint shieldHp, uint maxHp)
+    private static string FormatDeathChatHp(uint currentHp, uint shieldHp, uint maxHp)
     {
         var effectiveHp = (ulong)currentHp + shieldHp;
         return maxHp == 0
             ? $"{effectiveHp:N0}"
-            : $"{effectiveHp:N0} / {maxHp:N0} ({(double)effectiveHp / maxHp:P0})";
+            : $"{effectiveHp:N0} ({(double)effectiveHp / maxHp:P0})";
     }
 
     private static string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
@@ -4410,7 +4410,7 @@ public sealed partial class Plugin : IDalamudPlugin
         if (snapshot is not null)
         {
             return new DeathChatHpDisplay(
-                FormatEffectiveHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp),
+                FormatDeathChatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp),
                 snapshot.CurrentHp + (ulong)snapshot.ShieldHp);
         }
 
@@ -4419,7 +4419,7 @@ public sealed partial class Plugin : IDalamudPlugin
             (fallbackEvent.CurrentHp > 0 || fallbackEvent.ShieldHp > 0))
         {
             return new DeathChatHpDisplay(
-                FormatEffectiveHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp),
+                FormatDeathChatHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp),
                 fallbackEvent.CurrentHp + (ulong)fallbackEvent.ShieldHp);
         }
 

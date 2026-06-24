@@ -24,10 +24,10 @@ public enum DeathChatChannel
 
 public sealed record ChatChannelOption(DeathChatChannel Channel, string Label, string Command);
 
-public enum WidgetPlayerNameDisplayMode
+public enum WidgetDisplayMode
 {
-    FullName,
-    Initials,
+    Normal,
+    Concise,
 }
 
 [Serializable]
@@ -43,7 +43,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public float WidgetIconSize { get; set; } = 20.0f;
 
-    public WidgetPlayerNameDisplayMode WidgetPlayerNameDisplayMode { get; set; } = WidgetPlayerNameDisplayMode.FullName;
+    public WidgetDisplayMode WidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;
 
     public bool RemoveChatBranding { get; set; }
 

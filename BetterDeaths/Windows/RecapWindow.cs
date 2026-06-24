@@ -46,7 +46,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.90";
+    private const string CurrentChangelogVersion = "0.1.0.97";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -242,7 +242,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawExamplePullTab()
     {
         var deaths = GetExampleDeaths();
-        ImGui.TextUnformatted("Example pull - Dancing Mad - Timer 11:54");
+        ImGui.TextUnformatted("Example pull - Sigmascape V4.0 - Timer 04:53");
         ImGui.TextDisabled("Names are redacted into static party-role labels.");
         using var examplePullIndent = new ImGuiIndentScope(PullBodyIndent);
         DrawDeathTimeline(deaths, "ExamplePull");
@@ -315,7 +315,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false))
+        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
         }
@@ -330,12 +330,13 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        var conciseMode = IsWidgetConciseMode();
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
-        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.35f);
-        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.05f : 1.35f);
+        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.95f : 1.25f);
         ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 1.25f);
-        ImGui.TableSetupColumn("Mits", ImGuiTableColumnFlags.WidthStretch, 1.6f);
-        DrawCenteredTableHeader("Time", "Player", "Cause", "Overkill", "Mits");
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.2f : 1.6f);
+        DrawCenteredTableHeader("Time", "Player", "Cause", "Overkill", "Mits/Debuffs");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -349,11 +350,11 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawWidgetPlayerCell(death);
             ImGui.TableNextColumn();
-            DrawWidgetCauseSummary(causeEvents);
+            DrawWidgetCauseSummary(causeEvents, conciseMode);
             ImGui.TableNextColumn();
             DrawWidgetOverkillSummary(selection);
             ImGui.TableNextColumn();
-            DrawWidgetMitsCell(death, selection);
+            DrawWidgetMitsCell(death, selection, conciseMode);
         }
 
         ImGui.EndTable();
@@ -404,9 +405,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private string FormatWidgetPlayerName(string memberName)
     {
-        return configuration.WidgetPlayerNameDisplayMode == WidgetPlayerNameDisplayMode.Initials
+        return IsWidgetConciseMode()
             ? FormatPlayerInitials(memberName)
             : memberName;
+    }
+
+    private bool IsWidgetConciseMode()
+    {
+        return configuration.WidgetDisplayMode == WidgetDisplayMode.Concise;
     }
 
     private static string FormatPlayerInitials(string memberName)
@@ -832,9 +838,11 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
+    private static void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents, bool conciseMode)
     {
-        var text = FormatWidgetCauseSummary(causeEvents);
+        var text = conciseMode
+            ? FormatConciseWidgetCauseSummary(causeEvents)
+            : FormatWidgetCauseSummary(causeEvents);
         DrawCenteredOrWrappedText(text, GetWidgetCauseColor(causeEvents));
 
         if (ImGui.IsItemHovered())
@@ -883,6 +891,20 @@ public sealed class RecapWindow : Window, IDisposable
             : $"{FormatWidgetAmount(cause.Amount)} {cause.ActionName}";
     }
 
+    private static string FormatConciseWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
+    {
+        if (causeEvents.Count == 0)
+        {
+            return "-";
+        }
+
+        var totalDamage = causeEvents
+            .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+            .Aggregate(0UL, (sum, cause) => sum + cause.Amount);
+
+        return totalDamage > 0 ? FormatWidgetAmount(totalDamage) : "-";
+    }
+
     private static void DrawWidgetOverkillSummary(DeathDisplaySelection selection)
     {
         var incomingDamage = GetIncomingDamageAmount(selection.Events);
@@ -911,7 +933,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawWidgetMitsCell(PartyDeathRecord death, DeathDisplaySelection selection)
+    private void DrawWidgetMitsCell(PartyDeathRecord death, DeathDisplaySelection selection, bool conciseMode)
     {
         var statuses = GetWidgetMitStatuses(death, selection);
         if (statuses.Count == 0)
@@ -922,6 +944,12 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.SetTooltip("No player mitigations/debuffs or boss damage-down debuffs were captured for this death.");
             }
 
+            return;
+        }
+
+        if (conciseMode)
+        {
+            DrawConciseWidgetMitIcons(statuses);
             return;
         }
 
@@ -996,16 +1024,75 @@ public sealed class RecapWindow : Window, IDisposable
                     ImGui.SameLine();
                 }
 
-                var status = row[statusIndex];
-                var tooltipPrefix = status.Category == "Boss" && !string.IsNullOrWhiteSpace(status.SourceName)
-                    ? $"{status.Category} ({status.SourceName})"
-                    : status.Category;
-                DrawGameIcon(
-                    status.Status.IconId,
-                    iconSize,
-                    $"{tooltipPrefix}: {FormatStatusCompact(status.Status)}");
+                DrawWidgetMitIcon(row[statusIndex], iconSize);
             }
         }
+    }
+
+    private void DrawConciseWidgetMitIcons(IReadOnlyList<WidgetMitStatus> statuses)
+    {
+        const int MaxVisibleStatuses = 3;
+
+        var iconSize = GetWidgetIconSize();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var visibleStatuses = statuses.Take(MaxVisibleStatuses).ToList();
+        var extraCount = Math.Max(0, statuses.Count - visibleStatuses.Count);
+        var extraText = extraCount > 0 ? $"+{extraCount}" : string.Empty;
+        var groupWidth = visibleStatuses.Count * iconSize;
+        if (visibleStatuses.Count > 1)
+        {
+            groupWidth += (visibleStatuses.Count - 1) * spacing;
+        }
+
+        if (!string.IsNullOrEmpty(extraText))
+        {
+            groupWidth += (visibleStatuses.Count > 0 ? spacing : 0.0f) + ImGui.CalcTextSize(extraText).X;
+        }
+
+        CenterNextItem(groupWidth);
+        ImGui.BeginGroup();
+        for (var statusIndex = 0; statusIndex < visibleStatuses.Count; statusIndex++)
+        {
+            if (statusIndex > 0)
+            {
+                ImGui.SameLine();
+            }
+
+            DrawWidgetMitIcon(visibleStatuses[statusIndex], iconSize);
+        }
+
+        if (!string.IsNullOrEmpty(extraText))
+        {
+            if (visibleStatuses.Count > 0)
+            {
+                ImGui.SameLine();
+            }
+
+            ImGui.TextUnformatted(extraText);
+            if (ImGui.IsItemHovered())
+            {
+                var remainingLines = statuses
+                    .Skip(MaxVisibleStatuses)
+                    .Select(FormatWidgetMitTooltip)
+                    .ToList();
+                ImGui.SetTooltip(string.Join(Environment.NewLine, remainingLines));
+            }
+        }
+
+        ImGui.EndGroup();
+    }
+
+    private void DrawWidgetMitIcon(WidgetMitStatus status, float iconSize)
+    {
+        DrawGameIcon(status.Status.IconId, iconSize, FormatWidgetMitTooltip(status));
+    }
+
+    private static string FormatWidgetMitTooltip(WidgetMitStatus status)
+    {
+        var tooltipPrefix = status.Category == "Boss" && !string.IsNullOrWhiteSpace(status.SourceName)
+            ? $"{status.Category} ({status.SourceName})"
+            : status.Category;
+        return $"{tooltipPrefix}: {FormatStatusCompact(status.Status)}";
     }
 
     private static string FormatWidgetAmount(ulong amount)
@@ -1785,24 +1872,75 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo)
     {
-        if (displayInfo.MitigationPercentText == "-")
+        if (displayInfo.MitigationPercents.Count == 0)
         {
             DrawCenteredText("-", DisabledColor);
             return;
         }
 
-        if (displayInfo.HasVariableMitigationPercent)
+        var iconSize = Math.Clamp(ImGui.GetTextLineHeight(), 12.0f, 18.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var separatorText = "/";
+        var separatorWidth = ImGui.CalcTextSize(separatorText).X;
+        var groupWidth = displayInfo.MitigationPercents.Aggregate(0.0f, (width, part) =>
         {
-            DrawCenteredText(displayInfo.MitigationPercentText, GetBreathingGoldColor());
-            if (ImGui.IsItemHovered() && displayInfo.MitigationPercentTooltip is not null)
+            var partWidth = (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X;
+            return width + (width > 0.0f ? spacing + separatorWidth + spacing : 0.0f) + partWidth;
+        });
+        CenterNextItem(groupWidth);
+
+        ImGui.BeginGroup();
+        for (var i = 0; i < displayInfo.MitigationPercents.Count; i++)
+        {
+            if (i > 0)
             {
-                ImGui.SetTooltip(displayInfo.MitigationPercentTooltip);
+                ImGui.SameLine();
+                ImGui.TextUnformatted(separatorText);
+                ImGui.SameLine();
             }
 
-            return;
+            DrawMitigationPercentPart(displayInfo.MitigationPercents[i], iconSize, displayInfo);
         }
 
-        DrawCenteredText(displayInfo.MitigationPercentText);
+        ImGui.EndGroup();
+    }
+
+    private static void DrawMitigationPercentPart(
+        Plugin.MitigationPercentDisplay part,
+        float iconSize,
+        Plugin.MitigationDisplayInfo displayInfo)
+    {
+        var tooltip = CombineTooltips(part.Tooltip, displayInfo.HasVariableMitigationPercent ? displayInfo.MitigationPercentTooltip : null);
+        if (part.IconId != 0)
+        {
+            DrawGameIcon(part.IconId, iconSize, tooltip ?? part.Text);
+            ImGui.SameLine();
+        }
+
+        if (displayInfo.HasVariableMitigationPercent)
+        {
+            ImGui.TextColored(GetBreathingGoldColor(), part.Text);
+        }
+        else
+        {
+            ImGui.TextUnformatted(part.Text);
+        }
+
+        if (ImGui.IsItemHovered() && tooltip is not null)
+        {
+            ImGui.SetTooltip(tooltip);
+        }
+    }
+
+    private static string? CombineTooltips(string? first, string? second)
+    {
+        return (first, second) switch
+        {
+            (null, null) => null,
+            (not null, null) => first,
+            (null, not null) => second,
+            _ => $"{first}\n{second}",
+        };
     }
 
     private void DrawInducedStatusesCell(IReadOnlyList<Plugin.InducedMitigationDisplay> inducedStatuses)
@@ -2530,17 +2668,17 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Controls only the Current Pull widget job and mitigation/debuff icon sizes.");
 
-        var widgetNameMode = configuration.WidgetPlayerNameDisplayMode;
+        var widgetMode = configuration.WidgetDisplayMode;
         ImGui.SetNextItemWidth(185.0f);
-        if (ImGui.BeginCombo("Naming Options", GetWidgetPlayerNameDisplayModeLabel(widgetNameMode)))
+        if (ImGui.BeginCombo("Display", GetWidgetDisplayModeLabel(widgetMode)))
         {
-            foreach (var mode in Enum.GetValues<WidgetPlayerNameDisplayMode>())
+            foreach (var mode in Enum.GetValues<WidgetDisplayMode>())
             {
-                var selected = widgetNameMode == mode;
-                if (ImGui.Selectable(GetWidgetPlayerNameDisplayModeLabel(mode), selected))
+                var selected = widgetMode == mode;
+                if (ImGui.Selectable(GetWidgetDisplayModeLabel(mode), selected))
                 {
-                    plugin.SetWidgetPlayerNameDisplayMode(mode);
-                    widgetNameMode = mode;
+                    plugin.SetWidgetDisplayMode(mode);
+                    widgetMode = mode;
                 }
 
                 if (selected)
@@ -2552,7 +2690,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.EndCombo();
         }
 
-        DrawSettingsTooltip("Controls the widget Player column only. Hover a player in the widget to see full-name and initials examples from that player's in-game name.");
+        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only causes, and limits visible mitigation/debuff icons to three with a +x count.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Widget preview");
@@ -2560,12 +2698,12 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCurrentPullWidgetPreview();
     }
 
-    private static string GetWidgetPlayerNameDisplayModeLabel(WidgetPlayerNameDisplayMode mode)
+    private static string GetWidgetDisplayModeLabel(WidgetDisplayMode mode)
     {
         return mode switch
         {
-            WidgetPlayerNameDisplayMode.Initials => "Initials",
-            _ => "Full name",
+            WidgetDisplayMode.Concise => "Concise",
+            _ => "Normal",
         };
     }
 
@@ -2577,7 +2715,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false))
         {
             DrawWidgetPreviewBackground(opacity);
-            DrawCurrentPullWidgetContent(GetExampleDeaths(), "Dancing Mad - Timer 11:54", "WidgetPreview");
+            DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - Timer 04:53", "WidgetPreview");
         }
 
         ImGui.EndChild();
@@ -2669,7 +2807,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
         {
-            ImGui.TextColored(NoticeBorderColor, "Hey! Nainai here~");
+            ImGui.TextColored(NoticeBorderColor, "Hey! NaiLa here~");
             ImGui.Spacing();
             ImGui.TextWrapped("I just wanted to give a short message to the users that have been helping me with the development of this project. With this update, I've released a big change!");
             ImGui.Spacing();
@@ -3533,6 +3671,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.97");
+        ImGui.TextDisabled("Improved widget readability, chat summaries, and mitigation display.");
+        DrawBreathingGoldBullet("Current Pull widget now has Normal and Concise display options.");
+        DrawBreathingGoldBullet("Active mitigations/debuffs Mit% now uses physical and magic icons instead of P/M letter prefixes.");
+        DrawWrappedBullet("Current Pull widget now labels the status column as Mits/Debuffs and concise view caps visible status icons at three with a +x count.");
+        DrawWrappedBullet("Chat-posted recaps now shorten HP before hit/KO by removing the max HP value while keeping the percentage.");
+        DrawWrappedBullet("Example Pull and Widget preview now use a smaller redacted Sigmascape V4.0 Pull 127-style example.");
+        DrawWrappedBullet("Current Pull widget hides the visual scrollbar while keeping mouse-wheel scrolling available.");
+
+        ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.90");
         ImGui.TextDisabled("Reworked live combat capture for more accurate death review.");
         DrawBreathingGoldBullet("Reworked death capture to use hook-based live combat data instead of relying mostly on periodic FFXIV HP/status snapshots.");
@@ -3816,7 +3964,7 @@ public sealed class RecapWindow : Window, IDisposable
         var textColor = new Vector4(1.0f, 0.88f, 0.58f, 1.0f);
 
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        ImGui.TextWrapped("Hi! Nainai here~ I really appreciate you using Better Deaths. I made this as a personal passion project because I always needed and wanted a little more from the tools available..");
+        ImGui.TextWrapped("Hi! NaiLa here~ I really appreciate you using Better Deaths. I made this as a personal passion project because I always needed and wanted a little more from the tools available..");
         ImGui.TextWrapped("It's not perfect, and it is definitely still growing and getting better every day, but I can promise I am putting a lot of love and care into it every day until it's perfect!");
         ImGui.TextWrapped("Thank you for trying it out, and I hope it helps your prog even a little <3");
         ImGui.PopStyleColor();
@@ -3832,14 +3980,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static readonly IReadOnlyDictionary<string, ExamplePlayer> ExamplePlayers = new Dictionary<string, ExamplePlayer>
     {
-        ["Tank 1"] = new("example-tank-1", "Tank 1", 0, 19, "PLD", 258000),
-        ["Tank 2"] = new("example-tank-2", "Tank 2", 1, 32, "DRK", 252000),
-        ["Healer 1"] = new("example-healer-1", "Healer 1", 2, 33, "AST", 139500),
-        ["Healer 2"] = new("example-healer-2", "Healer 2", 3, 28, "SCH", 136800),
-        ["DPS 1"] = new("example-dps-1", "DPS 1", 4, 41, "VPR", 164000),
-        ["DPS 2"] = new("example-dps-2", "DPS 2", 5, 22, "DRG", 171000),
-        ["DPS 3"] = new("example-dps-3", "DPS 3", 6, 23, "BRD", 156000),
-        ["DPS 4"] = new("example-dps-4", "DPS 4", 7, 35, "RDM", 151000),
+        ["Tank 1"] = new("example-tank-1", "Tank 1", 0, 32, "DRK", 325090),
+        ["Tank 2"] = new("example-tank-2", "Tank 2", 1, 19, "PLD", 325090),
+        ["Healer 1"] = new("example-healer-1", "Healer 1", 2, 24, "WHM", 205237),
+        ["Healer 2"] = new("example-healer-2", "Healer 2", 3, 28, "SCH", 205177),
+        ["DPS 1"] = new("example-dps-1", "DPS 1", 4, 23, "BRD", 226428),
+        ["DPS 2"] = new("example-dps-2", "DPS 2", 5, 22, "DRG", 227550),
+        ["DPS 3"] = new("example-dps-3", "DPS 3", 6, 25, "BLM", 205177),
+        ["DPS 4"] = new("example-dps-4", "DPS 4", 7, 34, "SAM", 226618),
     };
 
     private IReadOnlyList<PartyDeathRecord> GetExampleDeaths()
@@ -3852,21 +4000,14 @@ public sealed class RecapWindow : Window, IDisposable
     {
         return new List<PartyDeathRecord>
         {
-            CreateExampleDeath(519.6f, "Tank 1", 517.0f, "Kefka", 47843, "Ultima Blaster", 3099, DamageType.Magic, TankStatuses()),
-            CreateExampleDeath(534.8f, "DPS 1", 532.8f, "Kefka", 47844, "Ultima Blaster", 186998, DamageType.Magic, DpsStatuses()),
-            CreateExampleDeath(542.5f, "Tank 2", 540.5f, "Chaos", 49746, "Attack", 23352, DamageType.Physical, TankStatuses()),
-            CreateExampleDeath(637.9f, "DPS 4", 635.9f, "Kefka", 47866, "Earthquake", 63603, DamageType.Magic, CasterStatuses()),
-            CreateExampleDeath(654.2f, "DPS 2", 652.2f, "black hole", 47868, "Nothingness", 1, DamageType.Magic, DpsStatuses()),
-            CreateExampleDeath(664.3f, "DPS 1", 662.3f, "black hole", 47868, "Nothingness", 166206, DamageType.Magic, DpsStatuses()),
-            CreateExampleDeath(680.5f, "DPS 2", 678.5f, "Kefka", 47851, "Shockwave", 176062, DamageType.Physical, DpsStatuses()),
-            CreateExampleDeath(694.1f, "DPS 3", 692.1f, "Kefka", 47854, "Look upon Me and Despair", 108455, DamageType.Magic, RangedStatuses()),
-            CreateExampleDeath(694.2f, "DPS 4", 692.2f, "Kefka", 47854, "Look upon Me and Despair", 197891, DamageType.Magic, CasterStatuses()),
-            CreateExampleDeath(694.8f, "Healer 1", 692.8f, "black hole", 47868, "Nothingness", 1, DamageType.Magic, PureHealerStatuses()),
-            CreateExampleDeath(708.9f, "Tank 2", 706.9f, "Kefka", 47856, "Stomp-a-Mole", 315080, DamageType.Physical, TankStatuses()),
-            CreateExampleDeath(709.1f, "DPS 1", 707.1f, "Chaos", 47875, "Knock Down", 145170, DamageType.Physical, DpsStatuses()),
-            CreateExampleDeath(709.2f, "DPS 4", 707.2f, "Chaos", 47875, "Knock Down", 65144, DamageType.Physical, CasterStatuses()),
-            CreateExampleDeath(710.2f, "Healer 2", 708.2f, "Kefka", 47856, "Stomp-a-Mole", 38708, DamageType.Physical, ShieldHealerStatuses()),
-            CreateExampleDeath(712.6f, "Tank 1", 710.6f, "Chaos", 49746, "Attack", 48219, DamageType.Physical, TankStatuses()),
+            CreateExampleDeath(280.9f, "DPS 1", 280.3f, "Kefka", 47810, "Spellwave", 1831599, DamageType.Magic, DpsSpellwaveStatuses()),
+            CreateExampleDeath(280.9f, "DPS 2", 280.3f, "Kefka", 47810, "Spellwave", 1834025, DamageType.Magic, DpsGalvanizeSpellwaveStatuses()),
+            CreateExampleDeath(281.0f, "DPS 3", 280.3f, "Kefka", 47810, "Spellwave", 1662458, DamageType.Magic, CasterSpellwaveStatuses()),
+            CreateExampleDeath(281.0f, "Tank 1", 280.3f, "Kefka", 47810, "Spellwave", 1118760, DamageType.Magic, TankSpellwaveStatuses()),
+            CreateExampleDeath(281.1f, "DPS 4", 280.3f, "Kefka", 47810, "Spellwave", 1633114, DamageType.Magic, DpsSpellwaveStatuses()),
+            CreateExampleDeath(286.0f, "Tank 2", 279.3f, "Kefka", 47833, "Past's End", 22550, DamageType.Magic, PaladinPastEndStatuses()),
+            CreateExampleNonHitDeath(286.6f, "Healer 1", TroubadourOnlyStatuses()),
+            CreateExampleDeath(292.3f, "Healer 2", 291.7f, "Kefka", 47807, "the River of Light", 7257, DamageType.Magic, ShieldHealerRiverStatuses()),
         };
     }
 
@@ -3886,18 +4027,18 @@ public sealed class RecapWindow : Window, IDisposable
         var setupEvent = CreateExampleEvent(
             player,
             setupElapsed,
-            "Kefka",
-            47843,
-            "Ultima Blaster",
+            sourceName,
+            actionId,
+            actionName,
             DeathEventKind.Damage,
-            (uint)Math.Round(player.MaxHp * 0.18),
-            (uint)Math.Round(player.MaxHp * 0.62),
-            (uint)Math.Round(player.MaxHp * 0.10),
+            (uint)Math.Round(player.MaxHp * 0.12),
+            (uint)Math.Round(player.MaxHp * 0.72),
+            0,
             player.MaxHp,
-            DamageType.Magic,
+            damageType,
             string.Empty,
             AdjustExampleStatuses(statusesAtLikelyHit, causeElapsed, setupElapsed),
-            ExampleSourceStatuses("Kefka", causeElapsed, setupElapsed));
+            Array.Empty<StatusSnapshot>());
         var likelyCauseShieldHp = EstimateExampleShieldBeforeHit(player, statusesAtLikelyHit);
         var likelyCauseHp = EstimateExampleHpBeforeHit(player, amount, sourceName, likelyCauseShieldHp);
         var likelyCause = CreateExampleEvent(
@@ -3914,7 +4055,7 @@ public sealed class RecapWindow : Window, IDisposable
             damageType,
             string.Empty,
             statusesAtLikelyHit,
-            ExampleSourceStatuses(sourceName, causeElapsed, causeElapsed));
+            Array.Empty<StatusSnapshot>());
         var statusesAtDeath = AdjustExampleStatuses(statusesAtLikelyHit, causeElapsed, deathElapsed);
 
         return new PartyDeathRecord(
@@ -3932,6 +4073,61 @@ public sealed class RecapWindow : Window, IDisposable
             new List<CombatEventRecord> { setupEvent, likelyCause },
             CreateExampleHpHistory(player, deathElapsed, likelyCause, statusesAtLikelyHit),
             statusesAtDeath);
+    }
+
+    private PartyDeathRecord CreateExampleNonHitDeath(
+        float deathElapsed,
+        string playerRole,
+        IReadOnlyList<StatusSnapshot> statusesAtDeath)
+    {
+        var player = ExamplePlayers[playerRole];
+
+        return new PartyDeathRecord(
+            ExamplePullStartedAtUtc.AddSeconds(deathElapsed),
+            deathElapsed,
+            player.Key,
+            player.Name,
+            player.PartyIndex,
+            player.ClassJobId,
+            player.Job,
+            0,
+            0,
+            player.MaxHp,
+            null,
+            Array.Empty<CombatEventRecord>(),
+            CreateExampleNonHitHpHistory(player, deathElapsed, statusesAtDeath),
+            statusesAtDeath);
+    }
+
+    private static IReadOnlyList<HpHistorySnapshot> CreateExampleNonHitHpHistory(
+        ExamplePlayer player,
+        float deathElapsed,
+        IReadOnlyList<StatusSnapshot> statusesAtDeath)
+    {
+        var sampleTimes = new[]
+        {
+            MathF.Max(0.0f, deathElapsed - LeadUpHistorySeconds),
+            MathF.Max(0.0f, deathElapsed - 2.0f),
+            MathF.Max(0.0f, deathElapsed - 1.0f),
+        };
+
+        return sampleTimes
+            .Distinct()
+            .Where(elapsed => elapsed <= deathElapsed)
+            .OrderBy(elapsed => elapsed)
+            .Select(elapsed =>
+            {
+                var secondsBeforeDeath = MathF.Max(0.0f, deathElapsed - elapsed);
+                var currentHp = (uint)Math.Round(Math.Min(player.MaxHp, player.MaxHp * (0.26f + (secondsBeforeDeath * 0.03f))));
+                return new HpHistorySnapshot(
+                    ExamplePullStartedAtUtc.AddSeconds(elapsed),
+                    elapsed,
+                    currentHp,
+                    0,
+                    player.MaxHp,
+                    AdjustExampleStatuses(statusesAtDeath, deathElapsed, elapsed));
+            })
+            .ToList();
     }
 
     private static IReadOnlyList<HpHistorySnapshot> CreateExampleHpHistory(
@@ -4046,72 +4242,77 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> TankStatuses()
+    private static IReadOnlyList<StatusSnapshot> DpsSpellwaveStatuses()
     {
         return new[]
         {
-            Status(1191, "Rampart", 4.2f),
-            Status(638, "Vulnerability Up", 18.7f),
+            Status(2941, "Magic Vulnerability Up", 2.0f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> PureHealerStatuses()
+    private static IReadOnlyList<StatusSnapshot> DpsGalvanizeSpellwaveStatuses()
     {
         return new[]
         {
-            Status(2941, "Magic Vulnerability Up", 11.4f),
-            Status(638, "Vulnerability Up", 15.2f),
+            Status(297, "Galvanize", 22.1f),
+            Status(2941, "Magic Vulnerability Up", 2.0f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> ShieldHealerStatuses()
+    private static IReadOnlyList<StatusSnapshot> CasterSpellwaveStatuses()
     {
         return new[]
         {
-            Status(297, "Galvanize", 1.9f),
-            Status(299, "Sacred Soil", 5.6f),
-            Status(2941, "Magic Vulnerability Up", 8.5f),
+            Status(1219, "Confession", 10.0f),
+            Status(297, "Galvanize", 22.1f),
+            Status(2941, "Magic Vulnerability Up", 2.0f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> DpsStatuses()
+    private static IReadOnlyList<StatusSnapshot> TankSpellwaveStatuses()
     {
         return new[]
         {
-            Status(1826, "Shield Samba", 3.4f),
-            Status(638, "Vulnerability Up", 12.6f),
+            Status(317, "Fey Illumination", 20.0f),
+            Status(2941, "Magic Vulnerability Up", 2.0f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> RangedStatuses()
+    private static IReadOnlyList<StatusSnapshot> PaladinPastEndStatuses()
     {
         return new[]
         {
-            Status(1934, "Troubadour", 2.7f),
-            Status(638, "Vulnerability Up", 12.6f),
+            Status(1219, "Confession", 10.0f),
+            Status(297, "Galvanize", 23.1f),
+            Status(2674, "Holy Sheltron", 7.7f),
+            Status(2675, "Knight's Resolve", 3.7f),
+            Status(2941, "Magic Vulnerability Up", 2.0f),
+            Status(1175, "Passage of Arms", 18.0f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> CasterStatuses()
+    private static IReadOnlyList<StatusSnapshot> TroubadourOnlyStatuses()
     {
         return new[]
         {
-            Status(2941, "Magic Vulnerability Up", 9.2f),
+            Status(1934, "Troubadour", 15.0f),
         };
     }
 
-    private static IReadOnlyList<StatusSnapshot> ExampleSourceStatuses(string sourceName, float anchorElapsed, float elapsed)
+    private static IReadOnlyList<StatusSnapshot> ShieldHealerRiverStatuses()
     {
-        if (sourceName is not ("Chaos" or "Kefka"))
+        return new[]
         {
-            return Array.Empty<StatusSnapshot>();
-        }
-
-        return AdjustExampleStatuses(new[]
-        {
-            Status(1193, "Reprisal", 4.0f),
-            Status(1195, "Feint", 2.5f),
-        }, anchorElapsed, elapsed);
+            Status(297, "Galvanize", 20.6f),
+            Status(299, "Sacred Soil", 5.0f),
+            Status(1944, "Sacred Soil", 15.0f),
+            Status(1934, "Troubadour", 15.0f),
+        };
     }
 
     private static IReadOnlyList<StatusSnapshot> AdjustExampleStatuses(

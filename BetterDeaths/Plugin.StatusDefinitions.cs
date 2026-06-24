@@ -26,11 +26,13 @@ public sealed partial class Plugin
 
     internal sealed record MitigationTypeDisplay(string Label, uint IconId = 0, string? Tooltip = null);
 
+    internal sealed record MitigationPercentDisplay(string Text, uint IconId = 0, string? Tooltip = null);
+
     internal sealed record InducedMitigationDisplay(uint StatusId, string Name);
 
     internal sealed record MitigationDisplayInfo(
         IReadOnlyList<MitigationTypeDisplay> Types,
-        string MitigationPercentText,
+        IReadOnlyList<MitigationPercentDisplay> MitigationPercents,
         bool HasVariableMitigationPercent,
         string? MitigationPercentTooltip,
         IReadOnlyList<InducedMitigationDisplay> InducedStatuses);
@@ -219,13 +221,17 @@ public sealed partial class Plugin
             .FirstOrDefault(definition => definition.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase));
         if (defensiveStatus is not null)
         {
+            var mitigationPercents = BuildMitigationPercentDisplays(
+                defensiveStatus.DamageReductionPercent,
+                defensiveStatus.PhysicalDamageReductionPercent,
+                defensiveStatus.MagicDamageReductionPercent,
+                defensiveStatus.HasVariableMitigationPercent,
+                IncomingAllDamageReductionTooltip,
+                IncomingPhysicalDamageReductionTooltip,
+                IncomingMagicDamageReductionTooltip);
             return new MitigationDisplayInfo(
                 BuildMitigationTypes(defensiveStatus),
-                FormatMitigationPercent(
-                    defensiveStatus.DamageReductionPercent,
-                    defensiveStatus.PhysicalDamageReductionPercent,
-                    defensiveStatus.MagicDamageReductionPercent,
-                    defensiveStatus.HasVariableMitigationPercent),
+                mitigationPercents,
                 defensiveStatus.HasVariableMitigationPercent,
                 defensiveStatus.MitigationPercentTooltip,
                 defensiveStatus.InducedStatuses ?? []);
@@ -235,13 +241,17 @@ public sealed partial class Plugin
             .FirstOrDefault(definition => definition.StatusId == status.Id);
         if (bossStatus is not null)
         {
+            var mitigationPercents = BuildMitigationPercentDisplays(
+                bossStatus.DamageDownPercent,
+                bossStatus.PhysicalDamageDownPercent,
+                bossStatus.MagicDamageDownPercent,
+                false,
+                BossAllDamageDownTooltip,
+                BossPhysicalDamageDownTooltip,
+                BossMagicDamageDownTooltip);
             return new MitigationDisplayInfo(
                 BuildBossMitigationTypes(bossStatus),
-                FormatMitigationPercent(
-                    bossStatus.DamageDownPercent,
-                    bossStatus.PhysicalDamageDownPercent,
-                    bossStatus.MagicDamageDownPercent,
-                    false),
+                mitigationPercents,
                 false,
                 null,
                 []);
@@ -249,7 +259,7 @@ public sealed partial class Plugin
 
         return new MitigationDisplayInfo(
             [new("Debuff", Tooltip: DebuffTooltip)],
-            "-",
+            [],
             false,
             null,
             []);
@@ -327,34 +337,37 @@ public sealed partial class Plugin
         return types.Count == 0 ? [new("Boss DD", Tooltip: BossDamageDownTooltip)] : types;
     }
 
-    private static string FormatMitigationPercent(
+    private static IReadOnlyList<MitigationPercentDisplay> BuildMitigationPercentDisplays(
         float? allPercent,
         float? physicalPercent,
         float? magicPercent,
-        bool variable)
+        bool variable,
+        string allTooltip,
+        string physicalTooltip,
+        string magicTooltip)
     {
-        var parts = new List<string>();
+        var parts = new List<MitigationPercentDisplay>();
         if (allPercent is not null)
         {
-            parts.Add($"{allPercent:0.#}%");
+            parts.Add(new(FormatMitigationPercentValue(allPercent.Value, variable), Tooltip: allTooltip));
         }
 
         if (physicalPercent is not null)
         {
-            parts.Add($"P {physicalPercent:0.#}%");
+            parts.Add(new(FormatMitigationPercentValue(physicalPercent.Value, variable), PhysicalDamageReductionIconId, physicalTooltip));
         }
 
         if (magicPercent is not null)
         {
-            parts.Add($"M {magicPercent:0.#}%");
+            parts.Add(new(FormatMitigationPercentValue(magicPercent.Value, variable), MagicDamageReductionIconId, magicTooltip));
         }
 
-        if (parts.Count == 0)
-        {
-            return "-";
-        }
+        return parts;
+    }
 
-        var value = string.Join(" / ", parts);
+    private static string FormatMitigationPercentValue(float percent, bool variable)
+    {
+        var value = $"{percent:0.#}%";
         return variable ? $"{value}+" : value;
     }
 }
