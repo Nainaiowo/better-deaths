@@ -56,7 +56,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
     private const int RecordedPullHistorySchemaVersion = 3;
-    private const int CurrentConfigurationVersion = 3;
+    private const int CurrentConfigurationVersion = 4;
     private const int RecordedPullHistoryRollingBackupCount = 5;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
     private const ushort ChatGreenColorKey = 45;
@@ -89,8 +89,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
-    public const float DeathRecapPopupMinBackgroundOpacity = 0.20f;
-    public const float DeathRecapPopupMaxBackgroundOpacity = 1.0f;
+    public const float MainWindowMinBackgroundOpacity = 0.20f;
+    public const float MainWindowMaxBackgroundOpacity = 1.0f;
+    public const float DefaultMainWindowBackgroundOpacity = 0.85f;
     public const float MinWidgetIconSize = 12.0f;
     public const float MaxWidgetIconSize = 32.0f;
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
@@ -672,6 +673,15 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetMainWindowBackgroundOpacity(float opacity)
+    {
+        Configuration.MainWindowBackgroundOpacity = Math.Clamp(
+            opacity,
+            MainWindowMinBackgroundOpacity,
+            MainWindowMaxBackgroundOpacity);
+        SaveConfiguration();
+    }
+
     public void NotifyCurrentPullWidgetClosed()
     {
         if (disposing || !Configuration.ShowCurrentPullWidget)
@@ -694,12 +704,14 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
-    public void SetDeathRecapPopupBackgroundOpacity(float opacity)
+    public void MarkWideDefaultWindowSizeApplied()
     {
-        Configuration.DeathRecapPopupBackgroundOpacity = Math.Clamp(
-            opacity,
-            DeathRecapPopupMinBackgroundOpacity,
-            DeathRecapPopupMaxBackgroundOpacity);
+        if (!Configuration.ApplyWideDefaultWindowSizeOnNextOpen)
+        {
+            return;
+        }
+
+        Configuration.ApplyWideDefaultWindowSizeOnNextOpen = false;
         SaveConfiguration();
     }
 
@@ -1090,12 +1102,18 @@ public sealed partial class Plugin : IDalamudPlugin
                 : Configuration.CurrentPullWidgetBackgroundOpacity,
             CurrentPullWidgetMinBackgroundOpacity,
             CurrentPullWidgetMaxBackgroundOpacity);
-        var deathRecapPopupBackgroundOpacity = Math.Clamp(
+        var legacyPopupBackgroundOpacity = Math.Clamp(
             Configuration.DeathRecapPopupBackgroundOpacity <= 0.0f
-                ? 0.85f
+                ? DefaultMainWindowBackgroundOpacity
                 : Configuration.DeathRecapPopupBackgroundOpacity,
-            DeathRecapPopupMinBackgroundOpacity,
-            DeathRecapPopupMaxBackgroundOpacity);
+            MainWindowMinBackgroundOpacity,
+            MainWindowMaxBackgroundOpacity);
+        var mainWindowBackgroundOpacity = Math.Clamp(
+            Configuration.MainWindowBackgroundOpacity <= 0.0f
+                ? DefaultMainWindowBackgroundOpacity
+                : Configuration.MainWindowBackgroundOpacity,
+            MainWindowMinBackgroundOpacity,
+            MainWindowMaxBackgroundOpacity);
         const float pullBrowserWidth = 300.0f;
         var recentEventSeconds = Math.Clamp(Configuration.RecentEventSeconds, 5, 60);
         var deathCauseSeconds = Math.Clamp(Configuration.DeathCauseSeconds, 5, 60);
@@ -1125,9 +1143,16 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
-        if (MathF.Abs(Configuration.DeathRecapPopupBackgroundOpacity - deathRecapPopupBackgroundOpacity) > 0.01f)
+        if (loadedConfigurationVersion < 4)
         {
-            Configuration.DeathRecapPopupBackgroundOpacity = deathRecapPopupBackgroundOpacity;
+            mainWindowBackgroundOpacity = legacyPopupBackgroundOpacity;
+            Configuration.ApplyWideDefaultWindowSizeOnNextOpen = true;
+            changed = true;
+        }
+
+        if (MathF.Abs(Configuration.MainWindowBackgroundOpacity - mainWindowBackgroundOpacity) > 0.01f)
+        {
+            Configuration.MainWindowBackgroundOpacity = mainWindowBackgroundOpacity;
             changed = true;
         }
 

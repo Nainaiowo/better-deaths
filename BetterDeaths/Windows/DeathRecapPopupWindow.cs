@@ -15,6 +15,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     private static readonly Vector4 PopupButtonHoveredColor = new(0.06f, 0.46f, 0.43f, 1.0f);
     private static readonly Vector4 PopupButtonActiveColor = new(0.08f, 0.55f, 0.50f, 1.0f);
     private static readonly Vector2 DefaultSize = new(240.0f, 82.0f);
+    private const float PopupBackgroundOpacity = 0.85f;
     private readonly Plugin plugin;
     private readonly RecapWindow recapWindow;
     private PendingDeath? pendingDeath;
@@ -61,10 +62,9 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 
     public override void PreDraw()
     {
-        var opacity = GetBackgroundOpacity();
         ApplyPopupPosition();
-        ImGui.SetNextWindowBgAlpha(opacity);
-        PushPopupStyle(opacity);
+        ImGui.SetNextWindowBgAlpha(PopupBackgroundOpacity);
+        PushPopupStyle();
     }
 
     public override void PostDraw()
@@ -142,30 +142,20 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
     }
 
-    private float GetBackgroundOpacity()
-    {
-        return Math.Clamp(
-            plugin.Configuration.DeathRecapPopupBackgroundOpacity <= 0.0f
-                ? 0.85f
-                : plugin.Configuration.DeathRecapPopupBackgroundOpacity,
-            Plugin.DeathRecapPopupMinBackgroundOpacity,
-            Plugin.DeathRecapPopupMaxBackgroundOpacity);
-    }
-
-    private void PushPopupStyle(float opacity)
+    private void PushPopupStyle()
     {
         if (stylePushed)
         {
             return;
         }
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, WithAlpha(PopupWindowBgColor, opacity));
-        ImGui.PushStyleColor(ImGuiCol.TitleBg, WithAlpha(PopupTitleBgColor, opacity));
-        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WithAlpha(PopupTitleBgColor, MathF.Min(1.0f, opacity + 0.12f)));
-        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, WithAlpha(PopupTitleBgColor, opacity));
-        ImGui.PushStyleColor(ImGuiCol.Button, WithAlpha(PopupButtonColor, opacity));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, WithAlpha(PopupButtonHoveredColor, MathF.Min(1.0f, opacity + 0.12f)));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, WithAlpha(PopupButtonActiveColor, MathF.Min(1.0f, opacity + 0.20f)));
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, WithAlpha(PopupWindowBgColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, WithAlpha(PopupTitleBgColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WithAlpha(PopupTitleBgColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
+        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, WithAlpha(PopupTitleBgColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.Button, WithAlpha(PopupButtonColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, WithAlpha(PopupButtonHoveredColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, WithAlpha(PopupButtonActiveColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.20f)));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
         stylePushed = true;

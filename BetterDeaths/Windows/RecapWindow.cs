@@ -28,6 +28,7 @@ public sealed class RecapWindow : Window, IDisposable
     private string debugTextFilter = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
+    private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
     private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
@@ -60,6 +61,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector4 ModernDividerColor = new(1.0f, 1.0f, 1.0f, 0.10f);
     private static readonly Vector4 TimelineSelectedRowColor = new(0.28f, 0.22f, 0.10f, 0.55f);
     private static readonly Vector4 TimelinePressedRowColor = new(0.42f, 0.33f, 0.13f, 0.78f);
+    private static readonly Vector2 DefaultWindowSize = new(1180.0f, 650.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
@@ -182,11 +184,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private readonly struct ModernStyleScope : IDisposable
     {
-        public ModernStyleScope()
+        public ModernStyleScope(float backgroundOpacity)
         {
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernShellColor);
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernShellColor, backgroundOpacity));
             ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
-            ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernPanelAltColor);
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, WithBackgroundOpacity(ModernPanelAltColor, backgroundOpacity));
             ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.16f, 0.18f, 0.20f, 1.0f));
             ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 10.0f);
@@ -262,7 +264,7 @@ public sealed class RecapWindow : Window, IDisposable
         configuration = plugin.Configuration;
         showDebugTab = configuration.ShowDebugTab;
 
-        Size = new Vector2(780, 560);
+        Size = DefaultWindowSize;
         SizeCondition = ImGuiCond.FirstUseEver;
         Flags |= ImGuiWindowFlags.NoScrollbar;
     }
@@ -273,6 +275,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     public override void PreDraw()
     {
+        if (configuration.ApplyWideDefaultWindowSizeOnNextOpen)
+        {
+            ImGui.SetNextWindowSize(DefaultWindowSize, ImGuiCond.Always);
+            plugin.MarkWideDefaultWindowSizeApplied();
+        }
+
+        currentMainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
+        ImGui.SetNextWindowBgAlpha(currentMainWindowBackgroundOpacity);
         PushWindowStyle();
     }
 
@@ -333,7 +343,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernShell()
     {
-        using var shellStyle = new ModernStyleScope();
+        using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
         {
             DrawModernHeader();
@@ -354,7 +364,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, ModernShellColor);
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, WithBackgroundOpacity(ModernShellColor, currentMainWindowBackgroundOpacity));
         windowStylePushed = true;
     }
 
@@ -4344,6 +4354,19 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.SetShowWindowByDefault(showWindow);
         }
 
+        var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
+        if (ImGui.SliderFloat(
+            "Better Deaths window opacity",
+            ref mainWindowBackgroundOpacity,
+            Plugin.MainWindowMinBackgroundOpacity,
+            Plugin.MainWindowMaxBackgroundOpacity,
+            "%.2f"))
+        {
+            plugin.SetMainWindowBackgroundOpacity(mainWindowBackgroundOpacity);
+        }
+
+        DrawSettingsTooltip("Controls the main Better Deaths window background opacity. Lower values make it easier to see combat behind the review window.");
+
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
         if (ImGui.Checkbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
@@ -4351,19 +4374,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
-
-        var deathRecapPopupBackgroundOpacity = GetDeathRecapPopupBackgroundOpacity();
-        if (ImGui.SliderFloat(
-            "Recap popup opacity",
-            ref deathRecapPopupBackgroundOpacity,
-            Plugin.DeathRecapPopupMinBackgroundOpacity,
-            Plugin.DeathRecapPopupMaxBackgroundOpacity,
-            "%.2f"))
-        {
-            plugin.SetDeathRecapPopupBackgroundOpacity(deathRecapPopupBackgroundOpacity);
-        }
-
-        DrawSettingsTooltip("Controls the small death recap popup background and button opacity. Lower values make it easier to see combat behind the popup.");
 
         var removeChatBranding = configuration.RemoveChatBranding;
         if (ImGui.Checkbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
@@ -4661,14 +4671,22 @@ public sealed class RecapWindow : Window, IDisposable
             Plugin.CurrentPullWidgetMaxBackgroundOpacity);
     }
 
-    private float GetDeathRecapPopupBackgroundOpacity()
+    private float GetMainWindowBackgroundOpacity()
     {
         return Math.Clamp(
-            configuration.DeathRecapPopupBackgroundOpacity <= 0.0f
-                ? 0.85f
-                : configuration.DeathRecapPopupBackgroundOpacity,
-            Plugin.DeathRecapPopupMinBackgroundOpacity,
-            Plugin.DeathRecapPopupMaxBackgroundOpacity);
+            configuration.MainWindowBackgroundOpacity <= 0.0f
+                ? Plugin.DefaultMainWindowBackgroundOpacity
+                : configuration.MainWindowBackgroundOpacity,
+            Plugin.MainWindowMinBackgroundOpacity,
+            Plugin.MainWindowMaxBackgroundOpacity);
+    }
+
+    private static Vector4 WithBackgroundOpacity(Vector4 color, float opacity)
+    {
+        return color with
+        {
+            W = Math.Clamp(opacity, Plugin.MainWindowMinBackgroundOpacity, Plugin.MainWindowMaxBackgroundOpacity),
+        };
     }
 
     private float GetWidgetIconSize()

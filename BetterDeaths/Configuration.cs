@@ -39,9 +39,13 @@ public enum ClockDisplayMode
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 3;
+    public int Version { get; set; } = 4;
 
     public bool ShowWindow { get; set; } = true;
+
+    public bool ApplyWideDefaultWindowSizeOnNextOpen { get; set; }
+
+    public float MainWindowBackgroundOpacity { get; set; } = 0.85f;
 
     public bool ShowCurrentPullWidget { get; set; }
 
@@ -57,6 +61,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowDeathRecapPopup { get; set; } = true;
 
+    // Legacy setting name kept so older configs can migrate the saved value to MainWindowBackgroundOpacity.
     public float DeathRecapPopupBackgroundOpacity { get; set; } = 0.85f;
 
     public bool HasDeathRecapPopupPosition { get; set; }
