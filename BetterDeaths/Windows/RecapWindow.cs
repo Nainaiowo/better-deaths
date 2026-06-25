@@ -69,7 +69,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.127";
+    private const string CurrentChangelogVersion = "0.1.0.128";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5926,16 +5926,10 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.127");
+        ImGui.TextUnformatted("v0.1.0.128");
         ImGui.TextDisabled("Theme and review UI polish.");
-        DrawWrappedBullet("Added more theme options.");
+        DrawBreathingGoldBullet("Added a variety of theme options.");
         DrawWrappedBullet("Cleaned up settings and review table layout.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.126");
-        ImGui.TextDisabled("Theme testing.");
-        DrawWrappedBullet("Added theme options in Customize.");
 
         ImGui.Separator();
 
