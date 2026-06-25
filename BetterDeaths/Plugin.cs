@@ -690,6 +690,17 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetTheme(BetterDeathsTheme theme)
+    {
+        if (!Enum.IsDefined(theme) || Configuration.Theme == theme)
+        {
+            return;
+        }
+
+        Configuration.Theme = theme;
+        SaveConfiguration();
+    }
+
     public void NotifyCurrentPullWidgetClosed()
     {
         if (disposing || !Configuration.ShowCurrentPullWidget)
@@ -1428,6 +1439,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.ClockDisplayMode))
         {
             Configuration.ClockDisplayMode = ClockDisplayMode.TwentyFourHour;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.Theme))
+        {
+            Configuration.Theme = BetterDeathsTheme.Classic;
             changed = true;
         }
 

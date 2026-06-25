@@ -34,38 +34,41 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly ReviewSelectionState exampleReviewSelection = new();
     private MainPage currentMainPage = MainPage.Review;
     private DeathDetailPage selectedDeathDetailPage = DeathDetailPage.Summary;
-    private static readonly Vector4 DamageColor = new(1.0f, 0.35f, 0.25f, 1.0f);
-    private static readonly Vector4 HealColor = new(0.25f, 1.0f, 0.45f, 1.0f);
-    private static readonly Vector4 WarningColor = new(1.0f, 0.7f, 0.25f, 1.0f);
-    private static readonly Vector4 LeadUpGoldColor = new(1.0f, 0.78f, 0.22f, 1.0f);
-    private static readonly Vector4 SpamWarningColor = new(1.0f, 0.12f, 0.12f, 1.0f);
-    private static readonly Vector4 DisabledColor = new(0.65f, 0.65f, 0.65f, 1.0f);
-    private static readonly Vector4 UpdateBannerBgColor = new(0.16f, 0.24f, 0.12f, 0.95f);
-    private static readonly Vector4 UpdateBannerTextColor = new(0.35f, 1.0f, 0.45f, 1.0f);
-    private static readonly Vector4 NoticeBorderColor = new(0.37f, 0.92f, 0.83f, 1.0f);
-    private static readonly Vector4 NoticeTextColor = new(0.84f, 1.0f, 0.97f, 1.0f);
-    private static readonly Vector4 NoticeButtonColor = new(0.04f, 0.34f, 0.32f, 1.0f);
-    private static readonly Vector4 NoticeButtonHoveredColor = new(0.06f, 0.46f, 0.43f, 1.0f);
-    private static readonly Vector4 HpBarColor = new(0.2f, 0.75f, 0.35f, 1.0f);
-    private static readonly Vector4 ShieldBarColor = new(1.0f, 0.82f, 0.16f, 1.0f);
-    private static readonly Vector4 BarBackgroundColor = new(0.18f, 0.18f, 0.18f, 1.0f);
-    private static readonly Vector4 BarBorderColor = new(0.45f, 0.45f, 0.45f, 1.0f);
-    private static readonly Vector4 OverkillColor = new(1.0f, 0.05f, 0.05f, 1.0f);
-    private static readonly Vector4 ModernShellColor = new(0.055f, 0.06f, 0.068f, 0.84f);
-    private static readonly Vector4 ModernPanelColor = new(0.085f, 0.092f, 0.104f, 0.88f);
-    private static readonly Vector4 ModernPanelAltColor = new(0.11f, 0.118f, 0.132f, 0.90f);
-    private static readonly Vector4 ModernPanelBorderColor = new(0.22f, 0.25f, 0.28f, 0.95f);
-    private static readonly Vector4 ModernAccentColor = new(0.36f, 0.92f, 0.82f, 1.0f);
-    private static readonly Vector4 ModernAccentSoftColor = new(0.10f, 0.34f, 0.31f, 0.92f);
-    private static readonly Vector4 ModernMutedTextColor = new(0.68f, 0.72f, 0.76f, 1.0f);
-    private static readonly Vector4 ModernDividerColor = new(1.0f, 1.0f, 1.0f, 0.10f);
-    private static readonly Vector4 TimelineSelectedRowColor = new(0.28f, 0.22f, 0.10f, 0.55f);
-    private static readonly Vector4 TimelinePressedRowColor = new(0.42f, 0.33f, 0.13f, 0.78f);
+    private static BetterDeathsUiTheme activeTheme = BetterDeathsThemeCatalog.GetTheme(BetterDeathsTheme.Classic);
+    private static Vector4 DamageColor => activeTheme.DamageColor;
+    private static Vector4 HealColor => activeTheme.HealColor;
+    private static Vector4 WarningColor => activeTheme.WarningColor;
+    private static Vector4 LeadUpGoldColor => activeTheme.LeadUpGoldColor;
+    private static Vector4 SpamWarningColor => activeTheme.SpamWarningColor;
+    private static Vector4 DisabledColor => activeTheme.DisabledColor;
+    private static Vector4 UpdateBannerBgColor => activeTheme.UpdateBannerBgColor;
+    private static Vector4 UpdateBannerTextColor => activeTheme.UpdateBannerTextColor;
+    private static Vector4 NoticeBorderColor => activeTheme.NoticeBorderColor;
+    private static Vector4 NoticeTextColor => activeTheme.NoticeTextColor;
+    private static Vector4 NoticeButtonColor => activeTheme.NoticeButtonColor;
+    private static Vector4 NoticeButtonHoveredColor => activeTheme.NoticeButtonHoveredColor;
+    private static Vector4 HpBarColor => activeTheme.HpBarColor;
+    private static Vector4 ShieldBarColor => activeTheme.ShieldBarColor;
+    private static Vector4 BarBackgroundColor => activeTheme.BarBackgroundColor;
+    private static Vector4 BarBorderColor => activeTheme.BarBorderColor;
+    private static Vector4 OverkillColor => activeTheme.OverkillColor;
+    private static Vector4 ModernShellColor => activeTheme.ModernShellColor;
+    private static Vector4 ModernPanelColor => activeTheme.ModernPanelColor;
+    private static Vector4 ModernPanelAltColor => activeTheme.ModernPanelAltColor;
+    private static Vector4 ModernPanelBorderColor => activeTheme.ModernPanelBorderColor;
+    private static Vector4 ModernAccentColor => activeTheme.ModernAccentColor;
+    private static Vector4 ModernAccentSoftColor => activeTheme.ModernAccentSoftColor;
+    private static Vector4 ModernMutedTextColor => activeTheme.ModernMutedTextColor;
+    private static Vector4 ModernDividerColor => activeTheme.ModernDividerColor;
+    private static Vector4 ModernFrameHoveredColor => activeTheme.ModernFrameHoveredColor;
+    private static Vector4 ModernButtonHoveredColor => activeTheme.ModernButtonHoveredColor;
+    private static Vector4 TimelineSelectedRowColor => activeTheme.TimelineSelectedRowColor;
+    private static Vector4 TimelinePressedRowColor => activeTheme.TimelinePressedRowColor;
     private static readonly Vector2 DefaultWindowSize = new(1180.0f, 650.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.123";
+    private const string CurrentChangelogVersion = "0.1.0.126";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -189,7 +192,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernShellColor, backgroundOpacity));
             ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
             ImGui.PushStyleColor(ImGuiCol.FrameBg, WithBackgroundOpacity(ModernPanelAltColor, backgroundOpacity));
-            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.16f, 0.18f, 0.20f, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
             ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 10.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
@@ -275,6 +278,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     public override void PreDraw()
     {
+        ApplyConfiguredTheme();
         if (configuration.ApplyWideDefaultWindowSizeOnNextOpen)
         {
             ImGui.SetNextWindowSize(DefaultWindowSize, ImGuiCond.Always);
@@ -289,6 +293,11 @@ public sealed class RecapWindow : Window, IDisposable
     public override void PostDraw()
     {
         PopWindowStyle();
+    }
+
+    private void ApplyConfiguredTheme()
+    {
+        activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
     }
 
     public override void Draw()
@@ -486,8 +495,8 @@ public sealed class RecapWindow : Window, IDisposable
             ? ModernAccentSoftColor
             : ModernPanelAltColor;
         var hoveredColor = selected
-            ? new Vector4(0.14f, 0.45f, 0.40f, 1.0f)
-            : new Vector4(0.16f, 0.18f, 0.20f, 1.0f);
+            ? ModernAccentSoftColor with { W = 1.0f }
+            : ModernButtonHoveredColor;
         var textColor = highlight
             ? LeadUpGoldColor
             : selected ? ModernAccentColor : Vector4.One;
@@ -1267,8 +1276,8 @@ public sealed class RecapWindow : Window, IDisposable
         var selected = selectedDeathDetailPage == page;
         var buttonColor = selected ? ModernAccentSoftColor : ModernPanelAltColor;
         var hoveredColor = selected
-            ? new Vector4(0.14f, 0.45f, 0.40f, 1.0f)
-            : new Vector4(0.16f, 0.18f, 0.20f, 1.0f);
+            ? ModernAccentSoftColor with { W = 1.0f }
+            : ModernButtonHoveredColor;
 
         ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
@@ -1435,6 +1444,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     internal void DrawCurrentPullWidgetContent()
     {
+        ApplyConfiguredTheme();
         DrawCurrentPullWidgetContent(
             plugin.CurrentDeaths,
             BuildCurrentPullWidgetTitle(),
@@ -1744,9 +1754,9 @@ public sealed class RecapWindow : Window, IDisposable
     private static void PushChangelogTabHighlightStyle()
     {
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
-        ImGui.PushStyleColor(ImGuiCol.Tab, new Vector4(0.34f, 0.24f, 0.07f, 0.95f));
-        ImGui.PushStyleColor(ImGuiCol.TabHovered, new Vector4(0.66f, 0.45f, 0.12f, 1.0f));
-        ImGui.PushStyleColor(ImGuiCol.TabActive, new Vector4(0.50f, 0.35f, 0.10f, 1.0f));
+        ImGui.PushStyleColor(ImGuiCol.Tab, activeTheme.ChangelogTabColor);
+        ImGui.PushStyleColor(ImGuiCol.TabHovered, activeTheme.ChangelogTabHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.TabActive, activeTheme.ChangelogTabActiveColor);
     }
 
     private static void DrawChangelogTabHighlightBorder()
@@ -4352,6 +4362,8 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.SetShowWindowByDefault(showWindow);
         }
 
+        DrawThemeSetting();
+
         var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
         if (ImGui.SliderFloat(
             "Better Deaths window opacity",
@@ -4492,6 +4504,32 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsInfoLine("Duty dropdown", "A filter: All duties shows everything, while a selected duty only shows pulls from that duty.");
         ImGui.TextColored(SpamWarningColor, "Only functions in duties, not overworld or PvP.");
         DrawDebugTabAccessButton();
+    }
+
+    private void DrawThemeSetting()
+    {
+        var selectedTheme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
+        if (!ImGui.BeginCombo("Theme", selectedTheme.Label))
+        {
+            return;
+        }
+
+        foreach (var theme in BetterDeathsThemeCatalog.All)
+        {
+            var selected = configuration.Theme == theme.Id;
+            if (ImGui.Selectable(theme.Label, selected))
+            {
+                plugin.SetTheme(theme.Id);
+                activeTheme = theme;
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndCombo();
     }
 
     private void DrawDebugTabAccessButton()
@@ -5784,6 +5822,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.126");
+        ImGui.TextDisabled("Theme testing.");
+        DrawWrappedBullet("Added theme options in Customize.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.123");
         ImGui.TextDisabled("Data table cleanup.");
         DrawWrappedBullet("Data tables were refined and cleaned.");

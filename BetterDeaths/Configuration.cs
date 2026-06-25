@@ -36,6 +36,14 @@ public enum ClockDisplayMode
     TwelveHour,
 }
 
+public enum BetterDeathsTheme
+{
+    Classic,
+    Rose,
+    Verdant,
+    Ember,
+}
+
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
@@ -46,6 +54,8 @@ public sealed class Configuration : IPluginConfiguration
     public bool ApplyWideDefaultWindowSizeOnNextOpen { get; set; }
 
     public float MainWindowBackgroundOpacity { get; set; } = 0.85f;
+
+    public BetterDeathsTheme Theme { get; set; } = BetterDeathsTheme.Classic;
 
     public bool ShowCurrentPullWidget { get; set; }
 

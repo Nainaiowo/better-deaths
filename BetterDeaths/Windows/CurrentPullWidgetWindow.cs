@@ -10,13 +10,6 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
     private readonly Plugin plugin;
     private readonly RecapWindow recapWindow;
     private bool stylePushed;
-    private static readonly Vector4 WidgetWindowBackgroundColor = new(0.055f, 0.06f, 0.068f, 1.0f);
-    private static readonly Vector4 WidgetTitleBackgroundColor = new(0.085f, 0.092f, 0.104f, 1.0f);
-    private static readonly Vector4 WidgetTitleActiveBackgroundColor = new(0.10f, 0.11f, 0.125f, 1.0f);
-    private static readonly Vector4 WidgetBorderColor = new(0.22f, 0.25f, 0.28f, 0.95f);
-    private static readonly Vector4 WidgetResizeGripColor = new(0.36f, 0.92f, 0.82f, 0.30f);
-    private static readonly Vector4 WidgetResizeGripHoveredColor = new(0.36f, 0.92f, 0.82f, 0.55f);
-    private static readonly Vector4 WidgetResizeGripActiveColor = new(0.36f, 0.92f, 0.82f, 0.75f);
 
     public CurrentPullWidgetWindow(Plugin plugin, RecapWindow recapWindow)
         : base("Better Deaths Widget###BetterDeathsCurrentPullWidget")
@@ -53,7 +46,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
     public override void Draw()
     {
         recapWindow.DrawCurrentPullWidgetContent();
-        DrawBottomLeftResizeGrip();
+        DrawBottomLeftResizeGrip(BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme));
     }
 
     public override void OnClose()
@@ -68,14 +61,15 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
             return;
         }
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, WidgetWindowBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.TitleBg, WidgetTitleBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WidgetTitleActiveBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, WidgetTitleBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.Border, WidgetBorderColor);
-        ImGui.PushStyleColor(ImGuiCol.ResizeGrip, WidgetResizeGripColor);
-        ImGui.PushStyleColor(ImGuiCol.ResizeGripHovered, WidgetResizeGripHoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.ResizeGripActive, WidgetResizeGripActiveColor);
+        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme);
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, theme.WidgetWindowBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, theme.WidgetTitleBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, theme.WidgetTitleActiveBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, theme.WidgetTitleBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, theme.WidgetBorderColor);
+        ImGui.PushStyleColor(ImGuiCol.ResizeGrip, theme.WidgetResizeGripColor);
+        ImGui.PushStyleColor(ImGuiCol.ResizeGripHovered, theme.WidgetResizeGripHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ResizeGripActive, theme.WidgetResizeGripActiveColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
@@ -95,7 +89,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         stylePushed = false;
     }
 
-    private static void DrawBottomLeftResizeGrip()
+    private static void DrawBottomLeftResizeGrip(BetterDeathsUiTheme theme)
     {
         const float gripSize = 18.0f;
         const float inset = 5.0f;
@@ -114,9 +108,9 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         var color = ImGui.GetColorU32(
             hovered
                 ? ImGui.IsMouseDown(ImGuiMouseButton.Left)
-                    ? WidgetResizeGripActiveColor
-                    : WidgetResizeGripHoveredColor
-                : WidgetResizeGripColor);
+                    ? theme.WidgetResizeGripActiveColor
+                    : theme.WidgetResizeGripHoveredColor
+                : theme.WidgetResizeGripColor);
         var origin = new Vector2(position.X + inset, position.Y + size.Y - inset);
         var drawList = ImGui.GetWindowDrawList();
 
