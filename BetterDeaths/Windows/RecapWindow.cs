@@ -65,7 +65,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.121";
+    private const string CurrentChangelogVersion = "0.1.0.123";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1923,13 +1923,11 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         DrawCenteredHeaderCell("Before death");
-        DrawCenteredHeaderCell("Type");
         DrawCenteredHeaderCell("Source");
         DrawCenteredHeaderCell("Action");
         DrawCenteredHeaderCell("Amount");
         DrawCenteredHeaderCell("HP + shields");
         DrawCenteredHeaderCell("Mits/Debuffs");
-        DrawCenteredHeaderCell("Target Mits");
     }
 
     private static void DrawCenteredHeaderCell(string label)
@@ -3794,19 +3792,17 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable($"##LeadUpEvents{idSuffix}", 8, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##LeadUpEvents{idSuffix}", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.75f);
-        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.7f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 0.85f);
+        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 1.0f);
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.25f);
-        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
-        ImGui.TableSetupColumn("Target Mits", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 2.85f);
         DrawLeadUpEventsTableHeader();
 
         foreach (var combatEvent in events)
@@ -3815,8 +3811,6 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, combatEvent.SeenAtUtc));
-            ImGui.TableNextColumn();
-            DrawEventTypeText(combatEvent);
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(FormatKnownPlayerName(combatEvent.SourceName));
             ImGui.TableNextColumn();
@@ -3832,9 +3826,9 @@ public sealed class RecapWindow : Window, IDisposable
                 GetIncomingDamageAmount(combatEvent),
                 hpDisplay.TooltipDetail);
             ImGui.TableNextColumn();
-            DrawStatusSummaryCell(GetMergedPlayerStatusesForEvent(death, combatEvent), true, Plugin.ShouldShowPlayerStatusTimerForDisplay, true);
-            ImGui.TableNextColumn();
-            DrawStatusSummaryCell(Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent)), true, null, true);
+            DrawCombinedMitigationDebuffCell(
+                GetMergedPlayerStatusesForEvent(death, combatEvent),
+                GetEventSourceMitigationStatuses(death, combatEvent));
         }
 
         ImGui.EndTable();
@@ -5790,6 +5784,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.123");
+        ImGui.TextDisabled("Data table cleanup.");
+        DrawWrappedBullet("Data tables were refined and cleaned.");
+        DrawWrappedBullet("Adjusted the captured hits/events columns so Source, Action, Amount, HP, and Mits/Debuffs have better spacing.");
+        DrawWrappedBullet("Fixed download count metadata so installer counts can update from the feed instead of being stuck inside the package.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.121");
         ImGui.TextDisabled("Settings privacy.");
         DrawWrappedBullet("Added a name redaction option in settings");
@@ -6745,27 +6747,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return lines.Count == 0 ? [text] : lines;
-    }
-
-    private static void DrawEventTypeText(CombatEventRecord combatEvent)
-    {
-        DrawCenteredText(FormatEventType(combatEvent), GetEventColor(combatEvent.Kind));
-    }
-
-    private static string FormatEventType(CombatEventRecord combatEvent)
-    {
-        var flags = FormatEventFlags(combatEvent);
-        if (!string.IsNullOrWhiteSpace(flags) && flags != "-")
-        {
-            return flags;
-        }
-
-        return combatEvent.Kind switch
-        {
-            DeathEventKind.Damage => "Hit",
-            DeathEventKind.Invulnerable => "Invuln",
-            _ => combatEvent.Kind.ToString(),
-        };
     }
 
     private static Vector4 GetEventColor(DeathEventKind kind)
