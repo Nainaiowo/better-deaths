@@ -65,7 +65,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.119";
+    private const string CurrentChangelogVersion = "0.1.0.121";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1167,7 +1167,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            DrawCenteredText(death.MemberName);
+            DrawCenteredText(FormatPlayerName(death, pull.Deaths));
             ImGui.TableNextColumn();
             DrawJobCell(death);
             ImGui.TableNextColumn();
@@ -1208,7 +1208,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawSelectedDeathHeader(death);
+        DrawSelectedDeathHeader(pull, death);
         var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
         DrawDeathDetailSwitcher(deathId);
         ImGui.Spacing();
@@ -1282,7 +1282,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(4);
     }
 
-    private void DrawSelectedDeathHeader(PartyDeathRecord death)
+    private void DrawSelectedDeathHeader(ReviewPull pull, PartyDeathRecord death)
     {
         var iconId = GetClassJobIconId(death.ClassJobId);
         if (iconId != 0)
@@ -1291,7 +1291,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SameLine();
         }
 
-        ImGui.TextUnformatted($"{death.MemberName} ({death.ClassJobName})");
+        ImGui.TextUnformatted($"{FormatPlayerName(death, pull.Deaths)} ({death.ClassJobName})");
         ImGui.TextDisabled($"Death at {FormatCombatTimer(death.PullElapsedSeconds)}");
         ImGui.Separator();
     }
@@ -1546,8 +1546,11 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawWidgetPlayerCell(PartyDeathRecord death)
     {
         var iconId = GetClassJobIconId(death.ClassJobId);
-        var displayName = FormatWidgetPlayerName(death.MemberName);
-        var tooltip = $"Full name: {death.MemberName}\nInitials: {FormatPlayerInitials(death.MemberName)}";
+        var fullDisplayName = FormatPlayerName(death);
+        var displayName = FormatWidgetPlayerName(fullDisplayName);
+        var tooltip = configuration.RedactPlayerNames
+            ? $"{fullDisplayName}\nInitials: {FormatPlayerInitials(fullDisplayName)}"
+            : $"Full name: {death.MemberName}\nInitials: {FormatPlayerInitials(death.MemberName)}";
         var iconSize = GetWidgetIconSize();
         var textWidth = ImGui.CalcTextSize(displayName).X;
         var spacing = ImGui.GetStyle().ItemSpacing.X;
@@ -1895,7 +1898,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            DrawCenteredText(death.MemberName);
+            DrawCenteredText(FormatPlayerName(death, deaths));
             ImGui.TableNextColumn();
             DrawJobCell(death);
 
@@ -2176,7 +2179,7 @@ public sealed class RecapWindow : Window, IDisposable
             : combatEvent.ActionName;
     }
 
-    private static void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents, bool conciseMode)
+    private void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents, bool conciseMode)
     {
         var text = conciseMode
             ? FormatConciseWidgetCauseSummary(causeEvents)
@@ -2202,7 +2205,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static string FormatWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
+    private string FormatWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
     {
         if (causeEvents.Count == 0)
         {
@@ -2225,7 +2228,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         var cause = causeEvents[0];
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {cause.SourceName}"
+            ? $"{cause.ActionName} from {FormatKnownPlayerName(cause.SourceName)}"
             : $"{FormatWidgetAmount(cause.Amount)} {cause.ActionName}";
     }
 
@@ -2527,10 +2530,10 @@ public sealed class RecapWindow : Window, IDisposable
         DrawGameIcon(status.Status.IconId, iconSize, FormatWidgetMitTooltip(status));
     }
 
-    private static string FormatWidgetMitTooltip(WidgetMitStatus status)
+    private string FormatWidgetMitTooltip(WidgetMitStatus status)
     {
         var tooltipPrefix = status.Category == "Boss" && !string.IsNullOrWhiteSpace(status.SourceName)
-            ? $"{status.Category} ({status.SourceName})"
+            ? $"{status.Category} ({FormatKnownPlayerName(status.SourceName)})"
             : status.Category;
         return $"{tooltipPrefix}: {FormatStatusCompact(status.Status)}";
     }
@@ -2595,7 +2598,8 @@ public sealed class RecapWindow : Window, IDisposable
                 continue;
             }
 
-            var header = $"#{deathNumber} - {FormatCombatTimer(death.PullElapsedSeconds)} - {death.MemberName} ({death.ClassJobName})###DeathDetail{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+            var playerName = FormatPlayerName(death);
+            var header = $"#{deathNumber} - {FormatCombatTimer(death.PullElapsedSeconds)} - {playerName} ({death.ClassJobName})###DeathDetail{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}";
             if (useCollapsers)
             {
                 if (isSelectedDeath)
@@ -2611,7 +2615,7 @@ public sealed class RecapWindow : Window, IDisposable
             else
             {
                 ImGui.Separator();
-                ImGui.TextUnformatted($"#{deathNumber} - {FormatCombatTimer(death.PullElapsedSeconds)} - {death.MemberName} ({death.ClassJobName})");
+                ImGui.TextUnformatted($"#{deathNumber} - {FormatCombatTimer(death.PullElapsedSeconds)} - {playerName} ({death.ClassJobName})");
             }
 
             if (isSelectedDeath)
@@ -2725,7 +2729,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawFatalSequenceSummary(death);
     }
 
-    private static void DrawLikelyCauseDetails(IReadOnlyList<CombatEventRecord> causeEvents)
+    private void DrawLikelyCauseDetails(IReadOnlyList<CombatEventRecord> causeEvents)
     {
         for (var i = 0; i < causeEvents.Count; i++)
         {
@@ -2737,7 +2741,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             DrawActionBullet(cause);
-            ImGui.BulletText($"Source: {cause.SourceName}");
+            ImGui.BulletText($"Source: {FormatKnownPlayerName(cause.SourceName)}");
             if (cause.Kind == DeathEventKind.Status)
             {
                 ImGui.BulletText(cause.Detail);
@@ -2846,7 +2850,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 ImGui.Indent();
                 ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), logEvent.SeenAtUtc)} {logEvent.SourceName}: {logEvent.ActionName} {FormatAmount(logEvent.Amount)}");
+                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {logEvent.ActionName} {FormatAmount(logEvent.Amount)}");
                 ImGui.Unindent();
             }
         }
@@ -2972,7 +2976,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
-    private static IReadOnlyList<LeadUpTimelineRow> GetLeadUpTimelineRows(
+    private IReadOnlyList<LeadUpTimelineRow> GetLeadUpTimelineRows(
         PartyDeathRecord death,
         DateTime anchorSeenAtUtc,
         DateTime displayAnchorSeenAtUtc)
@@ -3154,7 +3158,7 @@ public sealed class RecapWindow : Window, IDisposable
             StatusListsMatchForHistoryMerge(previous.SourceStatuses, next.SourceStatuses);
     }
 
-    private static LeadUpTimelineRow CreateHpSampleTimelineRow(
+    private LeadUpTimelineRow CreateHpSampleTimelineRow(
         HpHistorySnapshot snapshot,
         DerivedHpState? pendingDerivedHp,
         DateTime displayAnchorSeenAtUtc,
@@ -3170,7 +3174,7 @@ public sealed class RecapWindow : Window, IDisposable
             var shieldSourceText = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
                 ? "shield was also derived from the hit"
                 : "shield came from the captured sample";
-            var tooltip = $"Derived HP after {pendingDerivedHp.SourceName}: {pendingDerivedHp.ActionName} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
+            var tooltip = $"Derived HP after {FormatKnownPlayerName(pendingDerivedHp.SourceName)}: {pendingDerivedHp.ActionName} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
             return new LeadUpTimelineRow(
                 snapshot.SeenAtUtc,
                 snapshot.PullElapsedSeconds,
@@ -3258,7 +3262,7 @@ public sealed class RecapWindow : Window, IDisposable
         return statuses;
     }
 
-    private static void DrawTimelineEventCell(CombatEventRecord? combatEvent)
+    private void DrawTimelineEventCell(CombatEventRecord? combatEvent)
     {
         if (combatEvent is null)
         {
@@ -3267,8 +3271,8 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var text = combatEvent.Amount > 0
-            ? $"{combatEvent.SourceName}: {combatEvent.ActionName} {FormatAmount(combatEvent.Amount)}"
-            : $"{combatEvent.SourceName}: {combatEvent.ActionName}";
+            ? $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} {FormatAmount(combatEvent.Amount)}"
+            : $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName}";
         DrawCenteredOrWrappedText(text, GetEventColor(combatEvent.Kind));
         DrawLikelyAutoAttackTooltip(combatEvent);
     }
@@ -3720,7 +3724,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(row.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(row.SourceName);
+            DrawCenteredOrWrappedText(FormatKnownPlayerName(row.SourceName));
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(row.ActionName);
             ImGui.TableNextColumn();
@@ -3814,7 +3818,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawEventTypeText(combatEvent);
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(combatEvent.SourceName);
+            DrawCenteredOrWrappedText(FormatKnownPlayerName(combatEvent.SourceName));
             ImGui.TableNextColumn();
             DrawActionText(combatEvent, false);
             ImGui.TableNextColumn();
@@ -3950,7 +3954,7 @@ public sealed class RecapWindow : Window, IDisposable
             "No HP sample before this event was available.");
     }
 
-    private static void DrawEventSummaryCell(IReadOnlyList<CombatEventRecord> events, int maxEvents = 2)
+    private void DrawEventSummaryCell(IReadOnlyList<CombatEventRecord> events, int maxEvents = 2)
     {
         if (events.Count == 0)
         {
@@ -3998,14 +4002,14 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static string FormatLikelyCauseLine(CombatEventRecord combatEvent)
+    private string FormatLikelyCauseLine(CombatEventRecord combatEvent)
     {
         if (combatEvent.Kind == DeathEventKind.Status)
         {
-            return $"{combatEvent.SourceName}: {combatEvent.ActionName} | Flags: {FormatEventFlags(combatEvent)}";
+            return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} | Flags: {FormatEventFlags(combatEvent)}";
         }
 
-        return $"{combatEvent.SourceName}: {combatEvent.ActionName} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
+        return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
     }
 
     private void DrawLeadUpSummaryMitigationDebuffCell(LeadUpSummaryRow summary)
@@ -4375,6 +4379,15 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
 
+        var redactPlayerNames = configuration.RedactPlayerNames;
+        if (ImGui.Checkbox("Name Redaction", ref redactPlayerNames))
+        {
+            plugin.SetRedactPlayerNames(redactPlayerNames);
+        }
+
+        DrawSettingsTooltip("A way to show information to others without doxxing your party");
+
+
         var removeChatBranding = configuration.RemoveChatBranding;
         if (ImGui.Checkbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
         {
@@ -4689,6 +4702,36 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
+    private string FormatPlayerName(PartyDeathRecord death)
+    {
+        return plugin.FormatPlayerDisplayName(death);
+    }
+
+    private string FormatPlayerName(PartyDeathRecord death, IReadOnlyList<PartyDeathRecord>? context)
+    {
+        return plugin.FormatPlayerDisplayName(death, context);
+    }
+
+    private string FormatPlayerName(DebugStatusSnapshot snapshot)
+    {
+        return plugin.FormatPlayerDisplayName(
+            snapshot.MemberName,
+            snapshot.MemberKey,
+            snapshot.PartyIndex,
+            snapshot.ClassJobId,
+            snapshot.ClassJobName);
+    }
+
+    private string FormatKnownPlayerName(string name)
+    {
+        return plugin.FormatKnownPlayerName(name);
+    }
+
+    private string RedactKnownPlayerNamesInText(string text)
+    {
+        return plugin.RedactKnownPlayerNamesInText(text);
+    }
+
     private float GetWidgetIconSize()
     {
         return Math.Clamp(
@@ -4988,6 +5031,7 @@ public sealed class RecapWindow : Window, IDisposable
         return MatchesDebugTextFilter(
             filter,
             snapshot.MemberName,
+            FormatPlayerName(snapshot),
             snapshot.ClassJobName,
             snapshot.PartyIndex.ToString(),
             FormatDebugStatusSource(snapshot.ClassJobId)) ||
@@ -5006,12 +5050,13 @@ public sealed class RecapWindow : Window, IDisposable
         return MatchesDebugTextFilter(
             filter,
             snapshot.TargetName,
+            FormatKnownPlayerName(snapshot.TargetName),
             FormatDebugStatusSource(snapshot.TargetId),
             FormatDebugStatusSource(snapshot.ActorId),
             snapshot.RelatedActionSequence.ToString(CultureInfo.InvariantCulture)) ||
             MatchesDebugTextFilter(
                 filter,
-                string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.EffectId} {status.SourceName} {FormatDebugStatusSource(status.SourceActorId)}")));
+                string.Join(" ", snapshot.Statuses.Select(status => $"{status.Name} {status.EffectId} {FormatKnownPlayerName(status.SourceName)} {FormatDebugStatusSource(status.SourceActorId)}")));
     }
 
     private bool MatchesDebugActorControlEvent(DebugActorControlEvent entry)
@@ -5029,7 +5074,9 @@ public sealed class RecapWindow : Window, IDisposable
         return MatchesDebugTextFilter(
             filter,
             entry.EntityName,
+            FormatKnownPlayerName(entry.EntityName),
             entry.TargetName,
+            FormatKnownPlayerName(entry.TargetName),
             entry.CategoryName,
             entry.Category.ToString(CultureInfo.InvariantCulture),
             FormatDebugStatusSource(entry.EntityId),
@@ -5056,7 +5103,8 @@ public sealed class RecapWindow : Window, IDisposable
             filter,
             entry.SeenAtUtc.ToString("HH:mm:ss"),
             FormatCombatTimer(entry.PullElapsedSeconds),
-            entry.Message);
+            entry.Message,
+            RedactKnownPlayerNamesInText(entry.Message));
     }
 
     private bool TryGetDebugTextFilter(out string filter)
@@ -5117,7 +5165,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.PushID($"DebugStatus{snapshot.MemberKey}");
             var deadText = snapshot.IsDead ? " dead" : string.Empty;
-            var label = $"{snapshot.MemberName} ({snapshot.ClassJobName}) - {snapshot.Statuses.Count:N0} captured statuses{deadText}###DebugStatusSnapshot";
+            var label = $"{FormatPlayerName(snapshot)} ({snapshot.ClassJobName}) - {snapshot.Statuses.Count:N0} captured statuses{deadText}###DebugStatusSnapshot";
             if (ImGui.TreeNode(label))
             {
                 var shieldText = snapshot.ShieldHp > 0 ? $" + {snapshot.ShieldHp:N0} shield" : string.Empty;
@@ -5220,7 +5268,7 @@ public sealed class RecapWindow : Window, IDisposable
         foreach (var snapshot in snapshots)
         {
             ImGui.PushID($"DebugEffectResult{snapshot.TargetId}{snapshot.ActorId}{snapshot.TargetName}");
-            var label = $"{snapshot.TargetName} - {snapshot.Statuses.Count:N0}/{snapshot.EffectCount:N0} packet statuses###DebugEffectResultSnapshot";
+            var label = $"{FormatKnownPlayerName(snapshot.TargetName)} - {snapshot.Statuses.Count:N0}/{snapshot.EffectCount:N0} packet statuses###DebugEffectResultSnapshot";
             if (ImGui.TreeNode(label))
             {
                 var shieldText = snapshot.ShieldHp > 0
@@ -5289,7 +5337,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(snapshot.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(snapshot.TargetName);
+            ImGui.TextWrapped(FormatKnownPlayerName(snapshot.TargetName));
             ImGui.TableNextColumn();
             DrawCenteredText($"{snapshot.CurrentHp:N0}/{snapshot.MaxHp:N0}");
             ImGui.TableNextColumn();
@@ -5338,7 +5386,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatDebugStatusSource(status.SourceActorId));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(status.SourceName);
+            ImGui.TextWrapped(FormatKnownPlayerName(status.SourceName));
             ImGui.TableNextColumn();
             DrawCenteredText(status.StackCount == 0 ? "-" : status.StackCount.ToString());
             ImGui.TableNextColumn();
@@ -5413,7 +5461,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(entry.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(entry.EntityName);
+            ImGui.TextWrapped(FormatKnownPlayerName(entry.EntityName));
             ImGui.TableNextColumn();
             DrawCenteredText($"{entry.CategoryName} ({entry.Category})");
             ImGui.TableNextColumn();
@@ -5433,7 +5481,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatDebugActorControlParam(entry.Param8));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(entry.TargetName);
+            ImGui.TextWrapped(FormatKnownPlayerName(entry.TargetName));
             ImGui.TableNextColumn();
             DrawCenteredText(entry.Param9.ToString());
             ImGui.TableNextColumn();
@@ -5483,7 +5531,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(entry.PullElapsedSeconds));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(entry.Message);
+            ImGui.TextWrapped(RedactKnownPlayerNamesInText(entry.Message));
         }
 
         ImGui.EndTable();
@@ -5520,12 +5568,12 @@ public sealed class RecapWindow : Window, IDisposable
         return $"{status.Name} ({status.Id})\nSource: {FormatDebugStatusSource(status.SourceId)}\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nRemaining: {FormatStatusDuration(status, true, true, "-")}";
     }
 
-    private static string FormatDebugEffectResultStatusTooltip(DebugEffectResultStatus status)
+    private string FormatDebugEffectResultStatusTooltip(DebugEffectResultStatus status)
     {
-        return $"{status.Name} ({status.EffectId})\nEffect index: {status.EffectIndex}\nSource: {status.SourceName} ({FormatDebugStatusSource(status.SourceActorId)})\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nDuration: {FormatDebugEffectResultDuration(status.Duration)}";
+        return $"{status.Name} ({status.EffectId})\nEffect index: {status.EffectIndex}\nSource: {FormatKnownPlayerName(status.SourceName)} ({FormatDebugStatusSource(status.SourceActorId)})\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nDuration: {FormatDebugEffectResultDuration(status.Duration)}";
     }
 
-    private static string FormatDebugEffectResultStatusSummary(DebugEffectResultSnapshot snapshot)
+    private string FormatDebugEffectResultStatusSummary(DebugEffectResultSnapshot snapshot)
     {
         if (snapshot.Statuses.Count == 0)
         {
@@ -5533,7 +5581,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return string.Join("; ", snapshot.Statuses.Select(status =>
-            $"{status.Name} ({status.EffectId}) {FormatDebugEffectResultDuration(status.Duration)} from {status.SourceName}"));
+            $"{status.Name} ({status.EffectId}) {FormatDebugEffectResultDuration(status.Duration)} from {FormatKnownPlayerName(status.SourceName)}"));
     }
 
     private static string FormatDebugEffectResultDuration(float duration)
@@ -5742,6 +5790,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.121");
+        ImGui.TextDisabled("Settings privacy.");
+        DrawWrappedBullet("Added a name redaction option in settings");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.119");
         ImGui.TextDisabled("Acknowledgement fix.");
         DrawWrappedBullet("Acknowledgement text now wraps correctly.");

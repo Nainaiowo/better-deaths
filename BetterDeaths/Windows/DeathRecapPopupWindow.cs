@@ -54,7 +54,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             death.SeenAtUtc,
             death.SeenAtUtc.Ticks,
             Plugin.GetMemberKeyHash(death.MemberKey),
-            death.MemberName,
+            plugin.FormatPlayerDisplayName(death),
             death.ClassJobName);
         applySavedPositionOnNextDraw = true;
         IsOpen = true;

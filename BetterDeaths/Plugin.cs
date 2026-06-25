@@ -146,6 +146,14 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private sealed record RecordedPullHistoryFile(int SchemaVersion, List<PullDeathSnapshot> Pulls);
 
+    private readonly record struct PlayerLabelCandidate(
+        string MemberKey,
+        string MemberName,
+        int PartyIndex,
+        uint ClassJobId,
+        string ClassJobName,
+        DateTime SeenAtUtc);
+
     private sealed record DebugCaptureFileRecord(
         DateTime SeenAtUtc,
         float PullElapsedSeconds,
@@ -758,6 +766,12 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetRedactPlayerNames(bool enabled)
+    {
+        Configuration.RedactPlayerNames = enabled;
+        SaveConfiguration();
+    }
+
     public void SetShowDeathRecapPopup(bool enabled)
     {
         Configuration.ShowDeathRecapPopup = enabled;
@@ -956,7 +970,7 @@ public sealed partial class Plugin : IDalamudPlugin
     public void PrintDeathInformationToChat(PartyDeathRecord death)
     {
         var timer = FormatCombatTimer(death.PullElapsedSeconds);
-        var playerLabel = $"{death.MemberName} ({death.ClassJobName})";
+        var playerLabel = $"{FormatPlayerDisplayName(death)} ({death.ClassJobName})";
         var prefix = GetChatBrandingPrefix();
         var selection = DeathDisplaySelector.Select(death);
         var causeEvents = selection.Events;
@@ -1080,6 +1094,225 @@ public sealed partial class Plugin : IDalamudPlugin
 
             return hash;
         }
+    }
+
+    public string FormatPlayerDisplayName(PartyDeathRecord death)
+    {
+        return FormatPlayerDisplayName(death, FindDeathLabelContext(death));
+    }
+
+    public string FormatPlayerDisplayName(PartyDeathRecord death, IReadOnlyList<PartyDeathRecord>? context)
+    {
+        if (!Configuration.RedactPlayerNames)
+        {
+            return death.MemberName;
+        }
+
+        return FormatRedactedPlayerLabel(ToPlayerLabelCandidate(death), ToPlayerLabelCandidates(context));
+    }
+
+    public string FormatPlayerDisplayName(
+        string memberName,
+        string memberKey,
+        int partyIndex,
+        uint classJobId,
+        string classJobName)
+    {
+        if (!Configuration.RedactPlayerNames)
+        {
+            return memberName;
+        }
+
+        return FormatRedactedPlayerLabel(new PlayerLabelCandidate(
+            memberKey,
+            memberName,
+            partyIndex,
+            classJobId,
+            classJobName,
+            DateTime.MinValue));
+    }
+
+    public string FormatKnownPlayerName(string name)
+    {
+        if (!Configuration.RedactPlayerNames || string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        return BuildKnownPlayerNameMap().TryGetValue(name, out var label)
+            ? label
+            : name;
+    }
+
+    public string RedactKnownPlayerNamesInText(string text)
+    {
+        if (!Configuration.RedactPlayerNames || string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        foreach (var pair in BuildKnownPlayerNameMap()
+                     .OrderByDescending(pair => pair.Key.Length))
+        {
+            text = text.Replace(pair.Key, pair.Value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return text;
+    }
+
+    private Dictionary<string, string> BuildKnownPlayerNameMap()
+    {
+        var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        AddPlayerLabelCandidates(labels, currentMembers.Select(ToPlayerLabelCandidate));
+        AddDeathLabelCandidates(labels, currentDeaths);
+
+        foreach (var pull in recordedPulls.AsEnumerable().Reverse())
+        {
+            AddDeathLabelCandidates(labels, pull.Deaths);
+        }
+
+        return labels;
+    }
+
+    private static void AddDeathLabelCandidates(Dictionary<string, string> labels, IReadOnlyList<PartyDeathRecord> deaths)
+    {
+        AddPlayerLabelCandidates(labels, ToPlayerLabelCandidates(deaths));
+    }
+
+    private static void AddPlayerLabelCandidates(
+        Dictionary<string, string> labels,
+        IEnumerable<PlayerLabelCandidate> candidates)
+    {
+        var context = candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.MemberName))
+            .ToList();
+
+        foreach (var candidate in context)
+        {
+            labels.TryAdd(candidate.MemberName, FormatRedactedPlayerLabel(candidate, context));
+        }
+    }
+
+    private IReadOnlyList<PartyDeathRecord>? FindDeathLabelContext(PartyDeathRecord death)
+    {
+        if (currentDeaths.Any(candidate => DeathRecordsMatch(candidate, death)))
+        {
+            return currentDeaths;
+        }
+
+        return recordedPulls
+            .AsEnumerable()
+            .Reverse()
+            .FirstOrDefault(pull => pull.Deaths.Any(candidate => DeathRecordsMatch(candidate, death)))
+            ?.Deaths;
+    }
+
+    private List<PlayerLabelCandidate> GetDeathLabelContext(PartyDeathRecord death)
+    {
+        return ToPlayerLabelCandidates(FindDeathLabelContext(death));
+    }
+
+    private static bool DeathRecordsMatch(PartyDeathRecord left, PartyDeathRecord right)
+    {
+        return left.SeenAtUtc.Ticks == right.SeenAtUtc.Ticks &&
+            string.Equals(left.MemberKey, right.MemberKey, StringComparison.Ordinal);
+    }
+
+    private static PlayerLabelCandidate ToPlayerLabelCandidate(PartyDeathRecord death)
+    {
+        return new PlayerLabelCandidate(
+            death.MemberKey,
+            death.MemberName,
+            death.PartyIndex,
+            death.ClassJobId,
+            death.ClassJobName,
+            death.SeenAtUtc);
+    }
+
+    private static PlayerLabelCandidate ToPlayerLabelCandidate(PartyMemberSnapshot member)
+    {
+        return new PlayerLabelCandidate(
+            member.MemberKey,
+            member.MemberName,
+            member.PartyIndex,
+            member.ClassJobId,
+            member.ClassJobName,
+            DateTime.MinValue);
+    }
+
+    private static List<PlayerLabelCandidate> ToPlayerLabelCandidates(IReadOnlyList<PartyDeathRecord>? deaths)
+    {
+        return deaths?.Select(ToPlayerLabelCandidate).ToList() ?? [];
+    }
+
+    private static string FormatRedactedPlayerLabel(PlayerLabelCandidate candidate, IReadOnlyList<PlayerLabelCandidate>? context = null)
+    {
+        var role = GetRedactedRoleLabel(candidate.ClassJobName);
+        var sameRoleCandidates = (context ?? [])
+            .Where(other => string.Equals(GetRedactedRoleLabel(other.ClassJobName), role, StringComparison.Ordinal))
+            .GroupBy(GetPlayerLabelCandidateKey, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderBy(NormalizedPartyIndex)
+                .ThenBy(other => other.SeenAtUtc)
+                .ThenBy(other => other.MemberName, StringComparer.OrdinalIgnoreCase)
+                .First())
+            .OrderBy(NormalizedPartyIndex)
+            .ThenBy(other => other.SeenAtUtc)
+            .ThenBy(other => other.MemberName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var index = sameRoleCandidates.FindIndex(other => PlayerLabelCandidatesMatch(other, candidate));
+        return $"{role} {(index >= 0 ? index + 1 : GetFallbackRedactedRoleIndex(candidate, role))}";
+    }
+
+    private static string GetRedactedRoleLabel(string classJobName)
+    {
+        var job = classJobName.Trim().ToUpperInvariant();
+        return job switch
+        {
+            "GLA" or "PLD" or "MRD" or "WAR" or "DRK" or "GNB" => "Tank",
+            "CNJ" or "WHM" or "SCH" or "AST" or "SGE" => "Healer",
+            _ => "DPS",
+        };
+    }
+
+    private static int GetFallbackRedactedRoleIndex(PlayerLabelCandidate candidate, string role)
+    {
+        if (candidate.PartyIndex < 0)
+        {
+            return 1;
+        }
+
+        return role switch
+        {
+            "Tank" => candidate.PartyIndex <= 1 ? candidate.PartyIndex + 1 : 1,
+            "Healer" => candidate.PartyIndex is >= 2 and <= 3 ? candidate.PartyIndex - 1 : 1,
+            "DPS" => candidate.PartyIndex >= 4 ? candidate.PartyIndex - 3 : Math.Max(1, candidate.PartyIndex + 1),
+            _ => Math.Max(1, candidate.PartyIndex + 1),
+        };
+    }
+
+    private static string GetPlayerLabelCandidateKey(PlayerLabelCandidate candidate)
+    {
+        return string.IsNullOrWhiteSpace(candidate.MemberKey)
+            ? $"name:{candidate.MemberName}:{candidate.ClassJobName}"
+            : $"key:{candidate.MemberKey}";
+    }
+
+    private static bool PlayerLabelCandidatesMatch(PlayerLabelCandidate left, PlayerLabelCandidate right)
+    {
+        if (!string.IsNullOrWhiteSpace(left.MemberKey) && !string.IsNullOrWhiteSpace(right.MemberKey))
+        {
+            return string.Equals(left.MemberKey, right.MemberKey, StringComparison.Ordinal);
+        }
+
+        return string.Equals(left.MemberName, right.MemberName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(left.ClassJobName, right.ClassJobName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int NormalizedPartyIndex(PlayerLabelCandidate candidate)
+    {
+        return candidate.PartyIndex < 0 ? int.MaxValue : candidate.PartyIndex;
     }
 
     public void SaveConfiguration()
@@ -4791,7 +5024,7 @@ public sealed partial class Plugin : IDalamudPlugin
             : $"{effectiveHp:N0} ({(double)effectiveHp / maxHp:P0})";
     }
 
-    private static string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
+    private string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
     {
         var hpText = FormatDeathChatHp(snapshot, cause);
         var hpSuffix = hpText is null
@@ -4799,9 +5032,10 @@ public sealed partial class Plugin : IDalamudPlugin
             : cause.Kind == DeathEventKind.Status
                 ? $" HP before KO: {hpText}."
                 : $" HP before hit: {hpText}.";
+        var sourceName = FormatKnownPlayerName(cause.SourceName);
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {cause.SourceName}.{hpSuffix}"
-            : $"{cause.Amount:N0} from {cause.ActionName} by {cause.SourceName}.{hpSuffix}";
+            ? $"{cause.ActionName} from {sourceName}.{hpSuffix}"
+            : $"{cause.Amount:N0} from {cause.ActionName} by {sourceName}.{hpSuffix}";
     }
 
     private static string FormatDeathChatDamageLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
@@ -4917,9 +5151,9 @@ public sealed partial class Plugin : IDalamudPlugin
         return candidates.Count == 1 ? candidates[0] : null;
     }
 
-    private static bool IsSharedDeathCandidate(PartyDeathRecord death, SharedDeathPost post)
+    private bool IsSharedDeathCandidate(PartyDeathRecord death, SharedDeathPost post)
     {
-        if (!string.Equals(death.MemberName, post.MemberName, StringComparison.OrdinalIgnoreCase))
+        if (!SharedPostMemberMatches(death, post.MemberName))
         {
             return false;
         }
@@ -4935,6 +5169,17 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         return true;
+    }
+
+    private bool SharedPostMemberMatches(PartyDeathRecord death, string postMemberName)
+    {
+        if (string.Equals(death.MemberName, postMemberName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var redactedName = FormatRedactedPlayerLabel(ToPlayerLabelCandidate(death), GetDeathLabelContext(death));
+        return string.Equals(redactedName, postMemberName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DeathCauseMatchesSharedPost(PartyDeathRecord death, SharedDeathPost post)
@@ -4982,18 +5227,19 @@ public sealed partial class Plugin : IDalamudPlugin
             string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static SharedDeathPost BuildSharedDeathPost(PartyDeathRecord death)
+    private SharedDeathPost BuildSharedDeathPost(PartyDeathRecord death)
     {
         var causeEvents = GetDisplayCauseEvents(death);
         var damageEvents = causeEvents
             .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
             .ToList();
+        var memberName = FormatSharedPostMemberName(death);
         if (damageEvents.Count > 0)
         {
             var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
             return new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
-                death.MemberName,
+                memberName,
                 death.ClassJobName,
                 null,
                 null,
@@ -5004,7 +5250,7 @@ public sealed partial class Plugin : IDalamudPlugin
         return causeEvents.FirstOrDefault() is { } cause
             ? new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
-                death.MemberName,
+                memberName,
                 death.ClassJobName,
                 cause.ActionName,
                 cause.SourceName,
@@ -5012,12 +5258,19 @@ public sealed partial class Plugin : IDalamudPlugin
                 null)
             : new SharedDeathPost(
                 GetSharedPostElapsedSeconds(death),
-                death.MemberName,
+                memberName,
                 death.ClassJobName,
                 null,
                 null,
                 null,
                 null);
+    }
+
+    private string FormatSharedPostMemberName(PartyDeathRecord death)
+    {
+        return Configuration.RedactPlayerNames
+            ? FormatRedactedPlayerLabel(ToPlayerLabelCandidate(death), GetDeathLabelContext(death))
+            : death.MemberName;
     }
 
     private static float GetSharedPostElapsedSeconds(PartyDeathRecord death)
@@ -5198,7 +5451,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PrintDeathRecapLink(deaths[0], GetDeathRecapBatchLabel(deaths));
     }
 
-    private static string GetDeathRecapBatchLabel(IReadOnlyList<PartyDeathRecord> deaths)
+    private string GetDeathRecapBatchLabel(IReadOnlyList<PartyDeathRecord> deaths)
     {
         var namesText = FormatDeathRecapNames(deaths);
         return deaths.Count switch
@@ -5209,11 +5462,11 @@ public sealed partial class Plugin : IDalamudPlugin
         };
     }
 
-    private static string FormatDeathRecapNames(IReadOnlyList<PartyDeathRecord> deaths)
+    private string FormatDeathRecapNames(IReadOnlyList<PartyDeathRecord> deaths)
     {
         const int maxShownNames = 4;
         var names = deaths
-            .Select(death => death.MemberName)
+            .Select(death => FormatPlayerDisplayName(death, deaths))
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToList();
         if (names.Count == 0)
@@ -5230,7 +5483,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void PrintDeathRecapLink(PartyDeathRecord death)
     {
-        PrintDeathRecapLink(death, death.MemberName);
+        PrintDeathRecapLink(death, FormatPlayerDisplayName(death));
     }
 
     private void QueueDetectedSharedRecapLink(PartyDeathRecord death)
@@ -5256,7 +5509,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         QueueDeathRecapLinkMessage(
             death,
-            death.MemberName,
+            FormatPlayerDisplayName(death),
             "[ Open Recap ]",
             DateTime.MinValue);
     }

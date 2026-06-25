@@ -59,6 +59,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool PostDeathRecapLinksOnDeath { get; set; }
 
+    public bool RedactPlayerNames { get; set; }
+
     public bool ShowDeathRecapPopup { get; set; } = true;
 
     // Legacy setting name kept so older configs can migrate the saved value to MainWindowBackgroundOpacity.
