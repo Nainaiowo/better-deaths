@@ -42,6 +42,11 @@ public enum BetterDeathsTheme
     Rose,
     Verdant,
     Ember,
+    Pink,
+    Lavender,
+    Bright,
+    Marble,
+    Tabasco,
 }
 
 [Serializable]
