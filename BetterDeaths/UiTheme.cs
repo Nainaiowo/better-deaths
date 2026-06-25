@@ -303,7 +303,7 @@ internal static class BetterDeathsThemeCatalog
             UpdateBannerBgColor = new Vector4(0.14f, 0.22f, 0.12f, 0.95f),
             UpdateBannerTextColor = new Vector4(0.45f, 1.0f, 0.52f, 1.0f),
             NoticeBorderColor = accent,
-            NoticeTextColor = new Vector4(0.96f, 0.96f, 0.94f, 1.0f),
+            NoticeTextColor = textColor,
             NoticeButtonColor = accentSoft,
             NoticeButtonHoveredColor = accentSoft with { X = MathF.Min(1.0f, accentSoft.X + 0.08f), Y = MathF.Min(1.0f, accentSoft.Y + 0.08f), Z = MathF.Min(1.0f, accentSoft.Z + 0.08f) },
             HpBarColor = new Vector4(0.24f, 0.74f, 0.36f, 1.0f),

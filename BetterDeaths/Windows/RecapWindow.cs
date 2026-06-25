@@ -69,7 +69,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.128";
+    private const string CurrentChangelogVersion = "0.1.0.129";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -200,7 +200,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 0.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(6.0f, 6.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 6.0f));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(7.0f, 6.0f));
         }
 
@@ -403,14 +403,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(ModernAccentColor, "Better Deaths");
         ImGui.SameLine();
         ImGui.TextDisabled("Pull review that starts simple and opens detail only when needed.");
-
-        var status = plugin.PluginUpdateStatus;
-        var statusText = GetPluginUpdateStatusText(status);
-        if (!string.IsNullOrWhiteSpace(statusText))
-        {
-            ImGui.SameLine();
-            DrawModernPill(statusText, ShouldDrawPluginUpdateBanner(status) ? WarningColor : ModernMutedTextColor);
-        }
     }
 
     private void DrawModernNavigation()
@@ -528,11 +520,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(4);
     }
 
-    private static void DrawModernPill(string text, Vector4 color)
-    {
-        ImGui.TextColored(color, text);
-    }
-
     private void DrawDeathRecapTab()
     {
         var pulls = BuildDeathRecapReviewPulls();
@@ -561,7 +548,6 @@ public sealed class RecapWindow : Window, IDisposable
                 null),
         };
 
-        ImGui.TextDisabled("Names are redacted into static party-role labels. This example uses the same review workspace as real pulls.");
         DrawReviewWorkspace(
             pulls,
             "ExamplePull",
@@ -627,6 +613,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (pulls.Count == 0)
         {
+            using var emptyStateIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
             ImGui.TextDisabled("No pull data is available yet.");
             return;
         }
@@ -820,7 +807,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
         if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
             draw();
@@ -873,6 +860,7 @@ public sealed class RecapWindow : Window, IDisposable
         string idPrefix,
         ReviewSelectionState selection)
     {
+        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawPullBrowserHeader(idPrefix);
         DrawRecordedPullControls();
         ImGui.Separator();
@@ -984,6 +972,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.Spacing();
 
             var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4.0f, 0.0f));
             if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, ImGuiWindowFlags.NoScrollbar))
             {
                 foreach (var pull in pulls)
@@ -1004,6 +993,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.EndChild();
+            ImGui.PopStyleVar();
         }
 
         ImGui.EndChild();
@@ -4900,6 +4890,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, UpdateBannerBgColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
         if (ImGui.BeginChild("##BetterDeathsUpdateBanner", new Vector2(0.0f, 52.0f), true, ImGuiWindowFlags.NoScrollbar))
         {
             ImGui.TextColored(UpdateBannerTextColor, GetPluginUpdateStatusText(status));
@@ -4907,6 +4898,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        ImGui.PopStyleVar();
         ImGui.PopStyleColor();
     }
 
@@ -4945,6 +4937,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
         ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
 
         if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
         {
@@ -4989,6 +4982,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        ImGui.PopStyleVar();
         ImGui.PopStyleColor();
         ImGui.PopStyleColor();
     }
@@ -5926,6 +5920,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.129");
+        ImGui.TextDisabled("UI cleanup.");
+        DrawWrappedBullet("Cleaned up window spacing and header text.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.128");
         ImGui.TextDisabled("Theme and review UI polish.");
         DrawBreathingGoldBullet("Added a variety of theme options.");
@@ -6386,16 +6386,47 @@ public sealed class RecapWindow : Window, IDisposable
     private static Vector4 GetBreathingGoldColor()
     {
         var pulse = (MathF.Sin((float)ImGui.GetTime() * 2.2f) + 1.0f) * 0.5f;
+        var baseColor = LeadUpGoldColor;
+        var pulseAmount = ActiveThemeUsesLightPanels() ? 0.07f : 0.18f;
+
         return new Vector4(
-            1.0f,
-            0.68f + (pulse * 0.18f),
-            0.10f + (pulse * 0.18f),
+            MathF.Min(1.0f, baseColor.X + (pulse * 0.04f)),
+            MathF.Min(1.0f, baseColor.Y + (pulse * pulseAmount)),
+            MathF.Min(1.0f, baseColor.Z + (pulse * pulseAmount)),
+            baseColor.W);
+    }
+
+    private static bool ActiveThemeUsesLightPanels()
+    {
+        return GetColorLuminance(ModernPanelColor) >= 0.55f;
+    }
+
+    private static float GetColorLuminance(Vector4 color)
+    {
+        return (color.X * 0.2126f) + (color.Y * 0.7152f) + (color.Z * 0.0722f);
+    }
+
+    private static Vector4 GetCreatorNoteTextColor()
+    {
+        if (!ActiveThemeUsesLightPanels())
+        {
+            return new Vector4(
+                MathF.Max(LeadUpGoldColor.X, 0.94f),
+                MathF.Max(LeadUpGoldColor.Y, 0.76f),
+                MathF.Max(LeadUpGoldColor.Z, 0.38f),
+                1.0f);
+        }
+
+        return new Vector4(
+            MathF.Min(LeadUpGoldColor.X * 0.68f, 0.55f),
+            MathF.Min(LeadUpGoldColor.Y * 0.68f, 0.38f),
+            MathF.Min(LeadUpGoldColor.Z * 0.68f, 0.20f),
             1.0f);
     }
 
     private static void DrawCreatorNote()
     {
-        var textColor = new Vector4(1.0f, 0.88f, 0.58f, 1.0f);
+        var textColor = GetCreatorNoteTextColor();
 
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
         ImGui.TextWrapped("Hi! NaiLa here~ I really appreciate you using Better Deaths. I made this as a personal passion project because I always needed and wanted a little more from the tools available..");
