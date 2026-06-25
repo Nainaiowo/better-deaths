@@ -83,7 +83,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.130";
+    private const string CurrentChangelogVersion = "0.1.0.131";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -686,7 +686,8 @@ public sealed class RecapWindow : Window, IDisposable
                 selectedDeath,
                 idPrefix,
                 showPullBrowser,
-                selection));
+                selection),
+            indentContent: false);
     }
 
     private void DrawWideUnifiedReviewWorkspace(
@@ -841,19 +842,27 @@ public sealed class RecapWindow : Window, IDisposable
                     $"##{idPrefix}DeathDetailsStacked",
                     Vector2.Zero,
                     () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
-            });
+            },
+            indentContent: false);
     }
 
-    private static void DrawReviewPanel(string id, Vector2 size, Action draw)
+    private static void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, indentContent ? new Vector2(ReviewPaneContentIndent, 6.0f) : Vector2.Zero);
         if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
-            using var panelIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-            draw();
+            if (indentContent)
+            {
+                using var panelIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
+                draw();
+            }
+            else
+            {
+                draw();
+            }
         }
 
         ImGui.EndChild();
@@ -4805,12 +4814,15 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var previewHeight = MathF.Min(420.0f, MathF.Max(260.0f, ImGui.GetContentRegionAvail().Y));
         var opacity = GetCurrentPullWidgetBackgroundOpacity();
+        var theme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, ImGuiWindowFlags.NoScrollbar))
         {
-            DrawWidgetPreviewBackground(opacity);
+            var titleHeight = DrawWidgetPreviewBackground(theme, opacity);
+            ImGui.SetCursorPos(new Vector2(0.0f, titleHeight));
             DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - 04:53", "WidgetPreview");
+            DrawWidgetPreviewChrome(theme, titleHeight);
         }
 
         ImGui.EndChild();
@@ -4818,15 +4830,16 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor();
     }
 
-    private static void DrawWidgetPreviewBackground(float opacity)
+    private static float DrawWidgetPreviewBackground(BetterDeathsUiTheme theme, float opacity)
     {
         var drawList = ImGui.GetWindowDrawList();
         var position = ImGui.GetWindowPos();
         var size = ImGui.GetWindowSize();
         var end = position + size;
+        var titleHeight = MathF.Max(ImGui.GetFrameHeight(), ImGui.GetTextLineHeight() + 8.0f);
         const float tileSize = 28.0f;
-        var darkTileColor = ImGui.GetColorU32(new Vector4(0.09f, 0.10f, 0.12f, 1.0f));
-        var lightTileColor = ImGui.GetColorU32(new Vector4(0.18f, 0.18f, 0.16f, 1.0f));
+        var darkTileColor = ImGui.GetColorU32(new Vector4(0.12f, 0.12f, 0.12f, 1.0f));
+        var lightTileColor = ImGui.GetColorU32(new Vector4(0.28f, 0.28f, 0.28f, 1.0f));
         var rowIndex = 0;
 
         for (var y = position.Y; y < end.Y; y += tileSize)
@@ -4847,7 +4860,91 @@ public sealed class RecapWindow : Window, IDisposable
             rowIndex++;
         }
 
-        drawList.AddRectFilled(position, end, ImGui.GetColorU32(new Vector4(0.06f, 0.06f, 0.06f, opacity)), 4.0f);
+        drawList.AddRectFilled(
+            position,
+            end,
+            ImGui.GetColorU32(theme.WidgetWindowBackgroundColor with { W = Math.Clamp(opacity, 0.0f, 1.0f) }),
+            8.0f);
+        drawList.AddRectFilled(
+            position,
+            new Vector2(end.X, MathF.Min(end.Y, position.Y + titleHeight)),
+            ImGui.GetColorU32(theme.WidgetTitleBackgroundColor));
+
+        return titleHeight;
+    }
+
+    private static void DrawWidgetPreviewChrome(BetterDeathsUiTheme theme, float titleHeight)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var position = ImGui.GetWindowPos();
+        var size = ImGui.GetWindowSize();
+        var end = position + size;
+        var textPosition = position + new Vector2(8.0f, MathF.Max(0.0f, (titleHeight - ImGui.GetTextLineHeight()) * 0.5f));
+
+        drawList.AddText(textPosition, ImGui.GetColorU32(theme.ModernTextColor), "Better Deaths Widget");
+        DrawWidgetPreviewTitleControls(theme, position, size, titleHeight);
+        DrawWidgetPreviewResizeGrip(theme, position, size, left: true);
+        DrawWidgetPreviewResizeGrip(theme, position, size, left: false);
+        drawList.AddRect(
+            position + new Vector2(0.5f),
+            end - new Vector2(0.5f),
+            ImGui.GetColorU32(theme.WidgetBorderColor),
+            8.0f);
+    }
+
+    private static void DrawWidgetPreviewTitleControls(BetterDeathsUiTheme theme, Vector2 position, Vector2 size, float titleHeight)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var color = ImGui.GetColorU32(theme.ModernTextColor);
+        var centerY = position.Y + (titleHeight * 0.5f);
+        var closeCenterX = position.X + size.X - 10.0f;
+        var arrowCenterX = closeCenterX - 18.0f;
+        var menuCenterX = arrowCenterX - 18.0f;
+
+        for (var lineIndex = 0; lineIndex < 3; lineIndex++)
+        {
+            var y = centerY - 5.0f + (lineIndex * 4.0f);
+            drawList.AddLine(new Vector2(menuCenterX - 5.0f, y), new Vector2(menuCenterX + 5.0f, y), color, 1.4f);
+        }
+
+        drawList.AddLine(new Vector2(arrowCenterX - 4.0f, centerY - 2.0f), new Vector2(arrowCenterX, centerY + 3.0f), color, 1.4f);
+        drawList.AddLine(new Vector2(arrowCenterX + 4.0f, centerY - 2.0f), new Vector2(arrowCenterX, centerY + 3.0f), color, 1.4f);
+        drawList.AddLine(new Vector2(closeCenterX - 4.0f, centerY - 4.0f), new Vector2(closeCenterX + 4.0f, centerY + 4.0f), color, 1.4f);
+        drawList.AddLine(new Vector2(closeCenterX + 4.0f, centerY - 4.0f), new Vector2(closeCenterX - 4.0f, centerY + 4.0f), color, 1.4f);
+    }
+
+    private static void DrawWidgetPreviewResizeGrip(BetterDeathsUiTheme theme, Vector2 position, Vector2 size, bool left)
+    {
+        const float inset = 5.0f;
+        const float lineSpacing = 4.0f;
+        const float thickness = 1.3f;
+
+        var drawList = ImGui.GetWindowDrawList();
+        var color = ImGui.GetColorU32(theme.WidgetResizeGripColor);
+        var origin = left
+            ? new Vector2(position.X + inset, position.Y + size.Y - inset)
+            : new Vector2(position.X + size.X - inset, position.Y + size.Y - inset);
+
+        for (var lineIndex = 0; lineIndex < 3; lineIndex++)
+        {
+            var offset = lineIndex * lineSpacing;
+            if (left)
+            {
+                drawList.AddLine(
+                    new Vector2(origin.X + offset, origin.Y),
+                    new Vector2(origin.X, origin.Y - offset),
+                    color,
+                    thickness);
+            }
+            else
+            {
+                drawList.AddLine(
+                    new Vector2(origin.X - offset, origin.Y),
+                    new Vector2(origin.X, origin.Y - offset),
+                    color,
+                    thickness);
+            }
+        }
     }
 
     private float GetCurrentPullWidgetBackgroundOpacity()
@@ -5982,6 +6079,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.131");
+        ImGui.TextDisabled("Widget and popup theme polish.");
+        DrawWrappedBullet("Improved widget preview and recap popup theming.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.130");
         ImGui.TextDisabled("Theme polish.");
         DrawWrappedBullet("Improved theme contrast and window spacing.");

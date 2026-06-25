@@ -9,11 +9,6 @@ namespace BetterDeaths.Windows;
 public sealed class DeathRecapPopupWindow : Window, IDisposable
 {
     private static readonly TimeSpan PopupLifetime = TimeSpan.FromSeconds(30);
-    private static readonly Vector4 PopupWindowBgColor = new(0.055f, 0.06f, 0.068f, 1.0f);
-    private static readonly Vector4 PopupTitleBgColor = new(0.085f, 0.092f, 0.104f, 1.0f);
-    private static readonly Vector4 PopupButtonColor = new(0.04f, 0.34f, 0.32f, 1.0f);
-    private static readonly Vector4 PopupButtonHoveredColor = new(0.06f, 0.46f, 0.43f, 1.0f);
-    private static readonly Vector4 PopupButtonActiveColor = new(0.08f, 0.55f, 0.50f, 1.0f);
     private static readonly Vector2 DefaultSize = new(240.0f, 82.0f);
     private const float PopupBackgroundOpacity = 0.85f;
     private readonly Plugin plugin;
@@ -149,14 +144,20 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             return;
         }
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, WithAlpha(PopupWindowBgColor, PopupBackgroundOpacity));
-        ImGui.PushStyleColor(ImGuiCol.TitleBg, WithAlpha(PopupTitleBgColor, PopupBackgroundOpacity));
-        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WithAlpha(PopupTitleBgColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
-        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, WithAlpha(PopupTitleBgColor, PopupBackgroundOpacity));
-        ImGui.PushStyleColor(ImGuiCol.Button, WithAlpha(PopupButtonColor, PopupBackgroundOpacity));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, WithAlpha(PopupButtonHoveredColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, WithAlpha(PopupButtonActiveColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.20f)));
+        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme);
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, WithAlpha(theme.WidgetWindowBackgroundColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, WithAlpha(theme.WidgetTitleBackgroundColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WithAlpha(theme.WidgetTitleActiveBackgroundColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
+        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, WithAlpha(theme.WidgetTitleBackgroundColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.Border, theme.WidgetBorderColor);
+        ImGui.PushStyleColor(ImGuiCol.Button, WithAlpha(theme.ModernNavButtonSelectedColor, PopupBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, WithAlpha(theme.ModernNavButtonSelectedHoveredColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, WithAlpha(theme.ModernNavButtonActiveColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.20f)));
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, theme.ModernPopupBgColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernTextColor);
+        ImGui.PushStyleColor(ImGuiCol.TextDisabled, theme.ModernMutedTextColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
         stylePushed = true;
     }
@@ -168,8 +169,8 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             return;
         }
 
-        ImGui.PopStyleVar(2);
-        ImGui.PopStyleColor(7);
+        ImGui.PopStyleVar(3);
+        ImGui.PopStyleColor(11);
         stylePushed = false;
     }
 
