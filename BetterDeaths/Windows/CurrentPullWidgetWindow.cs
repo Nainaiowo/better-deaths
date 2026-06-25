@@ -70,6 +70,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ResizeGrip, theme.WidgetResizeGripColor);
         ImGui.PushStyleColor(ImGuiCol.ResizeGripHovered, theme.WidgetResizeGripHoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ResizeGripActive, theme.WidgetResizeGripActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, theme.ModernPopupBgColor);
         ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernTextColor);
         ImGui.PushStyleColor(ImGuiCol.TextDisabled, theme.ModernMutedTextColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
@@ -87,7 +88,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
         }
 
         ImGui.PopStyleVar(4);
-        ImGui.PopStyleColor(10);
+        ImGui.PopStyleColor(11);
         stylePushed = false;
     }
 

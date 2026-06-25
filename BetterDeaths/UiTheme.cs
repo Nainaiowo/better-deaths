@@ -62,9 +62,37 @@ internal sealed class BetterDeathsUiTheme
 
     public required Vector4 ModernDividerColor { get; init; }
 
+    public required Vector4 ModernFrameColor { get; init; }
+
     public required Vector4 ModernFrameHoveredColor { get; init; }
 
     public required Vector4 ModernButtonHoveredColor { get; init; }
+
+    public required Vector4 ModernNavButtonColor { get; init; }
+
+    public required Vector4 ModernNavButtonHoveredColor { get; init; }
+
+    public required Vector4 ModernNavButtonSelectedColor { get; init; }
+
+    public required Vector4 ModernNavButtonSelectedHoveredColor { get; init; }
+
+    public required Vector4 ModernNavButtonActiveColor { get; init; }
+
+    public required Vector4 ModernPopupBgColor { get; init; }
+
+    public required Vector4 ModernCheckMarkColor { get; init; }
+
+    public required Vector4 ModernSliderGrabColor { get; init; }
+
+    public required Vector4 ModernSliderGrabActiveColor { get; init; }
+
+    public required Vector4 ModernHeaderColor { get; init; }
+
+    public required Vector4 ModernHeaderHoveredColor { get; init; }
+
+    public required Vector4 ModernHeaderActiveColor { get; init; }
+
+    public required float ModernFrameBorderSize { get; init; }
 
     public required Vector4 TimelineSelectedRowColor { get; init; }
 
@@ -123,8 +151,22 @@ internal static class BetterDeathsThemeCatalog
         ModernMutedTextColor = new Vector4(0.68f, 0.72f, 0.76f, 1.0f),
         ModernTextColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
         ModernDividerColor = new Vector4(1.0f, 1.0f, 1.0f, 0.10f),
+        ModernFrameColor = new Vector4(0.11f, 0.118f, 0.132f, 0.90f),
         ModernFrameHoveredColor = new Vector4(0.16f, 0.18f, 0.20f, 1.0f),
         ModernButtonHoveredColor = new Vector4(0.16f, 0.18f, 0.20f, 1.0f),
+        ModernNavButtonColor = new Vector4(0.11f, 0.118f, 0.132f, 0.96f),
+        ModernNavButtonHoveredColor = new Vector4(0.16f, 0.18f, 0.20f, 1.0f),
+        ModernNavButtonSelectedColor = new Vector4(0.10f, 0.34f, 0.31f, 0.95f),
+        ModernNavButtonSelectedHoveredColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
+        ModernNavButtonActiveColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
+        ModernPopupBgColor = new Vector4(0.085f, 0.092f, 0.104f, 0.98f),
+        ModernCheckMarkColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
+        ModernSliderGrabColor = new Vector4(0.36f, 0.92f, 0.82f, 0.72f),
+        ModernSliderGrabActiveColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
+        ModernHeaderColor = new Vector4(0.10f, 0.34f, 0.31f, 0.42f),
+        ModernHeaderHoveredColor = new Vector4(0.16f, 0.18f, 0.20f, 1.0f),
+        ModernHeaderActiveColor = new Vector4(0.10f, 0.34f, 0.31f, 0.92f),
+        ModernFrameBorderSize = 0.0f,
         TimelineSelectedRowColor = new Vector4(0.28f, 0.22f, 0.10f, 0.55f),
         TimelinePressedRowColor = new Vector4(0.42f, 0.33f, 0.13f, 0.78f),
         ChangelogTabColor = new Vector4(0.34f, 0.24f, 0.07f, 0.95f),
@@ -212,6 +254,14 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.33f, 0.39f, 0.43f, 1.0f),
         text: new Vector4(0.06f, 0.08f, 0.09f, 1.0f),
         danger: new Vector4(0.86f, 0.05f, 0.02f, 1.0f),
+        frame: new Vector4(0.76f, 0.84f, 0.87f, 0.98f),
+        frameHovered: new Vector4(0.68f, 0.81f, 0.84f, 1.0f),
+        popup: new Vector4(0.94f, 0.97f, 0.97f, 0.99f),
+        navButton: new Vector4(0.80f, 0.87f, 0.89f, 0.98f),
+        navButtonHovered: new Vector4(0.70f, 0.82f, 0.85f, 1.0f),
+        navButtonSelected: new Vector4(0.54f, 0.76f, 0.80f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.46f, 0.70f, 0.76f, 1.0f),
+        frameBorderSize: 1.0f,
         barBackground: new Vector4(0.75f, 0.78f, 0.80f, 1.0f),
         barBorder: new Vector4(0.35f, 0.40f, 0.42f, 1.0f));
 
@@ -228,6 +278,10 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.36f, 0.38f, 0.40f, 1.0f),
         text: new Vector4(0.08f, 0.09f, 0.10f, 1.0f),
         danger: new Vector4(0.80f, 0.06f, 0.04f, 1.0f),
+        navButton: new Vector4(0.72f, 0.74f, 0.75f, 0.98f),
+        navButtonHovered: new Vector4(0.64f, 0.68f, 0.70f, 1.0f),
+        navButtonSelected: new Vector4(0.56f, 0.67f, 0.72f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.50f, 0.62f, 0.68f, 1.0f),
         barBackground: new Vector4(0.68f, 0.69f, 0.70f, 1.0f),
         barBorder: new Vector4(0.38f, 0.39f, 0.40f, 1.0f));
 
@@ -285,11 +339,27 @@ internal static class BetterDeathsThemeCatalog
         Vector4 muted,
         Vector4? text = null,
         Vector4? danger = null,
+        Vector4? frame = null,
+        Vector4? frameHovered = null,
+        Vector4? popup = null,
+        Vector4? navButton = null,
+        Vector4? navButtonHovered = null,
+        Vector4? navButtonSelected = null,
+        Vector4? navButtonSelectedHovered = null,
+        Vector4? navButtonActive = null,
+        float frameBorderSize = 0.0f,
         Vector4? barBackground = null,
         Vector4? barBorder = null)
     {
         var dangerColor = danger ?? new Vector4(1.0f, 0.25f, 0.20f, 1.0f);
         var textColor = text ?? new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+        var frameColor = frame ?? panelAlt;
+        var frameHoveredColor = frameHovered ?? panelAlt with { W = 1.0f };
+        var popupBgColor = popup ?? panel with { W = 0.98f };
+        var navButtonColor = navButton ?? panelAlt with { W = 0.96f };
+        var navButtonHoveredColor = navButtonHovered ?? border with { W = 1.0f };
+        var navButtonSelectedColor = navButtonSelected ?? accentSoft with { W = 0.95f };
+        var navButtonSelectedHoveredColor = navButtonSelectedHovered ?? accentSoft with { W = 1.0f };
         return new BetterDeathsUiTheme
         {
             Id = id,
@@ -320,8 +390,22 @@ internal static class BetterDeathsThemeCatalog
             ModernMutedTextColor = muted,
             ModernTextColor = textColor,
             ModernDividerColor = new Vector4(1.0f, 1.0f, 1.0f, 0.10f),
-            ModernFrameHoveredColor = panelAlt with { W = 1.0f },
+            ModernFrameColor = frameColor,
+            ModernFrameHoveredColor = frameHoveredColor,
             ModernButtonHoveredColor = border with { W = 1.0f },
+            ModernNavButtonColor = navButtonColor,
+            ModernNavButtonHoveredColor = navButtonHoveredColor,
+            ModernNavButtonSelectedColor = navButtonSelectedColor,
+            ModernNavButtonSelectedHoveredColor = navButtonSelectedHoveredColor,
+            ModernNavButtonActiveColor = navButtonActive ?? navButtonSelectedHoveredColor,
+            ModernPopupBgColor = popupBgColor,
+            ModernCheckMarkColor = accent,
+            ModernSliderGrabColor = accent with { W = 0.72f },
+            ModernSliderGrabActiveColor = accent,
+            ModernHeaderColor = accentSoft with { W = 0.42f },
+            ModernHeaderHoveredColor = frameHoveredColor,
+            ModernHeaderActiveColor = accentSoft with { W = 1.0f },
+            ModernFrameBorderSize = frameBorderSize,
             TimelineSelectedRowColor = accentSoft with { W = 0.48f },
             TimelinePressedRowColor = accentSoft with { W = 0.72f },
             ChangelogTabColor = accentSoft with { W = 0.95f },

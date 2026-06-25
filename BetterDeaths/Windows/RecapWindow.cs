@@ -61,15 +61,29 @@ public sealed class RecapWindow : Window, IDisposable
     private static Vector4 ModernMutedTextColor => activeTheme.ModernMutedTextColor;
     private static Vector4 ModernTextColor => activeTheme.ModernTextColor;
     private static Vector4 ModernDividerColor => activeTheme.ModernDividerColor;
+    private static Vector4 ModernFrameColor => activeTheme.ModernFrameColor;
     private static Vector4 ModernFrameHoveredColor => activeTheme.ModernFrameHoveredColor;
     private static Vector4 ModernButtonHoveredColor => activeTheme.ModernButtonHoveredColor;
+    private static Vector4 ModernNavButtonColor => activeTheme.ModernNavButtonColor;
+    private static Vector4 ModernNavButtonHoveredColor => activeTheme.ModernNavButtonHoveredColor;
+    private static Vector4 ModernNavButtonSelectedColor => activeTheme.ModernNavButtonSelectedColor;
+    private static Vector4 ModernNavButtonSelectedHoveredColor => activeTheme.ModernNavButtonSelectedHoveredColor;
+    private static Vector4 ModernNavButtonActiveColor => activeTheme.ModernNavButtonActiveColor;
+    private static Vector4 ModernPopupBgColor => activeTheme.ModernPopupBgColor;
+    private static Vector4 ModernCheckMarkColor => activeTheme.ModernCheckMarkColor;
+    private static Vector4 ModernSliderGrabColor => activeTheme.ModernSliderGrabColor;
+    private static Vector4 ModernSliderGrabActiveColor => activeTheme.ModernSliderGrabActiveColor;
+    private static Vector4 ModernHeaderColor => activeTheme.ModernHeaderColor;
+    private static Vector4 ModernHeaderHoveredColor => activeTheme.ModernHeaderHoveredColor;
+    private static Vector4 ModernHeaderActiveColor => activeTheme.ModernHeaderActiveColor;
     private static Vector4 TimelineSelectedRowColor => activeTheme.TimelineSelectedRowColor;
     private static Vector4 TimelinePressedRowColor => activeTheme.TimelinePressedRowColor;
     private static readonly Vector2 DefaultWindowSize = new(1180.0f, 650.0f);
+    private static readonly Vector2 TooltipWindowPadding = new(8.0f, 6.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.129";
+    private const string CurrentChangelogVersion = "0.1.0.130";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -193,21 +207,29 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernShellColor, backgroundOpacity));
             ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
-            ImGui.PushStyleColor(ImGuiCol.FrameBg, WithBackgroundOpacity(ModernPanelAltColor, backgroundOpacity));
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, WithBackgroundOpacity(ModernFrameColor, backgroundOpacity));
             ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
             ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
+            ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
+            ImGui.PushStyleColor(ImGuiCol.CheckMark, ModernCheckMarkColor);
+            ImGui.PushStyleColor(ImGuiCol.SliderGrab, ModernSliderGrabColor);
+            ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, ModernSliderGrabActiveColor);
+            ImGui.PushStyleColor(ImGuiCol.Header, ModernHeaderColor);
+            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ModernHeaderHoveredColor);
+            ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 0.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 6.0f));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(7.0f, 6.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, activeTheme.ModernFrameBorderSize);
         }
 
         public void Dispose()
         {
-            ImGui.PopStyleVar(4);
-            ImGui.PopStyleColor(7);
+            ImGui.PopStyleVar(5);
+            ImGui.PopStyleColor(14);
         }
     }
 
@@ -219,17 +241,28 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
             ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
             ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
+            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
+            ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
+            ImGui.PushStyleColor(ImGuiCol.CheckMark, ModernCheckMarkColor);
+            ImGui.PushStyleColor(ImGuiCol.SliderGrab, ModernSliderGrabColor);
+            ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, ModernSliderGrabActiveColor);
+            ImGui.PushStyleColor(ImGuiCol.Header, ModernHeaderColor);
+            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ModernHeaderHoveredColor);
+            ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 9.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 7.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, activeTheme.ModernFrameBorderSize);
         }
 
         public void Dispose()
         {
-            ImGui.PopStyleVar(3);
-            ImGui.PopStyleColor(6);
+            ImGui.PopStyleVar(4);
+            ImGui.PopStyleColor(16);
         }
     }
 
@@ -240,6 +273,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
             ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
             ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
@@ -249,7 +283,7 @@ public sealed class RecapWindow : Window, IDisposable
         public void Dispose()
         {
             ImGui.PopStyleVar(2);
-            ImGui.PopStyleColor(5);
+            ImGui.PopStyleColor(6);
         }
     }
 
@@ -363,6 +397,7 @@ public sealed class RecapWindow : Window, IDisposable
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
         {
+            using var shellIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
             DrawModernHeader();
             DrawModernNavigation();
             ImGui.Spacing();
@@ -494,18 +529,18 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var selected = currentMainPage == page;
         var buttonColor = selected
-            ? ModernAccentSoftColor
-            : ModernPanelAltColor;
+            ? ModernNavButtonSelectedColor
+            : ModernNavButtonColor;
         var hoveredColor = selected
-            ? ModernAccentSoftColor with { W = 1.0f }
-            : ModernButtonHoveredColor;
+            ? ModernNavButtonSelectedHoveredColor
+            : ModernNavButtonHoveredColor;
         var textColor = highlight
             ? LeadUpGoldColor
-            : selected ? ModernAccentColor : ModernTextColor;
+            : selected ? GetModernNavSelectedTextColor() : ModernTextColor;
 
         ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
         if (ImGui.Button($"{label}##MainNav{page}", new Vector2(118.0f, 30.0f)))
         {
@@ -518,6 +553,13 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PopStyleColor(4);
+    }
+
+    private static Vector4 GetModernNavSelectedTextColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? ModernTextColor
+            : ModernAccentColor;
     }
 
     private void DrawDeathRecapTab()
@@ -810,6 +852,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
         if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
+            using var panelIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
             draw();
         }
 
@@ -917,7 +960,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Collapse pulls");
+            SetThemedTooltip("Collapse pulls");
         }
 
         ImGui.PopStyleColor();
@@ -936,7 +979,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor();
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Expand pulls");
+            SetThemedTooltip("Expand pulls");
         }
     }
 
@@ -964,7 +1007,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PopStyleColor();
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip("Expand pulls");
+                SetThemedTooltip("Expand pulls");
             }
 
             ImGui.Spacing();
@@ -987,7 +1030,7 @@ public sealed class RecapWindow : Window, IDisposable
 
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip(FormatCollapsedPullTooltip(pull));
+                        SetThemedTooltip(FormatCollapsedPullTooltip(pull));
                     }
                 }
             }
@@ -1087,7 +1130,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Ctrl+click to delete stored death recaps");
+            SetThemedTooltip("Ctrl+click to delete stored death recaps");
         }
     }
 
@@ -1342,7 +1385,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawReviewLegendTooltip()
     {
-        ImGui.BeginTooltip();
+        BeginThemedTooltip();
         ImGui.PushTextWrapPos(ImGui.GetFontSize() * 34.0f);
         ImGui.TextColored(LeadUpGoldColor, "Review legend");
         ImGui.Separator();
@@ -1354,7 +1397,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReviewLegendTooltipLine("Recorded pull order", "Recorded pulls are grouped by duty, with the duty containing the newest pull shown first.");
         DrawReviewLegendTooltipLine("Duty dropdown", "All duties shows everything, while a selected duty only shows pulls from that duty.");
         ImGui.PopTextWrapPos();
-        ImGui.EndTooltip();
+        EndThemedTooltip();
     }
 
     private static void DrawReviewLegendTooltipLine(string term, string explanation)
@@ -1645,7 +1688,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndGroup();
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
@@ -1752,7 +1795,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Ctrl+click to delete stored death recaps");
+            SetThemedTooltip("Ctrl+click to delete stored death recaps");
         }
 
         ImGui.SetCursorPosX(buttonX + buttonWidth - collapseButtonWidth);
@@ -1763,7 +1806,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Collapse all pulls");
+            SetThemedTooltip("Collapse all pulls");
         }
     }
 
@@ -2165,7 +2208,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (arrowHovered)
         {
-            ImGui.SetTooltip(isExpanded ? "Collapse likely causes." : "Expand likely causes.");
+            SetThemedTooltip(isExpanded ? "Collapse likely causes." : "Expand likely causes.");
         }
 
         if (!isExpanded)
@@ -2258,7 +2301,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             if (causeEvents.Count == 0)
             {
-                ImGui.SetTooltip("Likely walled/non-hit KO.");
+                SetThemedTooltip("Likely walled/non-hit KO.");
                 return;
             }
 
@@ -2269,7 +2312,7 @@ public sealed class RecapWindow : Window, IDisposable
                 tooltipLines.Add(LikelyAutoAttackTooltip);
             }
 
-            ImGui.SetTooltip(string.Join(Environment.NewLine, tooltipLines));
+            SetThemedTooltip(string.Join(Environment.NewLine, tooltipLines));
         }
     }
 
@@ -2322,7 +2365,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawCenteredText("-", DisabledColor);
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip("No incoming damage and pre-hit HP snapshot were available for this death.");
+                SetThemedTooltip("No incoming damage and pre-hit HP snapshot were available for this death.");
             }
 
             return;
@@ -2335,7 +2378,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.IsItemHovered())
         {
             var effectiveHp = (ulong)snapshot.CurrentHp + snapshot.ShieldHp;
-            ImGui.SetTooltip(
+            SetThemedTooltip(
                 $"Incoming damage: {incomingDamage.Value:N0}\n" +
                 $"HP plus shields before hit: {effectiveHp:N0}\n" +
                 overkillDisplay.TooltipLine);
@@ -2350,7 +2393,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawCenteredText("-", DisabledColor);
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip("No player mitigations/debuffs or boss damage-down debuffs were captured for this death.");
+                SetThemedTooltip("No player mitigations/debuffs or boss damage-down debuffs were captured for this death.");
             }
 
             return;
@@ -2546,7 +2589,7 @@ public sealed class RecapWindow : Window, IDisposable
         var maxWidth = MathF.Max(iconSize, iconSize * 6.0f + spacing * 5.0f);
         var rowWidth = 0.0f;
 
-        ImGui.BeginTooltip();
+        BeginThemedTooltip();
         for (var statusIndex = 0; statusIndex < statuses.Count; statusIndex++)
         {
             var needsSameLine = rowWidth > 0.0f && rowWidth + spacing + iconSize <= maxWidth;
@@ -2564,7 +2607,7 @@ public sealed class RecapWindow : Window, IDisposable
             rowWidth += iconSize;
         }
 
-        ImGui.EndTooltip();
+        EndThemedTooltip();
     }
 
     private static void DrawTooltipStatusIcon(uint iconId, float iconSize)
@@ -3022,7 +3065,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip(FormatPreciseRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
+                SetThemedTooltip(FormatPreciseRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
             }
 
             ImGui.TableNextColumn();
@@ -3509,7 +3552,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted(type.Label);
         if (ImGui.IsItemHovered() && type.Tooltip is not null)
         {
-            ImGui.SetTooltip(type.Tooltip);
+            SetThemedTooltip(type.Tooltip);
         }
 
         ImGui.EndGroup();
@@ -3581,7 +3624,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered() && tooltip is not null)
         {
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
@@ -3653,7 +3696,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawMitigationTotalTooltip()
     {
-        ImGui.SetTooltip("Calculated Multiplicatively.");
+        SetThemedTooltip("Calculated Multiplicatively.");
     }
 
     private static MitigationTotalDisplay? CalculateMitigationTotal(IReadOnlyList<StatusSnapshot> statuses)
@@ -4053,7 +4096,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             if (totalDamage is not null)
             {
-                ImGui.SetTooltip("The value presented is the calculated hit post-mitigations.");
+                SetThemedTooltip("The value presented is the calculated hit post-mitigations.");
             }
         }
     }
@@ -4062,7 +4105,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("The value presented is the calculated hit post-mitigations.");
+            SetThemedTooltip("The value presented is the calculated hit post-mitigations.");
         }
     }
 
@@ -4410,7 +4453,7 @@ public sealed class RecapWindow : Window, IDisposable
         hovered |= ImGui.IsItemHovered();
         if (hovered)
         {
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
@@ -4489,7 +4532,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (postDeathRecapLinksHovered)
         {
-            ImGui.SetTooltip("Opt-in. When enabled, Better Deaths posts a clickable recap link to chat after captured deaths. Manual chat posts still include their own recap link.");
+            SetThemedTooltip("Opt-in. When enabled, Better Deaths posts a clickable recap link to chat after captured deaths. Manual chat posts still include their own recap link.");
         }
 
         ImGui.Separator();
@@ -4510,7 +4553,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip("Includes your own character.");
+                SetThemedTooltip("Includes your own character.");
             }
 
             var captureOthers = configuration.CaptureOtherDeaths;
@@ -4521,7 +4564,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip("Tracks non-party player characters visible to your client.");
+                SetThemedTooltip("Tracks non-party player characters visible to your client.");
             }
 
             ImGui.TableNextColumn();
@@ -4658,7 +4701,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Show the Better Deaths acknowledgement message again.");
+            SetThemedTooltip("Show the Better Deaths acknowledgement message again.");
         }
 
         ImGui.SameLine();
@@ -4674,7 +4717,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(showDebugTab
+            SetThemedTooltip(showDebugTab
                 ? "Hides the developer debug tab and turns debug logging off."
                 : "Shows the developer debug tab. Debug logging still requires its own checkbox inside that tab.");
         }
@@ -4690,7 +4733,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Keeps the current pull death recap in its own window. Closing the widget turns this setting off.");
+            SetThemedTooltip("Keeps the current pull death recap in its own window. Closing the widget turns this setting off.");
         }
 
         var widgetBackgroundOpacity = GetCurrentPullWidgetBackgroundOpacity();
@@ -4877,7 +4920,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
@@ -5006,6 +5049,25 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
+    private static void SetThemedTooltip(string text)
+    {
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, TooltipWindowPadding);
+        ImGui.SetTooltip(text);
+        ImGui.PopStyleVar();
+    }
+
+    private static void BeginThemedTooltip()
+    {
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, TooltipWindowPadding);
+        ImGui.BeginTooltip();
+    }
+
+    private static void EndThemedTooltip()
+    {
+        ImGui.EndTooltip();
+        ImGui.PopStyleVar();
+    }
+
     private static void DrawWrappedText(string text, Vector4? color = null)
     {
         if (color is { } textColor)
@@ -5048,7 +5110,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("When enabled, Debug records the death control event and then stops accepting new debug rows until resumed or cleared.");
+            SetThemedTooltip("When enabled, Debug records the death control event and then stops accepting new debug rows until resumed or cleared.");
         }
 
         if (plugin.DebugCaptureFrozen)
@@ -5070,7 +5132,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("When enabled, Debug writes captured rows to a local JSONL file. The newest rows are kept and the file is capped at 25 MB.");
+            SetThemedTooltip("When enabled, Debug writes captured rows to a local JSONL file. The newest rows are kept and the file is capped at 25 MB.");
         }
 
         ImGui.SameLine();
@@ -5081,7 +5143,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Deletes the saved debug JSONL file and clears pending debug-file rows. This does not clear the visible in-memory Debug tables.");
+            SetThemedTooltip("Deletes the saved debug JSONL file and clears pending debug-file rows. This does not clear the visible in-memory Debug tables.");
         }
 
         ImGui.TextDisabled($"Saved debug file: {FormatByteSize(plugin.DebugCaptureFileSizeBytes)} / {FormatByteSize(plugin.DebugCaptureMaxFileSizeBytes)}");
@@ -5117,7 +5179,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.InputText("Player/text filter##DebugTextFilter", ref debugTextFilter, 128);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Filters Debug rows by player, target, source, category, action/status text, or raw IDs shown in the row.");
+            SetThemedTooltip("Filters Debug rows by player, target, source, category, action/status text, or raw IDs shown in the row.");
         }
 
         if (!string.IsNullOrWhiteSpace(debugTextFilter))
@@ -5920,6 +5982,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.130");
+        ImGui.TextDisabled("Theme polish.");
+        DrawWrappedBullet("Improved theme contrast and window spacing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.129");
         ImGui.TextDisabled("UI cleanup.");
         DrawWrappedBullet("Cleaned up window spacing and header text.");
@@ -6962,7 +7030,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (ImGui.IsItemHovered() && IsLikelyAutoAttack(combatEvent))
         {
-            ImGui.SetTooltip(LikelyAutoAttackTooltip);
+            SetThemedTooltip(LikelyAutoAttackTooltip);
         }
     }
 
@@ -7068,7 +7136,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Image(wrap.Handle, size);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
@@ -7122,7 +7190,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Actual damage taken after mitigation, shields, blocks, parries, and other damage reductions are applied.");
+            SetThemedTooltip("Actual damage taken after mitigation, shields, blocks, parries, and other damage reductions are applied.");
         }
     }
 
@@ -7231,7 +7299,7 @@ public sealed class RecapWindow : Window, IDisposable
                 tooltip += "\nRed text means a likely failed mechanic or vastly insufficient mitigation related death.";
             }
 
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
 
         if (showOverkillLine)
@@ -7309,7 +7377,7 @@ public sealed class RecapWindow : Window, IDisposable
                 tooltip += $"\nMax HP: {maxHp:N0}";
             }
 
-            ImGui.SetTooltip(tooltip);
+            SetThemedTooltip(tooltip);
         }
     }
 
