@@ -1927,9 +1927,9 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCenteredHeaderCell("Source");
         DrawCenteredHeaderCell("Action");
         DrawCenteredHeaderCell("Amount");
-        DrawCenteredHeaderCell("HP + shields before");
-        DrawCenteredHeaderCell("Player mits/debuffs");
-        DrawCenteredHeaderCell("Boss damage-downs");
+        DrawCenteredHeaderCell("HP + shields");
+        DrawCenteredHeaderCell("Mits/Debuffs");
+        DrawCenteredHeaderCell("Target Mits");
     }
 
     private static void DrawCenteredHeaderCell(string label)
@@ -2942,9 +2942,9 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        ImGui.TableSetupColumn("Captured hit/event", ImGuiTableColumnFlags.WidthStretch, 1.5f);
-        ImGui.TableSetupColumn("Mitigations/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
-        DrawCenteredTableHeader("Before KO", "Timer", "HP + shields", "Captured hit/event", "Mitigations/Debuffs");
+        ImGui.TableSetupColumn("Events", ImGuiTableColumnFlags.WidthStretch, 1.5f);
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
+        DrawCenteredTableHeader("Before KO", "Timer", "HP + shields", "Events", "Mits/Debuffs");
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -3804,9 +3804,9 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.0f);
         ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 0.85f);
-        ImGui.TableSetupColumn("HP + shields before", ImGuiTableColumnFlags.WidthStretch, 1.25f);
-        ImGui.TableSetupColumn("Player mits/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
-        ImGui.TableSetupColumn("Boss damage-downs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("Target Mits", ImGuiTableColumnFlags.WidthStretch, 1.55f);
         DrawLeadUpEventsTableHeader();
 
         foreach (var combatEvent in events)
