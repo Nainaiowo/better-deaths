@@ -262,6 +262,7 @@ internal static class BetterDeathsThemeCatalog
         navButtonSelected: new Vector4(0.54f, 0.76f, 0.80f, 0.98f),
         navButtonSelectedHovered: new Vector4(0.46f, 0.70f, 0.76f, 1.0f),
         frameBorderSize: 1.0f,
+        divider: new Vector4(0.12f, 0.20f, 0.24f, 0.18f),
         barBackground: new Vector4(0.75f, 0.78f, 0.80f, 1.0f),
         barBorder: new Vector4(0.35f, 0.40f, 0.42f, 1.0f));
 
@@ -282,6 +283,7 @@ internal static class BetterDeathsThemeCatalog
         navButtonHovered: new Vector4(0.64f, 0.68f, 0.70f, 1.0f),
         navButtonSelected: new Vector4(0.56f, 0.67f, 0.72f, 0.98f),
         navButtonSelectedHovered: new Vector4(0.50f, 0.62f, 0.68f, 1.0f),
+        divider: new Vector4(0.16f, 0.18f, 0.20f, 0.18f),
         barBackground: new Vector4(0.68f, 0.69f, 0.70f, 1.0f),
         barBorder: new Vector4(0.38f, 0.39f, 0.40f, 1.0f));
 
@@ -298,6 +300,106 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.84f, 0.64f, 0.58f, 1.0f),
         danger: new Vector4(1.0f, 0.10f, 0.06f, 1.0f));
 
+    private static readonly BetterDeathsUiTheme MintTheme = CreateTheme(
+        BetterDeathsTheme.Mint,
+        "Mint",
+        shell: new Vector4(0.82f, 0.92f, 0.88f, 0.92f),
+        panel: new Vector4(0.92f, 0.98f, 0.95f, 0.96f),
+        panelAlt: new Vector4(0.78f, 0.90f, 0.85f, 0.96f),
+        border: new Vector4(0.38f, 0.60f, 0.52f, 0.95f),
+        accent: new Vector4(0.00f, 0.48f, 0.36f, 1.0f),
+        accentSoft: new Vector4(0.58f, 0.80f, 0.72f, 0.96f),
+        highlight: new Vector4(0.82f, 0.50f, 0.00f, 1.0f),
+        muted: new Vector4(0.25f, 0.40f, 0.36f, 1.0f),
+        text: new Vector4(0.04f, 0.10f, 0.09f, 1.0f),
+        danger: new Vector4(0.86f, 0.06f, 0.04f, 1.0f),
+        frame: new Vector4(0.70f, 0.86f, 0.80f, 0.98f),
+        frameHovered: new Vector4(0.62f, 0.80f, 0.74f, 1.0f),
+        popup: new Vector4(0.91f, 0.97f, 0.94f, 0.99f),
+        navButton: new Vector4(0.70f, 0.85f, 0.79f, 0.98f),
+        navButtonHovered: new Vector4(0.60f, 0.78f, 0.72f, 1.0f),
+        navButtonSelected: new Vector4(0.44f, 0.70f, 0.62f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.36f, 0.64f, 0.56f, 1.0f),
+        frameBorderSize: 1.0f,
+        divider: new Vector4(0.08f, 0.22f, 0.18f, 0.18f),
+        barBackground: new Vector4(0.72f, 0.82f, 0.78f, 1.0f),
+        barBorder: new Vector4(0.30f, 0.44f, 0.40f, 1.0f));
+
+    private static readonly BetterDeathsUiTheme SkyTheme = CreateTheme(
+        BetterDeathsTheme.Sky,
+        "Sky",
+        shell: new Vector4(0.82f, 0.90f, 0.96f, 0.92f),
+        panel: new Vector4(0.92f, 0.97f, 1.0f, 0.96f),
+        panelAlt: new Vector4(0.76f, 0.87f, 0.94f, 0.96f),
+        border: new Vector4(0.36f, 0.54f, 0.68f, 0.95f),
+        accent: new Vector4(0.00f, 0.36f, 0.70f, 1.0f),
+        accentSoft: new Vector4(0.56f, 0.74f, 0.88f, 0.96f),
+        highlight: new Vector4(0.86f, 0.48f, 0.02f, 1.0f),
+        muted: new Vector4(0.25f, 0.36f, 0.46f, 1.0f),
+        text: new Vector4(0.04f, 0.08f, 0.12f, 1.0f),
+        danger: new Vector4(0.84f, 0.05f, 0.06f, 1.0f),
+        frame: new Vector4(0.68f, 0.82f, 0.92f, 0.98f),
+        frameHovered: new Vector4(0.58f, 0.76f, 0.88f, 1.0f),
+        popup: new Vector4(0.91f, 0.96f, 1.0f, 0.99f),
+        navButton: new Vector4(0.68f, 0.82f, 0.92f, 0.98f),
+        navButtonHovered: new Vector4(0.58f, 0.76f, 0.88f, 1.0f),
+        navButtonSelected: new Vector4(0.42f, 0.66f, 0.84f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.34f, 0.58f, 0.78f, 1.0f),
+        frameBorderSize: 1.0f,
+        divider: new Vector4(0.06f, 0.16f, 0.26f, 0.18f),
+        barBackground: new Vector4(0.70f, 0.80f, 0.86f, 1.0f),
+        barBorder: new Vector4(0.30f, 0.40f, 0.48f, 1.0f));
+
+    private static readonly BetterDeathsUiTheme PeachTheme = CreateTheme(
+        BetterDeathsTheme.Peach,
+        "Peach",
+        shell: new Vector4(0.94f, 0.86f, 0.82f, 0.92f),
+        panel: new Vector4(1.0f, 0.94f, 0.90f, 0.96f),
+        panelAlt: new Vector4(0.92f, 0.78f, 0.72f, 0.96f),
+        border: new Vector4(0.66f, 0.42f, 0.34f, 0.95f),
+        accent: new Vector4(0.74f, 0.22f, 0.14f, 1.0f),
+        accentSoft: new Vector4(0.86f, 0.58f, 0.50f, 0.96f),
+        highlight: new Vector4(0.72f, 0.38f, 0.00f, 1.0f),
+        muted: new Vector4(0.43f, 0.30f, 0.26f, 1.0f),
+        text: new Vector4(0.12f, 0.06f, 0.04f, 1.0f),
+        danger: new Vector4(0.86f, 0.04f, 0.03f, 1.0f),
+        frame: new Vector4(0.88f, 0.70f, 0.64f, 0.98f),
+        frameHovered: new Vector4(0.82f, 0.62f, 0.56f, 1.0f),
+        popup: new Vector4(1.0f, 0.93f, 0.89f, 0.99f),
+        navButton: new Vector4(0.88f, 0.72f, 0.66f, 0.98f),
+        navButtonHovered: new Vector4(0.82f, 0.62f, 0.56f, 1.0f),
+        navButtonSelected: new Vector4(0.76f, 0.48f, 0.40f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.70f, 0.40f, 0.32f, 1.0f),
+        frameBorderSize: 1.0f,
+        divider: new Vector4(0.30f, 0.12f, 0.08f, 0.18f),
+        barBackground: new Vector4(0.82f, 0.70f, 0.66f, 1.0f),
+        barBorder: new Vector4(0.46f, 0.32f, 0.28f, 1.0f));
+
+    private static readonly BetterDeathsUiTheme CloudTheme = CreateTheme(
+        BetterDeathsTheme.Cloud,
+        "Cloud",
+        shell: new Vector4(0.88f, 0.91f, 0.94f, 0.92f),
+        panel: new Vector4(0.97f, 0.98f, 0.99f, 0.96f),
+        panelAlt: new Vector4(0.82f, 0.86f, 0.90f, 0.96f),
+        border: new Vector4(0.48f, 0.55f, 0.62f, 0.95f),
+        accent: new Vector4(0.28f, 0.40f, 0.58f, 1.0f),
+        accentSoft: new Vector4(0.66f, 0.74f, 0.84f, 0.96f),
+        highlight: new Vector4(0.76f, 0.46f, 0.04f, 1.0f),
+        muted: new Vector4(0.34f, 0.38f, 0.44f, 1.0f),
+        text: new Vector4(0.06f, 0.08f, 0.10f, 1.0f),
+        danger: new Vector4(0.82f, 0.05f, 0.05f, 1.0f),
+        frame: new Vector4(0.76f, 0.82f, 0.88f, 0.98f),
+        frameHovered: new Vector4(0.68f, 0.76f, 0.84f, 1.0f),
+        popup: new Vector4(0.96f, 0.98f, 1.0f, 0.99f),
+        navButton: new Vector4(0.76f, 0.82f, 0.88f, 0.98f),
+        navButtonHovered: new Vector4(0.68f, 0.76f, 0.84f, 1.0f),
+        navButtonSelected: new Vector4(0.58f, 0.68f, 0.80f, 0.98f),
+        navButtonSelectedHovered: new Vector4(0.50f, 0.62f, 0.76f, 1.0f),
+        frameBorderSize: 1.0f,
+        divider: new Vector4(0.12f, 0.16f, 0.22f, 0.18f),
+        barBackground: new Vector4(0.74f, 0.78f, 0.82f, 1.0f),
+        barBorder: new Vector4(0.36f, 0.40f, 0.46f, 1.0f));
+
     private static readonly BetterDeathsUiTheme[] Themes =
     [
         ClassicTheme,
@@ -309,6 +411,10 @@ internal static class BetterDeathsThemeCatalog
         BrightTheme,
         MarbleTheme,
         TabascoTheme,
+        MintTheme,
+        SkyTheme,
+        PeachTheme,
+        CloudTheme,
     ];
 
     public static IReadOnlyList<BetterDeathsUiTheme> All => Themes;
@@ -348,6 +454,7 @@ internal static class BetterDeathsThemeCatalog
         Vector4? navButtonSelectedHovered = null,
         Vector4? navButtonActive = null,
         float frameBorderSize = 0.0f,
+        Vector4? divider = null,
         Vector4? barBackground = null,
         Vector4? barBorder = null)
     {
@@ -389,7 +496,7 @@ internal static class BetterDeathsThemeCatalog
             ModernAccentSoftColor = accentSoft,
             ModernMutedTextColor = muted,
             ModernTextColor = textColor,
-            ModernDividerColor = new Vector4(1.0f, 1.0f, 1.0f, 0.10f),
+            ModernDividerColor = divider ?? new Vector4(1.0f, 1.0f, 1.0f, 0.10f),
             ModernFrameColor = frameColor,
             ModernFrameHoveredColor = frameHoveredColor,
             ModernButtonHoveredColor = border with { W = 1.0f },

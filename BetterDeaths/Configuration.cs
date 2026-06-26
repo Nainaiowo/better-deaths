@@ -47,6 +47,10 @@ public enum BetterDeathsTheme
     Bright,
     Marble,
     Tabasco,
+    Mint,
+    Sky,
+    Peach,
+    Cloud,
 }
 
 [Serializable]

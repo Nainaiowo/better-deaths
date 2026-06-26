@@ -83,7 +83,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.134";
+    private const string CurrentChangelogVersion = "0.1.0.135";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1051,7 +1051,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
         DrawClearRecordedPullsButton($"ClearRecordedPullsModern{idPrefix}", clearSelection: true);
         ImGui.SameLine(0.0f, style.ItemSpacing.X);
-        if (ImGuiComponents.IconButton($"CollapsePullBrowser{idPrefix}", FontAwesomeIcon.ChevronLeft))
+        if (DrawTransparentIconButton($"CollapsePullBrowser{idPrefix}", FontAwesomeIcon.ChevronLeft))
         {
             plugin.SetPullBrowserCollapsed(true);
         }
@@ -1069,8 +1069,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCollapsedPullBrowser(string idPrefix)
     {
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
-        CenterNextItem(ImGui.GetFrameHeight());
-        if (ImGuiComponents.IconButton($"ExpandPullBrowser{idPrefix}", FontAwesomeIcon.ChevronRight))
+        if (DrawCenteredTransparentIconButton($"ExpandPullBrowser{idPrefix}", FontAwesomeIcon.ChevronRight))
         {
             plugin.SetPullBrowserCollapsed(false);
         }
@@ -1094,12 +1093,10 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild($"##{id}", size, false, ImGuiWindowFlags.NoScrollbar))
         {
-            var buttonSize = ImGui.GetFrameHeight();
-            var buttonX = MathF.Max(0.0f, (ImGui.GetContentRegionAvail().X - buttonSize) * 0.5f);
-            ImGui.SetCursorPos(new Vector2(buttonX, 4.0f));
+            ImGui.SetCursorPosY(4.0f);
 
             ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
-            if (ImGuiComponents.IconButton($"ExpandPullBrowser{id}", FontAwesomeIcon.ChevronRight))
+            if (DrawCenteredTransparentIconButton($"ExpandPullBrowser{id}", FontAwesomeIcon.ChevronRight))
             {
                 plugin.SetPullBrowserCollapsed(false);
             }
@@ -1210,7 +1207,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.BeginDisabled();
         }
 
-        if (ImGuiComponents.IconButton(id, FontAwesomeIcon.Trash) &&
+        if (DrawTransparentIconButton(id, FontAwesomeIcon.Trash) &&
             ImGui.GetIO().KeyCtrl)
         {
             plugin.ClearRecordedPulls();
@@ -1892,7 +1889,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.BeginDisabled();
         }
 
-        if (ImGuiComponents.IconButton("ClearRecordedPulls", FontAwesomeIcon.Trash) &&
+        if (DrawTransparentIconButton("ClearRecordedPulls", FontAwesomeIcon.Trash) &&
             ImGui.GetIO().KeyCtrl)
         {
             plugin.ClearRecordedPulls();
@@ -1911,9 +1908,12 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.SetCursorPosX(buttonX + buttonWidth - collapseButtonWidth);
-        if (ImGui.SmallButton(collapseLabel))
+        using (new TransparentButtonScope())
         {
-            collapseRecordedPullsRequested = true;
+            if (ImGui.SmallButton(collapseLabel))
+            {
+                collapseRecordedPullsRequested = true;
+            }
         }
 
         if (ImGui.IsItemHovered())
@@ -4587,6 +4587,8 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.SetShowWindowByDefault(showWindow);
         }
 
+        DrawInlineDebugTabButton();
+
         var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
         if (ImGui.SliderFloat(
             "Better Deaths window opacity",
@@ -4719,7 +4721,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
         DrawThemeSetting();
-        DrawDebugTabAccessButton();
     }
 
     private void DrawThemeSetting()
@@ -4729,7 +4730,28 @@ public sealed class RecapWindow : Window, IDisposable
         DrawInlineNewBadge();
         ImGui.Spacing();
 
-        var themes = BetterDeathsThemeCatalog.All;
+        var darkThemes = BetterDeathsThemeCatalog.All
+            .Where(theme => !IsLightPanelTheme(theme))
+            .ToList();
+        var lightThemes = BetterDeathsThemeCatalog.All
+            .Where(IsLightPanelTheme)
+            .ToList();
+
+        DrawThemeGroup("Dark", "Dark", darkThemes);
+        ImGui.Spacing();
+        DrawSubtleSeparator();
+        ImGui.Spacing();
+        DrawThemeGroup("Light", "Light", lightThemes);
+    }
+
+    private void DrawThemeGroup(string label, string id, IReadOnlyList<BetterDeathsUiTheme> themes)
+    {
+        if (themes.Count == 0)
+        {
+            return;
+        }
+
+        ImGui.TextDisabled(label);
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var style = ImGui.GetStyle();
         const float minimumTileWidth = 76.0f;
@@ -4738,7 +4760,7 @@ public sealed class RecapWindow : Window, IDisposable
             1,
             themes.Count);
 
-        if (!ImGui.BeginTable("##ThemePicker", columnCount, ImGuiTableFlags.SizingStretchSame))
+        if (!ImGui.BeginTable($"##ThemePicker{id}", columnCount, ImGuiTableFlags.SizingStretchSame))
         {
             return;
         }
@@ -4750,6 +4772,23 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndTable();
+    }
+
+    private static bool IsLightPanelTheme(BetterDeathsUiTheme theme)
+    {
+        return GetColorLuminance(theme.ModernPanelColor) >= 0.55f;
+    }
+
+    private static void DrawSubtleSeparator()
+    {
+        var cursor = ImGui.GetCursorScreenPos();
+        var width = ImGui.GetContentRegionAvail().X;
+        ImGui.GetWindowDrawList().AddLine(
+            cursor,
+            cursor + new Vector2(MathF.Max(0.0f, width), 0.0f),
+            ImGui.GetColorU32(ModernDividerColor),
+            1.0f);
+        ImGui.Dummy(new Vector2(width, 1.0f));
     }
 
     private void DrawThemeTile(BetterDeathsUiTheme theme)
@@ -4800,35 +4839,12 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCenteredOrWrappedText(theme.Label, labelColor);
     }
 
-    private void DrawDebugTabAccessButton()
+    private void DrawInlineDebugTabButton()
     {
-        ImGui.Separator();
-        ImGui.Spacing();
-        ImGui.TextDisabled("Developer tools");
-        ImGui.SameLine();
-
-        var buttonLabel = showDebugTab ? "Hide debug tab" : "Show debug tab";
-        var style = ImGui.GetStyle();
+        const string buttonLabel = "debug";
         var buttonWidth = ImGui.CalcTextSize(buttonLabel).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
-        var starButtonWidth = ImGui.GetFrameHeight();
-        var totalButtonWidth = starButtonWidth + style.ItemSpacing.X + buttonWidth;
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        if (availableWidth > totalButtonWidth)
-        {
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableWidth - totalButtonWidth);
-        }
-
-        if (ImGuiComponents.IconButton("ShowAcknowledgementNotice", FontAwesomeIcon.Star))
-        {
-            showThankYouNoticeOnDemand = true;
-        }
-
-        if (ImGui.IsItemHovered())
-        {
-            SetThemedTooltip("Show the Better Deaths acknowledgement message again.");
-        }
-
-        ImGui.SameLine();
+        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - buttonWidth;
+        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX(), buttonX));
         if (ImGui.Button(buttonLabel))
         {
             showDebugTab = !showDebugTab;
@@ -4842,8 +4858,8 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip(showDebugTab
-                ? "Hides the developer debug tab and turns debug logging off."
-                : "Shows the developer debug tab. Debug logging still requires its own checkbox inside that tab.");
+                ? "Hide Debug and turn debug logging off."
+                : "Show Debug. Debug logging still has its own checkbox inside that page.");
         }
     }
 
@@ -6155,7 +6171,7 @@ public sealed class RecapWindow : Window, IDisposable
         long? RecordedPullCapturedAtTicks,
         uint? RecordedPullTerritoryId);
 
-    private static void DrawNotesTab()
+    private void DrawNotesTab()
     {
         ImGui.TextUnformatted("What Better Deaths adds");
         DrawWrappedBullet("Duty-only death review built around raid pulls, wipes, recommences, and resets.");
@@ -6172,6 +6188,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextWrapped("The goal is to make wipe review fast: see who died, see why, see what was active, and keep the pull context intact between attempts.");
         ImGui.Separator();
         DrawCreatorNote();
+        DrawAcknowledgementNoticeButton();
     }
 
     private static void DrawWrappedBullet(string text)
@@ -6197,6 +6214,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.135");
+        ImGui.TextDisabled("Theme cleanup.");
+        DrawBreathingGoldBullet("Added more light theme options.");
+        DrawWrappedBullet("Theme choices are now split into dark and light sections.");
+        DrawWrappedBullet("Cleaned up settings buttons.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.134");
         ImGui.TextDisabled("Saved pull loading.");
         DrawBreathingGoldBullet("Recorded pulls now load with less startup impact.");
@@ -6725,6 +6750,22 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor();
     }
 
+    private void DrawAcknowledgementNoticeButton()
+    {
+        ImGui.Spacing();
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        if (DrawTransparentIconButton("ShowAcknowledgementNotice", FontAwesomeIcon.Star))
+        {
+            showThankYouNoticeOnDemand = true;
+        }
+
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Show the Better Deaths acknowledgement message again.");
+        }
+    }
+
     private sealed record ExamplePlayer(
         string Key,
         string Name,
@@ -7132,6 +7173,37 @@ public sealed class RecapWindow : Window, IDisposable
         if (availableWidth > itemWidth)
         {
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((availableWidth - itemWidth) * 0.5f));
+        }
+    }
+
+    private static bool DrawTransparentIconButton(string id, FontAwesomeIcon icon)
+    {
+        using var transparentButton = new TransparentButtonScope();
+        return ImGuiComponents.IconButton(id, icon);
+    }
+
+    private static bool DrawCenteredTransparentIconButton(string id, FontAwesomeIcon icon)
+    {
+        var iconText = icon.ToIconString();
+        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        CenterNextItem(buttonWidth);
+        return DrawTransparentIconButton(id, icon);
+    }
+
+    private readonly struct TransparentButtonScope : IDisposable
+    {
+        public TransparentButtonScope()
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, Vector4.Zero);
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Vector4.Zero);
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, Vector4.Zero);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
+        }
+
+        public void Dispose()
+        {
+            ImGui.PopStyleVar();
+            ImGui.PopStyleColor(3);
         }
     }
 
