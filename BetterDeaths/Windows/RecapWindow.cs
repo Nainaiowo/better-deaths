@@ -26,6 +26,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool showThankYouNoticeOnDemand;
     private bool windowStylePushed;
     private string debugTextFilter = string.Empty;
+    private string addonInspectorName = string.Empty;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
@@ -85,7 +86,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.136";
+    private const string CurrentChangelogVersion = "0.1.0.137";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5404,6 +5405,9 @@ public sealed class RecapWindow : Window, IDisposable
             $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | ActorControl hook {FormatDebugBool(plugin.DebugActorControlHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
 
         ImGui.Separator();
+        DrawAddonInspector();
+
+        ImGui.Separator();
         DrawDebugStatusSnapshots();
 
         ImGui.Separator();
@@ -5454,6 +5458,291 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.EndCombo();
         }
+    }
+
+    private void DrawAddonInspector()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "Addon inspector");
+        ImGui.TextDisabled("Read-only. Open the game window you want to inspect, then snapshot its addon name.");
+
+        ImGui.SetNextItemWidth(MathF.Max(220.0f, ImGui.GetContentRegionAvail().X * 0.35f));
+        ImGui.InputText("Addon name##AddonInspectorName", ref addonInspectorName, 128);
+        ImGui.SameLine();
+        if (ImGui.Button("Snapshot addon"))
+        {
+            plugin.CaptureAddonInspectorSnapshot(addonInspectorName);
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Clear addon inspector"))
+        {
+            plugin.ClearAddonInspector();
+        }
+
+        DrawAddonInspectorEvents();
+        DrawAddonInspectorSnapshot();
+    }
+
+    private void DrawAddonInspectorEvents()
+    {
+        var allEvents = plugin.AddonInspectorEvents;
+        var events = allEvents
+            .Where(MatchesAddonInspectorEvent)
+            .Take(80)
+            .ToList();
+        if (allEvents.Count == 0)
+        {
+            ImGui.TextDisabled("No addon lifecycle events captured yet. Open or move a game UI window.");
+            return;
+        }
+
+        if (events.Count == 0)
+        {
+            ImGui.TextDisabled("No addon lifecycle events match the current filter.");
+            return;
+        }
+
+        ImGui.TextDisabled($"Showing {events.Count:N0} of {allEvents.Count:N0} latest addon lifecycle events.");
+        if (!ImGui.BeginTable("##AddonInspectorEvents", 7, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("Use", ImGuiTableColumnFlags.WidthFixed, 44.0f);
+        ImGui.TableSetupColumn("UTC", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Event", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        ImGui.TableSetupColumn("Addon", ImGuiTableColumnFlags.WidthStretch, 2.0f);
+        ImGui.TableSetupColumn("Address", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+        ImGui.TableSetupColumn("Ready", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+        ImGui.TableSetupColumn("Visible", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableHeadersRow();
+
+        foreach (var entry in events)
+        {
+            ImGui.PushID($"AddonInspectorEvent{entry.SeenAtUtc.Ticks}{entry.Address}{entry.AddonName}");
+            ImGui.TableNextRow();
+
+            ImGui.TableSetColumnIndex(0);
+            if (ImGui.SmallButton("Use"))
+            {
+                addonInspectorName = entry.AddonName;
+            }
+
+            ImGui.TableSetColumnIndex(1);
+            DrawCenteredText(entry.SeenAtUtc.ToString("HH:mm:ss"));
+
+            ImGui.TableSetColumnIndex(2);
+            ImGui.TextUnformatted(entry.EventName);
+
+            ImGui.TableSetColumnIndex(3);
+            ImGui.TextUnformatted(entry.AddonName);
+
+            ImGui.TableSetColumnIndex(4);
+            DrawCenteredText(FormatDebugAddress(entry.Address));
+
+            ImGui.TableSetColumnIndex(5);
+            DrawCenteredText(FormatDebugBool(entry.IsReady));
+
+            ImGui.TableSetColumnIndex(6);
+            DrawCenteredText(FormatDebugBool(entry.IsVisible));
+
+            ImGui.PopID();
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawAddonInspectorSnapshot()
+    {
+        var snapshot = plugin.AddonInspectorSnapshot;
+        if (snapshot is null)
+        {
+            ImGui.TextDisabled("No addon snapshot yet.");
+            return;
+        }
+
+        ImGui.Spacing();
+        ImGui.TextColored(LeadUpGoldColor, "Latest addon snapshot");
+        ImGui.TextDisabled(
+            $"{snapshot.AddonName} | {snapshot.SeenAtUtc:HH:mm:ss} UTC | {FormatDebugAddress(snapshot.Address)} | Ready {FormatDebugBool(snapshot.IsReady)} | Visible {FormatDebugBool(snapshot.IsVisible)} | Pos {snapshot.X:N0}, {snapshot.Y:N0} | Size {snapshot.Width:N0} x {snapshot.Height:N0}");
+
+        if (!string.IsNullOrWhiteSpace(snapshot.Error))
+        {
+            ImGui.TextColored(WarningColor, snapshot.Error);
+            return;
+        }
+
+        DrawAddonInspectorAtkValues(snapshot);
+        DrawAddonInspectorNodes(snapshot);
+    }
+
+    private void DrawAddonInspectorAtkValues(AddonInspectorSnapshot snapshot)
+    {
+        var values = snapshot.AtkValues
+            .Where(MatchesAddonInspectorValue)
+            .ToList();
+        if (snapshot.AtkValues.Count == 0)
+        {
+            ImGui.TextDisabled("No AtkValues exposed on this snapshot.");
+            return;
+        }
+
+        if (values.Count == 0)
+        {
+            ImGui.TextDisabled("No AtkValues match the current filter.");
+            return;
+        }
+
+        if (!ImGui.TreeNode($"AtkValues ({values.Count:N0}/{snapshot.AtkValues.Count:N0})###AddonInspectorAtkValues"))
+        {
+            return;
+        }
+
+        if (ImGui.BeginTable("##AddonInspectorAtkValuesTable", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+            ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 3.0f);
+            ImGui.TableHeadersRow();
+
+            foreach (var value in values)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawCenteredText(value.Index.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(1);
+                ImGui.TextUnformatted(value.Type);
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.TextWrapped(value.Value);
+            }
+
+            ImGui.EndTable();
+        }
+
+        ImGui.TreePop();
+    }
+
+    private void DrawAddonInspectorNodes(AddonInspectorSnapshot snapshot)
+    {
+        var nodes = snapshot.Nodes
+            .Where(MatchesAddonInspectorNode)
+            .ToList();
+        if (snapshot.Nodes.Count == 0)
+        {
+            ImGui.TextDisabled("No nodes exposed on this snapshot.");
+            return;
+        }
+
+        if (nodes.Count == 0)
+        {
+            ImGui.TextDisabled("No nodes match the current filter.");
+            return;
+        }
+
+        if (!ImGui.TreeNode($"Nodes ({nodes.Count:N0}/{snapshot.NodeCount:N0})###AddonInspectorNodes"))
+        {
+            return;
+        }
+
+        if (ImGui.BeginTable("##AddonInspectorNodesTable", 8, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+            ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+            ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableSetupColumn("Visible", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+            ImGui.TableSetupColumn("X/Y", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+            ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+            ImGui.TableSetupColumn("Text", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+            ImGui.TableSetupColumn("Raw", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableHeadersRow();
+
+            foreach (var node in nodes)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawCenteredText(node.Index.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(1);
+                DrawCenteredText(node.NodeId.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.TextUnformatted(node.NodeType);
+
+                ImGui.TableSetColumnIndex(3);
+                DrawCenteredText(FormatDebugBool(node.IsVisible));
+
+                ImGui.TableSetColumnIndex(4);
+                DrawCenteredText($"{node.X:N0}, {node.Y:N0}");
+
+                ImGui.TableSetColumnIndex(5);
+                DrawCenteredText($"{node.Width:N0} x {node.Height:N0}");
+
+                ImGui.TableSetColumnIndex(6);
+                if (string.IsNullOrWhiteSpace(node.Text))
+                {
+                    ImGui.TextDisabled("-");
+                }
+                else
+                {
+                    ImGui.TextWrapped(node.Text);
+                }
+
+                ImGui.TableSetColumnIndex(7);
+                ImGui.TextDisabled(node.Text is null ? "-" : "Text");
+            }
+
+            ImGui.EndTable();
+        }
+
+        ImGui.TreePop();
+    }
+
+    private bool MatchesAddonInspectorEvent(AddonInspectorEvent entry)
+    {
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            entry.EventName,
+            entry.AddonName,
+            FormatDebugAddress(entry.Address),
+            FormatDebugBool(entry.IsReady),
+            FormatDebugBool(entry.IsVisible));
+    }
+
+    private bool MatchesAddonInspectorValue(AddonInspectorValue value)
+    {
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            value.Index.ToString(CultureInfo.InvariantCulture),
+            value.Type,
+            value.Value);
+    }
+
+    private bool MatchesAddonInspectorNode(AddonInspectorNode node)
+    {
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            node.Index.ToString(CultureInfo.InvariantCulture),
+            node.NodeId.ToString(CultureInfo.InvariantCulture),
+            node.NodeType,
+            FormatDebugBool(node.IsVisible),
+            node.Text);
     }
 
     private bool MatchesDebugStatusSnapshot(DebugStatusSnapshot snapshot)
@@ -5998,6 +6287,11 @@ public sealed class RecapWindow : Window, IDisposable
         return value ? "yes" : "no";
     }
 
+    private static string FormatDebugAddress(nint address)
+    {
+        return address == 0 ? "-" : $"0x{(long)address:X}";
+    }
+
     private static string FormatDebugStatusTooltip(StatusSnapshot status)
     {
         return $"{status.Name} ({status.Id})\nSource: {FormatDebugStatusSource(status.SourceId)}\nStacks: {(status.StackCount == 0 ? "-" : status.StackCount.ToString())}\nRemaining: {FormatStatusDuration(status, true, true, "-")}";
@@ -6305,6 +6599,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.137");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.136");
         ImGui.TextDisabled("Privacy and data.");
         DrawBreathingGoldBullet("Added a Data page with privacy and local storage information.");

@@ -231,6 +231,45 @@ public sealed record DebugActorControlEvent(
     string TargetName,
     byte Param9);
 
+public sealed record AddonInspectorEvent(
+    DateTime SeenAtUtc,
+    string EventName,
+    string AddonName,
+    nint Address,
+    bool IsReady,
+    bool IsVisible);
+
+public sealed record AddonInspectorSnapshot(
+    DateTime SeenAtUtc,
+    string AddonName,
+    nint Address,
+    bool IsReady,
+    bool IsVisible,
+    float X,
+    float Y,
+    float Width,
+    float Height,
+    int NodeCount,
+    IReadOnlyList<AddonInspectorNode> Nodes,
+    IReadOnlyList<AddonInspectorValue> AtkValues,
+    string? Error);
+
+public sealed record AddonInspectorNode(
+    int Index,
+    uint NodeId,
+    string NodeType,
+    bool IsVisible,
+    float X,
+    float Y,
+    ushort Width,
+    ushort Height,
+    string? Text);
+
+public sealed record AddonInspectorValue(
+    int Index,
+    string Type,
+    string Value);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

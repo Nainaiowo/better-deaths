@@ -1,6 +1,9 @@
 using BetterDeaths.Windows;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Command;
 using Dalamud.Game.Chat;
+using Dalamud.Game.NativeWrapper;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Statuses;
 using Dalamud.Game.DutyState;
@@ -17,6 +20,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
@@ -79,6 +83,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRawActorControlPackets = 256;
     private const int MaxDebugEffectResultEvents = 1000;
     private const int MaxDebugActorControlEvents = 1000;
+    private const int MaxAddonInspectorEvents = 500;
+    private const int MaxAddonInspectorNodes = 500;
+    private const int MaxAddonInspectorAtkValues = 128;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
@@ -133,6 +140,17 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly Regex SharedUnknownDeathPostRegex = new(
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:likely walled/)?non-hit KO\.(?:\s+HP before KO:\s+.+\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly AddonEvent[] AddonInspectorLifecycleEvents =
+    [
+        AddonEvent.PostSetup,
+        AddonEvent.PostShow,
+        AddonEvent.PostHide,
+        AddonEvent.PostRequestedUpdate,
+        AddonEvent.PostRefresh,
+        AddonEvent.PostOpen,
+        AddonEvent.PostClose,
+        AddonEvent.PreFinalize,
+    ];
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
     [
@@ -362,6 +380,8 @@ public sealed partial class Plugin : IDalamudPlugin
     [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
+    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
+    [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
     private readonly WindowSystem windowSystem = new("BetterDeaths");
     private readonly RecapWindow recapWindow;
@@ -378,6 +398,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
     private readonly List<DebugEffectResultSnapshot> debugEffectResultHistory = [];
     private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
+    private readonly List<AddonInspectorEvent> addonInspectorEvents = [];
     private readonly Queue<string> debugCaptureFileLines = new();
     private readonly object debugCaptureFileLock = new();
     private readonly DalamudLinkPayload deathChatLinkPayload;
@@ -418,6 +439,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private string? availablePluginUpdateVersion;
     private bool availablePluginUpdateIsTesting;
     private string? pluginUpdateCheckError;
+    private AddonInspectorSnapshot? addonInspectorSnapshot;
     private string? pendingUpdateNoticeKey;
     private CancellationTokenSource? recordedPullHistoryLoadCts;
     private Task? recordedPullHistoryLoadTask;
@@ -429,6 +451,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool actorControlHookEnabled;
     private bool debugFreezeOnDeathEnabled;
     private bool debugCaptureFrozen;
+    private bool addonInspectorLifecycleRegistered;
     private DateTime lastDebugCaptureFlushAtUtc = DateTime.MinValue;
     private static readonly string[] EncounterDebuffNameFragments =
     [
@@ -539,6 +562,13 @@ public sealed partial class Plugin : IDalamudPlugin
         .OrderBy(entry => entry.SeenAtUtc)
         .ThenBy(entry => entry.Category)
         .ToList();
+
+    public IReadOnlyList<AddonInspectorEvent> AddonInspectorEvents => addonInspectorEvents
+        .OrderByDescending(entry => entry.SeenAtUtc)
+        .ThenBy(entry => entry.AddonName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    public AddonInspectorSnapshot? AddonInspectorSnapshot => addonInspectorSnapshot;
 
     public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
 
@@ -686,6 +716,11 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyRecommenced += OnDutyReset;
         ChatGui.ChatMessage += OnChatMessage;
         ChatGui.LogMessage += OnLogMessage;
+        if (Configuration.ShowDebugTab)
+        {
+            RegisterAddonInspectorLifecycleListeners();
+        }
+
         Framework.Update += OnFrameworkUpdate;
         PluginInterface.UiBuilder.Draw += windowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -713,6 +748,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
         PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         Framework.Update -= OnFrameworkUpdate;
+        UnregisterAddonInspectorLifecycleListeners();
         ChatGui.LogMessage -= OnLogMessage;
         ChatGui.ChatMessage -= OnChatMessage;
         DutyState.DutyRecommenced -= OnDutyReset;
@@ -897,6 +933,15 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         Configuration.ShowDebugTab = show;
+        if (show)
+        {
+            RegisterAddonInspectorLifecycleListeners();
+        }
+        else
+        {
+            UnregisterAddonInspectorLifecycleListeners();
+        }
+
         SaveConfiguration();
     }
 
@@ -945,7 +990,36 @@ public sealed partial class Plugin : IDalamudPlugin
         debugEffectResultSnapshotsByTarget.Clear();
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
+        addonInspectorEvents.Clear();
+        addonInspectorSnapshot = null;
         debugCaptureFrozen = false;
+    }
+
+    public void ClearAddonInspector()
+    {
+        addonInspectorEvents.Clear();
+        addonInspectorSnapshot = null;
+    }
+
+    public void CaptureAddonInspectorSnapshot(string addonName)
+    {
+        addonName = addonName.Trim();
+        if (string.IsNullOrWhiteSpace(addonName))
+        {
+            addonInspectorSnapshot = CreateAddonInspectorErrorSnapshot(addonName, "Enter an addon name first.");
+            return;
+        }
+
+        try
+        {
+            var addon = GameGui.GetAddonByName(addonName);
+            addonInspectorSnapshot = CaptureAddonInspectorSnapshot(addonName, addon);
+        }
+        catch (Exception ex)
+        {
+            addonInspectorSnapshot = CreateAddonInspectorErrorSnapshot(addonName, ex.Message);
+            Log.Debug(ex, "Could not capture Better Deaths addon inspector snapshot for {AddonName}.", addonName);
+        }
     }
 
     public void ClearSavedDebugCaptureFile()
@@ -970,6 +1044,221 @@ public sealed partial class Plugin : IDalamudPlugin
         catch (Exception ex)
         {
             Log.Warning(ex, "Could not clear Better Deaths debug capture file.");
+        }
+    }
+
+    private void RegisterAddonInspectorLifecycleListeners()
+    {
+        if (addonInspectorLifecycleRegistered)
+        {
+            return;
+        }
+
+        foreach (var eventType in AddonInspectorLifecycleEvents)
+        {
+            AddonLifecycle.RegisterListener(eventType, OnAddonInspectorLifecycleEvent);
+        }
+
+        addonInspectorLifecycleRegistered = true;
+    }
+
+    private void UnregisterAddonInspectorLifecycleListeners()
+    {
+        if (!addonInspectorLifecycleRegistered)
+        {
+            return;
+        }
+
+        AddonLifecycle.UnregisterListener(OnAddonInspectorLifecycleEvent);
+        addonInspectorLifecycleRegistered = false;
+    }
+
+    private void OnAddonInspectorLifecycleEvent(AddonEvent eventType, AddonArgs args)
+    {
+        if (disposing)
+        {
+            return;
+        }
+
+        try
+        {
+            var addon = args.Addon;
+            var isKnown = addon.Address != 0 && !addon.IsNull;
+            addonInspectorEvents.Add(new AddonInspectorEvent(
+                DateTime.UtcNow,
+                eventType.ToString(),
+                args.AddonName,
+                addon.Address,
+                isKnown && addon.IsReady,
+                isKnown && addon.IsVisible));
+
+            while (addonInspectorEvents.Count > MaxAddonInspectorEvents)
+            {
+                addonInspectorEvents.RemoveAt(0);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths addon inspector lifecycle event.");
+        }
+    }
+
+    private static AddonInspectorSnapshot CreateAddonInspectorErrorSnapshot(string addonName, string error)
+    {
+        return new AddonInspectorSnapshot(
+            DateTime.UtcNow,
+            addonName,
+            0,
+            false,
+            false,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0,
+            [],
+            [],
+            error);
+    }
+
+    private unsafe AddonInspectorSnapshot CaptureAddonInspectorSnapshot(string addonName, AtkUnitBasePtr addon)
+    {
+        if (addon.Address == 0 || addon.IsNull)
+        {
+            return CreateAddonInspectorErrorSnapshot(
+                addonName,
+                "Addon was not found. Open the game window first, then snapshot again.");
+        }
+
+        var nodes = CaptureAddonInspectorNodes((AtkUnitBase*)addon.Address, out var nodeCount);
+        return new AddonInspectorSnapshot(
+            DateTime.UtcNow,
+            addonName,
+            addon.Address,
+            addon.IsReady,
+            addon.IsVisible,
+            addon.X,
+            addon.Y,
+            addon.Width,
+            addon.Height,
+            nodeCount,
+            nodes,
+            CaptureAddonInspectorAtkValues(addon),
+            null);
+    }
+
+    private static unsafe IReadOnlyList<AddonInspectorNode> CaptureAddonInspectorNodes(
+        AtkUnitBase* unit,
+        out int nodeCount)
+    {
+        var nodes = new List<AddonInspectorNode>();
+        nodeCount = 0;
+        if (unit is null)
+        {
+            return nodes;
+        }
+
+        CaptureAddonInspectorNode(unit->RootNode, nodes, ref nodeCount, 0);
+        return nodes;
+    }
+
+    private static unsafe void CaptureAddonInspectorNode(
+        AtkResNode* node,
+        List<AddonInspectorNode> nodes,
+        ref int nodeCount,
+        int depth)
+    {
+        if (node is null || nodes.Count >= MaxAddonInspectorNodes || depth > 80)
+        {
+            return;
+        }
+
+        var current = node;
+        while (current is not null && nodes.Count < MaxAddonInspectorNodes)
+        {
+            nodeCount++;
+            nodes.Add(new AddonInspectorNode(
+                nodes.Count,
+                current->NodeId,
+                current->Type.ToString(),
+                current->IsVisible(),
+                current->X,
+                current->Y,
+                current->Width,
+                current->Height,
+                ReadAddonInspectorNodeText(current)));
+
+            if (current->ChildNode is not null)
+            {
+                CaptureAddonInspectorNode(current->ChildNode, nodes, ref nodeCount, depth + 1);
+            }
+
+            current = current->NextSiblingNode;
+        }
+    }
+
+    private static unsafe string? ReadAddonInspectorNodeText(AtkResNode* node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var textNode = node->GetAsAtkTextNode();
+            if (textNode is null)
+            {
+                return null;
+            }
+
+            var text = textNode->NodeText.ToString();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyList<AddonInspectorValue> CaptureAddonInspectorAtkValues(AtkUnitBasePtr addon)
+    {
+        var values = new List<AddonInspectorValue>();
+        try
+        {
+            var index = 0;
+            foreach (var atkValue in addon.AtkValues)
+            {
+                if (values.Count >= MaxAddonInspectorAtkValues)
+                {
+                    break;
+                }
+
+                values.Add(new AddonInspectorValue(
+                    index,
+                    atkValue.ValueType.ToString(),
+                    FormatAddonInspectorAtkValue(atkValue)));
+                index++;
+            }
+        }
+        catch
+        {
+            values.Add(new AddonInspectorValue(0, "Error", "Could not read AtkValues."));
+        }
+
+        return values;
+    }
+
+    private static string FormatAddonInspectorAtkValue(AtkValuePtr atkValue)
+    {
+        try
+        {
+            var value = atkValue.GetValue();
+            return value?.ToString() ?? "-";
+        }
+        catch (Exception ex)
+        {
+            return $"Unreadable: {ex.Message}";
         }
     }
 
