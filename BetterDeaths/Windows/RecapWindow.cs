@@ -96,7 +96,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.143";
+    private const string CurrentChangelogVersion = "0.1.0.144";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -6099,7 +6099,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.BeginTable($"##TofuObjects{dataSetName}{board.Index}", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        if (ImGui.BeginTable($"##TofuObjects{dataSetName}{board.Index}", 11, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
             ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
             ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.9f);
@@ -6107,7 +6107,9 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableSetupColumn("Y", ImGuiTableColumnFlags.WidthStretch, 0.45f);
             ImGui.TableSetupColumn("Scale", ImGuiTableColumnFlags.WidthStretch, 0.55f);
             ImGui.TableSetupColumn("Angle", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("RGBA", ImGuiTableColumnFlags.WidthStretch, 0.7f);
             ImGui.TableSetupColumn("Flags", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+            ImGui.TableSetupColumn("Flag #", ImGuiTableColumnFlags.WidthStretch, 0.55f);
             ImGui.TableSetupColumn("Args", ImGuiTableColumnFlags.WidthStretch, 0.8f);
             ImGui.TableSetupColumn("Text", ImGuiTableColumnFlags.WidthStretch, 2.6f);
             ImGui.TableHeadersRow();
@@ -6134,12 +6136,18 @@ public sealed class RecapWindow : Window, IDisposable
                 DrawCenteredText(obj.Angle);
 
                 ImGui.TableSetColumnIndex(6);
-                ImGui.TextWrapped(obj.Flags);
+                DrawCenteredText(obj.Rgba);
 
                 ImGui.TableSetColumnIndex(7);
-                ImGui.TextWrapped(obj.Args);
+                ImGui.TextWrapped(obj.Flags);
 
                 ImGui.TableSetColumnIndex(8);
+                DrawCenteredText(obj.RawFlags);
+
+                ImGui.TableSetColumnIndex(9);
+                ImGui.TextWrapped(obj.Args);
+
+                ImGui.TableSetColumnIndex(10);
                 if (string.IsNullOrWhiteSpace(obj.Text))
                 {
                     ImGui.TextDisabled("-");
@@ -6574,7 +6582,9 @@ public sealed class RecapWindow : Window, IDisposable
             obj.Y,
             obj.Scale,
             obj.Angle,
+            obj.Rgba,
             obj.Flags,
+            obj.RawFlags,
             obj.Args,
             obj.Text);
     }
@@ -7463,6 +7473,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.144");
+        ImGui.TextDisabled("Strategy Board testing.");
+        DrawWrappedBullet("Added RGBA and raw flag details to the Debug Strategy Board inspector.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.143");
         ImGui.TextDisabled("Strategy Board testing.");
         DrawWrappedBullet("Adjusted the Debug Strategy Board inspector.");

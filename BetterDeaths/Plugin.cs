@@ -1466,7 +1466,9 @@ public sealed partial class Plugin : IDalamudPlugin
                     FormatTofuInspectorValue(obj.PosY),
                     FormatTofuInspectorValue(obj.Scale),
                     FormatTofuInspectorValue(obj.Angle),
+                    FormatTofuInspectorValue(obj.RGBA),
                     obj.Flags.ToString(),
+                    FormatTofuInspectorValue(obj.Flags),
                     $"{FormatTofuInspectorValue(obj.ArgsA)}, {FormatTofuInspectorValue(obj.ArgsB)}, {FormatTofuInspectorValue(obj.ArgsC)}",
                     text));
             }
@@ -1475,6 +1477,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 capturedObjects.Add(new TofuInspectorObject(
                     i,
                     "Unreadable",
+                    "-",
+                    "-",
                     "-",
                     "-",
                     "-",

@@ -299,7 +299,9 @@ public sealed record TofuInspectorObject(
     string Y,
     string Scale,
     string Angle,
+    string Rgba,
     string Flags,
+    string RawFlags,
     string Args,
     string? Text);
 
