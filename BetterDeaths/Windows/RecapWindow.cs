@@ -6089,33 +6089,13 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v0.1.0.132");
-        ImGui.TextDisabled("Fatal event accuracy.");
+        ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Improved fatal event selection for multi-hit deaths.");
-        DrawWrappedBullet("Fixed the clock icon in lead-up table headers.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.131");
-        ImGui.TextDisabled("Widget and popup theme polish.");
-        DrawWrappedBullet("Improved widget preview and recap popup theming.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.130");
-        ImGui.TextDisabled("Theme polish.");
-        DrawWrappedBullet("Improved theme contrast and window spacing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.129");
-        ImGui.TextDisabled("UI cleanup.");
-        DrawWrappedBullet("Cleaned up window spacing and header text.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.128");
-        ImGui.TextDisabled("Theme and review UI polish.");
         DrawBreathingGoldBullet("Added a variety of theme options.");
+        DrawWrappedBullet("Fixed the clock icon in lead-up table headers.");
+        DrawWrappedBullet("Improved widget preview and recap popup theming.");
+        DrawWrappedBullet("Improved theme contrast and window spacing.");
+        DrawWrappedBullet("Cleaned up window spacing and header text.");
         DrawWrappedBullet("Cleaned up settings and review table layout.");
 
         ImGui.Separator();
