@@ -307,6 +307,29 @@ public sealed record TofuInspectorObject(
     string Args,
     string? Text);
 
+public sealed record TofuTransferCreateResult(
+    bool Success,
+    string Message,
+    string TransferId,
+    int BoardCount,
+    int FolderCount,
+    int TextLength);
+
+public sealed record TofuTransferStatus(
+    DateTime SeenAtUtc,
+    IReadOnlyList<TofuTransferAssembly> Transfers,
+    string? Error);
+
+public sealed record TofuTransferAssembly(
+    string TransferId,
+    int ReceivedBoards,
+    int TotalBoards,
+    bool IsComplete,
+    int AssembledLength,
+    string? Mode,
+    string? Error,
+    string? PayloadPreview);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

@@ -36,6 +36,8 @@ public sealed class RecapWindow : Window, IDisposable
     private string? tofuInspectorSavedPath;
     private string? tofuInspectorSaveError;
     private string? tofuInspectorCreateResult;
+    private string? pullExportBoardResult;
+    private bool pullExportBoardResultIsWarning;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -96,7 +98,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.145";
+    private const string CurrentChangelogVersion = "0.1.0.146";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -114,6 +116,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const string CompactInfoSeparator = " \u00B7 ";
     private const int StrategyBoardTextObjectLimit = 8;
     private const int StrategyBoardTextObjectCharacterLimit = 30;
+    private const int StrategyBoardPayloadTextObjectLimit = StrategyBoardTextObjectLimit - 1;
+    private const int StrategyBoardPayloadCharacterLimit = StrategyBoardPayloadTextObjectLimit * StrategyBoardTextObjectCharacterLimit;
+    private const int StrategyBoardBoardsPerFolder = 9;
     private const string ShortExportPrefix = "BD1S";
     private const string FullExportPrefix = "BD1F";
     private static readonly JsonSerializerOptions TofuInspectorExportJsonOptions = new()
@@ -207,6 +212,8 @@ public sealed class RecapWindow : Window, IDisposable
         string PullTitle,
         string Value,
         int RequiredStrategyBoardChunks,
+        int RequiredStrategyBoardBoards,
+        int RequiredStrategyBoardFolders,
         IReadOnlyList<string> StrategyBoardChunks);
 
     private sealed record ReviewPull(
@@ -1296,6 +1303,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.SmallButton($"Short##ShortPullExport{idPrefix}{pull.Key}"))
         {
             pullExportPreview = CreatePullExportPreview(pull, full: false);
+            pullExportBoardResult = null;
             ImGui.OpenPopup("Pull export preview");
         }
 
@@ -1308,6 +1316,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.SmallButton($"Full##FullPullExport{idPrefix}{pull.Key}"))
         {
             pullExportPreview = CreatePullExportPreview(pull, full: true);
+            pullExportBoardResult = null;
             ImGui.OpenPopup("Pull export preview");
         }
 
@@ -1333,12 +1342,9 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextDisabled(preview.PullTitle);
         ImGui.Separator();
 
-        var fitsStrategyBoard = preview.RequiredStrategyBoardChunks <= StrategyBoardTextObjectLimit;
         ImGui.TextUnformatted($"Length: {preview.Value.Length:N0} characters");
-        ImGui.TextUnformatted($"Strategy Board text objects: {preview.RequiredStrategyBoardChunks:N0} / {StrategyBoardTextObjectLimit:N0}");
-        ImGui.TextColored(
-            fitsStrategyBoard ? HealColor : WarningColor,
-            fitsStrategyBoard ? "Fits in one Strategy Board." : "Does not fit in one Strategy Board.");
+        ImGui.TextUnformatted($"Strategy Board text objects: {preview.RequiredStrategyBoardChunks:N0}");
+        ImGui.TextUnformatted($"Strategy Board transfer: {preview.RequiredStrategyBoardBoards:N0} board(s), {preview.RequiredStrategyBoardFolders:N0} folder(s)");
 
         if (ImGui.Button("Copy export string"))
         {
@@ -1346,12 +1352,31 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
+        if (ImGui.Button("Create Strategy Boards"))
+        {
+            var result = plugin.CreateTofuTransferBoards(preview.Value);
+            pullExportBoardResult = result.Message;
+            pullExportBoardResultIsWarning = !result.Success;
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Creates saved Strategy Board chunks using a neutral board name. Share the created folders manually while the party-share callback is still being tested.");
+        }
+
+        ImGui.SameLine();
         if (ImGui.Button("Close"))
         {
             pullExportPreview = null;
+            pullExportBoardResult = null;
             ImGui.CloseCurrentPopup();
             ImGui.EndPopup();
             return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pullExportBoardResult))
+        {
+            ImGui.TextColored(pullExportBoardResultIsWarning ? WarningColor : HealColor, pullExportBoardResult);
         }
 
         ImGui.Separator();
@@ -1403,18 +1428,31 @@ public sealed class RecapWindow : Window, IDisposable
             ? CreateFullPullExportString(pull)
             : CreateShortPullExportString(pull);
         var requiredChunks = GetRequiredStrategyBoardChunks(value);
+        var requiredBoards = GetRequiredStrategyBoardBoards(value);
         var chunks = SplitStrategyBoardChunks(value, maxChunksToShow: full ? 16 : StrategyBoardTextObjectLimit);
         return new PullExportPreview(
             full ? "Full" : "Short",
             GetPullDeathTimelineTitle(pull),
             value,
             requiredChunks,
+            requiredBoards,
+            GetRequiredStrategyBoardFolders(requiredBoards),
             chunks);
     }
 
     private static int GetRequiredStrategyBoardChunks(string value)
     {
         return Math.Max(1, (value.Length + StrategyBoardTextObjectCharacterLimit - 1) / StrategyBoardTextObjectCharacterLimit);
+    }
+
+    private static int GetRequiredStrategyBoardBoards(string value)
+    {
+        return Math.Max(1, (value.Length + StrategyBoardPayloadCharacterLimit - 1) / StrategyBoardPayloadCharacterLimit);
+    }
+
+    private static int GetRequiredStrategyBoardFolders(int boardCount)
+    {
+        return Math.Max(1, (boardCount + StrategyBoardBoardsPerFolder - 1) / StrategyBoardBoardsPerFolder);
     }
 
     private static IReadOnlyList<string> SplitStrategyBoardChunks(string value, int maxChunksToShow)
@@ -5947,6 +5985,19 @@ public sealed class RecapWindow : Window, IDisposable
             SetThemedTooltip("Creates one saved Strategy Board with safe test objects. It does not share, send, delete, or edit existing boards.");
         }
 
+        ImGui.SameLine();
+        if (ImGui.Button("Scan transfer chunks"))
+        {
+            plugin.RefreshTofuTransferInbox();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Scans shared Strategy Boards for Better Deaths export chunks and checks whether a full payload can be assembled.");
+        }
+
+        DrawTofuTransferStatus();
+
         var snapshot = plugin.TofuInspectorSnapshot;
         if (snapshot is null)
         {
@@ -5983,6 +6034,71 @@ public sealed class RecapWindow : Window, IDisposable
         foreach (var dataSet in snapshot.DataSets)
         {
             DrawTofuInspectorDataSet(dataSet);
+        }
+    }
+
+    private void DrawTofuTransferStatus()
+    {
+        var status = plugin.TofuTransferStatus;
+        if (status is null)
+        {
+            ImGui.TextDisabled("No Better Deaths Strategy Board transfer scan yet.");
+            return;
+        }
+
+        ImGui.TextDisabled($"Transfer scan: {status.SeenAtUtc:HH:mm:ss} UTC");
+        if (!string.IsNullOrWhiteSpace(status.Error))
+        {
+            ImGui.TextColored(WarningColor, status.Error);
+            return;
+        }
+
+        if (status.Transfers.Count == 0)
+        {
+            ImGui.TextDisabled("No Better Deaths transfer chunks found in shared Strategy Boards.");
+            return;
+        }
+
+        if (ImGui.BeginTable("##TofuTransferStatus", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+            ImGui.TableSetupColumn("Boards", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+            ImGui.TableSetupColumn("State", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+            ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Length", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Preview", ImGuiTableColumnFlags.WidthStretch, 2.0f);
+            ImGui.TableHeadersRow();
+
+            foreach (var transfer in status.Transfers)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                ImGui.TextUnformatted(transfer.TransferId);
+
+                ImGui.TableSetColumnIndex(1);
+                DrawCenteredText($"{transfer.ReceivedBoards:N0}/{transfer.TotalBoards:N0}");
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.TextColored(transfer.IsComplete ? HealColor : WarningColor, transfer.IsComplete ? "Complete" : transfer.Error ?? "Waiting");
+
+                ImGui.TableSetColumnIndex(3);
+                DrawCenteredText(transfer.Mode ?? "-");
+
+                ImGui.TableSetColumnIndex(4);
+                DrawCenteredText(transfer.AssembledLength > 0 ? transfer.AssembledLength.ToString("N0", CultureInfo.InvariantCulture) : "-");
+
+                ImGui.TableSetColumnIndex(5);
+                if (string.IsNullOrWhiteSpace(transfer.PayloadPreview))
+                {
+                    ImGui.TextDisabled("-");
+                }
+                else
+                {
+                    ImGui.TextWrapped(transfer.PayloadPreview);
+                }
+            }
+
+            ImGui.EndTable();
         }
     }
 
@@ -7483,6 +7599,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.146");
+        ImGui.TextDisabled("Strategy Board testing.");
+        DrawWrappedBullet("Added Strategy Board export transfer testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.145");
         ImGui.TextDisabled("Strategy Board testing.");
         DrawWrappedBullet("Split Visible and Locked into separate Debug Strategy Board fields.");

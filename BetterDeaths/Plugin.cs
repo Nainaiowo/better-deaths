@@ -93,6 +93,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxTofuInspectorTextLength = 240;
     private const int MaxTofuTextObjectLength = 30;
     private const string DebugTofuTestBoardName = "Pineapple";
+    private const string TofuTransferBoardName = "Pineapple";
+    private const string TofuTransferHeaderPrefix = "BDX1";
+    private const int TofuTransferBoardsPerFolder = 9;
+    private const int TofuTransferPayloadTextObjectsPerBoard = 7;
+    private const int TofuTransferPayloadCharactersPerBoard = MaxTofuTextObjectLength * TofuTransferPayloadTextObjectsPerBoard;
     private const int TofuHiddenTextX = 5120;
     private const int TofuHiddenTextY = 3840;
     private const int MaxRecentHpHistoryPerMember = 240;
@@ -146,6 +151,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DebugCaptureFlushInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan TofuTransferInboxScanInterval = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
     {
         WriteIndented = false,
@@ -241,6 +247,13 @@ public sealed partial class Plugin : IDalamudPlugin
         uint ClassJobId,
         string ClassJobName,
         DateTime SeenAtUtc);
+
+    private sealed record TofuTransferChunk(
+        string TransferId,
+        int BoardIndex,
+        int TotalBoards,
+        uint Checksum,
+        string Payload);
 
     private sealed record DebugCaptureFileRecord(
         DateTime SeenAtUtc,
@@ -448,6 +461,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, string> classJobNameCache = new();
     private readonly Dictionary<uint, string> territoryNameCache = new();
     private readonly List<RecentOwnSharedDeathPost> recentOwnSharedDeathPosts = [];
+    private readonly Dictionary<string, Dictionary<int, TofuTransferChunk>> tofuTransferChunksByTransfer = new(StringComparer.Ordinal);
     private readonly List<PartyDeathRecord> pendingDeathRecapLinks = [];
     private readonly Queue<QueuedChatMessage> queuedChatMessages = [];
     private readonly object rawCombatQueueLock = new();
@@ -464,6 +478,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
     private DateTime nextPluginUpdateCheckAtUtc = DateTime.MinValue;
     private DateTime nextLiveCapturePruneAtUtc = DateTime.MinValue;
+    private DateTime nextTofuTransferInboxScanAtUtc = DateTime.MinValue;
     private DateTime? lastPluginUpdateCheckAtUtc;
     private PluginUpdateCheckState pluginUpdateCheckState = PluginUpdateCheckState.NotChecked;
     private string? availablePluginUpdateVersion;
@@ -471,6 +486,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private string? pluginUpdateCheckError;
     private AddonInspectorSnapshot? addonInspectorSnapshot;
     private TofuInspectorSnapshot? tofuInspectorSnapshot;
+    private TofuTransferStatus? tofuTransferStatus;
     private string? pendingUpdateNoticeKey;
     private CancellationTokenSource? recordedPullHistoryLoadCts;
     private Task? recordedPullHistoryLoadTask;
@@ -601,6 +617,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public AddonInspectorSnapshot? AddonInspectorSnapshot => addonInspectorSnapshot;
     public TofuInspectorSnapshot? TofuInspectorSnapshot => tofuInspectorSnapshot;
+    public TofuTransferStatus? TofuTransferStatus => tofuTransferStatus;
 
     public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
 
@@ -1024,8 +1041,10 @@ public sealed partial class Plugin : IDalamudPlugin
         debugActorControlEvents.Clear();
         addonInspectorEvents.Clear();
         addonInspectorEventSeenAtBySignature.Clear();
+        tofuTransferChunksByTransfer.Clear();
         addonInspectorSnapshot = null;
         tofuInspectorSnapshot = null;
+        tofuTransferStatus = null;
         debugCaptureFrozen = false;
     }
 
@@ -1101,6 +1120,139 @@ public sealed partial class Plugin : IDalamudPlugin
             Log.Warning(ex, "Could not create Better Deaths Strategy Board test board.");
             return $"Could not create Better Deaths test board: {ex.Message}";
         }
+    }
+
+    public unsafe TofuTransferCreateResult CreateTofuTransferBoards(string exportValue)
+    {
+        exportValue = exportValue.Trim();
+        if (string.IsNullOrWhiteSpace(exportValue))
+        {
+            return new TofuTransferCreateResult(false, "No export data was available to put into Strategy Boards.", string.Empty, 0, 0, 0);
+        }
+
+        try
+        {
+            var module = TofuModule.Instance();
+            if (module is null)
+            {
+                return new TofuTransferCreateResult(false, "Strategy Board module was not available yet.", string.Empty, 0, 0, exportValue.Length);
+            }
+
+            var payloadChunks = SplitTofuTransferPayload(exportValue);
+            var boardCount = payloadChunks.Count;
+            var folderCount = GetTofuTransferFolderCount(boardCount);
+            var savedBoards = SafeTofuInt(module->TotalItemCount(TofuType.Saved, TofuItem.Board));
+            var maxSavedBoards = SafeTofuInt(module->MaxItemAllowed(TofuType.Saved, TofuItem.Board));
+            var savedFolders = SafeTofuInt(module->TotalItemCount(TofuType.Saved, TofuItem.Folder));
+            var maxSavedFolders = SafeTofuInt(module->MaxItemAllowed(TofuType.Saved, TofuItem.Folder));
+
+            if (savedBoards + boardCount > maxSavedBoards)
+            {
+                return new TofuTransferCreateResult(
+                    false,
+                    $"Need {boardCount:N0} saved boards, but only {Math.Max(0, maxSavedBoards - savedBoards):N0} saved board slots are free.",
+                    string.Empty,
+                    boardCount,
+                    folderCount,
+                    exportValue.Length);
+            }
+
+            if (savedFolders + folderCount > maxSavedFolders)
+            {
+                return new TofuTransferCreateResult(
+                    false,
+                    $"Need {folderCount:N0} saved folders, but only {Math.Max(0, maxSavedFolders - savedFolders):N0} saved folder slots are free.",
+                    string.Empty,
+                    boardCount,
+                    folderCount,
+                    exportValue.Length);
+            }
+
+            var transferId = ToBase36(Fnv1A32($"{DateTime.UtcNow.Ticks}:{exportValue}"));
+            var checksum = Fnv1A32(exportValue);
+            var createdBoards = 0;
+
+            for (var folderIndex = 0; folderIndex < folderCount; folderIndex++)
+            {
+                var folder = module->CreateFolder(TofuType.Saved, TofuTransferBoardName);
+                if (folder is null)
+                {
+                    return new TofuTransferCreateResult(
+                        false,
+                        $"Created {createdBoards:N0}/{boardCount:N0} boards, then the game refused to create another Strategy Board folder.",
+                        transferId,
+                        boardCount,
+                        folderCount,
+                        exportValue.Length);
+                }
+
+                for (var slot = 0; slot < TofuTransferBoardsPerFolder; slot++)
+                {
+                    var boardIndex = (folderIndex * TofuTransferBoardsPerFolder) + slot;
+                    if (boardIndex >= boardCount)
+                    {
+                        break;
+                    }
+
+                    var board = CreateTofuTransferBoard(transferId, boardIndex, boardCount, checksum, payloadChunks[boardIndex]);
+                    board.Folder = folder->Index;
+
+                    var created = module->CreateBoard(TofuType.Saved, &board, false);
+                    if (created is null)
+                    {
+                        return new TofuTransferCreateResult(
+                            false,
+                            $"Created {createdBoards:N0}/{boardCount:N0} boards, then the game refused to create another Strategy Board.",
+                            transferId,
+                            boardCount,
+                            folderCount,
+                            exportValue.Length);
+                    }
+
+                    createdBoards++;
+                }
+            }
+
+            tofuInspectorSnapshot = CaptureTofuInspectorSnapshotInternal();
+            RefreshTofuTransferInbox();
+            AddDebugLog($"Created {boardCount} Strategy Board transfer boards in {folderCount} folder(s). Transfer {transferId}.");
+            return new TofuTransferCreateResult(
+                true,
+                $"Created {boardCount:N0} Strategy Board transfer boards in {folderCount:N0} folder(s). Share each {TofuTransferBoardName} folder with the party for now.",
+                transferId,
+                boardCount,
+                folderCount,
+                exportValue.Length);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not create Better Deaths Strategy Board transfer boards.");
+            return new TofuTransferCreateResult(false, $"Could not create Strategy Board transfer boards: {ex.Message}", string.Empty, 0, 0, exportValue.Length);
+        }
+    }
+
+    public void RefreshTofuTransferInbox()
+    {
+        try
+        {
+            tofuTransferStatus = CaptureTofuTransferStatusInternal(tofuTransferChunksByTransfer);
+        }
+        catch (Exception ex)
+        {
+            tofuTransferStatus = new TofuTransferStatus(DateTime.UtcNow, [], ex.Message);
+            Log.Debug(ex, "Could not scan Better Deaths Strategy Board transfer chunks.");
+        }
+    }
+
+    private void RefreshTofuTransferInboxIfDue(DateTime now)
+    {
+        if (nextTofuTransferInboxScanAtUtc > now)
+        {
+            return;
+        }
+
+        nextTofuTransferInboxScanAtUtc = now.Add(TofuTransferInboxScanInterval);
+        RefreshTofuTransferInbox();
     }
 
     public void CaptureAddonInspectorSnapshot(string addonName)
@@ -1379,6 +1531,364 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return $"Unreadable: {ex.Message}";
         }
+    }
+
+    private static unsafe TofuTransferStatus CaptureTofuTransferStatusInternal(Dictionary<string, Dictionary<int, TofuTransferChunk>> chunkStore)
+    {
+        var module = TofuModule.Instance();
+        if (module is null)
+        {
+            return new TofuTransferStatus(DateTime.UtcNow, [], "Strategy Board module was not available yet.");
+        }
+
+        var chunks = CaptureTofuTransferChunks(module->SharedBoardData);
+        foreach (var chunk in chunks)
+        {
+            if (!chunkStore.TryGetValue(chunk.TransferId, out var transferChunks))
+            {
+                transferChunks = [];
+                chunkStore[chunk.TransferId] = transferChunks;
+            }
+
+            transferChunks[chunk.BoardIndex] = chunk;
+        }
+
+        var assemblies = chunkStore.Values
+            .Select(AssembleTofuTransfer)
+            .OrderByDescending(assembly => assembly.IsComplete)
+            .ThenBy(assembly => assembly.TransferId, StringComparer.Ordinal)
+            .ToList();
+
+        return new TofuTransferStatus(DateTime.UtcNow, assemblies, null);
+    }
+
+    private static unsafe IReadOnlyList<TofuTransferChunk> CaptureTofuTransferChunks(TofuData* data)
+    {
+        if (data is null)
+        {
+            return [];
+        }
+
+        var boards = data->Boards;
+        var captureCount = Math.Clamp(SafeTofuInt(data->MaxCount), 0, Math.Min(boards.Length, MaxTofuInspectorBoardsPerDataSet));
+        var chunks = new List<TofuTransferChunk>();
+        for (var i = 0; i < captureCount; i++)
+        {
+            try
+            {
+                if (TryReadTofuTransferChunk(boards[i], out var chunk))
+                {
+                    chunks.Add(chunk);
+                }
+            }
+            catch
+            {
+                // Ignore malformed or disappearing shared boards; the next scan will pick them up if they stabilize.
+            }
+        }
+
+        return chunks;
+    }
+
+    private static TofuTransferAssembly AssembleTofuTransfer(IReadOnlyDictionary<int, TofuTransferChunk> storedChunks)
+    {
+        var chunks = storedChunks.Values
+            .OrderBy(chunk => chunk.BoardIndex)
+            .ToList();
+        var first = chunks[0];
+        var transferId = first.TransferId;
+        var totalBoards = first.TotalBoards;
+        var checksum = first.Checksum;
+        var error = chunks.Any(chunk => chunk.TotalBoards != totalBoards || chunk.Checksum != checksum)
+            ? "Chunk metadata did not agree."
+            : null;
+        var receivedBoards = chunks.Count;
+        var isComplete = error is null && receivedBoards == totalBoards && chunks[0].BoardIndex == 0 && chunks[^1].BoardIndex == totalBoards - 1;
+        var assembled = string.Empty;
+
+        if (isComplete)
+        {
+            var builder = new StringBuilder();
+            for (var i = 0; i < totalBoards; i++)
+            {
+                var chunk = chunks.FirstOrDefault(candidate => candidate.BoardIndex == i);
+                if (chunk is null)
+                {
+                    isComplete = false;
+                    error = $"Missing board {i + 1:N0}/{totalBoards:N0}.";
+                    break;
+                }
+
+                builder.Append(chunk.Payload);
+            }
+
+            if (isComplete)
+            {
+                assembled = builder.ToString();
+                if (Fnv1A32(assembled) != checksum)
+                {
+                    isComplete = false;
+                    error = "Checksum did not match after assembly.";
+                }
+            }
+        }
+
+        if (!isComplete && error is null)
+        {
+            error = "Waiting for more boards.";
+        }
+
+        return new TofuTransferAssembly(
+            transferId,
+            receivedBoards,
+            totalBoards,
+            isComplete,
+            assembled.Length,
+            isComplete ? DetectTofuTransferMode(assembled) : null,
+            error,
+            isComplete ? CreateTofuTransferPreview(assembled) : null);
+    }
+
+    private static bool TryReadTofuTransferChunk(TofuBoardEntry board, out TofuTransferChunk chunk)
+    {
+        chunk = default!;
+        if (!board.IsValid || board.NumberOfObjects == 0)
+        {
+            return false;
+        }
+
+        var textObjects = new List<string>();
+        var objects = board.Objects;
+        var objectCount = Math.Clamp(SafeTofuInt(board.NumberOfObjects), 0, Math.Min(objects.Length, MaxTofuInspectorObjectsPerBoard));
+        for (var i = 0; i < objectCount; i++)
+        {
+            var obj = objects[i];
+            if (obj.ObjectType != TofuObjectType.Text)
+            {
+                continue;
+            }
+
+            textObjects.Add(TrimTofuInspectorText(obj.TextString) ?? string.Empty);
+        }
+
+        if (textObjects.Count == 0 || !TryParseTofuTransferHeader(textObjects[0], out var transferId, out var boardIndex, out var totalBoards, out var checksum))
+        {
+            return false;
+        }
+
+        var payload = string.Concat(textObjects.Skip(1));
+        chunk = new TofuTransferChunk(transferId, boardIndex, totalBoards, checksum, payload);
+        return true;
+    }
+
+    private static bool TryParseTofuTransferHeader(
+        string header,
+        out string transferId,
+        out int boardIndex,
+        out int totalBoards,
+        out uint checksum)
+    {
+        transferId = string.Empty;
+        boardIndex = 0;
+        totalBoards = 0;
+        checksum = 0;
+
+        if (string.IsNullOrWhiteSpace(header))
+        {
+            return false;
+        }
+
+        var parts = header.Split('|');
+        if (parts.Length != 5 || !string.Equals(parts[0], TofuTransferHeaderPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(parts[1]) ||
+            !TryFromBase36Int(parts[2], out boardIndex) ||
+            !TryFromBase36Int(parts[3], out totalBoards) ||
+            !TryFromBase36UInt(parts[4], out checksum) ||
+            boardIndex < 0 ||
+            totalBoards <= 0 ||
+            boardIndex >= totalBoards)
+        {
+            return false;
+        }
+
+        transferId = parts[1];
+        return true;
+    }
+
+    private static TofuBoardEntry CreateTofuTransferBoard(
+        string transferId,
+        int boardIndex,
+        int totalBoards,
+        uint checksum,
+        string payload)
+    {
+        var header = string.Join(
+            "|",
+            TofuTransferHeaderPrefix,
+            transferId,
+            ToBase36(boardIndex),
+            ToBase36(totalBoards),
+            ToBase36(checksum));
+        var board = new TofuBoardEntry
+        {
+            NameString = TofuTransferBoardName,
+            Background = 0,
+        };
+        var objects = board.Objects;
+        var objectIndex = 0;
+
+        objects[objectIndex++] = CreateHiddenTofuTextObject(header);
+        for (var textIndex = 0; textIndex < TofuTransferPayloadTextObjectsPerBoard; textIndex++)
+        {
+            var start = textIndex * MaxTofuTextObjectLength;
+            var text = start < payload.Length
+                ? payload.Substring(start, Math.Min(MaxTofuTextObjectLength, payload.Length - start))
+                : string.Empty;
+            objects[objectIndex++] = CreateHiddenTofuTextObject(text);
+        }
+
+        for (var iconIndex = 0; iconIndex < DebugTofuJobIcons.Length; iconIndex++)
+        {
+            objects[objectIndex++] = CreateCoveringTofuJobIcon(DebugTofuJobIcons[iconIndex], iconIndex);
+        }
+
+        board.NumberOfObjects = (byte)objectIndex;
+        return board;
+    }
+
+    private static IReadOnlyList<string> SplitTofuTransferPayload(string value)
+    {
+        var chunks = new List<string>();
+        for (var start = 0; start < value.Length; start += TofuTransferPayloadCharactersPerBoard)
+        {
+            chunks.Add(value.Substring(start, Math.Min(TofuTransferPayloadCharactersPerBoard, value.Length - start)));
+        }
+
+        if (chunks.Count == 0)
+        {
+            chunks.Add(string.Empty);
+        }
+
+        return chunks;
+    }
+
+    private static int GetTofuTransferFolderCount(int boardCount)
+    {
+        return Math.Max(1, (boardCount + TofuTransferBoardsPerFolder - 1) / TofuTransferBoardsPerFolder);
+    }
+
+    private static string DetectTofuTransferMode(string value)
+    {
+        if (value.StartsWith("BD1S.", StringComparison.Ordinal))
+        {
+            return "Short";
+        }
+
+        if (value.StartsWith("BD1F:", StringComparison.Ordinal))
+        {
+            return "Full";
+        }
+
+        return "Unknown";
+    }
+
+    private static string CreateTofuTransferPreview(string value)
+    {
+        return value.Length <= 120
+            ? value
+            : string.Concat(value.AsSpan(0, 120), "...");
+    }
+
+    private static string ToBase36(long value)
+    {
+        const string digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (value == 0)
+        {
+            return "0";
+        }
+
+        var negative = value < 0;
+        ulong remaining = negative ? (ulong)-value : (ulong)value;
+        Span<char> buffer = stackalloc char[13];
+        var index = buffer.Length;
+        while (remaining > 0)
+        {
+            buffer[--index] = digits[(int)(remaining % 36)];
+            remaining /= 36;
+        }
+
+        return negative
+            ? string.Concat("-", buffer[index..].ToString())
+            : buffer[index..].ToString();
+    }
+
+    private static uint Fnv1A32(string value)
+    {
+        const uint offset = 2166136261;
+        const uint prime = 16777619;
+        var hash = offset;
+        foreach (var b in Encoding.UTF8.GetBytes(value))
+        {
+            hash ^= b;
+            hash *= prime;
+        }
+
+        return hash;
+    }
+
+    private static bool TryFromBase36Int(string value, out int result)
+    {
+        result = 0;
+        if (!TryFromBase36UInt(value, out var unsignedValue) || unsignedValue > int.MaxValue)
+        {
+            return false;
+        }
+
+        result = (int)unsignedValue;
+        return true;
+    }
+
+    private static bool TryFromBase36UInt(string value, out uint result)
+    {
+        result = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var character in value.Trim())
+        {
+            var digit = character switch
+            {
+                >= '0' and <= '9' => character - '0',
+                >= 'A' and <= 'Z' => character - 'A' + 10,
+                >= 'a' and <= 'z' => character - 'a' + 10,
+                _ => -1,
+            };
+
+            if (digit < 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                checked
+                {
+                    result = (result * 36) + (uint)digit;
+                }
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static TofuInspectorSnapshot CreateTofuInspectorErrorSnapshot(string error)
@@ -2339,6 +2849,7 @@ public sealed partial class Plugin : IDalamudPlugin
             FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
+            RefreshTofuTransferInboxIfDue(now);
         }
         catch (Exception ex)
         {
