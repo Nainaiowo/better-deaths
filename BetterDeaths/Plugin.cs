@@ -88,10 +88,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxAddonInspectorNodes = 500;
     private const int MaxAddonInspectorAtkValues = 128;
     private const int AddonInspectorDuplicateSuppressSeconds = 3;
-    private const int MaxTofuInspectorBoardsPerDataSet = 40;
+    private const int MaxTofuInspectorBoardsPerDataSet = 50;
     private const int MaxTofuInspectorObjectsPerBoard = 80;
     private const int MaxTofuInspectorTextLength = 240;
     private const int MaxTofuTextObjectLength = 30;
+    private const string DebugTofuTestBoardName = "Pineapple";
     private const int TofuHiddenTextX = 5120;
     private const int TofuHiddenTextY = 3840;
     private const int MaxRecentHpHistoryPerMember = 240;
@@ -1063,7 +1064,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 return "Saved Strategy Board list is full. Delete a saved board before creating a Better Deaths test board.";
             }
 
-            var boardName = $"BD_TEST_{DateTime.Now:HHmmss}";
+            var boardName = DebugTofuTestBoardName;
             var board = new TofuBoardEntry
             {
                 NameString = boardName,
@@ -1092,8 +1093,8 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             tofuInspectorSnapshot = CaptureTofuInspectorSnapshotInternal();
-            AddDebugLog($"Created Strategy Board test board {boardName}.");
-            return $"Created saved Strategy Board {boardName}.";
+            AddDebugLog($"Created Strategy Board test board named {boardName}.");
+            return $"Created saved Strategy Board named {boardName}.";
         }
         catch (Exception ex)
         {

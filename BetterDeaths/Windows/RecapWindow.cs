@@ -96,7 +96,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.142";
+    private const string CurrentChangelogVersion = "0.1.0.143";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5936,7 +5936,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Create BD test board"))
+        if (ImGui.Button("Create test board"))
         {
             tofuInspectorCreateResult = plugin.CreateDebugTofuTestBoard();
             tofuInspectorSaveError = null;
@@ -5992,7 +5992,7 @@ public sealed class RecapWindow : Window, IDisposable
             .Where(MatchesTofuInspectorBoard)
             .ToList();
 
-        if (!ImGui.TreeNode($"{dataSet.Name} ({boards.Count:N0}/{dataSet.Boards.Count:N0}, total {dataSet.Total:N0}, max {dataSet.MaxCount:N0})###Tofu{dataSet.Name}"))
+        if (!ImGui.TreeNode($"{dataSet.Name} (shown {boards.Count:N0}/{dataSet.Boards.Count:N0} non-empty, game total {dataSet.Total:N0}, capacity {dataSet.MaxCount:N0})###Tofu{dataSet.Name}"))
         {
             return;
         }
@@ -7463,6 +7463,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.143");
+        ImGui.TextDisabled("Strategy Board testing.");
+        DrawWrappedBullet("Adjusted the Debug Strategy Board inspector.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.142");
         ImGui.TextDisabled("Strategy Board testing.");
         DrawWrappedBullet("Adjusted the Debug Strategy Board test layout.");
