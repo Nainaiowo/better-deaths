@@ -27,6 +27,8 @@ public sealed class RecapWindow : Window, IDisposable
     private bool windowStylePushed;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
+    private string addonInspectorEventFilter = string.Empty;
+    private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
@@ -86,7 +88,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.137";
+    private const string CurrentChangelogVersion = "0.1.0.138";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5479,6 +5481,32 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.ClearAddonInspector();
         }
 
+        ImGui.SetNextItemWidth(MathF.Max(220.0f, ImGui.GetContentRegionAvail().X * 0.35f));
+        ImGui.InputText("Addon event filter##AddonInspectorEventFilter", ref addonInspectorEventFilter, 128);
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Filters addon lifecycle rows by addon name, event name, or address. Separate words are treated as separate search terms.");
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("board/strat"))
+        {
+            addonInspectorEventFilter = "board strat strategy";
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Clear addon filter"))
+        {
+            addonInspectorEventFilter = string.Empty;
+        }
+
+        ImGui.SameLine();
+        ImGui.Checkbox("Hide common UI noise", ref addonInspectorHideCommonNoise);
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Hides very common HUD addons like nameplates, cast bars, and minimap from the inspector event list.");
+        }
+
         DrawAddonInspectorEvents();
         DrawAddonInspectorSnapshot();
     }
@@ -5492,7 +5520,7 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
         if (allEvents.Count == 0)
         {
-            ImGui.TextDisabled("No addon lifecycle events captured yet. Open or move a game UI window.");
+            ImGui.TextDisabled("No addon lifecycle events captured yet. Open a game UI window.");
             return;
         }
 
@@ -5701,6 +5729,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private bool MatchesAddonInspectorEvent(AddonInspectorEvent entry)
     {
+        if (addonInspectorHideCommonNoise && IsCommonAddonInspectorNoise(entry.AddonName))
+        {
+            return false;
+        }
+
+        if (!MatchesAddonInspectorEventFilter(entry))
+        {
+            return false;
+        }
+
         if (!TryGetDebugTextFilter(out var filter))
         {
             return true;
@@ -5713,6 +5751,30 @@ public sealed class RecapWindow : Window, IDisposable
             FormatDebugAddress(entry.Address),
             FormatDebugBool(entry.IsReady),
             FormatDebugBool(entry.IsVisible));
+    }
+
+    private bool MatchesAddonInspectorEventFilter(AddonInspectorEvent entry)
+    {
+        var filter = addonInspectorEventFilter.Trim();
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        var terms = filter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return terms.Any(term => MatchesDebugTextFilter(
+            term,
+            entry.EventName,
+            entry.AddonName,
+            FormatDebugAddress(entry.Address)));
+    }
+
+    private static bool IsCommonAddonInspectorNoise(string addonName)
+    {
+        return addonName is "NamePlate" or "CastBarEnemy" or "_NaviMap" or "_ParameterWidget" or "_DTR" or "_TargetInfo" or "_FocusTargetInfo" or "_EnemyList" or "_PartyList" ||
+            addonName.StartsWith("_ActionBar", StringComparison.Ordinal) ||
+            addonName.StartsWith("_Status", StringComparison.Ordinal) ||
+            addonName.StartsWith("_CastBar", StringComparison.Ordinal);
     }
 
     private bool MatchesAddonInspectorValue(AddonInspectorValue value)
@@ -6599,6 +6661,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.138");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.137");
         ImGui.TextDisabled("Debug updates for future release testing.");
         DrawWrappedBullet("Updated Debug for future release testing.");

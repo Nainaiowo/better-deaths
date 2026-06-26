@@ -86,6 +86,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxAddonInspectorEvents = 500;
     private const int MaxAddonInspectorNodes = 500;
     private const int MaxAddonInspectorAtkValues = 128;
+    private const int AddonInspectorDuplicateSuppressSeconds = 3;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
@@ -145,8 +146,6 @@ public sealed partial class Plugin : IDalamudPlugin
         AddonEvent.PostSetup,
         AddonEvent.PostShow,
         AddonEvent.PostHide,
-        AddonEvent.PostRequestedUpdate,
-        AddonEvent.PostRefresh,
         AddonEvent.PostOpen,
         AddonEvent.PostClose,
         AddonEvent.PreFinalize,
@@ -399,6 +398,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<DebugEffectResultSnapshot> debugEffectResultHistory = [];
     private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
     private readonly List<AddonInspectorEvent> addonInspectorEvents = [];
+    private readonly Dictionary<string, DateTime> addonInspectorEventSeenAtBySignature = new(StringComparer.Ordinal);
     private readonly Queue<string> debugCaptureFileLines = new();
     private readonly object debugCaptureFileLock = new();
     private readonly DalamudLinkPayload deathChatLinkPayload;
@@ -991,6 +991,7 @@ public sealed partial class Plugin : IDalamudPlugin
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
         addonInspectorEvents.Clear();
+        addonInspectorEventSeenAtBySignature.Clear();
         addonInspectorSnapshot = null;
         debugCaptureFrozen = false;
     }
@@ -998,6 +999,7 @@ public sealed partial class Plugin : IDalamudPlugin
     public void ClearAddonInspector()
     {
         addonInspectorEvents.Clear();
+        addonInspectorEventSeenAtBySignature.Clear();
         addonInspectorSnapshot = null;
     }
 
@@ -1084,8 +1086,17 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             var addon = args.Addon;
             var isKnown = addon.Address != 0 && !addon.IsNull;
+            var now = DateTime.UtcNow;
+            var signature = $"{eventType}|{args.AddonName}|{addon.Address}";
+            if (addonInspectorEventSeenAtBySignature.TryGetValue(signature, out var lastSeen) &&
+                now - lastSeen < TimeSpan.FromSeconds(AddonInspectorDuplicateSuppressSeconds))
+            {
+                return;
+            }
+
+            addonInspectorEventSeenAtBySignature[signature] = now;
             addonInspectorEvents.Add(new AddonInspectorEvent(
-                DateTime.UtcNow,
+                now,
                 eventType.ToString(),
                 args.AddonName,
                 addon.Address,
@@ -1095,6 +1106,14 @@ public sealed partial class Plugin : IDalamudPlugin
             while (addonInspectorEvents.Count > MaxAddonInspectorEvents)
             {
                 addonInspectorEvents.RemoveAt(0);
+            }
+
+            foreach (var expiredKey in addonInspectorEventSeenAtBySignature
+                         .Where(pair => now - pair.Value > TimeSpan.FromMinutes(5))
+                         .Select(pair => pair.Key)
+                         .ToList())
+            {
+                addonInspectorEventSeenAtBySignature.Remove(expiredKey);
             }
         }
         catch (Exception ex)
