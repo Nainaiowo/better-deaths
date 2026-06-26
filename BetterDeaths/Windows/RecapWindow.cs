@@ -83,7 +83,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.133";
+    private const string CurrentChangelogVersion = "0.1.0.134";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -188,9 +188,10 @@ public sealed class RecapWindow : Window, IDisposable
         uint TerritoryId,
         string TerritoryName,
         float PullElapsedSeconds,
+        int DeathCount,
         IReadOnlyList<PartyDeathRecord> Deaths,
         DeathSelectionSource Source,
-        PullDeathSnapshot? RecordedPull);
+        RecordedPullSummary? RecordedPull);
 
     private sealed class ReviewSelectionState
     {
@@ -653,6 +654,7 @@ public sealed class RecapWindow : Window, IDisposable
                 0,
                 "Sigmascape V4.0",
                 293.0f,
+                deaths.Count,
                 deaths,
                 DeathSelectionSource.Example,
                 null),
@@ -678,38 +680,57 @@ public sealed class RecapWindow : Window, IDisposable
                 plugin.CurrentTerritoryId,
                 plugin.CurrentPullTerritoryName,
                 plugin.CurrentPullElapsedSeconds,
+                plugin.CurrentDeaths.Count,
                 plugin.CurrentDeaths,
                 DeathSelectionSource.Current,
                 null));
         }
 
-        pulls.AddRange(GetVisibleRecordedPulls().Select(entry =>
+        var hasCurrentPull = pulls.Count > 0;
+        var visibleRecordedPulls = GetVisibleRecordedPulls().ToList();
+        for (var i = 0; i < visibleRecordedPulls.Count; i++)
         {
-            var snapshot = entry.Snapshot;
-            return new ReviewPull(
-                BuildRecordedPullKey(snapshot),
-                $"Pull {entry.PullNumber}",
-                FormatRecordedPullCapturedTime(snapshot),
-                entry.PullNumber,
-                snapshot.TerritoryId,
-                snapshot.TerritoryName,
-                snapshot.PullElapsedSeconds,
-                snapshot.Deaths,
+            var summary = visibleRecordedPulls[i].Summary;
+            var key = BuildRecordedPullKey(summary);
+            var shouldLoadDetails =
+                string.Equals(recapReviewSelection.PullKey, key, StringComparison.Ordinal) ||
+                (!hasCurrentPull && recapReviewSelection.PullKey is null && i == 0) ||
+                PendingDeathSelectionMatchesRecordedPull(summary);
+            var detail = shouldLoadDetails
+                ? plugin.GetRecordedPullDetails(summary)
+                : plugin.GetLoadedRecordedPullDetails(summary);
+            var deaths = detail?.Deaths ?? [];
+            pulls.Add(new ReviewPull(
+                key,
+                $"Pull {summary.PullNumber}",
+                FormatRecordedPullCapturedTime(summary),
+                summary.PullNumber,
+                summary.TerritoryId,
+                summary.TerritoryName,
+                summary.PullElapsedSeconds,
+                detail?.Deaths.Count ?? summary.DeathCount,
+                deaths,
                 DeathSelectionSource.Recorded,
-                snapshot);
-        }));
+                summary));
+        }
 
         return pulls;
     }
 
-    private static string BuildRecordedPullKey(PullDeathSnapshot snapshot)
+    private static string BuildRecordedPullKey(RecordedPullSummary summary)
     {
-        return $"Recorded:{snapshot.PullNumber}:{snapshot.CapturedAtUtc.Ticks}";
+        return $"Recorded:{summary.PullNumber}:{summary.CapturedAtUtc.Ticks}";
     }
 
-    private string FormatRecordedPullCapturedTime(PullDeathSnapshot snapshot)
+    private string FormatRecordedPullCapturedTime(RecordedPullSummary summary)
     {
-        return FormatLocalClockTime(snapshot.CapturedAtUtc);
+        return FormatLocalClockTime(summary.CapturedAtUtc);
+    }
+
+    private bool PendingDeathSelectionMatchesRecordedPull(RecordedPullSummary summary)
+    {
+        return pendingDeathSelection is { } target &&
+            DeathSelectionSourceMatches(target, DeathSelectionSource.Recorded, summary);
     }
 
     private void DrawReviewWorkspace(
@@ -1048,6 +1069,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCollapsedPullBrowser(string idPrefix)
     {
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        CenterNextItem(ImGui.GetFrameHeight());
         if (ImGuiComponents.IconButton($"ExpandPullBrowser{idPrefix}", FontAwesomeIcon.ChevronRight))
         {
             plugin.SetPullBrowserCollapsed(false);
@@ -1069,10 +1091,11 @@ public sealed class RecapWindow : Window, IDisposable
         var position = ImGui.GetCursorScreenPos();
         var size = new Vector2(PullBrowserCollapsedWidth, height);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild($"##{id}", size, false, ImGuiWindowFlags.NoScrollbar))
         {
             var buttonSize = ImGui.GetFrameHeight();
-            var buttonX = MathF.Max(0.0f, (PullBrowserCollapsedWidth - buttonSize) * 0.5f);
+            var buttonX = MathF.Max(0.0f, (ImGui.GetContentRegionAvail().X - buttonSize) * 0.5f);
             ImGui.SetCursorPos(new Vector2(buttonX, 4.0f));
 
             ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
@@ -1092,7 +1115,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.Spacing();
 
             var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4.0f, 0.0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
             if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, ImGuiWindowFlags.NoScrollbar))
             {
                 foreach (var pull in pulls)
@@ -1117,6 +1140,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        ImGui.PopStyleVar();
         ImGui.PopStyleColor();
 
         var lineX = position.X + size.X - 1.0f;
@@ -1175,7 +1199,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatPullDutyInfo(ReviewPull pull)
     {
-        return $"{pull.TerritoryName} ({FormatCombatTimer(pull.PullElapsedSeconds)}){CompactInfoSeparator}{FormatDeathCount(pull.Deaths.Count)}";
+        return $"{pull.TerritoryName} ({FormatCombatTimer(pull.PullElapsedSeconds)}){CompactInfoSeparator}{FormatDeathCount(pull.DeathCount)}";
     }
 
     private void DrawClearRecordedPullsButton(string id, bool clearSelection)
@@ -1799,7 +1823,9 @@ public sealed class RecapWindow : Window, IDisposable
         DrawRecordedPullControls();
         if (plugin.RecordedPulls.Count == 0)
         {
-            ImGui.TextDisabled("No recorded pulls kept yet.");
+            ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
+                ? "Loading saved pulls..."
+                : "No recorded pulls kept yet.");
             collapseRecordedPullsRequested = false;
             return;
         }
@@ -1812,11 +1838,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        foreach (var (snapshot, pullNumber) in visiblePulls)
+        foreach (var (summary, pullNumber) in visiblePulls)
         {
-            var pullId = $"{snapshot.PullNumber}:{snapshot.CapturedAtUtc.Ticks}";
-            var header = $"Pull {pullNumber} - {snapshot.TerritoryName} - Timer {FormatCombatTimer(snapshot.PullElapsedSeconds)}###RecordedPull{pullId}";
-            if (HasPendingDeathSelection(snapshot.Deaths, DeathSelectionSource.Recorded, snapshot))
+            var pullId = $"{summary.PullNumber}:{summary.CapturedAtUtc.Ticks}";
+            var header = $"Pull {pullNumber} - {summary.TerritoryName} - Timer {FormatCombatTimer(summary.PullElapsedSeconds)}###RecordedPull{pullId}";
+            if (PendingDeathSelectionMatchesRecordedPull(summary))
             {
                 ImGui.SetNextItemOpen(true, ImGuiCond.Always);
             }
@@ -1831,9 +1857,18 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             using var recordedPullIndent = new ImGuiIndentScope(PullBodyIndent);
-            ImGui.TextDisabled(FormatRecordedPullCapturedTime(snapshot));
-            DrawDeathTimeline(snapshot.Deaths, $"Pull{pullId}");
-            DrawDeathDetails(snapshot.Deaths, $"Pull{pullId}", selectionSource: DeathSelectionSource.Recorded, recordedPull: snapshot);
+            ImGui.TextDisabled(FormatRecordedPullCapturedTime(summary));
+            var detail = plugin.GetRecordedPullDetails(summary);
+            if (detail is null)
+            {
+                ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
+                    ? "Loading pull details..."
+                    : "Pull details could not be loaded.");
+                continue;
+            }
+
+            DrawDeathTimeline(detail.Deaths, $"Pull{pullId}");
+            DrawDeathDetails(detail.Deaths, $"Pull{pullId}", selectionSource: DeathSelectionSource.Recorded, recordedPull: summary);
         }
 
         collapseRecordedPullsRequested = false;
@@ -2032,21 +2067,21 @@ public sealed class RecapWindow : Window, IDisposable
             : $"{option.TerritoryName} ({option.PullCount})";
     }
 
-    private IEnumerable<(PullDeathSnapshot Snapshot, long PullNumber)> GetVisibleRecordedPulls()
+    private IEnumerable<(RecordedPullSummary Summary, long PullNumber)> GetVisibleRecordedPulls()
     {
         var pulls = plugin.RecordedPulls
-            .Select(snapshot => (Snapshot: snapshot, PullNumber: snapshot.PullNumber));
+            .Select(summary => (Summary: summary, PullNumber: summary.PullNumber));
 
         if (recordedPullDutyFilter != AllRecordedPullDuties)
         {
-            pulls = pulls.Where(entry => entry.Snapshot.TerritoryId == recordedPullDutyFilter);
+            pulls = pulls.Where(entry => entry.Summary.TerritoryId == recordedPullDutyFilter);
         }
 
         return pulls
-            .GroupBy(entry => entry.Snapshot.TerritoryId)
+            .GroupBy(entry => entry.Summary.TerritoryId)
             .OrderByDescending(group => group.Max(entry => entry.PullNumber))
             .ThenBy(group => group
-                .Select(entry => entry.Snapshot.TerritoryName)
+                .Select(entry => entry.Summary.TerritoryName)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty,
                 StringComparer.OrdinalIgnoreCase)
             .SelectMany(group => group.OrderByDescending(entry => entry.PullNumber));
@@ -2779,7 +2814,7 @@ public sealed class RecapWindow : Window, IDisposable
         string idSuffix,
         bool useCollapsers = true,
         DeathSelectionSource selectionSource = DeathSelectionSource.Current,
-        PullDeathSnapshot? recordedPull = null)
+        RecordedPullSummary? recordedPull = null)
     {
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -5980,15 +6015,18 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (plugin.CurrentPullClosedForReview)
         {
-            var closedCurrentPull = plugin.RecordedPulls
-                .AsEnumerable()
-                .Reverse()
-                .FirstOrDefault(snapshot =>
-                    snapshot.PullNumber == plugin.CurrentPullRecordedPullNumber &&
-                    ContainsDeath(snapshot.Deaths, deathSeenAtTicks, memberKeyHash));
-            if (closedCurrentPull is not null)
+            foreach (var summary in plugin.RecordedPulls.AsEnumerable().Reverse())
             {
-                return BuildRecordedDeathSelectionTarget(deathSeenAtTicks, memberKeyHash, closedCurrentPull);
+                if (summary.PullNumber != plugin.CurrentPullRecordedPullNumber)
+                {
+                    continue;
+                }
+
+                var detail = plugin.GetRecordedPullDetails(summary);
+                if (detail is not null && ContainsDeath(detail.Deaths, deathSeenAtTicks, memberKeyHash))
+                {
+                    return BuildRecordedDeathSelectionTarget(deathSeenAtTicks, memberKeyHash, summary);
+                }
             }
         }
         else if (ContainsDeath(plugin.CurrentDeaths, deathSeenAtTicks, memberKeyHash))
@@ -5996,13 +6034,13 @@ public sealed class RecapWindow : Window, IDisposable
             return new DeathSelectionTarget(deathSeenAtTicks, memberKeyHash, DeathSelectionSource.Current, null, null, null);
         }
 
-        var recordedPull = plugin.RecordedPulls
-            .AsEnumerable()
-            .Reverse()
-            .FirstOrDefault(snapshot => ContainsDeath(snapshot.Deaths, deathSeenAtTicks, memberKeyHash));
-        if (recordedPull is not null)
+        foreach (var summary in plugin.RecordedPulls.AsEnumerable().Reverse())
         {
-            return BuildRecordedDeathSelectionTarget(deathSeenAtTicks, memberKeyHash, recordedPull);
+            var detail = plugin.GetRecordedPullDetails(summary);
+            if (detail is not null && ContainsDeath(detail.Deaths, deathSeenAtTicks, memberKeyHash))
+            {
+                return BuildRecordedDeathSelectionTarget(deathSeenAtTicks, memberKeyHash, summary);
+            }
         }
 
         return ContainsDeath(GetExampleDeaths(), deathSeenAtTicks, memberKeyHash)
@@ -6026,7 +6064,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static DeathSelectionTarget BuildRecordedDeathSelectionTarget(
         long deathSeenAtTicks,
         uint memberKeyHash,
-        PullDeathSnapshot recordedPull)
+        RecordedPullSummary recordedPull)
     {
         return new DeathSelectionTarget(
             deathSeenAtTicks,
@@ -6040,7 +6078,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool HasPendingDeathSelection(
         IReadOnlyList<PartyDeathRecord> deaths,
         DeathSelectionSource source,
-        PullDeathSnapshot? recordedPull = null)
+        RecordedPullSummary? recordedPull = null)
     {
         return pendingDeathSelection is { } target &&
             DeathSelectionSourceMatches(target, source, recordedPull) &&
@@ -6050,7 +6088,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool IsPendingDeathSelection(
         PartyDeathRecord death,
         DeathSelectionSource source,
-        PullDeathSnapshot? recordedPull = null)
+        RecordedPullSummary? recordedPull = null)
     {
         return pendingDeathSelection is { } target &&
             DeathSelectionSourceMatches(target, source, recordedPull) &&
@@ -6060,7 +6098,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool DeathSelectionSourceMatches(
         DeathSelectionTarget target,
         DeathSelectionSource source,
-        PullDeathSnapshot? recordedPull)
+        RecordedPullSummary? recordedPull)
     {
         if (target.Source != source)
         {
@@ -6159,6 +6197,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.134");
+        ImGui.TextDisabled("Saved pull loading.");
+        DrawBreathingGoldBullet("Recorded pulls now load with less startup impact.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.133");
         ImGui.TextDisabled("Theme visibility.");
         DrawBreathingGoldBullet("Theme options now have persistent New markers.");

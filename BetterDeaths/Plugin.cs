@@ -28,6 +28,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 
@@ -55,10 +56,15 @@ public sealed partial class Plugin : IDalamudPlugin
     private const long DebugCaptureTrimTargetBytes = 20L * 1024L * 1024L;
     private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
+    private const string RecordedPullIndexFileName = "recorded-pulls.index.json";
+    private const string RecordedPullDetailsDirectoryName = "recorded-pull-details";
     private const int RecordedPullHistorySchemaVersion = 3;
+    private const int RecordedPullIndexSchemaVersion = 4;
     private const int CurrentConfigurationVersion = 4;
     private const int RecordedPullHistoryRollingBackupCount = 5;
+    private const int RecordedPullIndexRollingBackupCount = 3;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
+    private const string RecordedPullIndexRollingBackupSearchPattern = "recorded-pulls.index.backup.*.json";
     private const ushort ChatGreenColorKey = 45;
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
@@ -145,6 +151,41 @@ public sealed partial class Plugin : IDalamudPlugin
     ];
 
     private sealed record RecordedPullHistoryFile(int SchemaVersion, List<PullDeathSnapshot> Pulls);
+
+    private sealed record RecordedPullIndexFile(int SchemaVersion, List<RecordedPullIndexEntry> Pulls);
+
+    private sealed record RecordedPullIndexEntry(
+        DateTime CapturedAtUtc,
+        string Reason,
+        uint TerritoryId,
+        string TerritoryName,
+        float PullElapsedSeconds,
+        int DeathCount,
+        long PullNumber,
+        string DetailFileName);
+
+    private sealed class RecordedPullState
+    {
+        public RecordedPullState(
+            RecordedPullSummary summary,
+            string detailFileName,
+            PullDeathSnapshot? detail,
+            bool detailDirty)
+        {
+            Summary = summary;
+            DetailFileName = detailFileName;
+            Detail = detail;
+            DetailDirty = detailDirty;
+        }
+
+        public RecordedPullSummary Summary { get; set; }
+
+        public string DetailFileName { get; set; }
+
+        public PullDeathSnapshot? Detail { get; set; }
+
+        public bool DetailDirty { get; set; }
+    }
 
     private readonly record struct PlayerLabelCandidate(
         string MemberKey,
@@ -328,7 +369,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly DeathRecapPopupWindow deathRecapPopupWindow;
     private readonly List<PartyMemberSnapshot> currentMembers = [];
     private readonly List<PartyDeathRecord> currentDeaths = [];
-    private readonly List<PullDeathSnapshot> recordedPulls = [];
+    private readonly List<RecordedPullState> recordedPulls = [];
+    private readonly object recordedPullLock = new();
+    private IReadOnlyList<RecordedPullSummary> recordedPullSummaries = [];
     private readonly List<DebugLogEntry> debugLogEntries = [];
     private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> debugStatusPersistSignaturesByMember = new(StringComparer.Ordinal);
@@ -376,7 +419,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool availablePluginUpdateIsTesting;
     private string? pluginUpdateCheckError;
     private string? pendingUpdateNoticeKey;
-    private string? lastSavedRecordedPullHistoryJson;
+    private CancellationTokenSource? recordedPullHistoryLoadCts;
+    private Task? recordedPullHistoryLoadTask;
+    private string? recordedPullHistoryLoadError;
+    private bool recordedPullHistoryLoading;
+    private bool recordedPullStorageDirty;
     private bool updateCheckInProgress;
     private bool effectResultHookEnabled;
     private bool actorControlHookEnabled;
@@ -465,7 +512,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public IReadOnlyList<PartyDeathRecord> CurrentDeaths => currentDeaths;
 
-    public IReadOnlyList<PullDeathSnapshot> RecordedPulls => recordedPulls;
+    public IReadOnlyList<RecordedPullSummary> RecordedPulls => recordedPullSummaries;
+
+    public bool RecordedPullHistoryLoading => recordedPullHistoryLoading;
+
+    public string? RecordedPullHistoryLoadError => recordedPullHistoryLoadError;
 
     public IReadOnlyList<DebugLogEntry> DebugLogEntries => debugLogEntries;
 
@@ -552,7 +603,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         NormalizeUserConfiguration();
-        LoadRecordedPullHistory();
+        BeginLoadRecordedPullHistory();
         deathChatLinkPayload = ChatGui.AddChatLinkHandler(0, OnDeathChatLinkClick);
 
         recapWindow = new RecapWindow(this)
@@ -639,6 +690,17 @@ public sealed partial class Plugin : IDalamudPlugin
         CaptureCurrentPullSnapshot("Plugin unloaded");
         SaveRecordedPullHistory();
         FlushDebugCaptureFile(force: true);
+        recordedPullHistoryLoadCts?.Cancel();
+        try
+        {
+            recordedPullHistoryLoadTask?.Wait(TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex) when (ex is AggregateException or OperationCanceledException)
+        {
+            Log.Warning(ex, "Better Deaths recorded pull history load did not finish before disposal.");
+        }
+
+        recordedPullHistoryLoadCts?.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= OpenMainUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
         PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
@@ -904,12 +966,17 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public void ClearRecordedPulls()
     {
-        recordedPulls.Clear();
-        nextRecordedPullNumber = 1;
+        WaitForRecordedPullHistoryLoadForMutation();
+        lock (recordedPullLock)
+        {
+            recordedPulls.Clear();
+            recordedPullSummaries = [];
+            nextRecordedPullNumber = 1;
+            recordedPullStorageDirty = false;
+        }
+
         currentPullRecordedPullNumber = 0;
         DeleteRecordedPullHistoryFiles();
-        lastSavedRecordedPullHistoryJson = null;
-        SaveRecordedPullHistory();
     }
 
     public void SetDeathChatChannel(DeathChatChannel channel)
@@ -954,7 +1021,13 @@ public sealed partial class Plugin : IDalamudPlugin
 
         Configuration.MaxRecordedPulls = maxRecordedPulls;
         SaveConfiguration();
-        TrimRecordedPulls();
+        WaitForRecordedPullHistoryLoadForMutation();
+        lock (recordedPullLock)
+        {
+            TrimRecordedPullsLocked();
+            UpdateRecordedPullSummariesLocked();
+        }
+
         SaveRecordedPullHistory();
     }
 
@@ -1177,7 +1250,7 @@ public sealed partial class Plugin : IDalamudPlugin
         AddPlayerLabelCandidates(labels, currentMembers.Select(ToPlayerLabelCandidate));
         AddDeathLabelCandidates(labels, currentDeaths);
 
-        foreach (var pull in recordedPulls.AsEnumerable().Reverse())
+        foreach (var pull in GetLoadedRecordedPullDetails().AsEnumerable().Reverse())
         {
             AddDeathLabelCandidates(labels, pull.Deaths);
         }
@@ -1211,7 +1284,7 @@ public sealed partial class Plugin : IDalamudPlugin
             return currentDeaths;
         }
 
-        return recordedPulls
+        return GetLoadedRecordedPullDetails()
             .AsEnumerable()
             .Reverse()
             .FirstOrDefault(pull => pull.Deaths.Any(candidate => DeathRecordsMatch(candidate, death)))
@@ -3940,8 +4013,9 @@ public sealed partial class Plugin : IDalamudPlugin
             return false;
         }
 
+        WaitForRecordedPullHistoryLoadForMutation();
         var pullNumber = GetNextRecordedPullNumber();
-        recordedPulls.Add(new PullDeathSnapshot(
+        var snapshot = new PullDeathSnapshot(
             DateTime.UtcNow,
             reason,
             currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId,
@@ -3950,8 +4024,16 @@ public sealed partial class Plugin : IDalamudPlugin
             currentDeaths.ToList())
         {
             PullNumber = pullNumber,
-        });
-        TrimRecordedPulls();
+        };
+
+        lock (recordedPullLock)
+        {
+            recordedPulls.Add(CreateRecordedPullState(snapshot, detailDirty: true));
+            TrimRecordedPullsLocked();
+            UpdateRecordedPullSummariesLocked();
+            recordedPullStorageDirty = true;
+        }
+
         SaveRecordedPullHistory();
         currentPullSnapshotCaptured = true;
         currentPullRecordedPullNumber = pullNumber;
@@ -4217,12 +4299,20 @@ public sealed partial class Plugin : IDalamudPlugin
             : (float)Math.Max(0.0, (now - pullStartedAtUtc.Value).TotalSeconds);
     }
 
-    private void TrimRecordedPulls()
+    private void TrimRecordedPullsLocked()
     {
         while (recordedPulls.Count > Configuration.MaxRecordedPulls)
         {
             recordedPulls.RemoveAt(0);
+            recordedPullStorageDirty = true;
         }
+    }
+
+    private void UpdateRecordedPullSummariesLocked()
+    {
+        recordedPullSummaries = recordedPulls
+            .Select(state => state.Summary)
+            .ToList();
     }
 
     private void PruneRecentCombatLogEvents(DateTime now)
@@ -4245,18 +4335,33 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private long GetNextRecordedPullNumber()
     {
+        lock (recordedPullLock)
+        {
+            var next = GetNextRecordedPullNumberLocked();
+            nextRecordedPullNumber = next + 1;
+            return next;
+        }
+    }
+
+    private long GetNextRecordedPullNumberLocked()
+    {
         var next = Math.Max(1, nextRecordedPullNumber);
         if (recordedPulls.Count > 0)
         {
-            next = Math.Max(next, recordedPulls.Max(pull => pull.PullNumber) + 1);
+            next = Math.Max(next, recordedPulls.Max(pull => pull.Summary.PullNumber) + 1);
         }
 
-        nextRecordedPullNumber = next + 1;
         return next;
     }
 
     private static string RecordedPullHistoryPath =>
         Path.Combine(PluginInterface.ConfigDirectory.FullName, RecordedPullHistoryFileName);
+
+    private static string RecordedPullIndexPath =>
+        Path.Combine(PluginInterface.ConfigDirectory.FullName, RecordedPullIndexFileName);
+
+    private static string RecordedPullDetailsDirectoryPath =>
+        Path.Combine(PluginInterface.ConfigDirectory.FullName, RecordedPullDetailsDirectoryName);
 
     private static string DebugCaptureFileFullPath =>
         Path.Combine(PluginInterface.ConfigDirectory.FullName, DebugCaptureFileName);
@@ -4270,8 +4375,68 @@ public sealed partial class Plugin : IDalamudPlugin
     private static string RecordedPullHistoryBackupPath =>
         RecordedPullHistoryPath + ".bak";
 
-    private void LoadRecordedPullHistory()
+    private static string RecordedPullIndexTempPath =>
+        RecordedPullIndexPath + ".tmp";
+
+    private static string RecordedPullIndexBackupPath =>
+        RecordedPullIndexPath + ".bak";
+
+    private void BeginLoadRecordedPullHistory()
     {
+        recordedPullHistoryLoading = true;
+        recordedPullHistoryLoadError = null;
+        recordedPullHistoryLoadCts = new CancellationTokenSource();
+        var token = recordedPullHistoryLoadCts.Token;
+        recordedPullHistoryLoadTask = Task.Run(() => LoadRecordedPullHistoryInBackground(token), token);
+    }
+
+    private void LoadRecordedPullHistoryInBackground(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var states = LoadRecordedPullStates(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyLoadedRecordedPullStates(states);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            recordedPullHistoryLoadError = ex.Message;
+            Log.Warning(ex, "Could not load Better Deaths recorded pull history.");
+        }
+        finally
+        {
+            recordedPullHistoryLoading = false;
+        }
+    }
+
+    private List<RecordedPullState> LoadRecordedPullStates(CancellationToken cancellationToken)
+    {
+        if (TryReadRecordedPullIndexFile(RecordedPullIndexPath) is { Count: > 0 } indexedStates)
+        {
+            return NormalizeRecordedPullStates(indexedStates);
+        }
+
+        if (TryReadRecordedPullIndexFile(RecordedPullIndexTempPath) is { Count: > 0 } tempIndexedStates)
+        {
+            return NormalizeRecordedPullStates(tempIndexedStates);
+        }
+
+        if (TryReadRecordedPullIndexFile(RecordedPullIndexBackupPath) is { Count: > 0 } backupIndexedStates)
+        {
+            return NormalizeRecordedPullStates(backupIndexedStates);
+        }
+
+        foreach (var backupPath in GetRecordedPullIndexRollingBackupPaths())
+        {
+            if (TryReadRecordedPullIndexFile(backupPath) is { Count: > 0 } rollingIndexedStates)
+            {
+                return NormalizeRecordedPullStates(rollingIndexedStates);
+            }
+        }
+
         var loadedPulls = TryReadRecordedPullHistoryFile(RecordedPullHistoryPath);
 
         if (loadedPulls is null && File.Exists(RecordedPullHistoryTempPath))
@@ -4298,17 +4463,75 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (loadedPulls is null)
         {
-            return;
+            return [];
         }
 
-        recordedPulls.Clear();
-        recordedPulls.AddRange(NormalizeRecordedPullNumbers(loadedPulls
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalizedPulls = NormalizeRecordedPullNumbers(loadedPulls
             .Where(pull => pull is { Deaths.Count: > 0 })
-            .OrderBy(pull => pull.CapturedAtUtc)));
-        TrimRecordedPulls();
-        nextRecordedPullNumber = recordedPulls.Count == 0
-            ? 1
-            : recordedPulls.Max(pull => pull.PullNumber) + 1;
+            .OrderBy(pull => pull.CapturedAtUtc))
+            .TakeLast(Configuration.MaxRecordedPulls)
+            .ToList();
+        var migratedStates = normalizedPulls
+            .Select(pull => CreateRecordedPullState(pull, detailDirty: true))
+            .ToList();
+        try
+        {
+            WriteRecordedPullStorageSnapshot(migratedStates, createBackup: false);
+            foreach (var state in migratedStates)
+            {
+                state.DetailDirty = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not migrate Better Deaths recorded pulls into split storage.");
+        }
+
+        return migratedStates;
+    }
+
+    private void ApplyLoadedRecordedPullStates(List<RecordedPullState> states)
+    {
+        lock (recordedPullLock)
+        {
+            recordedPulls.Clear();
+            recordedPulls.AddRange(states);
+            TrimRecordedPullsLocked();
+            UpdateRecordedPullSummariesLocked();
+            nextRecordedPullNumber = GetNextRecordedPullNumberLocked();
+            recordedPullStorageDirty = false;
+        }
+    }
+
+    private static List<RecordedPullState> NormalizeRecordedPullStates(IEnumerable<RecordedPullState> states)
+    {
+        var normalized = new List<RecordedPullState>();
+        var usedPullNumbers = new HashSet<long>();
+        var nextPullNumber = 1L;
+
+        foreach (var state in states
+                     .Where(state => state.Summary.DeathCount > 0)
+                     .OrderBy(state => state.Summary.CapturedAtUtc))
+        {
+            var pullNumber = state.Summary.PullNumber;
+            if (pullNumber <= 0 || !usedPullNumbers.Add(pullNumber))
+            {
+                while (usedPullNumbers.Contains(nextPullNumber))
+                {
+                    nextPullNumber++;
+                }
+
+                pullNumber = nextPullNumber;
+                usedPullNumbers.Add(pullNumber);
+            }
+
+            nextPullNumber = Math.Max(nextPullNumber, pullNumber + 1);
+            var summary = state.Summary with { PullNumber = pullNumber };
+            normalized.Add(new RecordedPullState(summary, state.DetailFileName, state.Detail, state.DetailDirty));
+        }
+
+        return normalized;
     }
 
     private static List<PullDeathSnapshot> NormalizeRecordedPullNumbers(IEnumerable<PullDeathSnapshot> pulls)
@@ -4371,33 +4594,78 @@ public sealed partial class Plugin : IDalamudPlugin
         };
     }
 
-    private void SaveRecordedPullHistory()
+    private List<RecordedPullState>? TryReadRecordedPullIndexFile(string path)
     {
         try
         {
-            Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
-            var json = JsonSerializer.Serialize(
-                new RecordedPullHistoryFile(RecordedPullHistorySchemaVersion, recordedPulls),
-                RecordedPullHistoryJsonOptions);
-            if (!RecordedPullHistoryNeedsWrite(json))
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            var index = JsonSerializer.Deserialize<RecordedPullIndexFile>(json, RecordedPullHistoryJsonOptions);
+            return index?.Pulls
+                .Where(entry => entry.DeathCount > 0 && !string.IsNullOrWhiteSpace(entry.DetailFileName))
+                .Select(entry =>
+                {
+                    var summary = new RecordedPullSummary(
+                        entry.CapturedAtUtc,
+                        entry.Reason,
+                        entry.TerritoryId,
+                        entry.TerritoryName,
+                        entry.PullElapsedSeconds,
+                        entry.DeathCount)
+                    {
+                        PullNumber = entry.PullNumber,
+                    };
+                    return new RecordedPullState(summary, entry.DetailFileName, null, detailDirty: false);
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, $"Could not read Better Deaths recorded pull index at {path}.");
+            return null;
+        }
+    }
+
+    private void SaveRecordedPullHistory()
+    {
+        if (!recordedPullStorageDirty)
+        {
+            return;
+        }
+
+        WaitForRecordedPullHistoryLoadForMutation();
+        List<RecordedPullState> snapshot;
+        lock (recordedPullLock)
+        {
+            if (!recordedPullStorageDirty)
             {
                 return;
             }
 
-            CreateRecordedPullHistoryRollingBackup();
-            File.WriteAllText(RecordedPullHistoryTempPath, json);
+            snapshot = recordedPulls.ToList();
+        }
 
-            if (File.Exists(RecordedPullHistoryPath))
+        try
+        {
+            WriteRecordedPullStorageSnapshot(snapshot, createBackup: true);
+            lock (recordedPullLock)
             {
-                File.Replace(RecordedPullHistoryTempPath, RecordedPullHistoryPath, RecordedPullHistoryBackupPath, true);
-            }
-            else
-            {
-                File.Move(RecordedPullHistoryTempPath, RecordedPullHistoryPath, true);
-            }
+                foreach (var state in recordedPulls)
+                {
+                    state.DetailDirty = false;
+                }
 
-            PruneRecordedPullHistoryRollingBackups();
-            lastSavedRecordedPullHistoryJson = json;
+                recordedPullStorageDirty = false;
+            }
         }
         catch (Exception ex)
         {
@@ -4405,35 +4673,207 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private bool RecordedPullHistoryNeedsWrite(string json)
+    private static void WriteRecordedPullStorageSnapshot(
+        IReadOnlyList<RecordedPullState> states,
+        bool createBackup)
+    {
+        Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
+        Directory.CreateDirectory(RecordedPullDetailsDirectoryPath);
+
+        foreach (var state in states)
+        {
+            if (state.Detail is null)
+            {
+                continue;
+            }
+
+            var detailPath = GetRecordedPullDetailPath(state.DetailFileName);
+            if (!state.DetailDirty && File.Exists(detailPath))
+            {
+                continue;
+            }
+
+            var detailJson = JsonSerializer.Serialize(state.Detail, RecordedPullHistoryJsonOptions);
+            File.WriteAllText(detailPath, detailJson);
+        }
+
+        var index = new RecordedPullIndexFile(
+            RecordedPullIndexSchemaVersion,
+            states
+                .Select(state => new RecordedPullIndexEntry(
+                    state.Summary.CapturedAtUtc,
+                    state.Summary.Reason,
+                    state.Summary.TerritoryId,
+                    state.Summary.TerritoryName,
+                    state.Summary.PullElapsedSeconds,
+                    state.Summary.DeathCount,
+                    state.Summary.PullNumber,
+                    state.DetailFileName))
+                .ToList());
+        var indexJson = JsonSerializer.Serialize(index, RecordedPullHistoryJsonOptions);
+        if (createBackup)
+        {
+            CreateRecordedPullIndexRollingBackup();
+        }
+
+        File.WriteAllText(RecordedPullIndexTempPath, indexJson);
+        if (File.Exists(RecordedPullIndexPath))
+        {
+            File.Replace(RecordedPullIndexTempPath, RecordedPullIndexPath, RecordedPullIndexBackupPath, true);
+        }
+        else
+        {
+            File.Move(RecordedPullIndexTempPath, RecordedPullIndexPath, true);
+        }
+
+        PruneRecordedPullIndexRollingBackups();
+        PruneOrphanRecordedPullDetailFiles(states);
+    }
+
+    private void WaitForRecordedPullHistoryLoadForMutation()
+    {
+        var task = recordedPullHistoryLoadTask;
+        if (task is null || task.IsCompleted)
+        {
+            return;
+        }
+
+        try
+        {
+            if (task.Wait(TimeSpan.FromSeconds(10)))
+            {
+                return;
+            }
+
+            recordedPullHistoryLoadCts?.Cancel();
+            Log.Warning("Better Deaths recorded pull history load timed out before mutation; canceling background load.");
+            task.Wait(TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex) when (ex is AggregateException or OperationCanceledException)
+        {
+            Log.Warning(ex, "Better Deaths recorded pull history load did not finish before mutation.");
+        }
+    }
+
+    public PullDeathSnapshot? GetRecordedPullDetails(RecordedPullSummary summary)
+    {
+        RecordedPullState? state;
+        lock (recordedPullLock)
+        {
+            state = FindRecordedPullStateLocked(summary);
+            if (state?.Detail is not null)
+            {
+                return state.Detail;
+            }
+        }
+
+        if (state is null)
+        {
+            return null;
+        }
+
+        var detail = TryReadRecordedPullDetailFile(GetRecordedPullDetailPath(state.DetailFileName));
+        if (detail is null)
+        {
+            return null;
+        }
+
+        lock (recordedPullLock)
+        {
+            state = FindRecordedPullStateLocked(summary);
+            if (state is null)
+            {
+                return detail;
+            }
+
+            state.Detail = detail;
+            state.DetailDirty = false;
+            return state.Detail;
+        }
+    }
+
+    public PullDeathSnapshot? GetLoadedRecordedPullDetails(RecordedPullSummary summary)
+    {
+        lock (recordedPullLock)
+        {
+            return FindRecordedPullStateLocked(summary)?.Detail;
+        }
+    }
+
+    private List<PullDeathSnapshot> GetLoadedRecordedPullDetails()
+    {
+        lock (recordedPullLock)
+        {
+            return recordedPulls
+                .Select(state => state.Detail)
+                .Where(detail => detail is not null)
+                .Cast<PullDeathSnapshot>()
+                .ToList();
+        }
+    }
+
+    private List<PullDeathSnapshot> GetRecordedPullDetailsForSearch()
+    {
+        return RecordedPulls
+            .Reverse()
+            .Select(GetRecordedPullDetails)
+            .Where(detail => detail is not null)
+            .Cast<PullDeathSnapshot>()
+            .ToList();
+    }
+
+    private RecordedPullState? FindRecordedPullStateLocked(RecordedPullSummary summary)
+    {
+        return recordedPulls.FirstOrDefault(state =>
+            state.Summary.PullNumber == summary.PullNumber &&
+            state.Summary.CapturedAtUtc.Ticks == summary.CapturedAtUtc.Ticks);
+    }
+
+    private static PullDeathSnapshot? TryReadRecordedPullDetailFile(string path)
     {
         try
         {
-            if (File.Exists(RecordedPullHistoryPath) &&
-                string.Equals(lastSavedRecordedPullHistoryJson, json, StringComparison.Ordinal))
+            if (!File.Exists(path))
             {
-                return false;
+                return null;
             }
 
-            if (!File.Exists(RecordedPullHistoryPath))
-            {
-                return true;
-            }
-
-            var existingJson = File.ReadAllText(RecordedPullHistoryPath);
-            if (!string.Equals(existingJson, json, StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            lastSavedRecordedPullHistoryJson = json;
-            return false;
+            var json = File.ReadAllText(path);
+            return string.IsNullOrWhiteSpace(json)
+                ? null
+                : JsonSerializer.Deserialize<PullDeathSnapshot>(json, RecordedPullHistoryJsonOptions);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Could not compare Better Deaths recorded pull history before saving.");
-            return true;
+            Log.Warning(ex, $"Could not read Better Deaths recorded pull details at {path}.");
+            return null;
         }
+    }
+
+    private static RecordedPullState CreateRecordedPullState(PullDeathSnapshot pull, bool detailDirty)
+    {
+        var summary = new RecordedPullSummary(
+            pull.CapturedAtUtc,
+            pull.Reason,
+            pull.TerritoryId,
+            pull.TerritoryName,
+            pull.PullElapsedSeconds,
+            pull.Deaths.Count)
+        {
+            PullNumber = pull.PullNumber,
+        };
+        return new RecordedPullState(summary, BuildRecordedPullDetailFileName(pull), pull, detailDirty);
+    }
+
+    private static string BuildRecordedPullDetailFileName(PullDeathSnapshot pull)
+    {
+        var pullNumber = Math.Max(0, pull.PullNumber);
+        return $"pull-{pullNumber:D6}-{pull.CapturedAtUtc.Ticks}.json";
+    }
+
+    private static string GetRecordedPullDetailPath(string fileName)
+    {
+        return Path.Combine(RecordedPullDetailsDirectoryPath, Path.GetFileName(fileName));
     }
 
     private static void DeleteRecordedPullHistoryFiles()
@@ -4454,6 +4894,11 @@ public sealed partial class Plugin : IDalamudPlugin
                     Log.Warning(ex, $"Could not delete Better Deaths recorded pull history file at {path}.");
                 }
             }
+
+            if (Directory.Exists(RecordedPullDetailsDirectoryPath))
+            {
+                Directory.Delete(RecordedPullDetailsDirectoryPath, recursive: true);
+            }
         }
         catch (Exception ex)
         {
@@ -4466,31 +4911,38 @@ public sealed partial class Plugin : IDalamudPlugin
         yield return RecordedPullHistoryPath;
         yield return RecordedPullHistoryTempPath;
         yield return RecordedPullHistoryBackupPath;
+        yield return RecordedPullIndexPath;
+        yield return RecordedPullIndexTempPath;
+        yield return RecordedPullIndexBackupPath;
 
         foreach (var backupPath in GetRecordedPullHistoryRollingBackupPaths())
         {
             yield return backupPath;
         }
+
+        foreach (var backupPath in GetRecordedPullIndexRollingBackupPaths())
+        {
+            yield return backupPath;
+        }
     }
 
-    private void CreateRecordedPullHistoryRollingBackup()
+    private static void CreateRecordedPullIndexRollingBackup()
     {
         try
         {
-            if (!File.Exists(RecordedPullHistoryPath) ||
-                TryReadRecordedPullHistoryFile(RecordedPullHistoryPath) is null)
+            if (!File.Exists(RecordedPullIndexPath))
             {
                 return;
             }
 
             var backupPath = Path.Combine(
                 PluginInterface.ConfigDirectory.FullName,
-                $"recorded-pulls.backup.{DateTime.UtcNow:yyyyMMddHHmmssfff}.{Guid.NewGuid():N}.json");
-            File.Copy(RecordedPullHistoryPath, backupPath, false);
+                $"recorded-pulls.index.backup.{DateTime.UtcNow:yyyyMMddHHmmssfff}.{Guid.NewGuid():N}.json");
+            File.Copy(RecordedPullIndexPath, backupPath, false);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Could not create Better Deaths recorded pull history rolling backup.");
+            Log.Warning(ex, "Could not create Better Deaths recorded pull index rolling backup.");
         }
     }
 
@@ -4517,18 +4969,67 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private static void PruneRecordedPullHistoryRollingBackups()
+    private static IEnumerable<string> GetRecordedPullIndexRollingBackupPaths()
     {
         try
         {
-            foreach (var backupPath in GetRecordedPullHistoryRollingBackupPaths().Skip(RecordedPullHistoryRollingBackupCount))
+            if (!Directory.Exists(PluginInterface.ConfigDirectory.FullName))
+            {
+                return [];
+            }
+
+            return Directory.EnumerateFiles(
+                    PluginInterface.ConfigDirectory.FullName,
+                    RecordedPullIndexRollingBackupSearchPattern,
+                    SearchOption.TopDirectoryOnly)
+                .OrderByDescending(Path.GetFileName)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not list Better Deaths recorded pull index rolling backups.");
+            return [];
+        }
+    }
+
+    private static void PruneRecordedPullIndexRollingBackups()
+    {
+        try
+        {
+            foreach (var backupPath in GetRecordedPullIndexRollingBackupPaths().Skip(RecordedPullIndexRollingBackupCount))
             {
                 File.Delete(backupPath);
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Could not prune Better Deaths recorded pull history rolling backups.");
+            Log.Warning(ex, "Could not prune Better Deaths recorded pull index rolling backups.");
+        }
+    }
+
+    private static void PruneOrphanRecordedPullDetailFiles(IReadOnlyList<RecordedPullState> states)
+    {
+        try
+        {
+            if (!Directory.Exists(RecordedPullDetailsDirectoryPath))
+            {
+                return;
+            }
+
+            var retainedNames = states
+                .Select(state => Path.GetFileName(state.DetailFileName))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in Directory.EnumerateFiles(RecordedPullDetailsDirectoryPath, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                if (!retainedNames.Contains(Path.GetFileName(path)))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not prune Better Deaths recorded pull detail files.");
         }
     }
 
@@ -5153,7 +5654,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private PartyDeathRecord? FindSharedDeathPost(SharedDeathPost post)
     {
         var candidates = currentDeaths
-            .Concat(recordedPulls.AsEnumerable().Reverse().SelectMany(pull => pull.Deaths))
+            .Concat(GetRecordedPullDetailsForSearch().SelectMany(pull => pull.Deaths))
             .Where(death => IsSharedDeathCandidate(death, post))
             .OrderBy(death => MathF.Abs(GetSharedPostElapsedSeconds(death) - post.ElapsedSeconds))
             .ThenByDescending(death => death.SeenAtUtc)

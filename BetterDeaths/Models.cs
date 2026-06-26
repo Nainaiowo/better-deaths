@@ -154,6 +154,17 @@ public sealed record PullDeathSnapshot(
     public long PullNumber { get; init; }
 }
 
+public sealed record RecordedPullSummary(
+    DateTime CapturedAtUtc,
+    string Reason,
+    uint TerritoryId,
+    string TerritoryName,
+    float PullElapsedSeconds,
+    int DeathCount)
+{
+    public long PullNumber { get; init; }
+}
+
 public sealed record DebugLogEntry(
     DateTime SeenAtUtc,
     float PullElapsedSeconds,
