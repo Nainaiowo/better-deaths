@@ -92,6 +92,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxTofuInspectorObjectsPerBoard = 80;
     private const int MaxTofuInspectorTextLength = 240;
     private const int MaxTofuTextObjectLength = 30;
+    private const int TofuHiddenTextX = 5120;
+    private const int TofuHiddenTextY = 3840;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
@@ -118,6 +120,28 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly (int X, int Y)[] TofuJobIconCoverPositions =
+    [
+        (5120, 3830),
+        (4880, 3790),
+        (4670, 3780),
+        (4440, 3820),
+        (4220, 3780),
+        (3810, 3800),
+        (4030, 3770),
+    ];
+
+    private static readonly TofuObjectType[] DebugTofuJobIcons =
+    [
+        TofuObjectType.Warrior,
+        TofuObjectType.DarkKnight,
+        TofuObjectType.Gunbreaker,
+        TofuObjectType.Paladin,
+        TofuObjectType.WhiteMage,
+        TofuObjectType.Scholar,
+        TofuObjectType.Dragoon,
+        TofuObjectType.BlackMage,
+    ];
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DebugCaptureFlushInterval = TimeSpan.FromSeconds(1);
@@ -1044,16 +1068,22 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 NameString = boardName,
                 Background = 0,
-                NumberOfObjects = 6,
             };
 
             var objects = board.Objects;
-            objects[0] = CreateSafeTofuObject(TofuObjectType.Text, 580, 350, text: "BD1.TEST.1");
-            objects[1] = CreateSafeTofuObject(TofuObjectType.Text, 1240, 1380, text: "BD1.TEST.2");
-            objects[2] = CreateSafeTofuObject(TofuObjectType.BlackMage, 1710, 3410);
-            objects[3] = CreateSafeTofuObject(TofuObjectType.CircleAoE, 892, 3085, scale: 17);
-            objects[4] = CreateSafeTofuObject(TofuObjectType.Stack, 3060, 1800);
-            objects[5] = CreateSafeTofuObject(TofuObjectType.Proximity, 1055, 3076, scale: 141);
+            var objectIndex = 0;
+
+            for (var chunkIndex = 0; chunkIndex < 8; chunkIndex++)
+            {
+                objects[objectIndex++] = CreateHiddenTofuTextObject($"BD1.TEST.{chunkIndex + 1}");
+            }
+
+            for (var iconIndex = 0; iconIndex < DebugTofuJobIcons.Length; iconIndex++)
+            {
+                objects[objectIndex++] = CreateCoveringTofuJobIcon(DebugTofuJobIcons[iconIndex], iconIndex);
+            }
+
+            board.NumberOfObjects = (byte)objectIndex;
 
             var created = module->CreateBoard(TofuType.Saved, &board, true);
             if (created is null)
@@ -1466,6 +1496,17 @@ public sealed partial class Plugin : IDalamudPlugin
             capturedObjects);
     }
 
+    private static TofuShortObject CreateHiddenTofuTextObject(string text)
+    {
+        return CreateSafeTofuObject(TofuObjectType.Text, TofuHiddenTextX, TofuHiddenTextY, text: text);
+    }
+
+    private static TofuShortObject CreateCoveringTofuJobIcon(TofuObjectType objectType, int iconIndex)
+    {
+        var position = TofuJobIconCoverPositions[iconIndex % TofuJobIconCoverPositions.Length];
+        return CreateSafeTofuObject(objectType, position.X, position.Y);
+    }
+
     private static TofuShortObject CreateSafeTofuObject(
         TofuObjectType objectType,
         int x,
@@ -1481,11 +1522,14 @@ public sealed partial class Plugin : IDalamudPlugin
         var safeText = objectType == TofuObjectType.Text
             ? SanitizeTofuObjectText(text)
             : null;
+        var safeX = objectType == TofuObjectType.Text ? TofuHiddenTextX : x;
+        var safeY = objectType == TofuObjectType.Text ? TofuHiddenTextY : y;
+
         return new TofuShortObject
         {
             ObjectType = objectType,
-            PosX = ClampToUShort(x),
-            PosY = ClampToUShort(y),
+            PosX = ClampToUShort(safeX),
+            PosY = ClampToUShort(safeY),
             Scale = (byte)Math.Clamp(scale, 1, byte.MaxValue),
             Angle = ClampToUShort(angle),
             Flags = flags & TofuObjectFlags.IsVisible,
