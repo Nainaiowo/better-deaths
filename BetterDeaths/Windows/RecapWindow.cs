@@ -98,7 +98,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.146";
+    private const string CurrentChangelogVersion = "0.1.0.147";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5963,6 +5963,17 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Strategy Board inspector");
         ImGui.TextDisabled("Read-only. Snapshots the internal Strategy Board shared/saved lists exposed as Tofu data.");
 
+        var watchTofuFunctions = plugin.DebugTofuFunctionWatchEnabled;
+        if (ImGui.Checkbox("Watch Tofu functions", ref watchTofuFunctions))
+        {
+            plugin.SetDebugTofuFunctionWatchEnabled(watchTofuFunctions);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Logs Strategy Board/Tofu function calls to the Internal capture log while enabled. Turn this on right before testing share actions.");
+        }
+
         if (ImGui.Button("Snapshot strategy boards"))
         {
             plugin.CaptureTofuInspectorSnapshot();
@@ -7599,6 +7610,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.147");
+        ImGui.TextDisabled("Strategy Board testing.");
+        DrawWrappedBullet("Adjusted Strategy Board transfer testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.146");
         ImGui.TextDisabled("Strategy Board testing.");
         DrawWrappedBullet("Added Strategy Board export transfer testing.");

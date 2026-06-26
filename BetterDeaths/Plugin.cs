@@ -16,9 +16,11 @@ using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Network;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -96,6 +98,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string TofuTransferBoardName = "Pineapple";
     private const string TofuTransferHeaderPrefix = "BDX1";
     private const int TofuTransferBoardsPerFolder = 9;
+    private const int MaxTofuTransferBoards = 500;
     private const int TofuTransferPayloadTextObjectsPerBoard = 7;
     private const int TofuTransferPayloadCharactersPerBoard = MaxTofuTextObjectLength * TofuTransferPayloadTextObjectsPerBoard;
     private const int TofuHiddenTextX = 5120;
@@ -152,6 +155,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan LiveCapturePruneInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DebugCaptureFlushInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan TofuTransferInboxScanInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan TofuTransferChunkRetention = TimeSpan.FromMinutes(10);
     private static readonly JsonSerializerOptions RecordedPullHistoryJsonOptions = new()
     {
         WriteIndented = false,
@@ -253,7 +257,8 @@ public sealed partial class Plugin : IDalamudPlugin
         int BoardIndex,
         int TotalBoards,
         uint Checksum,
-        string Payload);
+        string Payload,
+        DateTime SeenAtUtc);
 
     private sealed record DebugCaptureFileRecord(
         DateTime SeenAtUtc,
@@ -409,6 +414,34 @@ public sealed partial class Plugin : IDalamudPlugin
         ulong targetId,
         byte param9);
 
+    private unsafe delegate void TofuContextMenuOptionsDelegate(AgentTofuList* agent, AtkValue* values, uint valueCount, uint code);
+
+    private unsafe delegate TofuFolderEntry* TofuCreateFolderDelegate(TofuModule* module, TofuType type, TofuFolderEntry* folder);
+
+    private unsafe delegate TofuBoardEntry* TofuCreateBoardDelegate(TofuModule* module, TofuType type, TofuBoardEntry* board, bool notInFolder);
+
+    private unsafe delegate TofuBoardEntry* TofuCopyBoardToFolderDelegate(TofuModule* module, TofuType type, TofuBoardEntry* board, uint folderIndex);
+
+    private unsafe delegate bool TofuDeleteItemAndContentsDelegate(TofuModule* module, TofuType type, uint index);
+
+    private unsafe delegate void TofuMoveItemDelegate(TofuModule* module, TofuType type, TofuItem item, uint sourceIndex, uint targetIndex);
+
+    private unsafe delegate uint TofuWriteToUnpackedBoardDelegate(TofuBoardOverview* overview, TofuUnpackedBoard* target, int size, RaptureAtkColorDataManager* colorDataManager);
+
+    private unsafe delegate void TofuHandleStartSharingPacketDelegate(TofuHelper* helper, ServerIpcSegment<TofuStartSharingPacket>* packet);
+
+    private unsafe delegate void TofuHandleStopSharingPacketDelegate(TofuHelper* helper, ServerIpcSegment<TofuStopSharingPacket>* packet);
+
+    private unsafe delegate void TofuHandleRealTimeUpdatePacketDelegate(TofuHelper* helper, ServerIpcSegment<TofuRealTimeUpdatePacket>* packet);
+
+    private unsafe delegate void TofuHandleConfirmationPacketDelegate(TofuHelper* helper, ServerIpcSegment<TofuConfirmationPacket>* packet);
+
+    private unsafe delegate bool TofuHandleSharePacketDelegate(TofuHelper.TofuHelperData* data, Utf8String* value, ServerIpcSegment<TofuStartSharingPacket>* packet);
+
+    private unsafe delegate void TofuSaveBoardAndPlaySoundDelegate(TofuHelper.TofuHelperData* data, TofuStartSharingPacket* packetData, TofuPackedBoard* boardInfo, uint boardIndexInSharedFolder, uint totalBoardsInSharedFolder);
+
+    private unsafe delegate void TofuShowSharedNotificationDelegate(TofuHelper.TofuHelperData* data, bool isNotRealTimeSharing, bool openNotif);
+
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
@@ -496,6 +529,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool updateCheckInProgress;
     private bool effectResultHookEnabled;
     private bool actorControlHookEnabled;
+    private bool tofuFunctionWatchEnabled;
     private bool debugFreezeOnDeathEnabled;
     private bool debugCaptureFrozen;
     private bool addonInspectorLifecycleRegistered;
@@ -561,6 +595,20 @@ public sealed partial class Plugin : IDalamudPlugin
     private Hook<ActionEffectHandler.Delegates.Receive>? actionEffectHook;
     private Hook<ProcessPacketEffectResultDelegate>? effectResultHook;
     private Hook<ProcessPacketActorControlDelegate>? actorControlHook;
+    private Hook<TofuContextMenuOptionsDelegate>? tofuContextMenuOptionsHook;
+    private Hook<TofuCreateFolderDelegate>? tofuCreateFolderHook;
+    private Hook<TofuCreateBoardDelegate>? tofuCreateBoardHook;
+    private Hook<TofuCopyBoardToFolderDelegate>? tofuCopyBoardToFolderHook;
+    private Hook<TofuDeleteItemAndContentsDelegate>? tofuDeleteItemAndContentsHook;
+    private Hook<TofuMoveItemDelegate>? tofuMoveItemHook;
+    private Hook<TofuWriteToUnpackedBoardDelegate>? tofuWriteToUnpackedBoardHook;
+    private Hook<TofuHandleStartSharingPacketDelegate>? tofuHandleStartSharingPacketHook;
+    private Hook<TofuHandleStopSharingPacketDelegate>? tofuHandleStopSharingPacketHook;
+    private Hook<TofuHandleRealTimeUpdatePacketDelegate>? tofuHandleRealTimeUpdatePacketHook;
+    private Hook<TofuHandleConfirmationPacketDelegate>? tofuHandleConfirmationPacketHook;
+    private Hook<TofuHandleSharePacketDelegate>? tofuHandleSharePacketHook;
+    private Hook<TofuSaveBoardAndPlaySoundDelegate>? tofuSaveBoardAndPlaySoundHook;
+    private Hook<TofuShowSharedNotificationDelegate>? tofuShowSharedNotificationHook;
     private DateTime? pullStartedAtUtc;
     private DateTime? lastInCombatAtUtc;
     private float lastKnownPullElapsedSeconds;
@@ -630,6 +678,8 @@ public sealed partial class Plugin : IDalamudPlugin
     public bool DebugEffectResultHookEnabled => effectResultHookEnabled;
 
     public bool DebugActorControlHookEnabled => actorControlHookEnabled;
+
+    public bool DebugTofuFunctionWatchEnabled => tofuFunctionWatchEnabled;
 
     public bool DebugFreezeOnDeathEnabled => debugFreezeOnDeathEnabled;
 
@@ -806,6 +856,7 @@ public sealed partial class Plugin : IDalamudPlugin
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
+        DisposeTofuFunctionWatchHooks();
         ChatGui.RemoveChatLinkHandler(0);
         CommandManager.RemoveHandler(ShortWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);
@@ -1010,6 +1061,25 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    public void SetDebugTofuFunctionWatchEnabled(bool enabled)
+    {
+        if (enabled == tofuFunctionWatchEnabled)
+        {
+            return;
+        }
+
+        if (enabled)
+        {
+            Configuration.DebugLogEnabled = true;
+            SaveConfiguration();
+            EnableTofuFunctionWatch();
+        }
+        else
+        {
+            DisableTofuFunctionWatch();
+        }
+    }
+
     public void SetDebugFreezeOnDeathEnabled(bool enabled)
     {
         debugFreezeOnDeathEnabled = enabled;
@@ -1029,6 +1099,357 @@ public sealed partial class Plugin : IDalamudPlugin
 
         debugCaptureFrozen = frozen;
         AddDebugLog(frozen ? "Debug capture frozen." : "Debug capture resumed.");
+    }
+
+    private unsafe void EnableTofuFunctionWatch()
+    {
+        DisposeTofuFunctionWatchHooks();
+
+        var enabledHooks = 0;
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuContextMenuOptionsHook,
+            (nint)AgentTofuList.MemberFunctionPointers.ContextMenuOptions,
+            OnTofuContextMenuOptions,
+            "AgentTofuList.ContextMenuOptions");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuCreateFolderHook,
+            (nint)TofuModule.MemberFunctionPointers.CreateFolder,
+            OnTofuCreateFolder,
+            "TofuModule.CreateFolder");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuCreateBoardHook,
+            (nint)TofuModule.MemberFunctionPointers.CreateBoard,
+            OnTofuCreateBoard,
+            "TofuModule.CreateBoard");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuCopyBoardToFolderHook,
+            (nint)TofuModule.MemberFunctionPointers.CopyBoardToFolder,
+            OnTofuCopyBoardToFolder,
+            "TofuModule.CopyBoardToFolder");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuDeleteItemAndContentsHook,
+            (nint)TofuModule.MemberFunctionPointers.DeleteItemAndContents,
+            OnTofuDeleteItemAndContents,
+            "TofuModule.DeleteItemAndContents");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuMoveItemHook,
+            (nint)TofuModule.MemberFunctionPointers.MoveItem,
+            OnTofuMoveItem,
+            "TofuModule.MoveItem");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuWriteToUnpackedBoardHook,
+            (nint)TofuBoardOverview.MemberFunctionPointers.WriteToUnpackedBoard,
+            OnTofuWriteToUnpackedBoard,
+            "TofuBoardOverview.WriteToUnpackedBoard");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuHandleStartSharingPacketHook,
+            (nint)TofuHelper.MemberFunctionPointers.HandleStartSharingPacket,
+            OnTofuHandleStartSharingPacket,
+            "TofuHelper.HandleStartSharingPacket");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuHandleStopSharingPacketHook,
+            (nint)TofuHelper.MemberFunctionPointers.HandleStopSharingPacket,
+            OnTofuHandleStopSharingPacket,
+            "TofuHelper.HandleStopSharingPacket");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuHandleRealTimeUpdatePacketHook,
+            (nint)TofuHelper.MemberFunctionPointers.HandleRealTimeUpdatePacket,
+            OnTofuHandleRealTimeUpdatePacket,
+            "TofuHelper.HandleRealTimeUpdatePacket");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuHandleConfirmationPacketHook,
+            (nint)TofuHelper.MemberFunctionPointers.HandleTofuConfirmationPacket,
+            OnTofuHandleConfirmationPacket,
+            "TofuHelper.HandleTofuConfirmationPacket");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuHandleSharePacketHook,
+            (nint)TofuHelper.TofuHelperData.MemberFunctionPointers.HandleSharePacket,
+            OnTofuHandleSharePacket,
+            "TofuHelperData.HandleSharePacket");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuSaveBoardAndPlaySoundHook,
+            (nint)TofuHelper.TofuHelperData.MemberFunctionPointers.SaveBoardAndPlaySound,
+            OnTofuSaveBoardAndPlaySound,
+            "TofuHelperData.SaveBoardAndPlaySound");
+        enabledHooks += TryEnableTofuFunctionHook(
+            ref tofuShowSharedNotificationHook,
+            (nint)TofuHelper.TofuHelperData.MemberFunctionPointers.ShowSharedNotification,
+            OnTofuShowSharedNotification,
+            "TofuHelperData.ShowSharedNotification");
+
+        tofuFunctionWatchEnabled = enabledHooks > 0;
+        AddDebugLog(tofuFunctionWatchEnabled
+            ? $"Tofu function watcher enabled with {enabledHooks:N0} hook(s)."
+            : "Tofu function watcher could not attach any hooks.");
+    }
+
+    private int TryEnableTofuFunctionHook<T>(ref Hook<T>? hook, nint address, T detour, string name)
+        where T : Delegate
+    {
+        if (address == nint.Zero)
+        {
+            AddDebugLog($"Tofu watcher missing pointer: {name}.");
+            return 0;
+        }
+
+        try
+        {
+            hook = GameInteropProvider.HookFromAddress(address, detour);
+            hook.Enable();
+            AddDebugLog($"Tofu watcher attached: {name} at {FormatPointer(address)}.");
+            return 1;
+        }
+        catch (Exception ex)
+        {
+            hook?.Dispose();
+            hook = null;
+            Log.Warning(ex, "Could not attach Better Deaths Tofu watcher hook for {FunctionName}.", name);
+            AddDebugLog($"Tofu watcher failed: {name}: {ex.Message}");
+            return 0;
+        }
+    }
+
+    private void DisableTofuFunctionWatch()
+    {
+        DisposeTofuFunctionWatchHooks();
+        tofuFunctionWatchEnabled = false;
+        AddDebugLog("Tofu function watcher disabled.");
+    }
+
+    private void DisposeTofuFunctionWatchHooks()
+    {
+        tofuContextMenuOptionsHook?.Dispose();
+        tofuContextMenuOptionsHook = null;
+        tofuCreateFolderHook?.Dispose();
+        tofuCreateFolderHook = null;
+        tofuCreateBoardHook?.Dispose();
+        tofuCreateBoardHook = null;
+        tofuCopyBoardToFolderHook?.Dispose();
+        tofuCopyBoardToFolderHook = null;
+        tofuDeleteItemAndContentsHook?.Dispose();
+        tofuDeleteItemAndContentsHook = null;
+        tofuMoveItemHook?.Dispose();
+        tofuMoveItemHook = null;
+        tofuWriteToUnpackedBoardHook?.Dispose();
+        tofuWriteToUnpackedBoardHook = null;
+        tofuHandleStartSharingPacketHook?.Dispose();
+        tofuHandleStartSharingPacketHook = null;
+        tofuHandleStopSharingPacketHook?.Dispose();
+        tofuHandleStopSharingPacketHook = null;
+        tofuHandleRealTimeUpdatePacketHook?.Dispose();
+        tofuHandleRealTimeUpdatePacketHook = null;
+        tofuHandleConfirmationPacketHook?.Dispose();
+        tofuHandleConfirmationPacketHook = null;
+        tofuHandleSharePacketHook?.Dispose();
+        tofuHandleSharePacketHook = null;
+        tofuSaveBoardAndPlaySoundHook?.Dispose();
+        tofuSaveBoardAndPlaySoundHook = null;
+        tofuShowSharedNotificationHook?.Dispose();
+        tofuShowSharedNotificationHook = null;
+    }
+
+    private unsafe void OnTofuContextMenuOptions(AgentTofuList* agent, AtkValue* values, uint valueCount, uint code)
+    {
+        AddTofuFunctionWatchLog(
+            "AgentTofuList.ContextMenuOptions",
+            $"code {code}, valueCount {valueCount}, values [{FormatAtkValues(values, valueCount)}], data {FormatTofuListData(agent)}");
+        tofuContextMenuOptionsHook?.Original(agent, values, valueCount, code);
+    }
+
+    private unsafe TofuFolderEntry* OnTofuCreateFolder(TofuModule* module, TofuType type, TofuFolderEntry* folder)
+    {
+        AddTofuFunctionWatchLog("TofuModule.CreateFolder", $"type {type}, input {FormatTofuFolder(folder)}");
+        var result = tofuCreateFolderHook is null
+            ? null
+            : tofuCreateFolderHook.Original(module, type, folder);
+        AddTofuFunctionWatchLog("TofuModule.CreateFolder", $"result {FormatTofuFolder(result)}");
+        return result;
+    }
+
+    private unsafe TofuBoardEntry* OnTofuCreateBoard(TofuModule* module, TofuType type, TofuBoardEntry* board, bool notInFolder)
+    {
+        AddTofuFunctionWatchLog("TofuModule.CreateBoard", $"type {type}, notInFolder {notInFolder}, input {FormatTofuBoard(board)}");
+        var result = tofuCreateBoardHook is null
+            ? null
+            : tofuCreateBoardHook.Original(module, type, board, notInFolder);
+        AddTofuFunctionWatchLog("TofuModule.CreateBoard", $"result {FormatTofuBoard(result)}");
+        return result;
+    }
+
+    private unsafe TofuBoardEntry* OnTofuCopyBoardToFolder(TofuModule* module, TofuType type, TofuBoardEntry* board, uint folderIndex)
+    {
+        AddTofuFunctionWatchLog("TofuModule.CopyBoardToFolder", $"type {type}, folderIndex {folderIndex}, input {FormatTofuBoard(board)}");
+        var result = tofuCopyBoardToFolderHook is null
+            ? null
+            : tofuCopyBoardToFolderHook.Original(module, type, board, folderIndex);
+        AddTofuFunctionWatchLog("TofuModule.CopyBoardToFolder", $"result {FormatTofuBoard(result)}");
+        return result;
+    }
+
+    private unsafe bool OnTofuDeleteItemAndContents(TofuModule* module, TofuType type, uint index)
+    {
+        AddTofuFunctionWatchLog("TofuModule.DeleteItemAndContents", $"type {type}, index {index}");
+        var result = tofuDeleteItemAndContentsHook?.Original(module, type, index) ?? false;
+        AddTofuFunctionWatchLog("TofuModule.DeleteItemAndContents", $"result {result}");
+        return result;
+    }
+
+    private unsafe void OnTofuMoveItem(TofuModule* module, TofuType type, TofuItem item, uint sourceIndex, uint targetIndex)
+    {
+        AddTofuFunctionWatchLog("TofuModule.MoveItem", $"type {type}, item {item}, sourceIndex {sourceIndex}, targetIndex {targetIndex}");
+        tofuMoveItemHook?.Original(module, type, item, sourceIndex, targetIndex);
+    }
+
+    private unsafe uint OnTofuWriteToUnpackedBoard(TofuBoardOverview* overview, TofuUnpackedBoard* target, int size, RaptureAtkColorDataManager* colorDataManager)
+    {
+        AddTofuFunctionWatchLog("TofuBoardOverview.WriteToUnpackedBoard", $"overview {FormatTofuBoardOverview(overview)}, target {FormatPointer((nint)target)}, size {size}");
+        var result = tofuWriteToUnpackedBoardHook?.Original(overview, target, size, colorDataManager) ?? 0;
+        AddTofuFunctionWatchLog("TofuBoardOverview.WriteToUnpackedBoard", $"result {result}");
+        return result;
+    }
+
+    private unsafe void OnTofuHandleStartSharingPacket(TofuHelper* helper, ServerIpcSegment<TofuStartSharingPacket>* packet)
+    {
+        AddTofuFunctionWatchLog("TofuHelper.HandleStartSharingPacket", $"helper {FormatPointer((nint)helper)}, packet {FormatPointer((nint)packet)}");
+        tofuHandleStartSharingPacketHook?.Original(helper, packet);
+    }
+
+    private unsafe void OnTofuHandleStopSharingPacket(TofuHelper* helper, ServerIpcSegment<TofuStopSharingPacket>* packet)
+    {
+        AddTofuFunctionWatchLog("TofuHelper.HandleStopSharingPacket", $"helper {FormatPointer((nint)helper)}, packet {FormatPointer((nint)packet)}");
+        tofuHandleStopSharingPacketHook?.Original(helper, packet);
+    }
+
+    private unsafe void OnTofuHandleRealTimeUpdatePacket(TofuHelper* helper, ServerIpcSegment<TofuRealTimeUpdatePacket>* packet)
+    {
+        AddTofuFunctionWatchLog("TofuHelper.HandleRealTimeUpdatePacket", $"helper {FormatPointer((nint)helper)}, packet {FormatPointer((nint)packet)}");
+        tofuHandleRealTimeUpdatePacketHook?.Original(helper, packet);
+    }
+
+    private unsafe void OnTofuHandleConfirmationPacket(TofuHelper* helper, ServerIpcSegment<TofuConfirmationPacket>* packet)
+    {
+        AddTofuFunctionWatchLog("TofuHelper.HandleTofuConfirmationPacket", $"helper {FormatPointer((nint)helper)}, packet {FormatPointer((nint)packet)}");
+        tofuHandleConfirmationPacketHook?.Original(helper, packet);
+    }
+
+    private unsafe bool OnTofuHandleSharePacket(TofuHelper.TofuHelperData* data, Utf8String* value, ServerIpcSegment<TofuStartSharingPacket>* packet)
+    {
+        AddTofuFunctionWatchLog("TofuHelperData.HandleSharePacket", $"data {FormatPointer((nint)data)}, value {FormatPointer((nint)value)}, packet {FormatPointer((nint)packet)}");
+        var result = tofuHandleSharePacketHook?.Original(data, value, packet) ?? false;
+        AddTofuFunctionWatchLog("TofuHelperData.HandleSharePacket", $"result {result}");
+        return result;
+    }
+
+    private unsafe void OnTofuSaveBoardAndPlaySound(TofuHelper.TofuHelperData* data, TofuStartSharingPacket* packetData, TofuPackedBoard* boardInfo, uint boardIndexInSharedFolder, uint totalBoardsInSharedFolder)
+    {
+        AddTofuFunctionWatchLog(
+            "TofuHelperData.SaveBoardAndPlaySound",
+            $"data {FormatPointer((nint)data)}, packetData {FormatPointer((nint)packetData)}, boardInfo {FormatPointer((nint)boardInfo)}, boardIndex {boardIndexInSharedFolder}, total {totalBoardsInSharedFolder}");
+        tofuSaveBoardAndPlaySoundHook?.Original(data, packetData, boardInfo, boardIndexInSharedFolder, totalBoardsInSharedFolder);
+    }
+
+    private unsafe void OnTofuShowSharedNotification(TofuHelper.TofuHelperData* data, bool isNotRealTimeSharing, bool openNotif)
+    {
+        AddTofuFunctionWatchLog(
+            "TofuHelperData.ShowSharedNotification",
+            $"isNotRealTimeSharing {isNotRealTimeSharing}, openNotif {openNotif}, sender 0x{(data is null ? 0UL : data->TofuShareData.SenderContentId):X16}, total {SafeTofuInt(data is null ? 0 : data->TofuShareData.TotalBoardsInSharedFolder)}");
+        tofuShowSharedNotificationHook?.Original(data, isNotRealTimeSharing, openNotif);
+    }
+
+    private void AddTofuFunctionWatchLog(string functionName, string details)
+    {
+        if (!tofuFunctionWatchEnabled)
+        {
+            return;
+        }
+
+        AddDebugLog($"Tofu watcher | {functionName}: {details}");
+    }
+
+    private static unsafe string FormatTofuListData(AgentTofuList* agent)
+    {
+        if (agent is null || agent->Data is null)
+        {
+            return "data null";
+        }
+
+        var data = agent->Data;
+        return $"savedSelected {data->SavedSelectedIndex}, sharedSelected {data->SharedSelectedIndex}, savedList {data->TotalSavedList}, sharedList {data->TotalSharedList}, sharedOpen {data->IsSharedListOpen}";
+    }
+
+    private static unsafe string FormatAtkValues(AtkValue* values, uint valueCount)
+    {
+        if (values is null || valueCount == 0)
+        {
+            return "-";
+        }
+
+        var maxCount = Math.Min(valueCount, 12);
+        var parts = new List<string>((int)maxCount);
+        for (var i = 0; i < maxCount; i++)
+        {
+            var value = values[i];
+            parts.Add(value.Type switch
+            {
+                FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int => $"{i}:Int={value.Int}",
+                FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.UInt => $"{i}:UInt={value.UInt}",
+                FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Bool => $"{i}:Bool={value.Byte != 0}",
+                FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Float => $"{i}:Float={value.Float.ToString(CultureInfo.InvariantCulture)}",
+                FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.String => $"{i}:String={value.String}",
+                _ => $"{i}:{value.Type}",
+            });
+        }
+
+        if (valueCount > maxCount)
+        {
+            parts.Add($"...+{valueCount - maxCount}");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static unsafe string FormatTofuFolder(TofuFolderEntry* folder)
+    {
+        if (folder is null)
+        {
+            return "null";
+        }
+
+        return $"idx {SafeTofuInt(folder->Index)}, pos {SafeTofuInt(folder->PositionInList)}, isValid {folder->IsValid}, isBoard {folder->IsBoard}, name '{FormatTofuName(folder->NameString)}'";
+    }
+
+    private static unsafe string FormatTofuBoard(TofuBoardEntry* board)
+    {
+        if (board is null)
+        {
+            return "null";
+        }
+
+        return $"idx {SafeTofuInt(board->Index)}, pos {SafeTofuInt(board->PositionInList)}, folder {SafeTofuInt(board->Folder)}, isValid {board->IsValid}, objects {SafeTofuInt(board->NumberOfObjects)}, name '{FormatTofuName(board->NameString)}'";
+    }
+
+    private static unsafe string FormatTofuBoardOverview(TofuBoardOverview* overview)
+    {
+        if (overview is null)
+        {
+            return "null";
+        }
+
+        return $"name '{FormatTofuName(overview->BoardName.ToString())}', background {overview->BoardBackground}";
+    }
+
+    private static string FormatTofuName(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "-"
+            : value.ReplaceLineEndings(" ").Trim();
+    }
+
+    private static string FormatPointer(nint address)
+    {
+        return address == nint.Zero
+            ? "0x0"
+            : $"0x{address.ToInt64():X}";
     }
 
     public void ClearDebugLog()
@@ -1174,7 +1595,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
             for (var folderIndex = 0; folderIndex < folderCount; folderIndex++)
             {
-                var folder = module->CreateFolder(TofuType.Saved, TofuTransferBoardName);
+                var folder = CreateNamedTofuFolder(module, TofuTransferBoardName);
                 if (folder is null)
                 {
                     return new TofuTransferCreateResult(
@@ -1195,9 +1616,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     }
 
                     var board = CreateTofuTransferBoard(transferId, boardIndex, boardCount, checksum, payloadChunks[boardIndex]);
-                    board.Folder = folder->Index;
-
-                    var created = module->CreateBoard(TofuType.Saved, &board, false);
+                    var created = module->CopyBoardToFolder(TofuType.Saved, &board, folder->Index);
                     if (created is null)
                     {
                         return new TofuTransferCreateResult(
@@ -1209,6 +1628,7 @@ public sealed partial class Plugin : IDalamudPlugin
                             exportValue.Length);
                     }
 
+                    EnsureNamedTofuBoard(module, created, TofuTransferBoardName);
                     createdBoards++;
                 }
             }
@@ -1535,13 +1955,14 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static unsafe TofuTransferStatus CaptureTofuTransferStatusInternal(Dictionary<string, Dictionary<int, TofuTransferChunk>> chunkStore)
     {
+        var now = DateTime.UtcNow;
         var module = TofuModule.Instance();
         if (module is null)
         {
-            return new TofuTransferStatus(DateTime.UtcNow, [], "Strategy Board module was not available yet.");
+            return new TofuTransferStatus(now, [], "Strategy Board module was not available yet.");
         }
 
-        var chunks = CaptureTofuTransferChunks(module->SharedBoardData);
+        var chunks = CaptureTofuTransferChunks(module->SharedBoardData, now);
         foreach (var chunk in chunks)
         {
             if (!chunkStore.TryGetValue(chunk.TransferId, out var transferChunks))
@@ -1553,16 +1974,25 @@ public sealed partial class Plugin : IDalamudPlugin
             transferChunks[chunk.BoardIndex] = chunk;
         }
 
+        var staleTransferIds = chunkStore
+            .Where(pair => pair.Value.Values.All(chunk => now - chunk.SeenAtUtc > TofuTransferChunkRetention))
+            .Select(pair => pair.Key)
+            .ToList();
+        foreach (var transferId in staleTransferIds)
+        {
+            chunkStore.Remove(transferId);
+        }
+
         var assemblies = chunkStore.Values
             .Select(AssembleTofuTransfer)
             .OrderByDescending(assembly => assembly.IsComplete)
             .ThenBy(assembly => assembly.TransferId, StringComparer.Ordinal)
             .ToList();
 
-        return new TofuTransferStatus(DateTime.UtcNow, assemblies, null);
+        return new TofuTransferStatus(now, assemblies, null);
     }
 
-    private static unsafe IReadOnlyList<TofuTransferChunk> CaptureTofuTransferChunks(TofuData* data)
+    private static unsafe IReadOnlyList<TofuTransferChunk> CaptureTofuTransferChunks(TofuData* data, DateTime seenAtUtc)
     {
         if (data is null)
         {
@@ -1576,7 +2006,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             try
             {
-                if (TryReadTofuTransferChunk(boards[i], out var chunk))
+                if (TryReadTofuTransferChunk(boards[i], seenAtUtc, out var chunk))
                 {
                     chunks.Add(chunk);
                 }
@@ -1603,7 +2033,12 @@ public sealed partial class Plugin : IDalamudPlugin
             ? "Chunk metadata did not agree."
             : null;
         var receivedBoards = chunks.Count;
-        var isComplete = error is null && receivedBoards == totalBoards && chunks[0].BoardIndex == 0 && chunks[^1].BoardIndex == totalBoards - 1;
+        var missingBoardIndexes = error is null
+            ? Enumerable.Range(0, totalBoards)
+                .Where(index => !storedChunks.ContainsKey(index))
+                .ToList()
+            : [];
+        var isComplete = error is null && missingBoardIndexes.Count == 0;
         var assembled = string.Empty;
 
         if (isComplete)
@@ -1635,7 +2070,13 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (!isComplete && error is null)
         {
-            error = "Waiting for more boards.";
+            var shownMissing = missingBoardIndexes
+                .Take(6)
+                .Select(index => (index + 1).ToString("N0", CultureInfo.InvariantCulture));
+            var suffix = missingBoardIndexes.Count > 6
+                ? $" +{missingBoardIndexes.Count - 6:N0} more"
+                : string.Empty;
+            error = $"Waiting for board(s): {string.Join(", ", shownMissing)}{suffix}.";
         }
 
         return new TofuTransferAssembly(
@@ -1649,7 +2090,7 @@ public sealed partial class Plugin : IDalamudPlugin
             isComplete ? CreateTofuTransferPreview(assembled) : null);
     }
 
-    private static bool TryReadTofuTransferChunk(TofuBoardEntry board, out TofuTransferChunk chunk)
+    private static bool TryReadTofuTransferChunk(TofuBoardEntry board, DateTime seenAtUtc, out TofuTransferChunk chunk)
     {
         chunk = default!;
         if (!board.IsValid || board.NumberOfObjects == 0)
@@ -1677,7 +2118,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         var payload = string.Concat(textObjects.Skip(1));
-        chunk = new TofuTransferChunk(transferId, boardIndex, totalBoards, checksum, payload);
+        chunk = new TofuTransferChunk(transferId, boardIndex, totalBoards, checksum, payload, seenAtUtc);
         return true;
     }
 
@@ -1710,6 +2151,7 @@ public sealed partial class Plugin : IDalamudPlugin
             !TryFromBase36UInt(parts[4], out checksum) ||
             boardIndex < 0 ||
             totalBoards <= 0 ||
+            totalBoards > MaxTofuTransferBoards ||
             boardIndex >= totalBoards)
         {
             return false;
@@ -1758,6 +2200,48 @@ public sealed partial class Plugin : IDalamudPlugin
 
         board.NumberOfObjects = (byte)objectIndex;
         return board;
+    }
+
+    private static unsafe TofuFolderEntry* CreateNamedTofuFolder(TofuModule* module, string name)
+    {
+        var folder = new TofuFolderEntry
+        {
+            NameString = name,
+            IsBoard = false,
+        };
+        var created = module->CreateFolder(TofuType.Saved, &folder);
+        EnsureNamedTofuFolder(module, created, name);
+        return created;
+    }
+
+    private static unsafe void EnsureNamedTofuFolder(TofuModule* module, TofuFolderEntry* folder, string name)
+    {
+        if (module is null || folder is null || string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        if (string.Equals(folder->NameString, name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        module->RenameFolder(TofuType.Saved, folder->Index, name);
+    }
+
+    private static unsafe void EnsureNamedTofuBoard(TofuModule* module, TofuBoardEntry* board, string name)
+    {
+        if (module is null || board is null || string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        if (string.Equals(board->NameString, name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        module->RenameBoard(TofuType.Saved, board->Index, name);
     }
 
     private static IReadOnlyList<string> SplitTofuTransferPayload(string value)
