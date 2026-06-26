@@ -1466,9 +1466,11 @@ public sealed partial class Plugin : IDalamudPlugin
                     FormatTofuInspectorValue(obj.PosY),
                     FormatTofuInspectorValue(obj.Scale),
                     FormatTofuInspectorValue(obj.Angle),
-                    FormatTofuInspectorValue(obj.RGBA),
+                    FormatTofuInspectorColor(obj.RGBA),
+                    FormatTofuInspectorBool((obj.Flags & TofuObjectFlags.IsVisible) != 0),
+                    FormatTofuInspectorBool((obj.Flags & TofuObjectFlags.IsLocked) != 0),
                     obj.Flags.ToString(),
-                    FormatTofuInspectorValue(obj.Flags),
+                    FormatTofuInspectorRawFlags(obj.Flags),
                     $"{FormatTofuInspectorValue(obj.ArgsA)}, {FormatTofuInspectorValue(obj.ArgsB)}, {FormatTofuInspectorValue(obj.ArgsC)}",
                     text));
             }
@@ -1477,6 +1479,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 capturedObjects.Add(new TofuInspectorObject(
                     i,
                     "Unreadable",
+                    "-",
+                    "-",
                     "-",
                     "-",
                     "-",
@@ -1579,6 +1583,28 @@ public sealed partial class Plugin : IDalamudPlugin
     private static string FormatTofuInspectorValue<T>(T value)
     {
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "-";
+    }
+
+    private static string FormatTofuInspectorColor<T>(T color)
+        where T : unmanaged
+    {
+        var bytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref color, 1));
+        if (bytes.Length < 4)
+        {
+            return Convert.ToString(color, CultureInfo.InvariantCulture) ?? "-";
+        }
+
+        return $"{bytes[0]}, {bytes[1]}, {bytes[2]}, {bytes[3]}";
+    }
+
+    private static string FormatTofuInspectorRawFlags(TofuObjectFlags flags)
+    {
+        return Convert.ToUInt64(flags, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatTofuInspectorBool(bool value)
+    {
+        return value ? "Yes" : "No";
     }
 
     private static string? TrimTofuInspectorText(string? value)

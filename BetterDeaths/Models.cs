@@ -300,6 +300,8 @@ public sealed record TofuInspectorObject(
     string Scale,
     string Angle,
     string Rgba,
+    string Visible,
+    string Locked,
     string Flags,
     string RawFlags,
     string Args,
