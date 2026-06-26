@@ -90,6 +90,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int AddonInspectorDuplicateSuppressSeconds = 3;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
+    private const int MaxEnemyHpSnapshotsAtDeath = 5;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
@@ -3763,7 +3764,49 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             FatalSequence = fatalSequence,
             SourceMitigationHistory = sourceMitigationHistory,
+            EnemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc),
         };
+    }
+
+    private IReadOnlyList<EnemyHpSnapshot> CaptureEnemyHpSnapshotsAtDeath(DateTime deathSeenAtUtc)
+    {
+        var snapshots = new List<EnemyHpSnapshot>();
+        var seenEntityIds = new HashSet<uint>();
+        foreach (var gameObject in ObjectTable)
+        {
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
+                battleNpc.EntityId == 0 ||
+                battleNpc.EntityId == InvalidActorEntityId ||
+                battleNpc.MaxHp == 0 ||
+                battleNpc.CurrentHp == 0 ||
+                !seenEntityIds.Add(battleNpc.EntityId))
+            {
+                continue;
+            }
+
+            var name = battleNpc.Name.TextValue;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            snapshots.Add(new EnemyHpSnapshot(
+                deathSeenAtUtc,
+                CalculatePullElapsed(deathSeenAtUtc),
+                battleNpc.EntityId,
+                name,
+                battleNpc.CurrentHp,
+                battleNpc.MaxHp,
+                battleNpc.IsTargetable));
+        }
+
+        return snapshots
+            .OrderByDescending(snapshot => snapshot.IsTargetable)
+            .ThenByDescending(snapshot => snapshot.MaxHp)
+            .ThenBy(snapshot => snapshot.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxEnemyHpSnapshotsAtDeath)
+            .ToList();
     }
 
     private FatalSequenceRecord? CreateFatalSequence(

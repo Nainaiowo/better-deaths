@@ -90,7 +90,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.149";
+    private const string CurrentChangelogVersion = "0.1.0.150";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2973,17 +2973,46 @@ public sealed class RecapWindow : Window, IDisposable
             plugin.PrintDeathInformationToChat(death);
         }
 
+        DrawFatalEventRow(death, causeEvents);
+        DrawFatalSequenceSummary(death);
+    }
+
+    private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
+    {
         ImGui.Separator();
+        if (death.EnemyHpAtDeath.Count == 0)
+        {
+            DrawFatalEventHeaderAndDetails(causeEvents);
+            return;
+        }
+
+        if (!ImGui.BeginTable($"##FatalEventHealthsAtDeath{death.MemberKey}{death.SeenAtUtc.Ticks}", 2, ImGuiTableFlags.SizingStretchProp))
+        {
+            DrawFatalEventHeaderAndDetails(causeEvents);
+            DrawEnemyHpAtDeathHeaderAndBullets(death);
+            return;
+        }
+
+        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Enemy HP at death", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+        DrawFatalEventHeaderAndDetails(causeEvents);
+        ImGui.TableNextColumn();
+        DrawEnemyHpAtDeathHeaderAndBullets(death);
+        ImGui.EndTable();
+    }
+
+    private void DrawFatalEventHeaderAndDetails(IReadOnlyList<CombatEventRecord> causeEvents)
+    {
         ImGui.TextUnformatted(causeEvents.Count > 1 ? "Fatal events" : "Fatal event");
         if (causeEvents.Count == 0)
         {
             ImGui.TextColored(WarningColor, "Non-hit KO. Possible death wall, reconnect spawn KO, or scripted KO.");
-            DrawFatalSequenceSummary(death);
             return;
         }
 
         DrawFatalEventDetails(causeEvents);
-        DrawFatalSequenceSummary(death);
     }
 
     private void DrawFatalEventDetails(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -3008,7 +3037,6 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.Bullet();
                 ImGui.SameLine();
                 DrawCombatEventLine(cause);
-                DrawFlagsBullet(cause);
             }
 
             if (causeEvents.Count > 1)
@@ -3185,6 +3213,24 @@ public sealed class RecapWindow : Window, IDisposable
         else
         {
             DrawLeadUpEvents(death, idSuffix);
+        }
+    }
+
+    private void DrawEnemyHpAtDeathHeaderAndBullets(PartyDeathRecord death)
+    {
+        if (death.EnemyHpAtDeath.Count == 0)
+        {
+            return;
+        }
+
+        ImGui.TextUnformatted("Enemy HP at death");
+        foreach (var enemy in death.EnemyHpAtDeath)
+        {
+            ImGui.BulletText($"{enemy.Name}: {FormatEnemyHpPercent(enemy)}");
+            if (ImGui.IsItemHovered())
+            {
+                SetThemedTooltip($"{enemy.Name}\nHP: {enemy.CurrentHp:N0} / {enemy.MaxHp:N0}\nEntity: {enemy.EntityId:X8}\n{FormatEnemyTargetable(enemy)}");
+            }
         }
     }
 
@@ -6761,7 +6807,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.TextColored(LeadUpGoldColor, "Local data");
         DrawWrappedBullet("Recorded pulls are saved locally so you can review pulls after wipes, resets, reloads, or plugin updates.");
-        DrawWrappedBullet("Saved pull data can include player names, jobs, duty names, death timing, HP and shields, damage events, actions, statuses, and mitigation context.");
+        DrawWrappedBullet("Saved pull data can include player names, jobs, duty names, death timing, player and enemy HP, shields, damage events, actions, statuses, and mitigation context.");
         DrawWrappedBullet("Name Redaction helps with screenshots and shared display, but local saved pull files may still contain the original captured names.");
         DrawWrappedBullet("Debug capture is local and optional. It can contain raw troubleshooting data, so leave it off unless you are testing or debugging.");
 
@@ -6835,6 +6881,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.150");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Added enemy HP at death to fatal event details.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.149");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Fatal hit capture has been improved so death data should line up more cleanly with the 10s lead-up.");
@@ -7495,7 +7547,10 @@ public sealed class RecapWindow : Window, IDisposable
             likelyCause,
             new List<CombatEventRecord> { setupEvent, likelyCause },
             CreateExampleHpHistory(player, deathElapsed, likelyCause, statusesAtLikelyHit),
-            statusesAtDeath);
+            statusesAtDeath)
+        {
+            EnemyHpAtDeath = CreateExampleEnemyHpAtDeath(deathElapsed),
+        };
     }
 
     private PartyDeathRecord CreateExampleNonHitDeath(
@@ -7519,7 +7574,27 @@ public sealed class RecapWindow : Window, IDisposable
             null,
             Array.Empty<CombatEventRecord>(),
             CreateExampleNonHitHpHistory(player, deathElapsed, statusesAtDeath),
-            statusesAtDeath);
+            statusesAtDeath)
+        {
+            EnemyHpAtDeath = CreateExampleEnemyHpAtDeath(deathElapsed),
+        };
+    }
+
+    private static IReadOnlyList<EnemyHpSnapshot> CreateExampleEnemyHpAtDeath(float deathElapsed)
+    {
+        const uint kefkaMaxHp = 58_000_000;
+        var hpRatio = Math.Clamp(0.88 - (deathElapsed / 400.0), 0.08, 0.95);
+        return
+        [
+            new EnemyHpSnapshot(
+                ExamplePullStartedAtUtc.AddSeconds(deathElapsed),
+                deathElapsed,
+                GetExampleSourceId("Kefka"),
+                "Kefka",
+                (uint)Math.Round(kefkaMaxHp * hpRatio),
+                kefkaMaxHp,
+                true),
+        ];
     }
 
     private static IReadOnlyList<HpHistorySnapshot> CreateExampleNonHitHpHistory(
@@ -8223,6 +8298,22 @@ public sealed class RecapWindow : Window, IDisposable
     private static string FormatAmount(ulong amount)
     {
         return amount > 0 ? amount.ToString("N0") : "-";
+    }
+
+    private static string FormatEnemyHpPercent(EnemyHpSnapshot enemy)
+    {
+        if (enemy.MaxHp == 0)
+        {
+            return "-";
+        }
+
+        var ratio = Math.Clamp((double)enemy.CurrentHp / enemy.MaxHp, 0.0, 1.0);
+        return $"{ratio:P1}";
+    }
+
+    private static string FormatEnemyTargetable(EnemyHpSnapshot enemy)
+    {
+        return enemy.IsTargetable ? "Targetable at death." : "Not targetable at death.";
     }
 
     private static ulong? GetIncomingDamageAmount(CombatEventRecord combatEvent)
