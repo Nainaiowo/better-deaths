@@ -448,7 +448,11 @@ public sealed class RecapWindow : Window, IDisposable
         DrawModernNavButton("Example", MainPage.Example);
         ImGui.SameLine();
         DrawModernNavButton("Customize", MainPage.Customize);
-        DrawFloatingNewBadgeOverLastItem();
+        if (!configuration.HasChangedTheme)
+        {
+            DrawFloatingNewBadgeOverLastItem();
+        }
+
         ImGui.SameLine();
         DrawModernNavButton("Updates", MainPage.Updates, ShouldHighlightChangelogTab());
         if (showDebugTab)
@@ -4726,8 +4730,12 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawThemeSetting()
     {
         ImGui.TextColored(LeadUpGoldColor, "Theme");
-        ImGui.SameLine();
-        DrawInlineNewBadge();
+        if (!configuration.HasChangedTheme)
+        {
+            ImGui.SameLine();
+            DrawInlineNewBadge();
+        }
+
         ImGui.Spacing();
 
         var darkThemes = BetterDeathsThemeCatalog.All
@@ -6215,24 +6223,12 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v0.1.0.135");
-        ImGui.TextDisabled("Theme cleanup.");
-        DrawBreathingGoldBullet("Added more light theme options.");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Added more theme options.");
+        DrawBreathingGoldBullet("Startup impact was causing issues, and we've refactored how the local data gets read by the plugin on launch. Loads and updates should now be smooth after the new changes go into effect.");
         DrawWrappedBullet("Theme choices are now split into dark and light sections.");
+        DrawWrappedBullet("Theme highlights and table rows are easier to read across themes.");
         DrawWrappedBullet("Cleaned up settings buttons.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.134");
-        ImGui.TextDisabled("Saved pull loading.");
-        DrawBreathingGoldBullet("Recorded pulls now load with less startup impact.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.133");
-        ImGui.TextDisabled("Theme visibility.");
-        DrawBreathingGoldBullet("Theme options now have persistent New markers.");
-        DrawWrappedBullet("Marble theme highlights are easier to read.");
-        DrawWrappedBullet("Alternating table rows are easier to see across themes.");
 
         ImGui.Separator();
 

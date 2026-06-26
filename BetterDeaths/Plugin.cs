@@ -760,6 +760,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         Configuration.Theme = theme;
+        Configuration.HasChangedTheme = true;
         SaveConfiguration();
     }
 
@@ -1518,6 +1519,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.Theme))
         {
             Configuration.Theme = BetterDeathsTheme.Classic;
+            changed = true;
+        }
+
+        if (!Configuration.HasChangedTheme && Configuration.Theme != BetterDeathsTheme.Classic)
+        {
+            Configuration.HasChangedTheme = true;
             changed = true;
         }
 

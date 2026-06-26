@@ -66,6 +66,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public BetterDeathsTheme Theme { get; set; } = BetterDeathsTheme.Classic;
 
+    public bool HasChangedTheme { get; set; }
+
     public bool ShowCurrentPullWidget { get; set; }
 
     public float CurrentPullWidgetBackgroundOpacity { get; set; } = 1.0f;
