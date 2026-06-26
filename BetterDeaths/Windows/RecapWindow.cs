@@ -81,9 +81,9 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector2 DefaultWindowSize = new(1180.0f, 650.0f);
     private static readonly Vector2 TooltipWindowPadding = new(8.0f, 6.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
-    private const string LikelyAutoAttackTooltip = "Likely auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
+    private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.131";
+    private const string CurrentChangelogVersion = "0.1.0.132";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -98,7 +98,6 @@ public sealed class RecapWindow : Window, IDisposable
     private const float MinimumHpShieldBarWidth = 24.0f;
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
-    private static readonly string RelativeTimeHeaderIcon = FontAwesomeIcon.Clock.ToIconString();
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan LeadUpEventDuplicateWindow = TimeSpan.FromMilliseconds(5);
@@ -1188,8 +1187,8 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.62f);
         ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.72f);
-        ImGui.TableSetupColumn("Likely cause", ImGuiTableColumnFlags.WidthStretch, 2.4f);
-        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Likely cause");
+        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Fatal event");
 
         var orderedDeaths = GetDeathsInTimelineOrder(pull.Deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -1399,9 +1398,9 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Review legend");
         ImGui.Separator();
         DrawReviewLegendTooltipLine("KO state", "A captured character has transitioned into death.");
-        DrawReviewLegendTooltipLine("Likely cause", "The selected event from the fatal sequence, or a Doom-like status context inside the configured window.");
+        DrawReviewLegendTooltipLine("Fatal event", "The fatal hit group, fatal status, or selected event around the HP transition into KO.");
         DrawReviewLegendTooltipLine("Fatal sequence", "A compact set of captured hits and combat-log confirmations around the HP transition into KO.");
-        DrawReviewLegendTooltipLine("Likely walled/non-hit KO", "Kept in the death timeline, but no player detail panel is shown because no likely hit or KO status context was captured.");
+        DrawReviewLegendTooltipLine("Non-hit KO", "Kept in the death timeline, but no player detail panel is shown because no fatal hit or KO status context was captured.");
         DrawReviewLegendTooltipLine("Recorded pulls", "Created on duty reset, wipe, recommence, and territory changes when the pull had at least one death.");
         DrawReviewLegendTooltipLine("Recorded pull order", "Recorded pulls are grouped by duty, with the duty containing the newest pull shown first.");
         DrawReviewLegendTooltipLine("Duty dropdown", "All duties shows everything, while a selected duty only shows pulls from that duty.");
@@ -1628,10 +1627,10 @@ public sealed class RecapWindow : Window, IDisposable
         var conciseMode = IsWidgetConciseMode();
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.05f : 1.35f);
-        ImGui.TableSetupColumn("Cause", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.75f : 0.95f);
+        ImGui.TableSetupColumn("Event", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.75f : 0.95f);
         ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.85f : 2.35f);
-        DrawCenteredTableHeader("Time", "Player", "Cause", "Overkill", "Mits/Debuffs");
+        DrawCenteredTableHeader("Time", "Player", "Event", "Overkill", "Mits/Debuffs");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -1996,8 +1995,8 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.3f);
         ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        ImGui.TableSetupColumn("Likely cause", ImGuiTableColumnFlags.WidthStretch, 2.8f);
-        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Likely cause");
+        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.8f);
+        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Fatal event");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -2034,7 +2033,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawHpHistoryTableHeader()
     {
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        DrawCenteredHeaderCell(RelativeTimeHeaderIcon);
+        DrawCenteredIconHeaderCell(FontAwesomeIcon.Clock);
         DrawCenteredHeaderCell("Timer");
         DrawCenteredHeaderCell("HP + shields");
         DrawCenteredHeaderCell("Events");
@@ -2044,7 +2043,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawLeadUpEventsTableHeader()
     {
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        DrawCenteredHeaderCell(RelativeTimeHeaderIcon);
+        DrawCenteredIconHeaderCell(FontAwesomeIcon.Clock);
         DrawCenteredHeaderCell("Source");
         DrawCenteredHeaderCell("Action");
         DrawCenteredHeaderCell("Amount");
@@ -2056,6 +2055,17 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TableNextColumn();
         DrawCenteredOrWrappedText(label);
+    }
+
+    private static void DrawCenteredIconHeaderCell(FontAwesomeIcon icon)
+    {
+        ImGui.TableNextColumn();
+        var iconText = icon.ToIconString();
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            CenterNextItem(ImGui.CalcTextSize(iconText).X);
+            ImGui.TextUnformatted(iconText);
+        }
     }
 
     private static void DrawCenteredHpShieldBar(uint currentHp, uint shieldHp, uint maxHp, string id, ulong? incomingDamage = null, string? tooltipDetail = null)
@@ -2073,7 +2083,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(DeathDisplaySelection selection)
     {
         return selection.Events
-            .Where(IsLikelyDeathCauseEvent)
+            .Where(IsFatalEvent)
             .ToList();
     }
 
@@ -2100,7 +2110,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (causeEvents.Count == 0)
         {
-            DrawCenteredOrWrappedText("Likely walled/non-hit KO", WarningColor);
+            DrawCenteredOrWrappedText("Non-hit KO", WarningColor);
             return false;
         }
 
@@ -2217,7 +2227,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (arrowHovered)
         {
-            SetThemedTooltip(isExpanded ? "Collapse likely causes." : "Expand likely causes.");
+            SetThemedTooltip(isExpanded ? "Collapse fatal events." : "Expand fatal events.");
         }
 
         if (!isExpanded)
@@ -2289,7 +2299,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string BuildTimelineCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
     {
-        return $"{causeEvents.Count} likely causes";
+        return $"{causeEvents.Count} fatal events";
     }
 
     private static string FormatTimelineCauseLine(CombatEventRecord combatEvent)
@@ -2310,11 +2320,11 @@ public sealed class RecapWindow : Window, IDisposable
         {
             if (causeEvents.Count == 0)
             {
-                SetThemedTooltip("Likely walled/non-hit KO.");
+                SetThemedTooltip("Non-hit KO.");
                 return;
             }
 
-            var tooltipLines = causeEvents.Select(FormatLikelyCauseLine).ToList();
+            var tooltipLines = causeEvents.Select(FormatFatalEventLine).ToList();
             if (causeEvents.Any(IsLikelyAutoAttack))
             {
                 tooltipLines.Add(string.Empty);
@@ -2329,7 +2339,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (causeEvents.Count == 0)
         {
-            return "Likely walled/non-hit KO";
+            return "Non-hit KO";
         }
 
         var damageEvents = causeEvents
@@ -2784,8 +2794,8 @@ public sealed class RecapWindow : Window, IDisposable
             var cause = causeEvents[^1];
             var hpDisplay = GetEventHpDisplay(death, cause);
             ImGui.BulletText(cause.Kind == DeathEventKind.Status
-                ? "HP + shields before likely KO"
-                : "HP + shields before likely hit");
+                ? "HP + shields before fatal KO"
+                : "HP + shields before fatal hit");
             if (hpDisplay.MaxHp > 0)
             {
                 DrawHpShieldBar(
@@ -2799,13 +2809,13 @@ public sealed class RecapWindow : Window, IDisposable
             }
             else
             {
-                ImGui.TextColored(WarningColor, "No HP sample was captured before the likely hit.");
+                ImGui.TextColored(WarningColor, "No HP sample was captured before the fatal hit.");
             }
         }
         else
         {
-            ImGui.BulletText("HP + shields before likely hit");
-            ImGui.TextColored(WarningColor, "No likely hit was captured inside the configured cause window.");
+            ImGui.BulletText("HP + shields before fatal hit");
+            ImGui.TextColored(WarningColor, "No fatal hit was captured inside the configured event window.");
         }
 
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
@@ -2837,26 +2847,26 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.Separator();
-        ImGui.TextUnformatted(causeEvents.Count > 1 ? "Likely causes" : "Likely cause");
+        ImGui.TextUnformatted(causeEvents.Count > 1 ? "Fatal events" : "Fatal event");
         if (causeEvents.Count == 0)
         {
-            ImGui.TextColored(WarningColor, "Likely walled/non-hit KO. Possible death wall, reconnect spawn KO, or scripted KO.");
+            ImGui.TextColored(WarningColor, "Non-hit KO. Possible death wall, reconnect spawn KO, or scripted KO.");
             DrawFatalSequenceSummary(death);
             return;
         }
 
-        DrawLikelyCauseDetails(causeEvents);
+        DrawFatalEventDetails(causeEvents);
         DrawFatalSequenceSummary(death);
     }
 
-    private void DrawLikelyCauseDetails(IReadOnlyList<CombatEventRecord> causeEvents)
+    private void DrawFatalEventDetails(IReadOnlyList<CombatEventRecord> causeEvents)
     {
         for (var i = 0; i < causeEvents.Count; i++)
         {
             var cause = causeEvents[i];
             if (causeEvents.Count > 1)
             {
-                ImGui.BulletText($"Likely cause {i + 1}/{causeEvents.Count}");
+                ImGui.BulletText($"Fatal event {i + 1}/{causeEvents.Count}");
                 ImGui.Indent();
             }
 
@@ -2957,7 +2967,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 ImGui.Indent();
                 ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), combatEvent.SeenAtUtc)} {FormatLikelyCauseLine(combatEvent)}");
+                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), combatEvent.SeenAtUtc)} {FormatFatalEventLine(combatEvent)}");
                 DrawLikelyAutoAttackTooltip(combatEvent);
                 ImGui.Unindent();
             }
@@ -3016,7 +3026,7 @@ public sealed class RecapWindow : Window, IDisposable
             statuses,
             $"{idSuffix}AtDeath");
         ImGui.Separator();
-        DrawEarlierBossDebuffsNotOnLikelyHit(death, idSuffix);
+        DrawEarlierBossDebuffsNotOnFatalHit(death, idSuffix);
     }
 
     private void DrawBetterDeathsInformation(PartyDeathRecord death, string idSuffix)
@@ -3059,7 +3069,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn(RelativeTimeHeaderIcon, ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.65f);
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Events", ImGuiTableColumnFlags.WidthStretch, 1.5f);
@@ -3807,20 +3817,20 @@ public sealed class RecapWindow : Window, IDisposable
         return DeathDisplaySelector.Select(death).Snapshot?.Statuses ?? death.StatusesAtDeath;
     }
 
-    private void DrawEarlierBossDebuffsNotOnLikelyHit(PartyDeathRecord death, string idSuffix)
+    private void DrawEarlierBossDebuffsNotOnFatalHit(PartyDeathRecord death, string idSuffix)
     {
         DrawLeadUpLabel("Mitigations that expired on the leadup to the hit");
         var selection = DeathDisplaySelector.Select(death);
         if (selection.Events.Count == 0)
         {
-            ImGui.TextDisabled("No likely hit was captured to compare against.");
+            ImGui.TextDisabled("No fatal hit was captured to compare against.");
             return;
         }
 
-        var rows = GetEarlierBossDebuffsNotOnLikelyHit(death, selection);
+        var rows = GetEarlierBossDebuffsNotOnFatalHit(death, selection);
         if (rows.Count == 0)
         {
-            ImGui.TextDisabled("No earlier boss damage-down debuffs were captured outside the likely hit.");
+            ImGui.TextDisabled("No earlier boss damage-down debuffs were captured outside the fatal hit.");
             return;
         }
 
@@ -3854,26 +3864,26 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
-    private static IReadOnlyList<EarlierBossDebuffRow> GetEarlierBossDebuffsNotOnLikelyHit(
+    private static IReadOnlyList<EarlierBossDebuffRow> GetEarlierBossDebuffsNotOnFatalHit(
         PartyDeathRecord death,
         DeathDisplaySelection selection)
     {
-        var firstLikelyHitAtUtc = selection.Events
+        var firstFatalHitAtUtc = selection.Events
             .Select(combatEvent => combatEvent.SeenAtUtc)
             .OrderBy(seenAtUtc => seenAtUtc)
             .FirstOrDefault();
-        var likelyKeys = selection.Events
+        var fatalEventKeys = selection.Events
             .SelectMany(combatEvent => Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent))
                 .Select(status => BuildBossDebuffKey(GetSourceKey(combatEvent), status.Id)))
             .ToHashSet(StringComparer.Ordinal);
 
         return GetLeadUpEvents(death)
-            .Where(combatEvent => combatEvent.SeenAtUtc < firstLikelyHitAtUtc)
+            .Where(combatEvent => combatEvent.SeenAtUtc < firstFatalHitAtUtc)
             .SelectMany(combatEvent =>
             {
                 var sourceKey = GetSourceKey(combatEvent);
                 return Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent))
-                    .Where(status => !likelyKeys.Contains(BuildBossDebuffKey(sourceKey, status.Id)))
+                    .Where(status => !fatalEventKeys.Contains(BuildBossDebuffKey(sourceKey, status.Id)))
                     .Select(status => new EarlierBossDebuffRow(
                         combatEvent.SeenAtUtc,
                         combatEvent.PullElapsedSeconds,
@@ -3919,7 +3929,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn(RelativeTimeHeaderIcon, ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.35f);
         ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.55f);
         ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 1.0f);
@@ -4017,10 +4027,9 @@ public sealed class RecapWindow : Window, IDisposable
             string.Equals(previous.SourceName, next.SourceName, StringComparison.Ordinal);
     }
 
-    private static bool IsLikelyDeathCauseEvent(CombatEventRecord combatEvent)
+    private static bool IsFatalEvent(CombatEventRecord combatEvent)
     {
-        return combatEvent.Kind == DeathEventKind.Status ||
-            (combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0);
+        return DeathDisplaySelector.IsFatalEvent(combatEvent);
     }
 
     private static DateTime GetLeadUpAnchorSeenAtUtc(PartyDeathRecord death)
@@ -4090,7 +4099,7 @@ public sealed class RecapWindow : Window, IDisposable
             var shownEvents = events.Take(maxEvents).ToList();
             foreach (var combatEvent in shownEvents)
             {
-                DrawCenteredOrWrappedText(FormatLikelyCauseLine(combatEvent));
+                DrawCenteredOrWrappedText(FormatFatalEventLine(combatEvent));
             }
 
             var hiddenCount = events.Count - shownEvents.Count;
@@ -4118,7 +4127,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private string FormatLikelyCauseLine(CombatEventRecord combatEvent)
+    private string FormatFatalEventLine(CombatEventRecord combatEvent)
     {
         if (combatEvent.Kind == DeathEventKind.Status)
         {
@@ -4793,7 +4802,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.EndCombo();
         }
 
-        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only causes, and fits mitigation/debuff icons to available space with a +x count.");
+        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only events, and fits mitigation/debuff icons to available space with a +x count.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Widget preview");
@@ -6044,9 +6053,9 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Current Pull and the optional widget show live death order while combat is happening.");
         DrawWrappedBullet("Last Pull Review keeps the most recent wiped/reset pull visible until the next duty pull starts.");
         DrawWrappedBullet("Recorded pull groups save immediately after wipes or resets, then restore when the plugin loads.");
-        DrawWrappedBullet("Timeline-first recap shows who died, when they died, and the likely causes before opening player details.");
+        DrawWrappedBullet("Timeline-first recap shows who died, when they died, and the fatal events before opening player details.");
         DrawWrappedBullet("Fatal sequence summaries include source, action, amount, damage type, blocks, parries, crits, direct hits, and combat-log confirmations.");
-        DrawWrappedBullet("HP plus shields before the likely hit is shown as a clear bar with overkill context.");
+        DrawWrappedBullet("HP plus shields before the fatal hit is shown as a clear bar with overkill context.");
         DrawWrappedBullet("Nested 10-second lead-up under each death shows HP, shields, player mitigations, encounter debuffs, and captured hits before KO.");
         DrawWrappedBullet("Active player mitigations and boss damage-down debuffs are grouped so Reprisal, Addle, Feint, and similar effects are easier to audit.");
         DrawWrappedBullet("Chat-posted death summaries can include clickable recap links for other Better Deaths users with the same captured pull.");
@@ -6079,6 +6088,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.132");
+        ImGui.TextDisabled("Fatal event accuracy.");
+        DrawBreathingGoldBullet("Improved fatal event selection for multi-hit deaths.");
+        DrawWrappedBullet("Fixed the clock icon in lead-up table headers.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.131");
         ImGui.TextDisabled("Widget and popup theme polish.");
         DrawWrappedBullet("Improved widget preview and recap popup theming.");
@@ -7517,10 +7533,10 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return new OverkillDisplay(
-            "No overkill. Likely follow-up non-hit KO.",
+            "No overkill. Follow-up non-hit KO.",
             "Non-hit KO",
             WarningColor,
-            "Captured hit was non-lethal based on HP plus shields before hit. The KO likely came from a follow-up non-hit cause.");
+            "Captured hit was non-lethal based on HP plus shields before hit. The KO came from a follow-up non-hit event.");
     }
 
     private static string FormatHp(uint currentHp, uint shieldHp, uint maxHp)

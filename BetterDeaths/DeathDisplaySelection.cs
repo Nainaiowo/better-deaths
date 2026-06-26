@@ -7,22 +7,73 @@ using System.Linq;
 public sealed record DeathDisplaySelection(
     DateTime AnchorSeenAtUtc,
     HpHistorySnapshot? Snapshot,
-    IReadOnlyList<CombatEventRecord> Events);
+    IReadOnlyList<FatalEventGroup> FatalEvents)
+{
+    public IReadOnlyList<CombatEventRecord> Events { get; } = FatalEvents
+        .Select(group => group.DisplayEvent)
+        .ToList();
+}
+
+public sealed record FatalEventGroup(IReadOnlyList<CombatEventRecord> Events)
+{
+    public CombatEventRecord DisplayEvent { get; } = Events.Count == 1
+        ? Events[0]
+        : CreateDisplayEvent(Events);
+
+    public ulong Amount { get; } = Events
+        .Where(combatEvent => combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0)
+        .Aggregate(0UL, (sum, combatEvent) => sum + combatEvent.Amount);
+
+    private static CombatEventRecord CreateDisplayEvent(IReadOnlyList<CombatEventRecord> events)
+    {
+        var orderedEvents = events
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
+            .ToList();
+        var first = orderedEvents[0];
+        var last = orderedEvents[^1];
+        var total = orderedEvents.Aggregate(0UL, (sum, combatEvent) => sum + combatEvent.Amount);
+        return last with
+        {
+            SeenAtUtc = first.SeenAtUtc,
+            PullElapsedSeconds = first.PullElapsedSeconds,
+            Amount = total > uint.MaxValue ? uint.MaxValue : (uint)total,
+            Statuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.Statuses)),
+            SourceStatuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.SourceStatuses)),
+            EventIdentity = $"fatal-group:{first.EventIdentity ?? first.SeenAtUtc.Ticks.ToString()}:{last.EventIdentity ?? last.SeenAtUtc.Ticks.ToString()}",
+        };
+    }
+
+    private static IReadOnlyList<StatusSnapshot> MergeStatuses(IEnumerable<StatusSnapshot> statuses)
+    {
+        return statuses
+            .GroupBy(status => (status.Id, status.SourceId))
+            .Select(group => group.OrderBy(status => status.RemainingTime).First())
+            .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(status => status.Id)
+            .ToList();
+    }
+}
 
 public static class DeathDisplaySelector
 {
     private const float LeadUpHistorySeconds = 10.0f;
     private static readonly TimeSpan MaxHeadlineHpSampleAge = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan FatalTailLookback = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan FatalTailForwardBuffer = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan CombatLogActionEffectMatchWindow = TimeSpan.FromSeconds(2);
 
     public static DeathDisplaySelection Select(PartyDeathRecord death)
     {
         var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
-        var events = GetStoredLikelyCauseEvents(death);
-        var snapshot = GetMathematicallyFittingSnapshot(death, anchorSeenAtUtc, events) ??
+        var fatalEvents = GetStoredFatalEventGroups(death);
+        var events = fatalEvents.Select(group => group.DisplayEvent).ToList();
+        var snapshot = GetFatalTailSnapshot(death, events) ??
+            GetMathematicallyFittingSnapshot(death, anchorSeenAtUtc, events) ??
             GetReliablePriorSnapshot(death, anchorSeenAtUtc, events) ??
             GetFallbackSnapshot(death, anchorSeenAtUtc, events);
 
-        return new DeathDisplaySelection(anchorSeenAtUtc, snapshot, events);
+        return new DeathDisplaySelection(anchorSeenAtUtc, snapshot, fatalEvents);
     }
 
     public static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
@@ -53,6 +104,11 @@ public static class DeathDisplaySelector
     {
         return combatEvent.Kind == DeathEventKind.Status ||
             (combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0);
+    }
+
+    public static bool IsFatalEvent(CombatEventRecord combatEvent)
+    {
+        return IsLikelyDeathCauseEvent(combatEvent);
     }
 
     private static HpHistorySnapshot? GetReliablePriorSnapshot(
@@ -152,27 +208,41 @@ public static class DeathDisplaySelector
             .ToList();
     }
 
-    private static IReadOnlyList<CombatEventRecord> GetStoredLikelyCauseEvents(PartyDeathRecord death)
+    private static IReadOnlyList<FatalEventGroup> GetStoredFatalEventGroups(PartyDeathRecord death)
     {
         if (death.LikelyCause is { Kind: DeathEventKind.Status } statusCause)
         {
-            return [statusCause];
+            return [new FatalEventGroup([statusCause])];
+        }
+
+        var lastAliveSnapshot = GetLastAliveSnapshot(death);
+        var combatLogGroups = GetFatalEventGroupsFromCombatLogTail(death, lastAliveSnapshot);
+        if (combatLogGroups.Count > 0)
+        {
+            return combatLogGroups;
         }
 
         if (death.FatalSequence is { Events.Count: > 0 } sequence)
         {
             var sequenceEvents = sequence.Events
-                .Where(IsLikelyDeathCauseEvent)
+                .Where(IsFatalEvent)
                 .OrderBy(combatEvent => combatEvent.SeenAtUtc)
                 .ToList();
             if (sequenceEvents.Count > 0)
             {
-                return DeduplicateStoredEvents(sequenceEvents);
+                var fatalTail = SelectFatalTail(sequenceEvents, lastAliveSnapshot);
+                return BuildFatalEventGroups(fatalTail.Count > 0 ? fatalTail : DeduplicateStoredEvents(sequenceEvents));
             }
         }
 
-        return death.LikelyCause is { } likelyCause && IsLikelyDeathCauseEvent(likelyCause)
-            ? [likelyCause]
+        var recentTailGroups = GetFatalEventGroupsFromRecentEvents(death, lastAliveSnapshot);
+        if (recentTailGroups.Count > 0)
+        {
+            return recentTailGroups;
+        }
+
+        return death.LikelyCause is { } likelyCause && IsFatalEvent(likelyCause)
+            ? [new FatalEventGroup([likelyCause])]
             : [];
     }
 
@@ -194,6 +264,295 @@ public static class DeathDisplaySelector
                 .ThenByDescending(combatEvent => combatEvent.Kind == DeathEventKind.Damage)
                 .FirstOrDefault() ?? likelyCause
             : likelyCause;
+    }
+
+    private static HpHistorySnapshot? GetFatalTailSnapshot(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        if (events.Count == 0 || GetIncomingDamageAmount(events) is not { } incomingDamage)
+        {
+            return null;
+        }
+
+        var lastAliveSnapshot = GetLastAliveSnapshot(death);
+        if (lastAliveSnapshot is null)
+        {
+            return null;
+        }
+
+        return incomingDamage >= SnapshotHpAndShields(lastAliveSnapshot)
+            ? lastAliveSnapshot
+            : null;
+    }
+
+    private static HpHistorySnapshot? GetLastAliveSnapshot(PartyDeathRecord death)
+    {
+        return death.HpHistory
+            .Where(snapshot => snapshot.SeenAtUtc <= death.SeenAtUtc)
+            .Where(snapshot => snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .LastOrDefault();
+    }
+
+    private static IReadOnlyList<FatalEventGroup> GetFatalEventGroupsFromCombatLogTail(
+        PartyDeathRecord death,
+        HpHistorySnapshot? lastAliveSnapshot)
+    {
+        if (death.FatalSequence is not { LogEvents.Count: > 0 } sequence)
+        {
+            return [];
+        }
+
+        var logEvents = sequence.LogEvents
+            .Where(logEvent => logEvent.Amount > 0)
+            .OrderBy(logEvent => logEvent.SeenAtUtc)
+            .ToList();
+        if (logEvents.Count == 0)
+        {
+            return [];
+        }
+
+        var matchableLogEvents = FilterCombatLogEventsWithMatchingActionEffects(death, logEvents);
+        var fatalTail = SelectFatalTail(matchableLogEvents, lastAliveSnapshot);
+        if (fatalTail.Count == 0)
+        {
+            return [];
+        }
+
+        return BuildFatalEventGroups(CreateCombatEventsFromLogTail(death, fatalTail));
+    }
+
+    private static IReadOnlyList<CombatLogEventRecord> FilterCombatLogEventsWithMatchingActionEffects(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatLogEventRecord> logEvents)
+    {
+        var matchingLogs = logEvents
+            .Where(logEvent => death.RecentEvents.Any(combatEvent => LogEventMatchesCombatEvent(logEvent, combatEvent)))
+            .ToList();
+
+        return matchingLogs.Count == 0 ? logEvents : matchingLogs;
+    }
+
+    private static bool LogEventMatchesCombatEvent(CombatLogEventRecord logEvent, CombatEventRecord combatEvent)
+    {
+        return combatEvent.Kind == DeathEventKind.Damage &&
+            combatEvent.Amount == logEvent.Amount &&
+            string.Equals(combatEvent.SourceName, logEvent.SourceName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(combatEvent.ActionName, logEvent.ActionName, StringComparison.OrdinalIgnoreCase) &&
+            Math.Abs((combatEvent.SeenAtUtc - logEvent.SeenAtUtc).TotalSeconds) <= CombatLogActionEffectMatchWindow.TotalSeconds;
+    }
+
+    private static IReadOnlyList<CombatEventRecord> CreateCombatEventsFromLogTail(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatLogEventRecord> logEvents)
+    {
+        var usedCombatEventIndexes = new HashSet<int>();
+        var displayEvents = new List<CombatEventRecord>(logEvents.Count);
+        for (var logIndex = 0; logIndex < logEvents.Count; logIndex++)
+        {
+            var logEvent = logEvents[logIndex];
+            var matchedEvent = FindMatchingCombatEventForLogEvent(death, logEvent, usedCombatEventIndexes);
+            displayEvents.Add(matchedEvent is null
+                ? CreateSyntheticCombatEventFromLogEvent(death, logEvent, logIndex)
+                : matchedEvent with
+                {
+                    SeenAtUtc = logEvent.SeenAtUtc,
+                    PullElapsedSeconds = logEvent.PullElapsedSeconds,
+                    Amount = logEvent.Amount,
+                    HpSource = CombatEventHpSource.NoPreHitSample,
+                    EventIdentity = $"log:{logEvent.SeenAtUtc.Ticks}:{logIndex}:{logEvent.ActionName}:{logEvent.Amount}",
+                });
+        }
+
+        return displayEvents;
+    }
+
+    private static CombatEventRecord? FindMatchingCombatEventForLogEvent(
+        PartyDeathRecord death,
+        CombatLogEventRecord logEvent,
+        ISet<int> usedCombatEventIndexes)
+    {
+        var bestIndex = -1;
+        var bestDistance = TimeSpan.MaxValue;
+        for (var index = 0; index < death.RecentEvents.Count; index++)
+        {
+            if (usedCombatEventIndexes.Contains(index))
+            {
+                continue;
+            }
+
+            var combatEvent = death.RecentEvents[index];
+            if (!LogEventMatchesCombatEvent(logEvent, combatEvent))
+            {
+                continue;
+            }
+
+            var distance = (combatEvent.SeenAtUtc - logEvent.SeenAtUtc).Duration();
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = index;
+            }
+        }
+
+        if (bestIndex < 0)
+        {
+            return null;
+        }
+
+        usedCombatEventIndexes.Add(bestIndex);
+        return death.RecentEvents[bestIndex];
+    }
+
+    private static CombatEventRecord CreateSyntheticCombatEventFromLogEvent(
+        PartyDeathRecord death,
+        CombatLogEventRecord logEvent,
+        int logIndex)
+    {
+        var template = death.RecentEvents
+            .Where(combatEvent => string.Equals(combatEvent.SourceName, logEvent.SourceName, StringComparison.OrdinalIgnoreCase))
+            .Where(combatEvent => string.Equals(combatEvent.ActionName, logEvent.ActionName, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(combatEvent => Math.Abs((combatEvent.SeenAtUtc - logEvent.SeenAtUtc).TotalSeconds))
+            .FirstOrDefault();
+
+        return new CombatEventRecord(
+            logEvent.SeenAtUtc,
+            logEvent.PullElapsedSeconds,
+            death.MemberKey,
+            death.MemberName,
+            death.PartyIndex,
+            template?.SourceEntityId ?? 0,
+            logEvent.SourceName,
+            template?.ActionId ?? 0,
+            logEvent.ActionName,
+            template?.ActionIconId ?? 0,
+            DeathEventKind.Damage,
+            logEvent.Amount,
+            0,
+            0,
+            death.MaxHp,
+            template?.DamageType ?? DamageType.Unknown,
+            template?.Critical ?? false,
+            template?.DirectHit ?? false,
+            template?.Blocked ?? false,
+            template?.Parried ?? false,
+            template?.Detail ?? "Combat log confirmation.",
+            template?.Statuses ?? death.StatusesAtDeath,
+            template?.SourceStatuses ?? [])
+        {
+            EventIdentity = $"log:{logEvent.SeenAtUtc.Ticks}:{logIndex}:{logEvent.ActionName}:{logEvent.Amount}",
+            EventOrdinal = template?.EventOrdinal ?? 0,
+            HpSource = CombatEventHpSource.NoPreHitSample,
+        };
+    }
+
+    private static IReadOnlyList<FatalEventGroup> GetFatalEventGroupsFromRecentEvents(
+        PartyDeathRecord death,
+        HpHistorySnapshot? lastAliveSnapshot)
+    {
+        var candidates = death.RecentEvents
+            .Where(IsFatalEvent)
+            .Where(combatEvent => combatEvent.SeenAtUtc >= death.SeenAtUtc - FatalTailLookback)
+            .Where(combatEvent => combatEvent.SeenAtUtc <= death.SeenAtUtc + FatalTailForwardBuffer)
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var fatalTail = SelectFatalTail(candidates, lastAliveSnapshot);
+        return fatalTail.Count == 0 ? [] : BuildFatalEventGroups(fatalTail);
+    }
+
+    private static IReadOnlyList<CombatEventRecord> SelectFatalTail(
+        IReadOnlyList<CombatEventRecord> events,
+        HpHistorySnapshot? lastAliveSnapshot)
+    {
+        if (lastAliveSnapshot is null)
+        {
+            return DeduplicateStoredEvents(events);
+        }
+
+        var effectiveHp = SnapshotHpAndShields(lastAliveSnapshot);
+        if (effectiveHp == 0)
+        {
+            return DeduplicateStoredEvents(events);
+        }
+
+        var orderedEvents = DeduplicateStoredEvents(events)
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
+            .ToList();
+        var total = 0UL;
+        for (var index = orderedEvents.Count - 1; index >= 0; index--)
+        {
+            var combatEvent = orderedEvents[index];
+            if (combatEvent.Kind != DeathEventKind.Damage || combatEvent.Amount == 0)
+            {
+                continue;
+            }
+
+            total += combatEvent.Amount;
+            if (total >= effectiveHp)
+            {
+                return orderedEvents.Skip(index).ToList();
+            }
+        }
+
+        return [];
+    }
+
+    private static IReadOnlyList<CombatLogEventRecord> SelectFatalTail(
+        IReadOnlyList<CombatLogEventRecord> events,
+        HpHistorySnapshot? lastAliveSnapshot)
+    {
+        if (lastAliveSnapshot is null)
+        {
+            return events;
+        }
+
+        var effectiveHp = SnapshotHpAndShields(lastAliveSnapshot);
+        if (effectiveHp == 0)
+        {
+            return events;
+        }
+
+        var total = 0UL;
+        for (var index = events.Count - 1; index >= 0; index--)
+        {
+            total += events[index].Amount;
+            if (total >= effectiveHp)
+            {
+                return events.Skip(index).ToList();
+            }
+        }
+
+        return [];
+    }
+
+    private static IReadOnlyList<FatalEventGroup> BuildFatalEventGroups(IReadOnlyList<CombatEventRecord> events)
+    {
+        return events
+            .GroupBy(BuildFatalEventGroupKey)
+            .Select(group => new FatalEventGroup(group
+                .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+                .ThenBy(combatEvent => combatEvent.EventOrdinal)
+                .ToList()))
+            .OrderBy(group => group.DisplayEvent.SeenAtUtc)
+            .ThenBy(group => group.DisplayEvent.EventOrdinal)
+            .ToList();
+    }
+
+    private static (string SourceName, uint ActionId, string ActionName, DeathEventKind Kind) BuildFatalEventGroupKey(CombatEventRecord combatEvent)
+    {
+        return (
+            combatEvent.SourceName,
+            combatEvent.ActionId,
+            combatEvent.ActionName,
+            combatEvent.Kind);
     }
 
     private static bool IsDeathRelevantLeadUpEvent(CombatEventRecord combatEvent)
