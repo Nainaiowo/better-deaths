@@ -83,7 +83,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.132";
+    private const string CurrentChangelogVersion = "0.1.0.133";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -96,6 +96,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float PullBrowserHeaderButtonInset = 6.0f;
     private const float MinimumTimelinePaneWidth = 360.0f;
     private const float MinimumHpShieldBarWidth = 24.0f;
+    private const string ThemeNewBadgeText = "New";
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
@@ -239,7 +240,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelColor);
             ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
             ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
-            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
             ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
             ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
             ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
@@ -271,7 +272,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
             ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
-            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
             ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
@@ -446,6 +447,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawModernNavButton("Example", MainPage.Example);
         ImGui.SameLine();
         DrawModernNavButton("Customize", MainPage.Customize);
+        DrawFloatingNewBadgeOverLastItem();
         ImGui.SameLine();
         DrawModernNavButton("Updates", MainPage.Updates, ShouldHighlightChangelogTab());
         if (showDebugTab)
@@ -554,11 +556,78 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(4);
     }
 
+    private static void DrawFloatingNewBadgeOverLastItem()
+    {
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+        if (max.X <= min.X || max.Y <= min.Y)
+        {
+            return;
+        }
+
+        var size = GetNewBadgeSize();
+        var bounce = MathF.Abs(MathF.Sin((float)ImGui.GetTime() * 5.8f)) * 4.0f;
+        var position = new Vector2(
+            min.X + ((max.X - min.X - size.X) * 0.5f),
+            min.Y - 11.0f - bounce);
+        DrawNewBadge(position, size);
+    }
+
+    private static void DrawInlineNewBadge()
+    {
+        var size = GetNewBadgeSize();
+        var cursor = ImGui.GetCursorScreenPos();
+        var textLineHeight = ImGui.GetTextLineHeight();
+        var position = new Vector2(
+            cursor.X,
+            cursor.Y + MathF.Max(0.0f, (textLineHeight - size.Y) * 0.5f) - 1.0f);
+
+        DrawNewBadge(position, size);
+        ImGui.Dummy(size);
+    }
+
+    private static Vector2 GetNewBadgeSize()
+    {
+        return ImGui.CalcTextSize(ThemeNewBadgeText) + new Vector2(14.0f, 5.0f);
+    }
+
+    private static void DrawNewBadge(Vector2 position, Vector2 size)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var end = position + size;
+        var rounding = MathF.Min(9.0f, size.Y * 0.5f);
+        var textSize = ImGui.CalcTextSize(ThemeNewBadgeText);
+        var textPosition = position + ((size - textSize) * 0.5f);
+        var pulse = (MathF.Sin((float)ImGui.GetTime() * 3.6f) + 1.0f) * 0.5f;
+        var fill = new Vector4(1.0f, 0.30f + (pulse * 0.05f), 0.48f + (pulse * 0.05f), 1.0f);
+        var dark = new Vector4(0.035f, 0.025f, 0.035f, 0.94f);
+        var shadow = new Vector4(0.0f, 0.0f, 0.0f, 0.58f);
+        var textColor = new Vector4(1.0f, 0.96f, 0.88f, 1.0f);
+
+        drawList.AddRectFilled(position + new Vector2(2.0f), end + new Vector2(2.0f), ImGui.GetColorU32(shadow), rounding);
+        drawList.AddRectFilled(position, end, ImGui.GetColorU32(fill), rounding);
+        drawList.AddRect(position, end, ImGui.GetColorU32(dark), rounding);
+        drawList.AddRect(
+            position + new Vector2(1.0f),
+            end - new Vector2(1.0f),
+            ImGui.GetColorU32(LeadUpGoldColor with { W = 0.50f }),
+            MathF.Max(1.0f, rounding - 1.0f));
+        drawList.AddText(textPosition + new Vector2(1.0f), ImGui.GetColorU32(dark), ThemeNewBadgeText);
+        drawList.AddText(textPosition, ImGui.GetColorU32(textColor), ThemeNewBadgeText);
+    }
+
     private static Vector4 GetModernNavSelectedTextColor()
     {
         return ActiveThemeUsesLightPanels()
             ? ModernTextColor
             : ModernAccentColor;
+    }
+
+    private static Vector4 GetTableRowAltColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? new Vector4(0.15f, 0.23f, 0.28f, 0.105f)
+            : new Vector4(1.0f, 1.0f, 1.0f, 0.065f);
     }
 
     private void DrawDeathRecapTab()
@@ -849,7 +918,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
-        ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(1.0f, 1.0f, 1.0f, 0.035f));
+        ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, indentContent ? new Vector2(ReviewPaneContentIndent, 6.0f) : Vector2.Zero);
         if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
         {
@@ -4621,6 +4690,8 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawThemeSetting()
     {
         ImGui.TextColored(LeadUpGoldColor, "Theme");
+        ImGui.SameLine();
+        DrawInlineNewBadge();
         ImGui.Spacing();
 
         var themes = BetterDeathsThemeCatalog.All;
@@ -6088,6 +6159,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.133");
+        ImGui.TextDisabled("Theme visibility.");
+        DrawBreathingGoldBullet("Theme options now have persistent New markers.");
+        DrawWrappedBullet("Marble theme highlights are easier to read.");
+        DrawWrappedBullet("Alternating table rows are easier to see across themes.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.132");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Improved fatal event selection for multi-hit deaths.");

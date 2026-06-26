@@ -274,7 +274,7 @@ internal static class BetterDeathsThemeCatalog
         border: new Vector4(0.46f, 0.48f, 0.50f, 0.95f),
         accent: new Vector4(0.38f, 0.55f, 0.64f, 1.0f),
         accentSoft: new Vector4(0.64f, 0.72f, 0.76f, 0.94f),
-        highlight: new Vector4(0.74f, 0.56f, 0.28f, 1.0f),
+        highlight: new Vector4(0.20f, 0.43f, 0.52f, 1.0f),
         muted: new Vector4(0.36f, 0.38f, 0.40f, 1.0f),
         text: new Vector4(0.08f, 0.09f, 0.10f, 1.0f),
         danger: new Vector4(0.80f, 0.06f, 0.04f, 1.0f),
