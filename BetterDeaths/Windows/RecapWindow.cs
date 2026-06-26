@@ -31,6 +31,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
+    private LeadUpTableView selectedLeadUpTableView = LeadUpTableView.Timeline;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
     private DataPageSnapshot dataPageSnapshot = DataPageSnapshot.Empty;
     private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
@@ -87,8 +88,9 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly Vector2 TooltipWindowPadding = new(8.0f, 6.0f);
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
+    private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.148";
+    private const string CurrentChangelogVersion = "0.1.0.149";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -168,7 +170,8 @@ public sealed class RecapWindow : Window, IDisposable
         uint SourceShieldHp,
         uint SourceMaxHp,
         uint DerivedCurrentHp,
-        uint DerivedShieldHp);
+        uint DerivedShieldHp,
+        bool UsesCapturedResult);
 
     private sealed record OverkillDisplay(
         string Text,
@@ -205,6 +208,12 @@ public sealed class RecapWindow : Window, IDisposable
         public long? DeathSeenAtTicks { get; set; }
 
         public uint? DeathMemberKeyHash { get; set; }
+    }
+
+    private enum LeadUpTableView
+    {
+        Timeline,
+        Events,
     }
 
     private readonly struct ModernStyleScope : IDisposable
@@ -2423,8 +2432,8 @@ public sealed class RecapWindow : Window, IDisposable
     private static string FormatTimelineCauseLine(CombatEventRecord combatEvent)
     {
         return combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0
-            ? $"{combatEvent.ActionName}: {FormatAmount(combatEvent.Amount)}"
-            : combatEvent.ActionName;
+            ? $"{FormatActionNameForDisplay(combatEvent)}: {FormatAmount(combatEvent.Amount)}"
+            : FormatActionNameForDisplay(combatEvent);
     }
 
     private void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents, bool conciseMode)
@@ -2476,8 +2485,8 @@ public sealed class RecapWindow : Window, IDisposable
 
         var cause = causeEvents[0];
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {FormatKnownPlayerName(cause.SourceName)}"
-            : $"{FormatWidgetAmount(cause.Amount)} {cause.ActionName}";
+            ? $"{FormatActionNameForDisplay(cause)} from {FormatKnownPlayerName(cause.SourceName)}"
+            : $"{FormatWidgetAmount(cause.Amount)} {FormatActionNameForDisplay(cause)}";
     }
 
     private static string FormatConciseWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -2988,16 +2997,18 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.Indent();
             }
 
-            DrawActionBullet(cause);
-            ImGui.BulletText($"Source: {FormatKnownPlayerName(cause.SourceName)}");
             if (cause.Kind == DeathEventKind.Status)
             {
+                DrawActionBullet(cause);
+                ImGui.BulletText($"Source: {FormatKnownPlayerName(cause.SourceName)}");
                 ImGui.BulletText(cause.Detail);
             }
             else
             {
-                DrawAmountBullet(cause.Amount);
-                ImGui.BulletText($"Flags: {FormatEventFlags(cause)}");
+                ImGui.Bullet();
+                ImGui.SameLine();
+                DrawCombatEventLine(cause);
+                DrawFlagsBullet(cause);
             }
 
             if (causeEvents.Count > 1)
@@ -3084,9 +3095,10 @@ public sealed class RecapWindow : Window, IDisposable
             foreach (var combatEvent in sequence.Events.OrderBy(combatEvent => combatEvent.SeenAtUtc))
             {
                 ImGui.Indent();
-                ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), combatEvent.SeenAtUtc)} {FormatFatalEventLine(combatEvent)}");
-                DrawLikelyAutoAttackTooltip(combatEvent);
+                DrawCombatEventLine(
+                    combatEvent,
+                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), combatEvent.SeenAtUtc)} ",
+                    includeFlags: true);
                 ImGui.Unindent();
             }
         }
@@ -3098,7 +3110,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 ImGui.Indent();
                 ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {logEvent.ActionName} {FormatAmount(logEvent.Amount)}");
+                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {FormatActionNameForDisplay(logEvent.ActionName)} {FormatAmount(logEvent.Amount)}");
                 ImGui.Unindent();
             }
         }
@@ -3164,9 +3176,40 @@ public sealed class RecapWindow : Window, IDisposable
     {
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         ImGui.TextDisabled("Older saved pulls may show less detail if that data was not captured at the time.");
-        DrawHpHistory(death, idSuffix);
-        ImGui.Separator();
-        DrawLeadUpEvents(death, idSuffix);
+        DrawLeadUpTableViewToggle(idSuffix);
+        ImGui.Spacing();
+        if (selectedLeadUpTableView == LeadUpTableView.Timeline)
+        {
+            DrawHpHistory(death, idSuffix);
+        }
+        else
+        {
+            DrawLeadUpEvents(death, idSuffix);
+        }
+    }
+
+    private void DrawLeadUpTableViewToggle(string idSuffix)
+    {
+        ImGui.BeginGroup();
+        DrawLeadUpTableViewButton("Timeline", LeadUpTableView.Timeline, idSuffix);
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawLeadUpTableViewButton("Events", LeadUpTableView.Events, idSuffix);
+        ImGui.EndGroup();
+    }
+
+    private void DrawLeadUpTableViewButton(string label, LeadUpTableView view, string idSuffix)
+    {
+        var selected = selectedLeadUpTableView == view;
+        ImGui.PushStyleColor(ImGuiCol.Button, selected ? ModernNavButtonSelectedColor : ModernNavButtonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? GetModernNavSelectedTextColor() : ModernTextColor);
+        if (ImGui.Button($"{label}##LeadUpTableView{view}{idSuffix}", new Vector2(96.0f, 26.0f)))
+        {
+            selectedLeadUpTableView = view;
+        }
+
+        ImGui.PopStyleColor(4);
     }
 
     private void DrawHpHistory(PartyDeathRecord death, string idSuffix)
@@ -3422,7 +3465,8 @@ public sealed class RecapWindow : Window, IDisposable
             var shieldSourceText = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
                 ? "shield was also derived from the hit"
                 : "shield came from the captured sample";
-            var tooltip = $"Derived HP after {FormatKnownPlayerName(pendingDerivedHp.SourceName)}: {pendingDerivedHp.ActionName} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
+            var resultSourceText = pendingDerivedHp.UsesCapturedResult ? "Captured HP after" : "Derived HP after";
+            var tooltip = $"{resultSourceText} {FormatKnownPlayerName(pendingDerivedHp.SourceName)}: {FormatActionNameForDisplay(pendingDerivedHp.ActionName)} {FormatAmount(pendingDerivedHp.Amount)} at {FormatRelativeToDeath(displayAnchorSeenAtUtc, pendingDerivedHp.EventSeenAtUtc)}; {shieldSourceText}. Raw captured sample was {FormatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp)}.";
             return new LeadUpTimelineRow(
                 snapshot.SeenAtUtc,
                 snapshot.PullElapsedSeconds,
@@ -3462,6 +3506,21 @@ public sealed class RecapWindow : Window, IDisposable
             return null;
         }
 
+        if (CombatEventHasResultHp(combatEvent))
+        {
+            return new DerivedHpState(
+                combatEvent.SeenAtUtc,
+                combatEvent.SourceName,
+                combatEvent.ActionName,
+                combatEvent.Amount,
+                hpDisplay.CurrentHp,
+                hpDisplay.ShieldHp,
+                hpDisplay.MaxHp,
+                combatEvent.ResultCurrentHp,
+                combatEvent.ResultShieldHp,
+                true);
+        }
+
         var remainingDamage = (ulong)combatEvent.Amount;
         var derivedShieldHp = (ulong)hpDisplay.ShieldHp;
         var shieldDamage = Math.Min(derivedShieldHp, remainingDamage);
@@ -3481,7 +3540,14 @@ public sealed class RecapWindow : Window, IDisposable
             hpDisplay.ShieldHp,
             hpDisplay.MaxHp,
             (uint)derivedCurrentHp,
-            (uint)derivedShieldHp);
+            (uint)derivedShieldHp,
+            false);
+    }
+
+    private static bool CombatEventHasResultHp(CombatEventRecord combatEvent)
+    {
+        return combatEvent.ResultSeenAtUtc is not null &&
+            combatEvent.ResultMaxHp > 0;
     }
 
     private static IReadOnlyList<StatusSnapshot> GetNearbyHpHistoryStatuses(
@@ -3518,11 +3584,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var text = combatEvent.Amount > 0
-            ? $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} {FormatAmount(combatEvent.Amount)}"
-            : $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName}";
-        DrawCenteredOrWrappedText(text, GetEventColor(combatEvent.Kind));
-        DrawLikelyAutoAttackTooltip(combatEvent);
+        DrawCenteredCombatEventLine(combatEvent);
     }
 
     private IReadOnlyList<HpHistoryDisplayRow> GetLeadUpHpHistoryRows(PartyDeathRecord death, DateTime anchorSeenAtUtc)
@@ -3974,7 +4036,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(FormatKnownPlayerName(row.SourceName));
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(row.ActionName);
+            DrawCenteredOrWrappedText(FormatActionNameForDisplay(row.ActionName));
             ImGui.TableNextColumn();
             DrawCenteredIconText(row.Status.IconId, configuration.StatusIconSize, row.Status.Name, row.Status.Name);
         }
@@ -4209,7 +4271,7 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = GetIncomingDamageAmount(events);
         if (totalDamage is not null)
         {
-            DrawCenteredOrWrappedText($"Hit for {FormatAmount(totalDamage.Value)}");
+            DrawCenteredDamageSummary(events, $"Hit for {FormatAmount(totalDamage.Value)}");
             DrawPostMitigationHitTooltip();
         }
         else
@@ -4249,10 +4311,122 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (combatEvent.Kind == DeathEventKind.Status)
         {
-            return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} | Flags: {FormatEventFlags(combatEvent)}";
+            return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {FormatActionNameForDisplay(combatEvent)} | Flags: {FormatEventFlags(combatEvent)}";
         }
 
-        return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {combatEvent.ActionName} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
+        return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {FormatActionNameForDisplay(combatEvent)} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
+    }
+
+    private void DrawCombatEventLine(
+        CombatEventRecord combatEvent,
+        string? prefix = null,
+        bool includeFlags = false)
+    {
+        if (!string.IsNullOrEmpty(prefix))
+        {
+            ImGui.TextUnformatted(prefix);
+            ImGui.SameLine(0.0f, 0.0f);
+        }
+
+        DrawCombatEventLineCore(combatEvent, centered: false, includeFlags);
+    }
+
+    private void DrawCenteredCombatEventLine(CombatEventRecord combatEvent)
+    {
+        DrawCombatEventLineCore(combatEvent, centered: true, includeFlags: false);
+    }
+
+    private void DrawCombatEventLineCore(
+        CombatEventRecord combatEvent,
+        bool centered,
+        bool includeFlags)
+    {
+        var sourceText = $"{FormatKnownPlayerName(combatEvent.SourceName)}:";
+        var actionText = FormatActionNameForDisplay(combatEvent);
+        var amountText = combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0
+            ? $" {FormatAmount(combatEvent.Amount)}"
+            : string.Empty;
+        var flagsText = includeFlags ? $" | Flags: {FormatEventFlags(combatEvent)}" : string.Empty;
+        var textAfterIcon = $"{actionText}{amountText}{flagsText}";
+        var iconId = GetDamageTypeIconId(combatEvent);
+        var iconSize = GetInlineDamageTypeIconSize(iconId);
+        var spacing = 4.0f;
+        var groupWidth = ImGui.CalcTextSize(sourceText).X + spacing +
+            (iconId == 0 ? 0.0f : iconSize + spacing) +
+            ImGui.CalcTextSize(textAfterIcon).X;
+        if (centered)
+        {
+            CenterNextItem(groupWidth);
+        }
+
+        ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(combatEvent.Kind));
+        ImGui.TextUnformatted(sourceText);
+        ImGui.SameLine(0.0f, spacing);
+        ImGui.PopStyleColor();
+
+        DrawDamageTypeIconInline(combatEvent, iconSize);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(combatEvent.Kind));
+        ImGui.TextUnformatted(textAfterIcon);
+        ImGui.PopStyleColor();
+        DrawLikelyAutoAttackTooltip(combatEvent);
+    }
+
+    private static void DrawCenteredDamageSummary(IReadOnlyList<CombatEventRecord> events, string text)
+    {
+        var iconId = GetSharedDamageTypeIconId(events);
+        var iconSize = GetInlineDamageTypeIconSize(iconId);
+        if (iconId == 0)
+        {
+            DrawCenteredOrWrappedText(text);
+            return;
+        }
+
+        var spacing = 4.0f;
+        var groupWidth = iconSize + spacing + ImGui.CalcTextSize(text).X;
+        var tooltipDamageType = events
+            .First(combatEvent => GetDamageTypeIconId(combatEvent) == iconId)
+            .DamageType;
+        CenterNextItem(groupWidth);
+        DrawGameIcon(iconId, iconSize, GetDamageTypeIconTooltip(tooltipDamageType));
+        ImGui.SameLine(0.0f, spacing);
+        ImGui.TextUnformatted(text);
+    }
+
+    private static uint GetSharedDamageTypeIconId(IReadOnlyList<CombatEventRecord> events)
+    {
+        uint? iconId = null;
+        foreach (var combatEvent in events.Where(combatEvent => combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0))
+        {
+            var eventIconId = GetDamageTypeIconId(combatEvent);
+            if (eventIconId == 0)
+            {
+                return 0;
+            }
+
+            if (iconId is null)
+            {
+                iconId = eventIconId;
+                continue;
+            }
+
+            if (iconId.Value != eventIconId)
+            {
+                return 0;
+            }
+        }
+
+        return iconId ?? 0;
+    }
+
+    private static void DrawFlagsBullet(CombatEventRecord combatEvent)
+    {
+        ImGui.Bullet();
+        ImGui.SameLine();
+        ImGui.TextUnformatted("Flags:");
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawDamageTypeIconInline(combatEvent);
+        ImGui.TextUnformatted(FormatEventFlags(combatEvent));
     }
 
     private void DrawLeadUpSummaryMitigationDebuffCell(LeadUpSummaryRow summary)
@@ -6661,21 +6835,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.148");
-        ImGui.TextDisabled("Testing cleanup.");
-        DrawWrappedBullet("Removed experimental transfer testing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.138");
-        ImGui.TextDisabled("Debug updates for future release testing.");
-        DrawWrappedBullet("Updated Debug for future release testing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.137");
-        ImGui.TextDisabled("Debug updates for future release testing.");
-        DrawWrappedBullet("Updated Debug for future release testing.");
+        ImGui.TextUnformatted("v0.1.0.149");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Fatal hit capture has been improved so death data should line up more cleanly with the 10s lead-up.");
+        DrawBreathingGoldBullet("Added Moonlit, Wisteria, and Blush themes.");
+        DrawWrappedBullet("Added a Timeline / Events toggle in the 10s lead-up.");
+        DrawWrappedBullet("Added physical and magic icons to hit information.");
+        DrawWrappedBullet("Auto-attacks now show as Auto instead of Action or Attack.");
 
         ImGui.Separator();
 
@@ -7764,20 +7930,42 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatAction(CombatEventRecord combatEvent)
     {
+        if (IsLikelyAutoAttack(combatEvent))
+        {
+            return AutoActionDisplayName;
+        }
+
+        var actionName = FormatActionNameForDisplay(combatEvent);
         return combatEvent.Kind == DeathEventKind.Status
-            ? $"{combatEvent.ActionName} (status {combatEvent.ActionId})"
-            : $"{combatEvent.ActionName} ({combatEvent.ActionId})";
+            ? $"{actionName} (status {combatEvent.ActionId})"
+            : $"{actionName} ({combatEvent.ActionId})";
     }
 
     private static void DrawActionText(CombatEventRecord combatEvent, bool includeId = true)
     {
-        DrawCenteredOrWrappedText(includeId ? FormatAction(combatEvent) : combatEvent.ActionName);
+        DrawCenteredActionText(combatEvent, includeId ? FormatAction(combatEvent) : FormatActionNameForDisplay(combatEvent));
         DrawLikelyAutoAttackTooltip(combatEvent);
+    }
+
+    private static void DrawCenteredActionText(CombatEventRecord combatEvent, string text)
+    {
+        var iconId = GetDamageTypeIconId(combatEvent);
+        var iconSize = GetInlineDamageTypeIconSize(iconId);
+        var spacing = 4.0f;
+        var groupWidth = (iconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(text).X;
+        CenterNextItem(groupWidth);
+        DrawDamageTypeIconInline(combatEvent, iconSize);
+        ImGui.TextUnformatted(text);
     }
 
     private static void DrawActionBullet(CombatEventRecord combatEvent)
     {
-        ImGui.BulletText($"Action: {FormatAction(combatEvent)}");
+        ImGui.Bullet();
+        ImGui.SameLine();
+        ImGui.TextUnformatted("Action:");
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawDamageTypeIconInline(combatEvent);
+        ImGui.TextUnformatted(FormatAction(combatEvent));
         DrawLikelyAutoAttackTooltip(combatEvent);
     }
 
@@ -7792,8 +7980,86 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool IsLikelyAutoAttack(CombatEventRecord combatEvent)
     {
         return combatEvent.Kind == DeathEventKind.Damage &&
-            combatEvent.ActionId != 0 &&
-            string.Equals(combatEvent.ActionName, $"Action {combatEvent.ActionId}", StringComparison.Ordinal);
+            IsAutoAttackActionName(combatEvent.ActionName, combatEvent.ActionId);
+    }
+
+    private static string FormatActionNameForDisplay(CombatEventRecord combatEvent)
+    {
+        return IsLikelyAutoAttack(combatEvent)
+            ? AutoActionDisplayName
+            : FormatActionNameForDisplay(combatEvent.ActionName);
+    }
+
+    private static string FormatActionNameForDisplay(string actionName)
+    {
+        return IsAutoAttackActionName(actionName, 0)
+            ? AutoActionDisplayName
+            : actionName;
+    }
+
+    private static bool IsAutoAttackActionName(string actionName, uint actionId)
+    {
+        if (string.Equals(actionName, AutoActionDisplayName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionName, "Attack", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (actionId != 0 && string.Equals(actionName, $"Action {actionId}", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        const string actionPrefix = "Action ";
+        return actionName.StartsWith(actionPrefix, StringComparison.Ordinal) &&
+            actionName[actionPrefix.Length..].All(char.IsDigit);
+    }
+
+    private static bool DrawDamageTypeIconInline(CombatEventRecord combatEvent, float iconSize = 14.0f)
+    {
+        var iconId = GetDamageTypeIconId(combatEvent);
+        if (iconId == 0)
+        {
+            return false;
+        }
+
+        DrawGameIcon(iconId, iconSize, GetDamageTypeIconTooltip(combatEvent.DamageType));
+        ImGui.SameLine(0.0f, 4.0f);
+        return true;
+    }
+
+    private static uint GetDamageTypeIconId(CombatEventRecord combatEvent)
+    {
+        return combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0
+            ? GetDamageTypeIconId(combatEvent.DamageType)
+            : 0;
+    }
+
+    private static uint GetDamageTypeIconId(DamageType damageType)
+    {
+        return damageType switch
+        {
+            DamageType.Magic => Plugin.MagicDamageReductionIconId,
+            DamageType.Slashing or DamageType.Piercing or DamageType.Blunt or DamageType.Shot or DamageType.Physical =>
+                Plugin.PhysicalDamageReductionIconId,
+            _ => 0,
+        };
+    }
+
+    private static float GetInlineDamageTypeIconSize(uint iconId)
+    {
+        return iconId == 0 ? 0.0f : 14.0f;
+    }
+
+    private static string GetDamageTypeIconTooltip(DamageType damageType)
+    {
+        return damageType switch
+        {
+            DamageType.Magic => "Magic damage",
+            DamageType.Slashing or DamageType.Piercing or DamageType.Blunt or DamageType.Shot or DamageType.Physical =>
+                "Physical damage",
+            _ => $"{damageType} damage",
+        };
     }
 
     private static string FormatStatusSummary(IReadOnlyList<StatusSnapshot> statuses, int maxStatuses)

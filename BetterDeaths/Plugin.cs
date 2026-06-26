@@ -69,6 +69,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int RecordedPullIndexRollingBackupCount = 3;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
     private const string RecordedPullIndexRollingBackupSearchPattern = "recorded-pulls.index.backup.*.json";
+    private const string AutoActionDisplayName = "Auto";
     private const ushort ChatGreenColorKey = 45;
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
@@ -110,6 +111,7 @@ public sealed partial class Plugin : IDalamudPlugin
     public const float MaxWidgetIconSize = 32.0f;
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan FatalSequenceEndBuffer = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan EffectResultActionMatchWindow = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
@@ -179,7 +181,10 @@ public sealed partial class Plugin : IDalamudPlugin
         float PullElapsedSeconds,
         int DeathCount,
         long PullNumber,
-        string DetailFileName);
+        string DetailFileName)
+    {
+        public string CapturedPluginVersion { get; init; } = string.Empty;
+    }
 
     private sealed class RecordedPullState
     {
@@ -246,14 +251,21 @@ public sealed partial class Plugin : IDalamudPlugin
         string Detail,
         string? EventIdentity,
         uint EventOrdinal,
+        uint ActionSequence,
         string HpSource,
         int HpSourceId,
+        DateTime? ResultSeenAtUtc,
+        uint ResultCurrentHp,
+        uint ResultShieldHp,
+        uint ResultMaxHp,
         IReadOnlyList<StatusSnapshot> Statuses,
-        IReadOnlyList<StatusSnapshot> SourceStatuses);
+        IReadOnlyList<StatusSnapshot> SourceStatuses,
+        IReadOnlyList<StatusSnapshot> ResultStatuses);
 
     private sealed record RawActionEffectPacket(
         long Sequence,
         DateTime SeenAtUtc,
+        uint ActionSequence,
         uint CasterEntityId,
         uint ActionId,
         IReadOnlyList<RawActionEffectTarget> Targets);
@@ -1973,7 +1985,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var actionName = TryGetCombatLogActionName(message, out var parsedActionName) &&
             !string.IsNullOrWhiteSpace(parsedActionName)
             ? parsedActionName
-            : "Attack";
+            : "Auto";
         var targetName = FormatLogEntityName(target);
         EnqueueRawCombatLogMessage(new RawCombatLogMessage(
             GetNextRawCombatLogSequence(),
@@ -2112,6 +2124,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private static string FormatVersionForDisplay(Version? version)
     {
         return version is null ? "Unknown" : FormatVersionForCompare(version);
+    }
+
+    private static string GetCurrentPluginVersionForSavedData()
+    {
+        return FormatVersionForDisplay(typeof(Plugin).Assembly.GetName().Version);
     }
 
     private void SetPluginUpdateCheckState(PluginUpdateCheckState state)
@@ -2624,6 +2641,7 @@ public sealed partial class Plugin : IDalamudPlugin
         EnqueueRawActionEffectPacket(new RawActionEffectPacket(
             GetNextRawActionEffectSequence(),
             now,
+            header->GlobalSequence,
             casterEntityId,
             header->ActionId,
             targets));
@@ -2913,6 +2931,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 {
                     EventIdentity = $"{packet.Sequence}:{target.TargetIndex}:{effect.EffectIndex}:{member.MemberKey}:{packet.ActionId}",
                     EventOrdinal = eventOrdinal,
+                    ActionSequence = packet.ActionSequence,
                     HpSource = hpSource,
                 };
                 AddRecentEvent(record);
@@ -2973,6 +2992,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (member is not null)
         {
+            AttachEffectResultToCombatEvents(member, packet, shieldHp, mergedStatuses);
             CaptureEffectResultHpSnapshot(member, packet, shieldHp, mergedStatuses);
             if (packet.MaxHp > 0 && packet.CurrentHp == 0)
             {
@@ -3025,6 +3045,168 @@ public sealed partial class Plugin : IDalamudPlugin
         QueueDebugCaptureRecord("EffectResult", snapshot);
         AddDebugLog(
             $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
+    }
+
+    private void AttachEffectResultToCombatEvents(
+        PartyMemberSnapshot member,
+        RawEffectResultPacket packet,
+        uint shieldHp,
+        IReadOnlyList<StatusSnapshot> mergedStatuses)
+    {
+        if (packet.RelatedActionSequence == 0 || packet.MaxHp == 0)
+        {
+            return;
+        }
+
+        var resultStatuses = GetRelevantDeathStatuses(mergedStatuses);
+        var attachedCount = 0;
+        if (recentEventsByMember.TryGetValue(member.MemberKey, out var events))
+        {
+            for (var index = 0; index < events.Count; index++)
+            {
+                if (TryAttachEffectResult(events[index], packet, shieldHp, resultStatuses, out var updatedEvent))
+                {
+                    events[index] = updatedEvent;
+                    attachedCount++;
+                }
+            }
+        }
+
+        attachedCount += AttachEffectResultToDeathList(currentDeaths, member.MemberKey, packet, shieldHp, resultStatuses);
+        attachedCount += AttachEffectResultToDeathList(pendingDeathRecapLinks, member.MemberKey, packet, shieldHp, resultStatuses);
+        if (attachedCount > 0 && Configuration.DebugLogEnabled)
+        {
+            AddDebugLog(
+                $"Linked EffectResult seq {packet.RelatedActionSequence} to {attachedCount:N0} combat event(s).");
+        }
+    }
+
+    private static int AttachEffectResultToDeathList(
+        List<PartyDeathRecord> deaths,
+        string memberKey,
+        RawEffectResultPacket packet,
+        uint shieldHp,
+        IReadOnlyList<StatusSnapshot> resultStatuses)
+    {
+        var attachedCount = 0;
+        for (var index = 0; index < deaths.Count; index++)
+        {
+            var death = deaths[index];
+            if (!string.Equals(death.MemberKey, memberKey, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var likelyCause = death.LikelyCause;
+            if (likelyCause is not null &&
+                TryAttachEffectResult(likelyCause, packet, shieldHp, resultStatuses, out var updatedLikelyCause))
+            {
+                likelyCause = updatedLikelyCause;
+                attachedCount++;
+            }
+
+            var recentEvents = AttachEffectResultToEventList(
+                death.RecentEvents,
+                packet,
+                shieldHp,
+                resultStatuses,
+                out var recentAttachedCount);
+            attachedCount += recentAttachedCount;
+
+            var fatalSequence = death.FatalSequence;
+            if (fatalSequence is not null)
+            {
+                var fatalEvents = AttachEffectResultToEventList(
+                    fatalSequence.Events,
+                    packet,
+                    shieldHp,
+                    resultStatuses,
+                    out var fatalAttachedCount);
+                if (fatalAttachedCount > 0)
+                {
+                    fatalSequence = fatalSequence with { Events = fatalEvents };
+                    attachedCount += fatalAttachedCount;
+                }
+            }
+
+            if (likelyCause != death.LikelyCause ||
+                !ReferenceEquals(recentEvents, death.RecentEvents) ||
+                fatalSequence != death.FatalSequence)
+            {
+                deaths[index] = death with
+                {
+                    LikelyCause = likelyCause,
+                    RecentEvents = recentEvents,
+                    FatalSequence = fatalSequence,
+                };
+            }
+        }
+
+        return attachedCount;
+    }
+
+    private static IReadOnlyList<CombatEventRecord> AttachEffectResultToEventList(
+        IReadOnlyList<CombatEventRecord> events,
+        RawEffectResultPacket packet,
+        uint shieldHp,
+        IReadOnlyList<StatusSnapshot> resultStatuses,
+        out int attachedCount)
+    {
+        attachedCount = 0;
+        List<CombatEventRecord>? updatedEvents = null;
+        for (var index = 0; index < events.Count; index++)
+        {
+            var combatEvent = events[index];
+            if (!TryAttachEffectResult(combatEvent, packet, shieldHp, resultStatuses, out var updatedEvent))
+            {
+                updatedEvents?.Add(combatEvent);
+                continue;
+            }
+
+            updatedEvents ??= events.Take(index).ToList();
+            updatedEvents.Add(updatedEvent);
+            attachedCount++;
+        }
+
+        return updatedEvents ?? events;
+    }
+
+    private static bool TryAttachEffectResult(
+        CombatEventRecord combatEvent,
+        RawEffectResultPacket packet,
+        uint shieldHp,
+        IReadOnlyList<StatusSnapshot> resultStatuses,
+        out CombatEventRecord updatedEvent)
+    {
+        updatedEvent = combatEvent;
+        if (!EffectResultMatchesCombatEvent(combatEvent, packet))
+        {
+            return false;
+        }
+
+        if (combatEvent.ResultSeenAtUtc is { } existingResultAt &&
+            Duration(combatEvent.SeenAtUtc, existingResultAt) <= Duration(combatEvent.SeenAtUtc, packet.SeenAtUtc))
+        {
+            return false;
+        }
+
+        updatedEvent = combatEvent with
+        {
+            ResultSeenAtUtc = packet.SeenAtUtc,
+            ResultCurrentHp = packet.CurrentHp,
+            ResultShieldHp = shieldHp,
+            ResultMaxHp = packet.MaxHp,
+            ResultStatuses = resultStatuses,
+        };
+        return true;
+    }
+
+    private static bool EffectResultMatchesCombatEvent(CombatEventRecord combatEvent, RawEffectResultPacket packet)
+    {
+        return packet.RelatedActionSequence != 0 &&
+            combatEvent.ActionSequence != 0 &&
+            combatEvent.ActionSequence == packet.RelatedActionSequence &&
+            Duration(combatEvent.SeenAtUtc, packet.SeenAtUtc) <= EffectResultActionMatchWindow;
     }
 
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
@@ -4157,10 +4339,16 @@ public sealed partial class Plugin : IDalamudPlugin
             record.Detail,
             record.EventIdentity,
             record.EventOrdinal,
+            record.ActionSequence,
             record.HpSource.ToString(),
             (int)record.HpSource,
+            record.ResultSeenAtUtc,
+            record.ResultCurrentHp,
+            record.ResultShieldHp,
+            record.ResultMaxHp,
             record.Statuses,
-            record.SourceStatuses);
+            record.SourceStatuses,
+            record.ResultStatuses);
     }
 
     private IReadOnlyList<HpHistorySnapshot> GetRecentHpHistory(string memberKey, int seconds)
@@ -4347,6 +4535,7 @@ public sealed partial class Plugin : IDalamudPlugin
             currentDeaths.ToList())
         {
             PullNumber = pullNumber,
+            CapturedPluginVersion = GetCurrentPluginVersionForSavedData(),
         };
 
         lock (recordedPullLock)
@@ -4946,6 +5135,7 @@ public sealed partial class Plugin : IDalamudPlugin
                         entry.DeathCount)
                     {
                         PullNumber = entry.PullNumber,
+                        CapturedPluginVersion = entry.CapturedPluginVersion ?? string.Empty,
                     };
                     return new RecordedPullState(summary, entry.DetailFileName, null, detailDirty: false);
                 })
@@ -5031,7 +5221,10 @@ public sealed partial class Plugin : IDalamudPlugin
                     state.Summary.PullElapsedSeconds,
                     state.Summary.DeathCount,
                     state.Summary.PullNumber,
-                    state.DetailFileName))
+                    state.DetailFileName)
+                {
+                    CapturedPluginVersion = state.Summary.CapturedPluginVersion ?? string.Empty,
+                })
                 .ToList());
         var indexJson = JsonSerializer.Serialize(index, RecordedPullHistoryJsonOptions);
         if (createBackup)
@@ -5184,6 +5377,7 @@ public sealed partial class Plugin : IDalamudPlugin
             pull.Deaths.Count)
         {
             PullNumber = pull.PullNumber,
+            CapturedPluginVersion = pull.CapturedPluginVersion ?? string.Empty,
         };
         return new RecordedPullState(summary, BuildRecordedPullDetailFileName(pull), pull, detailDirty);
     }
@@ -5521,7 +5715,7 @@ public sealed partial class Plugin : IDalamudPlugin
             return cachedName;
         }
 
-        var name = actionId == 0 ? "Unknown action" : $"Action {actionId}";
+        var name = actionId == 0 ? "Unknown action" : "Auto";
         try
         {
             var action = DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId);
@@ -5906,8 +6100,8 @@ public sealed partial class Plugin : IDalamudPlugin
         return cause is null
             ? "Unknown"
             : cause.Kind == DeathEventKind.Status
-                ? cause.ActionName
-                : $"{cause.ActionName} ({cause.Amount:N0})";
+                ? FormatActionNameForDisplay(cause)
+                : $"{FormatActionNameForDisplay(cause)} ({cause.Amount:N0})";
     }
 
     private static string FormatCause(IReadOnlyList<CombatEventRecord> causes)
@@ -5948,8 +6142,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 : $" HP before hit: {hpText}.";
         var sourceName = FormatKnownPlayerName(cause.SourceName);
         return cause.Kind == DeathEventKind.Status
-            ? $"{cause.ActionName} from {sourceName}.{hpSuffix}"
-            : $"{cause.Amount:N0} from {cause.ActionName} by {sourceName}.{hpSuffix}";
+            ? $"{FormatActionNameForDisplay(cause)} from {sourceName}.{hpSuffix}"
+            : $"{cause.Amount:N0} from {FormatActionNameForDisplay(cause)} by {sourceName}.{hpSuffix}";
     }
 
     private static string FormatDeathChatDamageLine(IReadOnlyList<CombatEventRecord> damageEvents, HpHistorySnapshot? snapshot)
@@ -6108,7 +6302,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return causeEvents.Any(cause =>
                 cause.Kind == DeathEventKind.Status &&
-                string.Equals(cause.ActionName, post.ActionName, StringComparison.OrdinalIgnoreCase) &&
+                ActionNamesMatch(cause.ActionName, post.ActionName) &&
                 string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -6137,7 +6331,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         return causeEvents.Any(cause =>
             post.Amount.Value == cause.Amount &&
-            string.Equals(cause.ActionName, post.ActionName, StringComparison.OrdinalIgnoreCase) &&
+            ActionNamesMatch(cause.ActionName, post.ActionName) &&
             string.Equals(cause.SourceName, post.SourceName, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -6166,7 +6360,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 GetSharedPostElapsedSeconds(death),
                 memberName,
                 death.ClassJobName,
-                cause.ActionName,
+                FormatActionNameForDisplay(cause),
                 cause.SourceName,
                 cause.Kind == DeathEventKind.Status ? null : cause.Amount,
                 null)
@@ -6308,10 +6502,56 @@ public sealed partial class Plugin : IDalamudPlugin
         return left.ElapsedSeconds == right.ElapsedSeconds &&
             string.Equals(left.MemberName, right.MemberName, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.ClassJobName, right.ClassJobName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(left.ActionName, right.ActionName, StringComparison.OrdinalIgnoreCase) &&
+            ActionNamesMatch(left.ActionName, right.ActionName) &&
             string.Equals(left.SourceName, right.SourceName, StringComparison.OrdinalIgnoreCase) &&
             left.Amount == right.Amount &&
             left.HitCount == right.HitCount;
+    }
+
+    private static string FormatActionNameForDisplay(CombatEventRecord combatEvent)
+    {
+        return IsLikelyAutoAttack(combatEvent)
+            ? AutoActionDisplayName
+            : FormatActionNameForDisplay(combatEvent.ActionName);
+    }
+
+    private static string FormatActionNameForDisplay(string actionName)
+    {
+        return IsAutoAttackActionName(actionName)
+            ? AutoActionDisplayName
+            : actionName;
+    }
+
+    private static bool ActionNamesMatch(string? left, string? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return string.Equals(
+            FormatActionNameForDisplay(left),
+            FormatActionNameForDisplay(right),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsLikelyAutoAttack(CombatEventRecord combatEvent)
+    {
+        return combatEvent.Kind == DeathEventKind.Damage &&
+            IsAutoAttackActionName(combatEvent.ActionName);
+    }
+
+    private static bool IsAutoAttackActionName(string actionName)
+    {
+        if (string.Equals(actionName, AutoActionDisplayName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(actionName, "Attack", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        const string actionPrefix = "Action ";
+        return actionName.StartsWith(actionPrefix, StringComparison.Ordinal) &&
+            actionName[actionPrefix.Length..].All(char.IsDigit);
     }
 
     private string GetChatBrandingPrefix()

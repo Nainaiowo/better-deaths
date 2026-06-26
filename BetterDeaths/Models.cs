@@ -86,6 +86,18 @@ public sealed record CombatEventRecord(
     public uint EventOrdinal { get; init; }
 
     public CombatEventHpSource HpSource { get; init; }
+
+    public uint ActionSequence { get; init; }
+
+    public DateTime? ResultSeenAtUtc { get; init; }
+
+    public uint ResultCurrentHp { get; init; }
+
+    public uint ResultShieldHp { get; init; }
+
+    public uint ResultMaxHp { get; init; }
+
+    public IReadOnlyList<StatusSnapshot> ResultStatuses { get; init; } = [];
 }
 
 public sealed record CombatLogEventRecord(
@@ -152,6 +164,8 @@ public sealed record PullDeathSnapshot(
     IReadOnlyList<PartyDeathRecord> Deaths)
 {
     public long PullNumber { get; init; }
+
+    public string CapturedPluginVersion { get; init; } = string.Empty;
 }
 
 public sealed record RecordedPullSummary(
@@ -163,6 +177,8 @@ public sealed record RecordedPullSummary(
     int DeathCount)
 {
     public long PullNumber { get; init; }
+
+    public string CapturedPluginVersion { get; init; } = string.Empty;
 }
 
 public sealed record DebugLogEntry(

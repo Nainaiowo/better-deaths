@@ -79,6 +79,7 @@ public static class DeathDisplaySelector
     public static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
     {
         var displayAnchorSeenAtUtc = death.SeenAtUtc;
+        var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
         var cutoff = displayAnchorSeenAtUtc - TimeSpan.FromSeconds(LeadUpHistorySeconds);
         var events = death.RecentEvents.AsEnumerable();
         if (death.FatalSequence is { Events.Count: > 0 } sequence)
@@ -91,8 +92,12 @@ public static class DeathDisplaySelector
             events = events.Append(likelyCause);
         }
 
+        var fatalDisplayEvents = GetStoredFatalEventGroups(death)
+            .SelectMany(group => group.Events);
+        events = events.Concat(fatalDisplayEvents);
+
         var orderedEvents = events
-            .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= displayAnchorSeenAtUtc)
+            .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= anchorSeenAtUtc)
             .Where(IsDeathRelevantLeadUpEvent)
             .OrderBy(combatEvent => combatEvent.SeenAtUtc)
             .ToList();
@@ -355,14 +360,7 @@ public static class DeathDisplaySelector
             var matchedEvent = FindMatchingCombatEventForLogEvent(death, logEvent, usedCombatEventIndexes);
             displayEvents.Add(matchedEvent is null
                 ? CreateSyntheticCombatEventFromLogEvent(death, logEvent, logIndex)
-                : matchedEvent with
-                {
-                    SeenAtUtc = logEvent.SeenAtUtc,
-                    PullElapsedSeconds = logEvent.PullElapsedSeconds,
-                    Amount = logEvent.Amount,
-                    HpSource = CombatEventHpSource.NoPreHitSample,
-                    EventIdentity = $"log:{logEvent.SeenAtUtc.Ticks}:{logIndex}:{logEvent.ActionName}:{logEvent.Amount}",
-                });
+                : matchedEvent);
         }
 
         return displayEvents;
