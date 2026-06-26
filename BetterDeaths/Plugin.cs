@@ -562,6 +562,14 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public long DebugCaptureMaxFileSizeBytes => MaxDebugCaptureFileBytes;
 
+    public string LocalDataDirectoryPath => PluginInterface.ConfigDirectory.FullName;
+
+    public long LocalDataDirectorySizeBytes => GetDirectorySizeBytes(PluginInterface.ConfigDirectory.FullName);
+
+    public long RecordedPullStorageSizeBytes => GetRecordedPullStorageSizeBytes();
+
+    public int RecordedPullDetailFileCount => GetRecordedPullDetailFileCount();
+
     public int DebugCaptureQueuedLineCount
     {
         get
@@ -5468,6 +5476,79 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return File.Exists(DebugCaptureFileFullPath)
                 ? new FileInfo(DebugCaptureFileFullPath).Length
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static long GetRecordedPullStorageSizeBytes()
+    {
+        try
+        {
+            var total = GetFileSizeBytes(RecordedPullHistoryPath) +
+                GetFileSizeBytes(RecordedPullHistoryTempPath) +
+                GetFileSizeBytes(RecordedPullHistoryBackupPath) +
+                GetFileSizeBytes(RecordedPullIndexPath) +
+                GetFileSizeBytes(RecordedPullIndexTempPath) +
+                GetFileSizeBytes(RecordedPullIndexBackupPath);
+
+            foreach (var backupPath in GetRecordedPullHistoryRollingBackupPaths())
+            {
+                total += GetFileSizeBytes(backupPath);
+            }
+
+            foreach (var backupPath in GetRecordedPullIndexRollingBackupPaths())
+            {
+                total += GetFileSizeBytes(backupPath);
+            }
+
+            total += GetDirectorySizeBytes(RecordedPullDetailsDirectoryPath);
+            return total;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static int GetRecordedPullDetailFileCount()
+    {
+        try
+        {
+            return Directory.Exists(RecordedPullDetailsDirectoryPath)
+                ? Directory.EnumerateFiles(RecordedPullDetailsDirectoryPath, "*.json", SearchOption.TopDirectoryOnly).Count()
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static long GetDirectorySizeBytes(string directoryPath)
+    {
+        try
+        {
+            return Directory.Exists(directoryPath)
+                ? Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
+                    .Sum(GetFileSizeBytes)
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static long GetFileSizeBytes(string path)
+    {
+        try
+        {
+            return File.Exists(path)
+                ? new FileInfo(path).Length
                 : 0;
         }
         catch

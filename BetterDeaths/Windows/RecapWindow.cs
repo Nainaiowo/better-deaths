@@ -29,6 +29,8 @@ public sealed class RecapWindow : Window, IDisposable
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
+    private DataPageSnapshot dataPageSnapshot = DataPageSnapshot.Empty;
+    private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
     private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
@@ -83,7 +85,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.135";
+    private const string CurrentChangelogVersion = "0.1.0.136";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -454,6 +456,8 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
+        DrawModernNavButton("Data", MainPage.Data);
+        ImGui.SameLine();
         DrawModernNavButton("Updates", MainPage.Updates, ShouldHighlightChangelogTab());
         if (showDebugTab)
         {
@@ -471,6 +475,9 @@ public sealed class RecapWindow : Window, IDisposable
                 break;
             case MainPage.Customize:
                 DrawCustomizePage();
+                break;
+            case MainPage.Data:
+                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
                 break;
             case MainPage.Updates:
                 plugin.MarkChangelogVersionSeen(CurrentChangelogVersion);
@@ -6158,6 +6165,7 @@ public sealed class RecapWindow : Window, IDisposable
         Review,
         Example,
         Customize,
+        Data,
         Updates,
         Debug,
     }
@@ -6170,6 +6178,19 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private sealed record RecordedPullDutyOption(uint TerritoryId, string TerritoryName, int PullCount);
+
+    private sealed record DataPageSnapshot(
+        int SavedPullCount,
+        int MaxRecordedPulls,
+        long RecordedPullStorageSizeBytes,
+        int RecordedPullDetailFileCount,
+        long DebugCaptureFileSizeBytes,
+        long DebugCaptureMaxFileSizeBytes,
+        long LocalDataDirectorySizeBytes,
+        string LocalDataDirectoryPath)
+    {
+        public static readonly DataPageSnapshot Empty = new(0, 0, 0, 0, 0, 0, 0, string.Empty);
+    }
 
     private sealed record DeathSelectionTarget(
         long DeathSeenAtTicks,
@@ -6199,6 +6220,68 @@ public sealed class RecapWindow : Window, IDisposable
         DrawAcknowledgementNoticeButton();
     }
 
+    private void DrawDataPage()
+    {
+        var data = GetDataPageSnapshot();
+
+        ImGui.TextColored(LeadUpGoldColor, "Privacy & Data");
+        ImGui.TextWrapped("Better Deaths does not upload your data. It does not have any upload functions, telemetry, analytics, webhooks, feedback endpoints, or hidden network reporting built into the plugin in any way, shape, or form.");
+        ImGui.TextWrapped("That is intentional, and it will remain that way.");
+
+        ImGui.Separator();
+        ImGui.TextColored(LeadUpGoldColor, "Local data");
+        DrawWrappedBullet("Recorded pulls are saved locally so you can review pulls after wipes, resets, reloads, or plugin updates.");
+        DrawWrappedBullet("Saved pull data can include player names, jobs, duty names, death timing, HP and shields, damage events, actions, statuses, and mitigation context.");
+        DrawWrappedBullet("Name Redaction helps with screenshots and shared display, but local saved pull files may still contain the original captured names.");
+        DrawWrappedBullet("Debug capture is local and optional. It can contain raw troubleshooting data, so leave it off unless you are testing or debugging.");
+
+        ImGui.Spacing();
+        DrawDataStat("Saved pulls", $"{data.SavedPullCount:N0} / {data.MaxRecordedPulls:N0}");
+        DrawDataStat("Recorded pull files", $"{FormatByteSize(data.RecordedPullStorageSizeBytes)} across {data.RecordedPullDetailFileCount:N0} detail file(s)");
+        DrawDataStat("Debug file", $"{FormatByteSize(data.DebugCaptureFileSizeBytes)} / {FormatByteSize(data.DebugCaptureMaxFileSizeBytes)}");
+        DrawDataStat("Total local folder", FormatByteSize(data.LocalDataDirectorySizeBytes));
+        DrawDataStat("Local folder", data.LocalDataDirectoryPath);
+
+        ImGui.Separator();
+        ImGui.TextColored(LeadUpGoldColor, "What Better Deaths reads");
+        DrawWrappedBullet("While capture is enabled in supported duties, Better Deaths reads combat, party, HP, shield, status, action, death, and timing data that your client can already see.");
+        DrawWrappedBullet("Better Deaths reads its own local configuration and recorded pull files so your settings and saved recaps persist.");
+        DrawWrappedBullet("Better Deaths listens for Better Deaths recap chat posts so clickable recap links can open a matching local pull review.");
+
+        ImGui.Separator();
+        ImGui.TextColored(LeadUpGoldColor, "Sharing");
+        DrawWrappedBullet("Chat posting is opt-in. If you post recap information to chat, that information is shared through the selected in-game chat channel.");
+        DrawWrappedBullet("Recap links are not web links and do not send data to a Better Deaths server. They are local Dalamud chat payloads used to find a matching recap.");
+    }
+
+    private DataPageSnapshot GetDataPageSnapshot()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - dataPageSnapshotRefreshedAtUtc).TotalSeconds < 1.0)
+        {
+            return dataPageSnapshot;
+        }
+
+        dataPageSnapshot = new DataPageSnapshot(
+            plugin.RecordedPulls.Count,
+            configuration.MaxRecordedPulls,
+            plugin.RecordedPullStorageSizeBytes,
+            plugin.RecordedPullDetailFileCount,
+            plugin.DebugCaptureFileSizeBytes,
+            plugin.DebugCaptureMaxFileSizeBytes,
+            plugin.LocalDataDirectorySizeBytes,
+            plugin.LocalDataDirectoryPath);
+        dataPageSnapshotRefreshedAtUtc = now;
+        return dataPageSnapshot;
+    }
+
+    private static void DrawDataStat(string label, string value)
+    {
+        ImGui.TextColored(LeadUpGoldColor, $"{label}:");
+        ImGui.SameLine();
+        ImGui.TextWrapped(value);
+    }
+
     private static void DrawWrappedBullet(string text)
     {
         DrawWrappedBullet(text, null);
@@ -6222,6 +6305,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.136");
+        ImGui.TextDisabled("Privacy and data.");
+        DrawBreathingGoldBullet("Added a Data page with privacy and local storage information.");
+        DrawWrappedBullet("Better Deaths now shows local saved pull storage, debug file size, and local data folder size.");
+        DrawWrappedBullet("Added clearer wording that Better Deaths does not upload data and has no upload functions built into the plugin.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.135");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added more theme options.");
