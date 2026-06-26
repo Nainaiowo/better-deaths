@@ -270,66 +270,6 @@ public sealed record AddonInspectorValue(
     string Type,
     string Value);
 
-public sealed record TofuInspectorSnapshot(
-    DateTime SeenAtUtc,
-    IReadOnlyList<TofuInspectorDataSet> DataSets,
-    string? Error);
-
-public sealed record TofuInspectorDataSet(
-    string Name,
-    int Total,
-    int MaxCount,
-    IReadOnlyList<TofuInspectorBoard> Boards);
-
-public sealed record TofuInspectorBoard(
-    int Index,
-    bool IsValid,
-    string Name,
-    string Folder,
-    string PositionInList,
-    string ServerTime,
-    string Background,
-    int ObjectCount,
-    IReadOnlyList<TofuInspectorObject> Objects);
-
-public sealed record TofuInspectorObject(
-    int Index,
-    string ObjectType,
-    string X,
-    string Y,
-    string Scale,
-    string Angle,
-    string Rgba,
-    string Visible,
-    string Locked,
-    string Flags,
-    string RawFlags,
-    string Args,
-    string? Text);
-
-public sealed record TofuTransferCreateResult(
-    bool Success,
-    string Message,
-    string TransferId,
-    int BoardCount,
-    int FolderCount,
-    int TextLength);
-
-public sealed record TofuTransferStatus(
-    DateTime SeenAtUtc,
-    IReadOnlyList<TofuTransferAssembly> Transfers,
-    string? Error);
-
-public sealed record TofuTransferAssembly(
-    string TransferId,
-    int ReceivedBoards,
-    int TotalBoards,
-    bool IsComplete,
-    int AssembledLength,
-    string? Mode,
-    string? Error,
-    string? PayloadPreview);
-
 public enum PluginUpdateCheckState
 {
     NotChecked,
