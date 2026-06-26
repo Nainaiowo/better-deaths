@@ -270,6 +270,39 @@ public sealed record AddonInspectorValue(
     string Type,
     string Value);
 
+public sealed record TofuInspectorSnapshot(
+    DateTime SeenAtUtc,
+    IReadOnlyList<TofuInspectorDataSet> DataSets,
+    string? Error);
+
+public sealed record TofuInspectorDataSet(
+    string Name,
+    int Total,
+    int MaxCount,
+    IReadOnlyList<TofuInspectorBoard> Boards);
+
+public sealed record TofuInspectorBoard(
+    int Index,
+    bool IsValid,
+    string Name,
+    string Folder,
+    string PositionInList,
+    string ServerTime,
+    string Background,
+    int ObjectCount,
+    IReadOnlyList<TofuInspectorObject> Objects);
+
+public sealed record TofuInspectorObject(
+    int Index,
+    string ObjectType,
+    string X,
+    string Y,
+    string Scale,
+    string Angle,
+    string Flags,
+    string Args,
+    string? Text);
+
 public enum PluginUpdateCheckState
 {
     NotChecked,

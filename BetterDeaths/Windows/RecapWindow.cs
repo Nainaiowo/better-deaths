@@ -88,7 +88,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.138";
+    private const string CurrentChangelogVersion = "0.1.0.139";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5407,6 +5407,9 @@ public sealed class RecapWindow : Window, IDisposable
             $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | ActorControl hook {FormatDebugBool(plugin.DebugActorControlHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
 
         ImGui.Separator();
+        DrawTofuInspector();
+
+        ImGui.Separator();
         DrawAddonInspector();
 
         ImGui.Separator();
@@ -5460,6 +5463,199 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.EndCombo();
         }
+    }
+
+    private void DrawTofuInspector()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "Strategy Board inspector");
+        ImGui.TextDisabled("Read-only. Snapshots the internal Strategy Board shared/saved lists exposed as Tofu data.");
+
+        if (ImGui.Button("Snapshot strategy boards"))
+        {
+            plugin.CaptureTofuInspectorSnapshot();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Reads board names and visible object text from the client's Strategy Board data. It does not save, send, create, delete, or modify boards.");
+        }
+
+        var snapshot = plugin.TofuInspectorSnapshot;
+        if (snapshot is null)
+        {
+            ImGui.TextDisabled("No Strategy Board snapshot yet.");
+            return;
+        }
+
+        ImGui.TextDisabled($"Latest snapshot: {snapshot.SeenAtUtc:HH:mm:ss} UTC");
+        if (!string.IsNullOrWhiteSpace(snapshot.Error))
+        {
+            ImGui.TextColored(WarningColor, snapshot.Error);
+            return;
+        }
+
+        foreach (var dataSet in snapshot.DataSets)
+        {
+            DrawTofuInspectorDataSet(dataSet);
+        }
+    }
+
+    private void DrawTofuInspectorDataSet(TofuInspectorDataSet dataSet)
+    {
+        var boards = dataSet.Boards
+            .Where(MatchesTofuInspectorBoard)
+            .ToList();
+
+        if (!ImGui.TreeNode($"{dataSet.Name} ({boards.Count:N0}/{dataSet.Boards.Count:N0}, total {dataSet.Total:N0}, max {dataSet.MaxCount:N0})###Tofu{dataSet.Name}"))
+        {
+            return;
+        }
+
+        if (dataSet.Boards.Count == 0)
+        {
+            ImGui.TextDisabled("No boards exposed in this list.");
+            ImGui.TreePop();
+            return;
+        }
+
+        if (boards.Count == 0)
+        {
+            ImGui.TextDisabled("No boards match the current Debug text filter.");
+            ImGui.TreePop();
+            return;
+        }
+
+        if (ImGui.BeginTable($"##TofuBoards{dataSet.Name}", 8, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+            ImGui.TableSetupColumn("Valid", ImGuiTableColumnFlags.WidthStretch, 0.45f);
+            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 1.4f);
+            ImGui.TableSetupColumn("Folder", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Order", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Objects", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Background", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+            ImGui.TableSetupColumn("Server time", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+            ImGui.TableHeadersRow();
+
+            foreach (var board in boards)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawCenteredText(board.Index.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(1);
+                DrawCenteredText(FormatDebugBool(board.IsValid));
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.TextWrapped(board.Name);
+
+                ImGui.TableSetColumnIndex(3);
+                DrawCenteredText(board.Folder);
+
+                ImGui.TableSetColumnIndex(4);
+                DrawCenteredText(board.PositionInList);
+
+                ImGui.TableSetColumnIndex(5);
+                DrawCenteredText(board.ObjectCount.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(6);
+                DrawCenteredText(board.Background);
+
+                ImGui.TableSetColumnIndex(7);
+                DrawCenteredText(board.ServerTime);
+            }
+
+            ImGui.EndTable();
+        }
+
+        foreach (var board in boards)
+        {
+            DrawTofuInspectorBoardObjects(dataSet.Name, board);
+        }
+
+        ImGui.TreePop();
+    }
+
+    private void DrawTofuInspectorBoardObjects(string dataSetName, TofuInspectorBoard board)
+    {
+        var objects = board.Objects
+            .Where(MatchesTofuInspectorObject)
+            .ToList();
+
+        if (!ImGui.TreeNode($"Board {board.Index}: {board.Name} objects ({objects.Count:N0}/{board.Objects.Count:N0})###Tofu{dataSetName}{board.Index}Objects"))
+        {
+            return;
+        }
+
+        if (board.Objects.Count == 0)
+        {
+            ImGui.TextDisabled("No objects captured for this board.");
+            ImGui.TreePop();
+            return;
+        }
+
+        if (objects.Count == 0)
+        {
+            ImGui.TextDisabled("No objects match the current Debug text filter.");
+            ImGui.TreePop();
+            return;
+        }
+
+        if (ImGui.BeginTable($"##TofuObjects{dataSetName}{board.Index}", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+            ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+            ImGui.TableSetupColumn("X", ImGuiTableColumnFlags.WidthStretch, 0.45f);
+            ImGui.TableSetupColumn("Y", ImGuiTableColumnFlags.WidthStretch, 0.45f);
+            ImGui.TableSetupColumn("Scale", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Angle", ImGuiTableColumnFlags.WidthStretch, 0.55f);
+            ImGui.TableSetupColumn("Flags", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+            ImGui.TableSetupColumn("Args", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+            ImGui.TableSetupColumn("Text", ImGuiTableColumnFlags.WidthStretch, 2.6f);
+            ImGui.TableHeadersRow();
+
+            foreach (var obj in objects)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawCenteredText(obj.Index.ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(1);
+                ImGui.TextUnformatted(obj.ObjectType);
+
+                ImGui.TableSetColumnIndex(2);
+                DrawCenteredText(obj.X);
+
+                ImGui.TableSetColumnIndex(3);
+                DrawCenteredText(obj.Y);
+
+                ImGui.TableSetColumnIndex(4);
+                DrawCenteredText(obj.Scale);
+
+                ImGui.TableSetColumnIndex(5);
+                DrawCenteredText(obj.Angle);
+
+                ImGui.TableSetColumnIndex(6);
+                ImGui.TextWrapped(obj.Flags);
+
+                ImGui.TableSetColumnIndex(7);
+                ImGui.TextWrapped(obj.Args);
+
+                ImGui.TableSetColumnIndex(8);
+                if (string.IsNullOrWhiteSpace(obj.Text))
+                {
+                    ImGui.TextDisabled("-");
+                }
+                else
+                {
+                    ImGui.TextWrapped(obj.Text);
+                }
+            }
+
+            ImGui.EndTable();
+        }
+
+        ImGui.TreePop();
     }
 
     private void DrawAddonInspector()
@@ -5775,6 +5971,45 @@ public sealed class RecapWindow : Window, IDisposable
             addonName.StartsWith("_ActionBar", StringComparison.Ordinal) ||
             addonName.StartsWith("_Status", StringComparison.Ordinal) ||
             addonName.StartsWith("_CastBar", StringComparison.Ordinal);
+    }
+
+    private bool MatchesTofuInspectorBoard(TofuInspectorBoard board)
+    {
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            board.Index.ToString(CultureInfo.InvariantCulture),
+            board.Name,
+            board.Folder,
+            board.PositionInList,
+            board.Background,
+            board.ServerTime,
+            board.ObjectCount.ToString(CultureInfo.InvariantCulture),
+            string.Join(" ", board.Objects.Select(obj => obj.Text)));
+    }
+
+    private bool MatchesTofuInspectorObject(TofuInspectorObject obj)
+    {
+        if (!TryGetDebugTextFilter(out var filter))
+        {
+            return true;
+        }
+
+        return MatchesDebugTextFilter(
+            filter,
+            obj.Index.ToString(CultureInfo.InvariantCulture),
+            obj.ObjectType,
+            obj.X,
+            obj.Y,
+            obj.Scale,
+            obj.Angle,
+            obj.Flags,
+            obj.Args,
+            obj.Text);
     }
 
     private bool MatchesAddonInspectorValue(AddonInspectorValue value)
@@ -6661,6 +6896,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.139");
+        ImGui.TextDisabled("Debug updates for future release testing.");
+        DrawWrappedBullet("Updated Debug for future release testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.138");
         ImGui.TextDisabled("Debug updates for future release testing.");
         DrawWrappedBullet("Updated Debug for future release testing.");

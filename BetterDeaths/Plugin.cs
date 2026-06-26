@@ -19,6 +19,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
@@ -87,6 +88,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxAddonInspectorNodes = 500;
     private const int MaxAddonInspectorAtkValues = 128;
     private const int AddonInspectorDuplicateSuppressSeconds = 3;
+    private const int MaxTofuInspectorBoardsPerDataSet = 40;
+    private const int MaxTofuInspectorObjectsPerBoard = 80;
+    private const int MaxTofuInspectorTextLength = 240;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
@@ -440,6 +444,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool availablePluginUpdateIsTesting;
     private string? pluginUpdateCheckError;
     private AddonInspectorSnapshot? addonInspectorSnapshot;
+    private TofuInspectorSnapshot? tofuInspectorSnapshot;
     private string? pendingUpdateNoticeKey;
     private CancellationTokenSource? recordedPullHistoryLoadCts;
     private Task? recordedPullHistoryLoadTask;
@@ -569,6 +574,7 @@ public sealed partial class Plugin : IDalamudPlugin
         .ToList();
 
     public AddonInspectorSnapshot? AddonInspectorSnapshot => addonInspectorSnapshot;
+    public TofuInspectorSnapshot? TofuInspectorSnapshot => tofuInspectorSnapshot;
 
     public bool DebugIsDutyCaptureActive => IsDutyCaptureActive();
 
@@ -993,6 +999,7 @@ public sealed partial class Plugin : IDalamudPlugin
         addonInspectorEvents.Clear();
         addonInspectorEventSeenAtBySignature.Clear();
         addonInspectorSnapshot = null;
+        tofuInspectorSnapshot = null;
         debugCaptureFrozen = false;
     }
 
@@ -1001,6 +1008,19 @@ public sealed partial class Plugin : IDalamudPlugin
         addonInspectorEvents.Clear();
         addonInspectorEventSeenAtBySignature.Clear();
         addonInspectorSnapshot = null;
+    }
+
+    public void CaptureTofuInspectorSnapshot()
+    {
+        try
+        {
+            tofuInspectorSnapshot = CaptureTofuInspectorSnapshotInternal();
+        }
+        catch (Exception ex)
+        {
+            tofuInspectorSnapshot = CreateTofuInspectorErrorSnapshot(ex.Message);
+            Log.Debug(ex, "Could not capture Better Deaths Strategy Board inspector snapshot.");
+        }
     }
 
     public void CaptureAddonInspectorSnapshot(string addonName)
@@ -1279,6 +1299,153 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return $"Unreadable: {ex.Message}";
         }
+    }
+
+    private static TofuInspectorSnapshot CreateTofuInspectorErrorSnapshot(string error)
+    {
+        return new TofuInspectorSnapshot(DateTime.UtcNow, [], error);
+    }
+
+    private static unsafe TofuInspectorSnapshot CaptureTofuInspectorSnapshotInternal()
+    {
+        var module = TofuModule.Instance();
+        if (module is null)
+        {
+            return CreateTofuInspectorErrorSnapshot("Strategy Board module was not available yet.");
+        }
+
+        return new TofuInspectorSnapshot(
+            DateTime.UtcNow,
+            [
+                CaptureTofuInspectorDataSet("Shared boards", module->SharedBoardData),
+                CaptureTofuInspectorDataSet("Saved boards", module->SavedBoardData),
+            ],
+            null);
+    }
+
+    private static unsafe TofuInspectorDataSet CaptureTofuInspectorDataSet(string name, TofuData* data)
+    {
+        if (data is null)
+        {
+            return new TofuInspectorDataSet(name, 0, 0, []);
+        }
+
+        var boards = data->Boards;
+        var maxCount = SafeTofuInt(data->MaxCount);
+        var total = SafeTofuInt(data->Total);
+        var captureCount = Math.Clamp(Math.Max(total, maxCount), 0, Math.Min(boards.Length, MaxTofuInspectorBoardsPerDataSet));
+        var capturedBoards = new List<TofuInspectorBoard>();
+
+        for (var i = 0; i < captureCount; i++)
+        {
+            try
+            {
+                var board = boards[i];
+                if (!board.IsValid && string.IsNullOrWhiteSpace(board.NameString) && board.NumberOfObjects == 0)
+                {
+                    continue;
+                }
+
+                capturedBoards.Add(CaptureTofuInspectorBoard(i, board));
+            }
+            catch (Exception ex)
+            {
+                capturedBoards.Add(new TofuInspectorBoard(
+                    i,
+                    false,
+                    $"Unreadable board: {ex.Message}",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    0,
+                    []));
+            }
+        }
+
+        return new TofuInspectorDataSet(name, total, maxCount, capturedBoards);
+    }
+
+    private static unsafe TofuInspectorBoard CaptureTofuInspectorBoard(int index, TofuBoardEntry board)
+    {
+        var objects = board.Objects;
+        var objectCount = Math.Clamp(SafeTofuInt(board.NumberOfObjects), 0, Math.Min(objects.Length, MaxTofuInspectorObjectsPerBoard));
+        var capturedObjects = new List<TofuInspectorObject>();
+
+        for (var i = 0; i < objectCount; i++)
+        {
+            try
+            {
+                var obj = objects[i];
+                var text = TrimTofuInspectorText(obj.TextString);
+
+                capturedObjects.Add(new TofuInspectorObject(
+                    i,
+                    obj.ObjectType.ToString(),
+                    FormatTofuInspectorValue(obj.PosX),
+                    FormatTofuInspectorValue(obj.PosY),
+                    FormatTofuInspectorValue(obj.Scale),
+                    FormatTofuInspectorValue(obj.Angle),
+                    obj.Flags.ToString(),
+                    $"{FormatTofuInspectorValue(obj.ArgsA)}, {FormatTofuInspectorValue(obj.ArgsB)}, {FormatTofuInspectorValue(obj.ArgsC)}",
+                    text));
+            }
+            catch (Exception ex)
+            {
+                capturedObjects.Add(new TofuInspectorObject(
+                    i,
+                    "Unreadable",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    ex.Message));
+            }
+        }
+
+        return new TofuInspectorBoard(
+            index,
+            board.IsValid,
+            string.IsNullOrWhiteSpace(board.NameString) ? "-" : TrimTofuInspectorText(board.NameString) ?? "-",
+            FormatTofuInspectorValue(board.Folder),
+            FormatTofuInspectorValue(board.PositionInList),
+            FormatTofuInspectorValue(board.ServerTime),
+            FormatTofuInspectorValue(board.Background),
+            SafeTofuInt(board.NumberOfObjects),
+            capturedObjects);
+    }
+
+    private static int SafeTofuInt<T>(T value)
+        where T : IConvertible
+    {
+        try
+        {
+            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string FormatTofuInspectorValue<T>(T value)
+    {
+        return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "-";
+    }
+
+    private static string? TrimTofuInspectorText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        value = value.ReplaceLineEndings(" ").Trim();
+        return value.Length <= MaxTofuInspectorTextLength
+            ? value
+            : string.Concat(value.AsSpan(0, MaxTofuInspectorTextLength), "...");
     }
 
     public void ClearRecordedPulls()
