@@ -6,8 +6,12 @@ using Dalamud.Interface.Windowing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Numerics;
+using System.Text;
+using System.Text.Json;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 using LuminaStatus = Lumina.Excel.Sheets.Status;
 
@@ -25,9 +29,12 @@ public sealed class RecapWindow : Window, IDisposable
     private bool showDebugTab;
     private bool showThankYouNoticeOnDemand;
     private bool windowStylePushed;
+    private PullExportPreview? pullExportPreview;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
     private string addonInspectorEventFilter = string.Empty;
+    private string? tofuInspectorSavedPath;
+    private string? tofuInspectorSaveError;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -88,7 +95,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.139";
+    private const string CurrentChangelogVersion = "0.1.0.140";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -104,6 +111,15 @@ public sealed class RecapWindow : Window, IDisposable
     private const string ThemeNewBadgeText = "New";
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
+    private const int StrategyBoardTextObjectLimit = 8;
+    private const int StrategyBoardTextObjectCharacterLimit = 30;
+    private const string ShortExportPrefix = "BD1S";
+    private const string FullExportPrefix = "BD1F";
+    private static readonly JsonSerializerOptions TofuInspectorExportJsonOptions = new()
+    {
+        WriteIndented = true,
+    };
+
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan LeadUpEventDuplicateWindow = TimeSpan.FromMilliseconds(5);
@@ -184,6 +200,13 @@ public sealed class RecapWindow : Window, IDisposable
         bool AllVariable,
         bool PhysicalVariable,
         bool MagicVariable);
+
+    private sealed record PullExportPreview(
+        string Mode,
+        string PullTitle,
+        string Value,
+        int RequiredStrategyBoardChunks,
+        IReadOnlyList<string> StrategyBoardChunks);
 
     private sealed record ReviewPull(
         string Key,
@@ -1253,13 +1276,444 @@ public sealed class RecapWindow : Window, IDisposable
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawTimelineSectionTitle(GetPullDeathTimelineTitle(pull), pull.Subtitle);
+        DrawPullExportControls(pull, idPrefix);
         if (pull.Deaths.Count == 0)
         {
             ImGui.TextDisabled("No deaths recorded for this pull.");
+            DrawPullExportPreviewPopup();
             return;
         }
 
         DrawSelectableDeathTimeline(pull, idPrefix, selection);
+        DrawPullExportPreviewPopup();
+    }
+
+    private void DrawPullExportControls(ReviewPull pull, string idPrefix)
+    {
+        ImGui.TextDisabled("Export preview");
+        ImGui.SameLine();
+        if (ImGui.SmallButton($"Short##ShortPullExport{idPrefix}{pull.Key}"))
+        {
+            pullExportPreview = CreatePullExportPreview(pull, full: false);
+            ImGui.OpenPopup("Pull export preview");
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Builds a compact Strategy Board-sized pull summary. No player names are included.");
+        }
+
+        ImGui.SameLine();
+        if (ImGui.SmallButton($"Full##FullPullExport{idPrefix}{pull.Key}"))
+        {
+            pullExportPreview = CreatePullExportPreview(pull, full: true);
+            ImGui.OpenPopup("Pull export preview");
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Builds a compressed full-data export preview. This is expected to be much larger than a Strategy Board can hold.");
+        }
+    }
+
+    private void DrawPullExportPreviewPopup()
+    {
+        if (pullExportPreview is not { } preview)
+        {
+            return;
+        }
+
+        if (!ImGui.BeginPopup("Pull export preview"))
+        {
+            return;
+        }
+
+        ImGui.TextColored(LeadUpGoldColor, $"{preview.Mode} export");
+        ImGui.TextDisabled(preview.PullTitle);
+        ImGui.Separator();
+
+        var fitsStrategyBoard = preview.RequiredStrategyBoardChunks <= StrategyBoardTextObjectLimit;
+        ImGui.TextUnformatted($"Length: {preview.Value.Length:N0} characters");
+        ImGui.TextUnformatted($"Strategy Board text objects: {preview.RequiredStrategyBoardChunks:N0} / {StrategyBoardTextObjectLimit:N0}");
+        ImGui.TextColored(
+            fitsStrategyBoard ? HealColor : WarningColor,
+            fitsStrategyBoard ? "Fits in one Strategy Board." : "Does not fit in one Strategy Board.");
+
+        if (ImGui.Button("Copy export string"))
+        {
+            ImGui.SetClipboardText(preview.Value);
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Close"))
+        {
+            pullExportPreview = null;
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
+
+        ImGui.Separator();
+        ImGui.TextDisabled("Export string");
+        DrawExportPreviewText(preview.Value, 420.0f);
+
+        ImGui.Separator();
+        ImGui.TextDisabled($"30-character Strategy Board chunks shown: {preview.StrategyBoardChunks.Count:N0} / {preview.RequiredStrategyBoardChunks:N0}");
+        if (ImGui.BeginTable("##PullExportChunks", 2, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+            ImGui.TableSetupColumn("Text object", ImGuiTableColumnFlags.WidthStretch, 3.0f);
+            ImGui.TableHeadersRow();
+
+            for (var i = 0; i < preview.StrategyBoardChunks.Count; i++)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawCenteredText((i + 1).ToString(CultureInfo.InvariantCulture));
+
+                ImGui.TableSetColumnIndex(1);
+                ImGui.TextUnformatted(preview.StrategyBoardChunks[i]);
+            }
+
+            ImGui.EndTable();
+        }
+
+        if (preview.StrategyBoardChunks.Count < preview.RequiredStrategyBoardChunks)
+        {
+            ImGui.TextDisabled("Additional chunks are hidden in this preview.");
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private static void DrawExportPreviewText(string value, float height)
+    {
+        if (ImGui.BeginChild("##PullExportPreviewText", new Vector2(0.0f, height), true, ImGuiWindowFlags.HorizontalScrollbar))
+        {
+            ImGui.TextWrapped(value);
+        }
+
+        ImGui.EndChild();
+    }
+
+    private PullExportPreview CreatePullExportPreview(ReviewPull pull, bool full)
+    {
+        var value = full
+            ? CreateFullPullExportString(pull)
+            : CreateShortPullExportString(pull);
+        var requiredChunks = GetRequiredStrategyBoardChunks(value);
+        var chunks = SplitStrategyBoardChunks(value, maxChunksToShow: full ? 16 : StrategyBoardTextObjectLimit);
+        return new PullExportPreview(
+            full ? "Full" : "Short",
+            GetPullDeathTimelineTitle(pull),
+            value,
+            requiredChunks,
+            chunks);
+    }
+
+    private static int GetRequiredStrategyBoardChunks(string value)
+    {
+        return Math.Max(1, (value.Length + StrategyBoardTextObjectCharacterLimit - 1) / StrategyBoardTextObjectCharacterLimit);
+    }
+
+    private static IReadOnlyList<string> SplitStrategyBoardChunks(string value, int maxChunksToShow)
+    {
+        var chunks = new List<string>();
+        var chunkCount = Math.Min(GetRequiredStrategyBoardChunks(value), Math.Max(1, maxChunksToShow));
+        for (var i = 0; i < chunkCount; i++)
+        {
+            var start = i * StrategyBoardTextObjectCharacterLimit;
+            if (start >= value.Length)
+            {
+                break;
+            }
+
+            var length = Math.Min(StrategyBoardTextObjectCharacterLimit, value.Length - start);
+            chunks.Add(value.Substring(start, length));
+        }
+
+        return chunks;
+    }
+
+    private static string CreateShortPullExportString(ReviewPull pull)
+    {
+        var deaths = GetDeathsInTimelineOrder(pull.Deaths);
+        var deathTokens = deaths.Select(CreateShortDeathExportToken);
+        var body = string.Join(
+            ".",
+            ToBase36(pull.TerritoryId),
+            ToBase36(ToTenths(pull.PullElapsedSeconds)),
+            ToBase36(deaths.Count),
+            string.Join("~", deathTokens));
+        var checksum = ToBase36(Fnv1A32(body));
+        return $"{ShortExportPrefix}.{checksum}.{body}";
+    }
+
+    private static string CreateShortDeathExportToken(PartyDeathRecord death)
+    {
+        var cause = death.LikelyCause;
+        var slot = Math.Clamp(death.PartyIndex + 1, 0, 99);
+        return string.Join(
+            ",",
+            ToBase36(slot),
+            ToBase36(death.ClassJobId),
+            ToBase36(ToTenths(death.PullElapsedSeconds)),
+            ToBase36(cause?.ActionId ?? 0),
+            ToBase36(cause?.Amount ?? 0),
+            GetShortExportDamageCode(cause?.DamageType ?? DamageType.Unknown),
+            ToBase36(GetShortExportFlagBits(cause)));
+    }
+
+    private static string CreateFullPullExportString(ReviewPull pull)
+    {
+        var deaths = GetDeathsInTimelineOrder(pull.Deaths);
+        var playerNameMap = CreateExportPlayerNameMap(deaths);
+        var payload = new
+        {
+            v = 1,
+            type = "pull",
+            mode = "full",
+            source = "BetterDeaths",
+            pull = new
+            {
+                title = pull.Title,
+                number = pull.PullNumber,
+                territoryId = pull.TerritoryId,
+                territoryName = pull.TerritoryName,
+                elapsed = MathF.Round(pull.PullElapsedSeconds, 3),
+                deathCount = deaths.Count,
+                capturedAtUtc = pull.RecordedPull?.CapturedAtUtc,
+                reason = pull.RecordedPull?.Reason,
+            },
+            deaths = deaths.Select((death, index) => new
+            {
+                order = index + 1,
+                slot = death.PartyIndex + 1,
+                jobId = death.ClassJobId,
+                job = death.ClassJobName,
+                time = MathF.Round(death.PullElapsedSeconds, 3),
+                hp = new
+                {
+                    death.CurrentHp,
+                    death.ShieldHp,
+                    death.MaxHp,
+                },
+                cause = death.LikelyCause is null ? null : CreateFullEventExport(death.LikelyCause, playerNameMap),
+                statuses = death.StatusesAtDeath.Select(CreateFullStatusExport),
+                recent = death.RecentEvents.Select(combatEvent => CreateFullEventExport(combatEvent, playerNameMap)),
+                hpHistory = death.HpHistory.Select(snapshot => new
+                {
+                    time = MathF.Round(snapshot.PullElapsedSeconds, 3),
+                    snapshot.CurrentHp,
+                    snapshot.ShieldHp,
+                    snapshot.MaxHp,
+                    statuses = snapshot.Statuses.Select(CreateFullStatusExport),
+                }),
+                fatal = death.FatalSequence is null ? null : new
+                {
+                    events = death.FatalSequence.Events.Select(combatEvent => CreateFullEventExport(combatEvent, playerNameMap)),
+                    logs = death.FatalSequence.LogEvents.Select(log => new
+                    {
+                        time = MathF.Round(log.PullElapsedSeconds, 3),
+                        sourceName = RedactExportText(log.SourceName, playerNameMap),
+                        targetName = RedactExportText(log.TargetName, playerNameMap),
+                        log.LogMessageId,
+                        log.ActionName,
+                        log.Amount,
+                    }),
+                },
+                sourceMitigation = death.SourceMitigationHistory.Select(snapshot => new
+                {
+                    time = MathF.Round(snapshot.PullElapsedSeconds, 3),
+                    snapshot.SourceEntityId,
+                    sourceName = RedactExportText(snapshot.SourceName, playerNameMap),
+                    statuses = snapshot.Statuses.Select(CreateFullStatusExport),
+                }),
+            }),
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        return $"{FullExportPrefix}:{Base64UrlEncode(CompressUtf8(json))}";
+    }
+
+    private static Dictionary<string, string> CreateExportPlayerNameMap(IReadOnlyList<PartyDeathRecord> deaths)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var death in deaths)
+        {
+            if (string.IsNullOrWhiteSpace(death.MemberName))
+            {
+                continue;
+            }
+
+            map.TryAdd(death.MemberName, $"P{Math.Max(0, death.PartyIndex) + 1}");
+        }
+
+        return map;
+    }
+
+    private static string RedactExportText(string text, IReadOnlyDictionary<string, string> playerNameMap)
+    {
+        if (string.IsNullOrWhiteSpace(text) || playerNameMap.Count == 0)
+        {
+            return text;
+        }
+
+        var redacted = text;
+        foreach (var (name, label) in playerNameMap.OrderByDescending(entry => entry.Key.Length))
+        {
+            redacted = redacted.Replace(name, label, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return redacted;
+    }
+
+    private static object CreateFullEventExport(
+        CombatEventRecord combatEvent,
+        IReadOnlyDictionary<string, string> playerNameMap)
+    {
+        return new
+        {
+            time = MathF.Round(combatEvent.PullElapsedSeconds, 3),
+            combatEvent.SourceEntityId,
+            sourceName = RedactExportText(combatEvent.SourceName, playerNameMap),
+            combatEvent.ActionId,
+            combatEvent.ActionName,
+            kind = combatEvent.Kind.ToString(),
+            combatEvent.Amount,
+            combatEvent.CurrentHp,
+            combatEvent.ShieldHp,
+            combatEvent.MaxHp,
+            damageType = combatEvent.DamageType.ToString(),
+            combatEvent.Critical,
+            combatEvent.DirectHit,
+            combatEvent.Blocked,
+            combatEvent.Parried,
+            statuses = combatEvent.Statuses.Select(CreateFullStatusExport),
+            sourceStatuses = combatEvent.SourceStatuses.Select(CreateFullStatusExport),
+        };
+    }
+
+    private static object CreateFullStatusExport(StatusSnapshot status)
+    {
+        return new
+        {
+            status.Id,
+            status.Name,
+            status.IconId,
+            status.SourceId,
+            status.StackCount,
+            remaining = MathF.Round(status.RemainingTime, 1),
+        };
+    }
+
+    private static uint ToTenths(float seconds)
+    {
+        return (uint)Math.Clamp(MathF.Round(MathF.Max(0.0f, seconds) * 10.0f), 0.0f, uint.MaxValue);
+    }
+
+    private static uint GetShortExportFlagBits(CombatEventRecord? combatEvent)
+    {
+        if (combatEvent is null)
+        {
+            return 0;
+        }
+
+        uint flags = 1;
+        if (combatEvent.Critical)
+        {
+            flags |= 1 << 1;
+        }
+
+        if (combatEvent.DirectHit)
+        {
+            flags |= 1 << 2;
+        }
+
+        if (combatEvent.Blocked)
+        {
+            flags |= 1 << 3;
+        }
+
+        if (combatEvent.Parried)
+        {
+            flags |= 1 << 4;
+        }
+
+        return flags;
+    }
+
+    private static char GetShortExportDamageCode(DamageType damageType)
+    {
+        return damageType switch
+        {
+            DamageType.Slashing => 'S',
+            DamageType.Piercing => 'P',
+            DamageType.Blunt => 'B',
+            DamageType.Shot => 'H',
+            DamageType.Magic => 'M',
+            DamageType.Breath => 'R',
+            DamageType.Physical => 'Y',
+            DamageType.LimitBreak => 'L',
+            _ => 'U',
+        };
+    }
+
+    private static string ToBase36(long value)
+    {
+        const string digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (value == 0)
+        {
+            return "0";
+        }
+
+        var negative = value < 0;
+        ulong remaining = negative ? (ulong)-value : (ulong)value;
+        Span<char> buffer = stackalloc char[13];
+        var index = buffer.Length;
+        while (remaining > 0)
+        {
+            buffer[--index] = digits[(int)(remaining % 36)];
+            remaining /= 36;
+        }
+
+        return negative
+            ? string.Concat("-", buffer[index..].ToString())
+            : buffer[index..].ToString();
+    }
+
+    private static uint Fnv1A32(string value)
+    {
+        const uint offset = 2166136261;
+        const uint prime = 16777619;
+        var hash = offset;
+        foreach (var b in Encoding.UTF8.GetBytes(value))
+        {
+            hash ^= b;
+            hash *= prime;
+        }
+
+        return hash;
+    }
+
+    private static byte[] CompressUtf8(string value)
+    {
+        var input = Encoding.UTF8.GetBytes(value);
+        using var output = new MemoryStream();
+        using (var brotli = new BrotliStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            brotli.Write(input, 0, input.Length);
+        }
+
+        return output.ToArray();
+    }
+
+    private static string Base64UrlEncode(byte[] bytes)
+    {
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 
     private static string GetPullDeathTimelineTitle(ReviewPull pull)
@@ -5488,6 +5942,15 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TextDisabled($"Latest snapshot: {snapshot.SeenAtUtc:HH:mm:ss} UTC");
+        if (!string.IsNullOrWhiteSpace(tofuInspectorSaveError))
+        {
+            ImGui.TextColored(WarningColor, tofuInspectorSaveError);
+        }
+        else if (!string.IsNullOrWhiteSpace(tofuInspectorSavedPath))
+        {
+            ImGui.TextDisabled($"Saved board data: {tofuInspectorSavedPath}");
+        }
+
         if (!string.IsNullOrWhiteSpace(snapshot.Error))
         {
             ImGui.TextColored(WarningColor, snapshot.Error);
@@ -5525,7 +5988,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.BeginTable($"##TofuBoards{dataSet.Name}", 8, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        if (ImGui.BeginTable($"##TofuBoards{dataSet.Name}", 9, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
             ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.35f);
             ImGui.TableSetupColumn("Valid", ImGuiTableColumnFlags.WidthStretch, 0.45f);
@@ -5535,6 +5998,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableSetupColumn("Objects", ImGuiTableColumnFlags.WidthStretch, 0.55f);
             ImGui.TableSetupColumn("Background", ImGuiTableColumnFlags.WidthStretch, 0.75f);
             ImGui.TableSetupColumn("Server time", ImGuiTableColumnFlags.WidthStretch, 0.8f);
+            ImGui.TableSetupColumn("Save", ImGuiTableColumnFlags.WidthStretch, 0.55f);
             ImGui.TableHeadersRow();
 
             foreach (var board in boards)
@@ -5563,6 +6027,17 @@ public sealed class RecapWindow : Window, IDisposable
 
                 ImGui.TableSetColumnIndex(7);
                 DrawCenteredText(board.ServerTime);
+
+                ImGui.TableSetColumnIndex(8);
+                if (ImGui.SmallButton($"Save##TofuSave{dataSet.Name}{board.Index}"))
+                {
+                    SaveTofuInspectorBoard(dataSet.Name, board);
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    SetThemedTooltip("Saves this board snapshot to Downloads\\BetterDeaths-Tofu as JSON.");
+                }
             }
 
             ImGui.EndTable();
@@ -5656,6 +6131,75 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TreePop();
+    }
+
+    private void SaveTofuInspectorBoard(string dataSetName, TofuInspectorBoard board)
+    {
+        try
+        {
+            var directory = GetTofuInspectorExportDirectory();
+            Directory.CreateDirectory(directory);
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            var fileName = string.Join(
+                "-",
+                "BetterDeaths-Tofu",
+                SanitizeTofuInspectorFilePart(dataSetName),
+                $"Board{board.Index.ToString(CultureInfo.InvariantCulture)}",
+                SanitizeTofuInspectorFilePart(board.Name),
+                timestamp) + ".json";
+            var path = Path.Combine(directory, fileName);
+            var payload = new
+            {
+                savedAtUtc = DateTime.UtcNow,
+                savedAtLocal = DateTime.Now,
+                dataSet = dataSetName,
+                board,
+            };
+            var json = JsonSerializer.Serialize(payload, TofuInspectorExportJsonOptions);
+            File.WriteAllText(path, json);
+
+            tofuInspectorSavedPath = path;
+            tofuInspectorSaveError = null;
+        }
+        catch (Exception ex)
+        {
+            tofuInspectorSavedPath = null;
+            tofuInspectorSaveError = $"Could not save Strategy Board data: {ex.Message}";
+        }
+    }
+
+    private string GetTofuInspectorExportDirectory()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(userProfile)
+            ? Path.Combine(plugin.LocalDataDirectoryPath, "TofuSnapshots")
+            : Path.Combine(userProfile, "Downloads", "BetterDeaths-Tofu");
+    }
+
+    private static string SanitizeTofuInspectorFilePart(string value)
+    {
+        var invalidCharacters = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value.Trim())
+        {
+            if (invalidCharacters.Contains(character))
+            {
+                continue;
+            }
+
+            builder.Append(char.IsWhiteSpace(character) ? '-' : character);
+        }
+
+        var sanitized = builder.ToString().Trim('-', '.');
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "board";
+        }
+
+        return sanitized.Length <= 64
+            ? sanitized
+            : sanitized[..64];
     }
 
     private void DrawAddonInspector()
@@ -6896,6 +7440,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.140");
+        ImGui.TextDisabled("Transfer testing.");
+        DrawWrappedBullet("Added pull export previews for transfer testing.");
+        DrawWrappedBullet("Added Strategy Board board-data saving in Debug.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.139");
         ImGui.TextDisabled("Debug updates for future release testing.");
         DrawWrappedBullet("Updated Debug for future release testing.");
