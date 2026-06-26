@@ -35,6 +35,7 @@ public sealed class RecapWindow : Window, IDisposable
     private string addonInspectorEventFilter = string.Empty;
     private string? tofuInspectorSavedPath;
     private string? tofuInspectorSaveError;
+    private string? tofuInspectorCreateResult;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -95,7 +96,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static readonly DateTime ExamplePullStartedAtUtc = new(2026, 6, 19, 0, 0, 0, DateTimeKind.Utc);
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.140";
+    private const string CurrentChangelogVersion = "0.1.0.141";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5934,14 +5935,36 @@ public sealed class RecapWindow : Window, IDisposable
             SetThemedTooltip("Reads board names and visible object text from the client's Strategy Board data. It does not save, send, create, delete, or modify boards.");
         }
 
+        ImGui.SameLine();
+        if (ImGui.Button("Create BD test board"))
+        {
+            tofuInspectorCreateResult = plugin.CreateDebugTofuTestBoard();
+            tofuInspectorSaveError = null;
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Creates one saved Strategy Board with safe test objects. It does not share, send, delete, or edit existing boards.");
+        }
+
         var snapshot = plugin.TofuInspectorSnapshot;
         if (snapshot is null)
         {
+            if (!string.IsNullOrWhiteSpace(tofuInspectorCreateResult))
+            {
+                ImGui.TextDisabled(tofuInspectorCreateResult);
+            }
+
             ImGui.TextDisabled("No Strategy Board snapshot yet.");
             return;
         }
 
         ImGui.TextDisabled($"Latest snapshot: {snapshot.SeenAtUtc:HH:mm:ss} UTC");
+        if (!string.IsNullOrWhiteSpace(tofuInspectorCreateResult))
+        {
+            ImGui.TextDisabled(tofuInspectorCreateResult);
+        }
+
         if (!string.IsNullOrWhiteSpace(tofuInspectorSaveError))
         {
             ImGui.TextColored(WarningColor, tofuInspectorSaveError);
@@ -7440,6 +7463,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.141");
+        ImGui.TextDisabled("Strategy Board testing.");
+        DrawWrappedBullet("Added a Debug test for creating a saved Strategy Board.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.140");
         ImGui.TextDisabled("Transfer testing.");
         DrawWrappedBullet("Added pull export previews for transfer testing.");

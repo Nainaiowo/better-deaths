@@ -91,6 +91,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxTofuInspectorBoardsPerDataSet = 40;
     private const int MaxTofuInspectorObjectsPerBoard = 80;
     private const int MaxTofuInspectorTextLength = 240;
+    private const int MaxTofuTextObjectLength = 30;
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxActionEffectTargets = 32;
@@ -1023,6 +1024,54 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    public unsafe string CreateDebugTofuTestBoard()
+    {
+        try
+        {
+            var module = TofuModule.Instance();
+            if (module is null)
+            {
+                return "Strategy Board module was not available yet.";
+            }
+
+            if (module->IsFull(TofuType.Saved, TofuItem.Board))
+            {
+                return "Saved Strategy Board list is full. Delete a saved board before creating a Better Deaths test board.";
+            }
+
+            var boardName = $"BD_TEST_{DateTime.Now:HHmmss}";
+            var board = new TofuBoardEntry
+            {
+                NameString = boardName,
+                Background = 0,
+                NumberOfObjects = 6,
+            };
+
+            var objects = board.Objects;
+            objects[0] = CreateSafeTofuObject(TofuObjectType.Text, 580, 350, text: "BD1.TEST.1");
+            objects[1] = CreateSafeTofuObject(TofuObjectType.Text, 1240, 1380, text: "BD1.TEST.2");
+            objects[2] = CreateSafeTofuObject(TofuObjectType.BlackMage, 1710, 3410);
+            objects[3] = CreateSafeTofuObject(TofuObjectType.CircleAoE, 892, 3085, scale: 17);
+            objects[4] = CreateSafeTofuObject(TofuObjectType.Stack, 3060, 1800);
+            objects[5] = CreateSafeTofuObject(TofuObjectType.Proximity, 1055, 3076, scale: 141);
+
+            var created = module->CreateBoard(TofuType.Saved, &board, true);
+            if (created is null)
+            {
+                return "The game did not create the Better Deaths test board.";
+            }
+
+            tofuInspectorSnapshot = CaptureTofuInspectorSnapshotInternal();
+            AddDebugLog($"Created Strategy Board test board {boardName}.");
+            return $"Created saved Strategy Board {boardName}.";
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not create Better Deaths Strategy Board test board.");
+            return $"Could not create Better Deaths test board: {ex.Message}";
+        }
+    }
+
     public void CaptureAddonInspectorSnapshot(string addonName)
     {
         addonName = addonName.Trim();
@@ -1415,6 +1464,54 @@ public sealed partial class Plugin : IDalamudPlugin
             FormatTofuInspectorValue(board.Background),
             SafeTofuInt(board.NumberOfObjects),
             capturedObjects);
+    }
+
+    private static TofuShortObject CreateSafeTofuObject(
+        TofuObjectType objectType,
+        int x,
+        int y,
+        int scale = 100,
+        int angle = 0,
+        TofuObjectFlags flags = TofuObjectFlags.IsVisible,
+        int argsA = 0,
+        int argsB = 0,
+        int argsC = 0,
+        string? text = null)
+    {
+        var safeText = objectType == TofuObjectType.Text
+            ? SanitizeTofuObjectText(text)
+            : null;
+        return new TofuShortObject
+        {
+            ObjectType = objectType,
+            PosX = ClampToUShort(x),
+            PosY = ClampToUShort(y),
+            Scale = (byte)Math.Clamp(scale, 1, byte.MaxValue),
+            Angle = ClampToUShort(angle),
+            Flags = flags & TofuObjectFlags.IsVisible,
+            ArgsA = ClampToUShort(argsA),
+            ArgsB = ClampToUShort(argsB),
+            ArgsC = ClampToUShort(argsC),
+            TextString = safeText ?? string.Empty,
+        };
+    }
+
+    private static ushort ClampToUShort(int value)
+    {
+        return (ushort)Math.Clamp(value, 0, ushort.MaxValue);
+    }
+
+    private static string SanitizeTofuObjectText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var sanitized = value.ReplaceLineEndings(" ").Trim();
+        return sanitized.Length <= MaxTofuTextObjectLength
+            ? sanitized
+            : sanitized[..MaxTofuTextObjectLength];
     }
 
     private static int SafeTofuInt<T>(T value)
