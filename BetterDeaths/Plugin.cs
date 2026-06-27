@@ -420,6 +420,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<StatusObservation>> recentStatusesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<HpHistorySnapshot>> recentHpHistoryByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
+    private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
@@ -2852,6 +2853,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
+        TrackPossibleMitigationActionUse(packet);
+
         string? actionName = null;
         uint? actionIconId = null;
         string? sourceName = null;
@@ -3765,6 +3768,7 @@ public sealed partial class Plugin : IDalamudPlugin
             FatalSequence = fatalSequence,
             SourceMitigationHistory = sourceMitigationHistory,
             EnemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc),
+            PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
         };
     }
 
@@ -4644,6 +4648,7 @@ public sealed partial class Plugin : IDalamudPlugin
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
         recentSourceMitigationHistoryBySource.Clear();
+        possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
         lock (rawCombatQueueLock)
         {

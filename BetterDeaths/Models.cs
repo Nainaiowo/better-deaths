@@ -136,6 +136,31 @@ public sealed record EnemyHpSnapshot(
     uint MaxHp,
     bool IsTargetable);
 
+public enum PossibleMitigationScope
+{
+    Personal,
+    Targeted,
+    Party,
+    Boss,
+}
+
+public sealed record PossibleMitigationSnapshot(
+    string Key,
+    string MemberKey,
+    string MemberName,
+    int PartyIndex,
+    uint ClassJobId,
+    string ClassJobName,
+    uint ActionId,
+    string ActionName,
+    uint ActionIconId,
+    PossibleMitigationScope Scope,
+    float CooldownSeconds,
+    DateTime? LastUsedAtUtc,
+    float? LastUsedPullElapsedSeconds,
+    string Availability,
+    IReadOnlyList<StatusSnapshot> Statuses);
+
 public sealed record FatalSequenceRecord(
     DateTime StartAtUtc,
     DateTime EndAtUtc,
@@ -164,6 +189,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<SourceMitigationSnapshot> SourceMitigationHistory { get; init; } = [];
 
     public IReadOnlyList<EnemyHpSnapshot> EnemyHpAtDeath { get; init; } = [];
+
+    public IReadOnlyList<PossibleMitigationSnapshot> PossibleMitigations { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(

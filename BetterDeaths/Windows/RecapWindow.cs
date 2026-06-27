@@ -36,6 +36,7 @@ public sealed class RecapWindow : Window, IDisposable
     private DataPageSnapshot dataPageSnapshot = DataPageSnapshot.Empty;
     private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
     private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
+    private readonly HashSet<string> selectedPossibleMitigationKeys = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
     private MainPage currentMainPage = MainPage.Review;
@@ -90,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.151";
+    private const string CurrentChangelogVersion = "0.1.0.152";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1391,6 +1392,9 @@ public sealed class RecapWindow : Window, IDisposable
             case DeathDetailPage.Mitigation:
                 DrawExtraMitigationContext(death, deathId);
                 break;
+            case DeathDetailPage.WhatIf:
+                DrawPossibleMitigationContext(death, deathId);
+                break;
             case DeathDetailPage.LeadUp:
                 DrawBetterDeathsInformationContent(death, deathId);
                 break;
@@ -1431,6 +1435,8 @@ public sealed class RecapWindow : Window, IDisposable
         DrawDeathDetailButton("Summary", DeathDetailPage.Summary, deathId);
         ImGui.SameLine();
         DrawDeathDetailButton("Mitigation", DeathDetailPage.Mitigation, deathId);
+        ImGui.SameLine();
+        DrawDeathDetailButton("What-if", DeathDetailPage.WhatIf, deathId);
         ImGui.SameLine();
         DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
     }
@@ -3185,6 +3191,370 @@ public sealed class RecapWindow : Window, IDisposable
             $"{idSuffix}AtDeath");
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnFatalHit(death, idSuffix);
+    }
+
+    private void DrawPossibleMitigationContext(PartyDeathRecord death, string idSuffix)
+    {
+        ImGui.TextUnformatted("Possible extra mitigation");
+        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
+        var selection = DeathDisplaySelector.Select(death);
+        var damageEvents = selection.Events
+            .Where(combatEvent => combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0)
+            .ToList();
+        var observedDamage = GetIncomingDamageAmount(damageEvents);
+        var hpDisplay = GetWhatIfHpDisplay(death, damageEvents);
+        var activeStatuses = GetSelectedMitigationDebuffStatuses(death);
+        var options = GetPossibleMitigationOptions(death, activeStatuses).ToList();
+        var selectedOptions = options
+            .Where(option => selectedPossibleMitigationKeys.Contains(BuildPossibleMitigationSelectionKey(idSuffix, option)))
+            .ToList();
+
+        DrawLeadUpLabel("Current outcome");
+        if (observedDamage is null)
+        {
+            ImGui.TextColored(WarningColor, "No captured damage amount is available for this selected death.");
+        }
+        else
+        {
+            ImGui.BulletText($"Captured damage: {observedDamage.Value:N0}");
+            if (hpDisplay.MaxHp > 0)
+            {
+                ImGui.BulletText($"HP + shields before hit: {(ulong)hpDisplay.CurrentHp + hpDisplay.ShieldHp:N0}");
+            }
+        }
+
+        DrawMitigationTotal(activeStatuses);
+        ImGui.Separator();
+
+        DrawLeadUpLabel("Could have helped");
+        if (death.PossibleMitigations.Count == 0)
+        {
+            ImGui.TextDisabled("No possible mitigation data was captured for this death.");
+            return;
+        }
+
+        if (options.Count == 0)
+        {
+            ImGui.TextDisabled("No tracked extra damage reductions looked available for this death.");
+            return;
+        }
+
+        DrawPossibleMitigationOptionsTable(options, idSuffix);
+        ImGui.Separator();
+        DrawPossibleMitigationResult(damageEvents, observedDamage, hpDisplay, activeStatuses, selectedOptions);
+    }
+
+    private EventHpDisplay GetWhatIfHpDisplay(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> damageEvents)
+    {
+        var summary = GetLeadUpSummaryRow(death);
+        if (summary is not null && summary.Row.LastSnapshot.MaxHp > 0)
+        {
+            return new EventHpDisplay(
+                summary.Row.LastSnapshot.CurrentHp,
+                summary.Row.LastSnapshot.ShieldHp,
+                summary.Row.LastSnapshot.MaxHp,
+                "HP from the selected death lead-up row.");
+        }
+
+        var eventForHp = damageEvents.LastOrDefault() ?? GetTimelineCauseEvents(death).LastOrDefault();
+        if (eventForHp is not null)
+        {
+            return GetEventHpDisplay(death, eventForHp);
+        }
+
+        return new EventHpDisplay(
+            death.CurrentHp,
+            death.ShieldHp,
+            death.MaxHp,
+            "HP from the captured death record.");
+    }
+
+    private IReadOnlyList<PossibleMitigationSnapshot> GetPossibleMitigationOptions(
+        PartyDeathRecord death,
+        IReadOnlyList<StatusSnapshot> activeStatuses)
+    {
+        return death.PossibleMitigations
+            .Where(option => option.Statuses.Any(HasCalculableMitigationPercent))
+            .Where(option => !option.Statuses.Any(status => StatusAlreadyActive(status, activeStatuses)))
+            .OrderBy(option => GetPossibleMitigationScopeOrder(option.Scope))
+            .ThenBy(option => option.PartyIndex)
+            .ThenBy(option => option.ActionName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void DrawPossibleMitigationOptionsTable(IReadOnlyList<PossibleMitigationSnapshot> options, string idSuffix)
+    {
+        if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 28.0f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.8f);
+        DrawCenteredTableHeader("", "Source", "Ability", "Mit%", "Availability");
+
+        foreach (var option in options)
+        {
+            var selectionKey = BuildPossibleMitigationSelectionKey(idSuffix, option);
+            var selected = selectedPossibleMitigationKeys.Contains(selectionKey);
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
+            var checkboxValue = selected;
+            if (ImGui.Checkbox($"##PossibleMitigation{selectionKey}", ref checkboxValue))
+            {
+                if (checkboxValue)
+                {
+                    selectedPossibleMitigationKeys.Add(selectionKey);
+                }
+                else
+                {
+                    selectedPossibleMitigationKeys.Remove(selectionKey);
+                }
+            }
+
+            ImGui.TableNextColumn();
+            DrawPossibleMitigationSource(option);
+
+            ImGui.TableNextColumn();
+            DrawPossibleMitigationAbility(option);
+
+            ImGui.TableNextColumn();
+            DrawCenteredOrWrappedText(FormatPossibleMitigationPercent(option.Statuses));
+
+            ImGui.TableNextColumn();
+            DrawCenteredOrWrappedText(option.Availability, ModernMutedTextColor);
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option)
+    {
+        var iconId = GetClassJobIconId(option.ClassJobId);
+        var playerName = plugin.FormatPlayerDisplayName(
+            option.MemberName,
+            option.MemberKey,
+            option.PartyIndex,
+            option.ClassJobId,
+            option.ClassJobName);
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        var label = $"{playerName} ({option.ClassJobName})";
+        if (iconId == 0)
+        {
+            DrawCenteredOrWrappedText(label);
+            return;
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var groupWidth = iconSize + spacing + ImGui.CalcTextSize(label).X;
+        CenterNextItem(groupWidth);
+        ImGui.BeginGroup();
+        DrawGameIcon(iconId, iconSize, option.ClassJobName);
+        ImGui.SameLine();
+        ImGui.TextUnformatted(label);
+        ImGui.EndGroup();
+    }
+
+    private void DrawPossibleMitigationAbility(PossibleMitigationSnapshot option)
+    {
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var scopeText = FormatPossibleMitigationScope(option.Scope);
+        var label = $"{option.ActionName} ({scopeText})";
+        var groupWidth = (option.ActionIconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(label).X;
+        CenterNextItem(groupWidth);
+        ImGui.BeginGroup();
+        if (option.ActionIconId != 0)
+        {
+            DrawGameIcon(option.ActionIconId, iconSize, option.ActionName);
+            ImGui.SameLine();
+        }
+
+        ImGui.TextUnformatted(label);
+        ImGui.EndGroup();
+    }
+
+    private static string FormatPossibleMitigationPercent(IReadOnlyList<StatusSnapshot> statuses)
+    {
+        var parts = statuses
+            .SelectMany(status => Plugin.GetMitigationDisplayInfo(status).MitigationPercents)
+            .Select(part => part.Scope switch
+            {
+                Plugin.MitigationPercentScope.Physical => $"P {part.Text}",
+                Plugin.MitigationPercentScope.Magic => $"M {part.Text}",
+                _ => part.Text,
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return parts.Count == 0 ? "-" : string.Join(" / ", parts);
+    }
+
+    private void DrawPossibleMitigationResult(
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay,
+        IReadOnlyList<StatusSnapshot> activeStatuses,
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions)
+    {
+        DrawLeadUpLabel("What-if result");
+        if (observedDamage is null || damageEvents.Count == 0)
+        {
+            ImGui.TextDisabled("Select a death with captured damage to calculate a what-if result.");
+            return;
+        }
+
+        if (selectedOptions.Count == 0)
+        {
+            ImGui.TextDisabled("Select one or more mitigations above to calculate a possible result.");
+            return;
+        }
+
+        var selectedStatuses = selectedOptions
+            .SelectMany(option => option.Statuses)
+            .ToList();
+        var combinedStatuses = DeduplicateWhatIfStatuses(activeStatuses.Concat(selectedStatuses));
+        var potentialDamage = CalculateDamageWithAdditionalMitigation(damageEvents, selectedStatuses);
+        var preventedDamage = observedDamage.Value > potentialDamage
+            ? observedDamage.Value - potentialDamage
+            : 0UL;
+
+        ImGui.BulletText($"Potential damage: {potentialDamage:N0}");
+        ImGui.BulletText($"Reduced by: {preventedDamage:N0}");
+        if (hpDisplay.MaxHp > 0)
+        {
+            var effectiveHp = (ulong)hpDisplay.CurrentHp + hpDisplay.ShieldHp;
+            if (potentialDamage < effectiveHp)
+            {
+                ImGui.TextColored(HealColor, $"Would survive by {effectiveHp - potentialDamage:N0}.");
+            }
+            else if (potentialDamage == effectiveHp)
+            {
+                ImGui.TextColored(WarningColor, "Would be exactly lethal.");
+            }
+            else
+            {
+                ImGui.TextColored(OverkillColor, $"Still short by {potentialDamage - effectiveHp:N0}.");
+            }
+        }
+
+        DrawMitigationTotal(combinedStatuses);
+    }
+
+    private static ulong CalculateDamageWithAdditionalMitigation(
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        IReadOnlyList<StatusSnapshot> selectedStatuses)
+    {
+        var total = 0UL;
+        foreach (var damageEvent in damageEvents)
+        {
+            total += ApplyAdditionalMitigation(damageEvent.Amount, damageEvent.DamageType, selectedStatuses);
+        }
+
+        return total;
+    }
+
+    private static ulong ApplyAdditionalMitigation(
+        uint amount,
+        DamageType damageType,
+        IReadOnlyList<StatusSnapshot> selectedStatuses)
+    {
+        var remaining = 1.0;
+        foreach (var status in selectedStatuses)
+        {
+            foreach (var part in Plugin.GetMitigationDisplayInfo(status).MitigationPercents)
+            {
+                if (part.Percent <= 0.0f || !MitigationPartAppliesToDamageType(part.Scope, damageType))
+                {
+                    continue;
+                }
+
+                remaining *= 1.0 - (Math.Clamp(part.Percent, 0.0f, 100.0f) / 100.0);
+            }
+        }
+
+        return (ulong)Math.Ceiling(amount * remaining);
+    }
+
+    private static bool MitigationPartAppliesToDamageType(Plugin.MitigationPercentScope scope, DamageType damageType)
+    {
+        return scope switch
+        {
+            Plugin.MitigationPercentScope.Physical => IsPhysicalDamageType(damageType),
+            Plugin.MitigationPercentScope.Magic => IsMagicDamageType(damageType),
+            _ => true,
+        };
+    }
+
+    private static bool IsPhysicalDamageType(DamageType damageType)
+    {
+        return damageType is DamageType.Slashing or DamageType.Piercing or DamageType.Blunt or DamageType.Shot or DamageType.Physical;
+    }
+
+    private static bool IsMagicDamageType(DamageType damageType)
+    {
+        return damageType is DamageType.Magic or DamageType.Breath;
+    }
+
+    private static bool HasCalculableMitigationPercent(StatusSnapshot status)
+    {
+        return Plugin.GetMitigationDisplayInfo(status).MitigationPercents.Count > 0;
+    }
+
+    private static bool StatusAlreadyActive(StatusSnapshot status, IReadOnlyList<StatusSnapshot> activeStatuses)
+    {
+        return activeStatuses.Any(activeStatus =>
+            status.Id != 0 && activeStatus.Id == status.Id ||
+            string.Equals(activeStatus.Name, status.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<StatusSnapshot> DeduplicateWhatIfStatuses(IEnumerable<StatusSnapshot> statuses)
+    {
+        var deduplicated = new List<StatusSnapshot>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var status in statuses)
+        {
+            var key = status.Id == 0 ? status.Name : status.Id.ToString(CultureInfo.InvariantCulture);
+            if (seen.Add(key))
+            {
+                deduplicated.Add(status);
+            }
+        }
+
+        return deduplicated;
+    }
+
+    private static string BuildPossibleMitigationSelectionKey(string idSuffix, PossibleMitigationSnapshot option)
+    {
+        return $"{idSuffix}:{option.Key}:{option.ActionId}";
+    }
+
+    private static int GetPossibleMitigationScopeOrder(PossibleMitigationScope scope)
+    {
+        return scope switch
+        {
+            PossibleMitigationScope.Personal => 0,
+            PossibleMitigationScope.Targeted => 1,
+            PossibleMitigationScope.Party => 2,
+            PossibleMitigationScope.Boss => 3,
+            _ => 4,
+        };
+    }
+
+    private static string FormatPossibleMitigationScope(PossibleMitigationScope scope)
+    {
+        return scope switch
+        {
+            PossibleMitigationScope.Personal => "self",
+            PossibleMitigationScope.Targeted => "targeted",
+            PossibleMitigationScope.Party => "party",
+            PossibleMitigationScope.Boss => "target",
+            _ => "other",
+        };
     }
 
     private void DrawBetterDeathsInformation(PartyDeathRecord death, string idSuffix)
@@ -6761,6 +7131,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         Summary,
         Mitigation,
+        WhatIf,
         LeadUp,
     }
 
@@ -6892,6 +7263,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.152");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added a What-if tab for possible extra mitigation.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.151");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Improved enemy HP at death readability.");
