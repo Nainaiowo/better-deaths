@@ -90,7 +90,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.150";
+    private const string CurrentChangelogVersion = "0.1.0.151";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3226,7 +3226,18 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted("Enemy HP at death");
         foreach (var enemy in death.EnemyHpAtDeath)
         {
-            ImGui.BulletText($"{enemy.Name}: {FormatEnemyHpPercent(enemy)}");
+            var enemyHpText = $"{enemy.Name}: {FormatEnemyHpPercent(enemy)}";
+            if (enemy.IsTargetable)
+            {
+                ImGui.BulletText(enemyHpText);
+            }
+            else
+            {
+                ImGui.Bullet();
+                ImGui.SameLine();
+                ImGui.TextColored(ModernMutedTextColor, enemyHpText);
+            }
+
             if (ImGui.IsItemHovered())
             {
                 SetThemedTooltip($"{enemy.Name}\nHP: {enemy.CurrentHp:N0} / {enemy.MaxHp:N0}\nEntity: {enemy.EntityId:X8}\n{FormatEnemyTargetable(enemy)}");
@@ -6881,6 +6892,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.151");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Improved enemy HP at death readability.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.150");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added enemy HP at death to fatal event details.");
@@ -8313,7 +8330,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatEnemyTargetable(EnemyHpSnapshot enemy)
     {
-        return enemy.IsTargetable ? "Targetable at death." : "Not targetable at death.";
+        return enemy.IsTargetable ? "Targetable" : "Not targetable";
     }
 
     private static ulong? GetIncomingDamageAmount(CombatEventRecord combatEvent)
