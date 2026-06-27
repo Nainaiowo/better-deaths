@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.152";
+    private const string CurrentChangelogVersion = "0.1.0.153";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3195,7 +3195,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawPossibleMitigationContext(PartyDeathRecord death, string idSuffix)
     {
-        ImGui.TextUnformatted("Possible extra mitigation");
+        ImGui.TextUnformatted("Mitigation what-if");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         var selection = DeathDisplaySelector.Select(death);
         var damageEvents = selection.Events
@@ -3226,22 +3226,28 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMitigationTotal(activeStatuses);
         ImGui.Separator();
 
-        DrawLeadUpLabel("Could have helped");
+        DrawLeadUpLabel("Available mitigation");
         if (death.PossibleMitigations.Count == 0)
         {
-            ImGui.TextDisabled("No possible mitigation data was captured for this death.");
-            return;
+            ImGui.TextDisabled("No available mitigation data was captured for this death.");
         }
-
-        if (options.Count == 0)
+        else if (options.Count == 0)
         {
             ImGui.TextDisabled("No tracked extra damage reductions looked available for this death.");
-            return;
+        }
+        else
+        {
+            DrawPossibleMitigationOptionsTable(options, idSuffix);
         }
 
-        DrawPossibleMitigationOptionsTable(options, idSuffix);
         ImGui.Separator();
-        DrawPossibleMitigationResult(damageEvents, observedDamage, hpDisplay, activeStatuses, selectedOptions);
+        DrawPossibleMitigationResult(
+            damageEvents,
+            observedDamage,
+            hpDisplay,
+            activeStatuses,
+            selectedOptions,
+            options.Count > 0);
     }
 
     private EventHpDisplay GetWhatIfHpDisplay(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> damageEvents)
@@ -3399,12 +3405,19 @@ public sealed class RecapWindow : Window, IDisposable
         ulong? observedDamage,
         EventHpDisplay hpDisplay,
         IReadOnlyList<StatusSnapshot> activeStatuses,
-        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions)
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
+        bool hasAvailableOptions)
     {
         DrawLeadUpLabel("What-if result");
         if (observedDamage is null || damageEvents.Count == 0)
         {
             ImGui.TextDisabled("Select a death with captured damage to calculate a what-if result.");
+            return;
+        }
+
+        if (!hasAvailableOptions)
+        {
+            ImGui.TextDisabled("No selectable mitigation was available to calculate.");
             return;
         }
 
@@ -7263,6 +7276,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.153");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Refined the What-if tab layout.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.152");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Added a What-if tab for possible extra mitigation.");
