@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.163";
+    private const string CurrentChangelogVersion = "0.1.0.164";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1515,6 +1515,39 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PopStyleColor(4);
+    }
+
+    private static bool DrawSegmentedButton(string label, string id, bool selected, float width)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, selected ? ModernNavButtonSelectedColor : ModernNavButtonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? GetModernNavSelectedTextColor() : ModernTextColor);
+        var clicked = ImGui.Button($"{label}##{id}", new Vector2(width, 24.0f));
+        ImGui.PopStyleColor(4);
+        return clicked;
+    }
+
+    private static bool DrawThemedActionButton(string label, string id, float width = 0.0f)
+    {
+        var buttonWidth = width <= 0.0f
+            ? GetThemedActionButtonWidth(label)
+            : MathF.Max(0.0f, width);
+        var buttonHeight = ImGui.GetFrameHeight();
+
+        ImGui.PushStyleColor(ImGuiCol.Button, ModernNavButtonSelectedColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ModernNavButtonSelectedHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, GetModernNavSelectedTextColor());
+        var clicked = ImGui.Button($"{label}##{id}", new Vector2(buttonWidth, buttonHeight));
+        ImGui.PopStyleColor(4);
+        return clicked;
+    }
+
+    private static float GetThemedActionButtonWidth(string label)
+    {
+        var style = ImGui.GetStyle();
+        return ImGui.CalcTextSize(label).X + (style.FramePadding.X * 2.0f) + 12.0f;
     }
 
     private void DrawSelectedDeathHeader(ReviewPull pull, PartyDeathRecord death)
@@ -3054,7 +3087,7 @@ public sealed class RecapWindow : Window, IDisposable
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
         DrawDeathChatChannelCombo(buttonId);
         ImGui.SameLine();
-        if (ImGui.Button($"Post information to chat##PostInfo{buttonId}"))
+        if (DrawThemedActionButton("Post information to chat", $"PostInfo{buttonId}"))
         {
             plugin.PrintDeathInformationToChat(death);
         }
@@ -3066,16 +3099,51 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawDeathChatChannelCombo(string id, float width = 185.0f)
     {
         var effectiveChannel = Plugin.GetEffectiveChatChannel(configuration.DeathChatChannel);
-        ImGui.SetNextItemWidth(width);
-        if (!ImGui.BeginCombo($"##DeathChatChannel{id}", Plugin.GetChatChannelLabel(effectiveChannel)))
+        var buttonWidth = MathF.Min(width, MathF.Max(92.0f, ImGui.GetContentRegionAvail().X));
+        var popupId = $"DeathChatChannelPopup{id}";
+        var popupWidth = GetDeathChatChannelPopupWidth(buttonWidth);
+        var buttonLabel = $"{Plugin.GetChatChannelLabel(effectiveChannel)} v";
+
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 8.0f);
+        ImGui.PushStyleColor(ImGuiCol.Button, ModernFrameColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ModernFrameHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+        if (ImGui.Button($"{buttonLabel}##DeathChatChannel{id}", new Vector2(buttonWidth, ImGui.GetFrameHeight())))
         {
+            ImGui.OpenPopup(popupId);
+        }
+
+        ImGui.PopStyleColor(4);
+        ImGui.PopStyleVar();
+
+        var buttonMin = ImGui.GetItemRectMin();
+        var buttonMax = ImGui.GetItemRectMax();
+        ImGui.SetNextWindowPos(new Vector2(buttonMin.X, buttonMax.Y + 2.0f), ImGuiCond.Appearing);
+
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(6.0f, 6.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4.0f, 4.0f));
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+        ImGui.PushStyleColor(ImGuiCol.Header, ModernHeaderColor);
+        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ModernHeaderHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+
+        if (!ImGui.BeginPopup(popupId))
+        {
+            ImGui.PopStyleColor(6);
+            ImGui.PopStyleVar(2);
             return;
         }
 
         foreach (var option in Plugin.ChatChannelOptions)
         {
             var selected = effectiveChannel == option.Channel;
-            if (ImGui.Selectable(option.Label, selected))
+            var label = selected
+                ? $"> {option.Label}"
+                : $"  {option.Label}";
+            if (ImGui.Selectable($"{label}##DeathChatChannel{id}{option.Channel}", selected, ImGuiSelectableFlags.None, new Vector2(popupWidth, 0.0f)))
             {
                 plugin.SetDeathChatChannel(option.Channel);
             }
@@ -3086,7 +3154,19 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        ImGui.EndCombo();
+        ImGui.EndPopup();
+        ImGui.PopStyleColor(6);
+        ImGui.PopStyleVar(2);
+    }
+
+    private static float GetDeathChatChannelPopupWidth(float minimumWidth)
+    {
+        var style = ImGui.GetStyle();
+        var optionWidth = Plugin.ChatChannelOptions
+            .Select(option => ImGui.CalcTextSize($"> {option.Label}").X)
+            .DefaultIfEmpty(0.0f)
+            .Max();
+        return MathF.Max(minimumWidth, optionWidth + (style.FramePadding.X * 2.0f) + 8.0f);
     }
 
     private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
@@ -3493,20 +3573,19 @@ public sealed class RecapWindow : Window, IDisposable
         ulong? observedDamage,
         EventHpDisplay hpDisplay)
     {
-        var style = ImGui.GetStyle();
         var controlId = $"WhatIf{idSuffix}";
         var comboWidth = MathF.Min(185.0f, MathF.Max(120.0f, ImGui.GetContentRegionAvail().X));
         DrawDeathChatChannelCombo(controlId, comboWidth);
         ImGui.Spacing();
 
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var canFitTwoButtons = availableWidth >= 284.0f + style.ItemSpacing.X;
-        var buttonWidth = canFitTwoButtons
-            ? MathF.Min(170.0f, (availableWidth - style.ItemSpacing.X) * 0.5f)
-            : MathF.Min(170.0f, availableWidth);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var availableButtonWidth = MathF.Min(GetThemedActionButtonWidth("Send available mits"), availableWidth);
+        var outcomeButtonWidth = MathF.Min(GetThemedActionButtonWidth("Send outcome"), availableWidth);
+        var canFitTwoButtons = availableWidth >= availableButtonWidth + outcomeButtonWidth + spacing;
 
         ImGui.BeginDisabled(options.Count == 0);
-        if (ImGui.Button($"Send available mits##WhatIfAvailableMits{controlId}", new Vector2(buttonWidth, 0.0f)))
+        if (DrawThemedActionButton("Send available mits", $"WhatIfAvailableMits{controlId}", canFitTwoButtons ? availableButtonWidth : availableWidth))
         {
             QueueWhatIfMitigationChat("Available mits", options);
         }
@@ -3519,7 +3598,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.BeginDisabled(selectedOptions.Count == 0 || observedDamage is null || damageEvents.Count == 0);
-        if (ImGui.Button($"Send outcome##WhatIfSelectedMits{controlId}", new Vector2(buttonWidth, 0.0f)))
+        if (DrawThemedActionButton("Send outcome", $"WhatIfSelectedMits{controlId}", canFitTwoButtons ? outcomeButtonWidth : availableWidth))
         {
             QueueWhatIfSelectedMitigationOutcomeChat(
                 selectedOptions,
@@ -5153,16 +5232,11 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var style = ImGui.GetStyle();
         var textSize = ImGui.CalcTextSize(label);
-        var switchSize = new Vector2(38.0f, 20.0f);
+        var switchSize = new Vector2(18.0f, 28.0f);
         var labelOffsetY = MathF.Max(0.0f, (switchSize.Y - textSize.Y) * 0.5f);
         var cursor = ImGui.GetCursorScreenPos();
 
-        ImGui.SetCursorScreenPos(cursor + new Vector2(0.0f, labelOffsetY));
-        ImGui.TextUnformatted(label);
-        ImGui.SameLine(0.0f, style.ItemInnerSpacing.X);
-        ImGui.SetCursorScreenPos(new Vector2(ImGui.GetCursorScreenPos().X, cursor.Y));
-
-        var switchPosition = ImGui.GetCursorScreenPos();
+        var switchPosition = cursor;
         var clicked = ImGui.InvisibleButton($"##{id}", switchSize);
         if (clicked)
         {
@@ -5171,7 +5245,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         var hovered = ImGui.IsItemHovered();
         var end = switchPosition + switchSize;
-        var rounding = switchSize.Y * 0.5f;
+        var rounding = switchSize.X * 0.5f;
         var fill = value
             ? ModernAccentSoftColor with { W = ActiveThemeUsesLightPanels() ? 0.96f : 0.92f }
             : GetCheckboxFrameColor();
@@ -5181,16 +5255,20 @@ public sealed class RecapWindow : Window, IDisposable
         var knobColor = value
             ? ModernAccentColor
             : BlendColors(ModernMutedTextColor, ModernPanelColor, ActiveThemeUsesLightPanels() ? 0.18f : 0.10f) with { W = 1.0f };
-        var knobRadius = 7.0f;
-        var knobCenterX = value
-            ? end.X - 10.0f
-            : switchPosition.X + 10.0f;
-        var knobCenter = new Vector2(knobCenterX, switchPosition.Y + (switchSize.Y * 0.5f));
+        var knobRadius = 5.6f;
+        var knobCenterY = value
+            ? switchPosition.Y + 7.5f
+            : end.Y - 7.5f;
+        var knobCenter = new Vector2(switchPosition.X + (switchSize.X * 0.5f), knobCenterY);
         var drawList = ImGui.GetWindowDrawList();
 
         drawList.AddRectFilled(switchPosition, end, ImGui.GetColorU32(fill), rounding);
         drawList.AddRect(switchPosition, end, ImGui.GetColorU32(border), rounding, ImDrawFlags.None, 1.0f);
         drawList.AddCircleFilled(knobCenter, knobRadius, ImGui.GetColorU32(knobColor), 18);
+
+        ImGui.SameLine(0.0f, style.ItemInnerSpacing.X);
+        ImGui.SetCursorScreenPos(new Vector2(ImGui.GetCursorScreenPos().X, cursor.Y + labelOffsetY));
+        ImGui.TextUnformatted(label);
 
         return clicked;
     }
@@ -6410,27 +6488,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Controls only the Current Pull widget job and mitigation/debuff icon sizes.");
 
-        var widgetMode = configuration.WidgetDisplayMode;
-        ImGui.SetNextItemWidth(185.0f);
-        if (ImGui.BeginCombo("Display", GetWidgetDisplayModeLabel(widgetMode)))
-        {
-            foreach (var mode in Enum.GetValues<WidgetDisplayMode>())
-            {
-                var selected = widgetMode == mode;
-                if (ImGui.Selectable(GetWidgetDisplayModeLabel(mode), selected))
-                {
-                    plugin.SetWidgetDisplayMode(mode);
-                    widgetMode = mode;
-                }
-
-                if (selected)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
-            }
-
-            ImGui.EndCombo();
-        }
+        DrawWidgetDisplayModeSetting();
 
         DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only events, and fits mitigation/debuff icons to available space with a +x count.");
 
@@ -6684,31 +6742,36 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawClockDisplaySetting()
     {
         ImGui.TextUnformatted("Clock Display");
-        var currentMode = configuration.ClockDisplayMode;
-        var preview = currentMode == ClockDisplayMode.TwelveHour
-            ? "12-hour"
-            : "24-hour";
-        if (ImGui.BeginCombo("##ClockDisplayMode", preview))
-        {
-            DrawClockDisplayModeOption("24-hour", ClockDisplayMode.TwentyFourHour);
-            DrawClockDisplayModeOption("12-hour", ClockDisplayMode.TwelveHour);
-            ImGui.EndCombo();
-        }
+        DrawClockDisplayModeSegment("24-hour", ClockDisplayMode.TwentyFourHour);
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawClockDisplayModeSegment("12-hour", ClockDisplayMode.TwelveHour);
 
         DrawSettingsTooltip("Controls local clock times shown in recorded pull descriptions.");
     }
 
-    private void DrawClockDisplayModeOption(string label, ClockDisplayMode mode)
+    private void DrawClockDisplayModeSegment(string label, ClockDisplayMode mode)
     {
         var selected = configuration.ClockDisplayMode == mode;
-        if (ImGui.Selectable(label, selected))
+        if (DrawSegmentedButton(label, $"ClockDisplayMode{mode}", selected, 74.0f))
         {
             plugin.SetClockDisplayMode(mode);
         }
+    }
 
-        if (selected)
+    private void DrawWidgetDisplayModeSetting()
+    {
+        ImGui.TextUnformatted("Display");
+        DrawWidgetDisplayModeSegment(WidgetDisplayMode.Normal);
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawWidgetDisplayModeSegment(WidgetDisplayMode.Concise);
+    }
+
+    private void DrawWidgetDisplayModeSegment(WidgetDisplayMode mode)
+    {
+        var selected = configuration.WidgetDisplayMode == mode;
+        if (DrawSegmentedButton(GetWidgetDisplayModeLabel(mode), $"WidgetDisplayMode{mode}", selected, 86.0f))
         {
-            ImGui.SetItemDefaultFocus();
+            plugin.SetWidgetDisplayMode(mode);
         }
     }
 
@@ -8152,67 +8215,24 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.163");
+        ImGui.TextUnformatted("v0.1.0.164");
         ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Updated theme options.");
+        DrawWrappedBullet("Refined chat controls.");
 
         ImGui.Separator();
 
-        ImGui.TextUnformatted("v0.1.0.162");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.163");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Added a What-if mitigation review so you can test how extra mitigation would have changed a death.");
+        DrawBreathingGoldBullet("Added an option to enable scrollbars for the scroll wheel-challenged.");
+        DrawBreathingGoldBullet("Cleaned up 10s lead-up capture so hits, HP, shields, and heals line up more reliably.");
+        DrawBreathingGoldBullet("Added more theme options.");
+        DrawWrappedBullet("Added a Timers toggle for the 10s lead-up Mits/Debuffs column.");
+        DrawWrappedBullet("Refined 10s lead-up event text and What-if chat buttons.");
+        DrawWrappedBullet("Refined 10s lead-up health and heal display.");
+        DrawWrappedBullet("Refined the mitigation What-if table and chat buttons.");
         DrawWrappedBullet("Cleaned up available mitigation options.");
         DrawWrappedBullet("Grouped death follow-up settings together.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.161");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Added an option to enable scrollbars.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.160");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined the mitigation What-if table.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.159");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Added more theme options.");
-        DrawWrappedBullet("Theme highlights and new-theme badges are easier to see.");
-        DrawWrappedBullet("Moved the 10s lead-up Timers control next to Timeline and Events.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.158");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined 10s lead-up event text and What-if chat buttons.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.157");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Added a Timers toggle for the 10s lead-up Mits/Debuffs column.");
-        DrawWrappedBullet("Refined 10s lead-up health and heal display.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.156");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Cleaned up 10s lead-up capture so hits, HP, shields, and heals line up more reliably.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.155");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined the What-if tab and checkbox visibility.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.152");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Added a What-if tab for possible extra mitigation.");
 
         ImGui.Separator();
 
