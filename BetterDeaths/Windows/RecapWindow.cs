@@ -8258,28 +8258,15 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v0.1.0.165");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined chat dropdown styling.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.164");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined chat controls.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.163");
         ImGui.TextDisabled("Stable update.");
-        DrawBreathingGoldBullet("Added a What-if mitigation review so you can test how extra mitigation would have changed a death.");
-        DrawBreathingGoldBullet("Added an option to enable scrollbars for the scroll wheel-challenged.");
-        DrawBreathingGoldBullet("Cleaned up 10s lead-up capture so hits, HP, shields, and heals line up more reliably.");
-        DrawBreathingGoldBullet("Added more theme options.");
-        DrawWrappedBullet("Added a Timers toggle for the 10s lead-up Mits/Debuffs column.");
-        DrawWrappedBullet("Refined 10s lead-up event text and What-if chat buttons.");
-        DrawWrappedBullet("Refined 10s lead-up health and heal display.");
-        DrawWrappedBullet("Refined the mitigation What-if table and chat buttons.");
-        DrawWrappedBullet("Cleaned up available mitigation options.");
+        DrawBreathingGoldBullet("Added a What-if mitigation review, so you can check how extra mitigation would have changed a death.");
+        DrawBreathingGoldBullet("Reworked the 10s lead-up so hits, HP, shields, and heals line up more cleanly.");
+        DrawBreathingGoldBullet("Added more themes, with better readability across the app.");
+        DrawBreathingGoldBullet("Added optional visible scrollbars for the scroll wheel-challenged.");
+        DrawWrappedBullet("Added a Timers switch for the 10s lead-up Mits/Debuffs column.");
+        DrawWrappedBullet("Added available mitigation review, including chat options for sharing it.");
+        DrawWrappedBullet("Cleaned up 10s lead-up tables so Timeline and Events are easier to read.");
+        DrawWrappedBullet("Cleaned up chat buttons and dropdown styling.");
         DrawWrappedBullet("Grouped death follow-up settings together.");
 
         ImGui.Separator();
