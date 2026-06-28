@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.159";
+    private const string CurrentChangelogVersion = "0.1.0.160";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3602,25 +3602,27 @@ public sealed class RecapWindow : Window, IDisposable
         return death.PossibleMitigations
             .Where(option => option.Statuses.Any(HasCalculableMitigationPercent))
             .Where(option => !option.Statuses.Any(status => StatusAlreadyActive(status, activeStatuses)))
-            .OrderBy(option => GetPossibleMitigationScopeOrder(option.Scope))
+            .OrderBy(option => GetPossibleMitigationRoleOrder(option.ClassJobId))
+            .ThenBy(option => GetPossibleMitigationClassOrder(option.ClassJobId))
             .ThenBy(option => option.PartyIndex)
+            .ThenBy(option => option.MemberName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(option => GetPossibleMitigationScopeOrder(option.Scope))
             .ThenBy(option => option.ActionName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
     private void DrawPossibleMitigationOptionsTable(IReadOnlyList<PossibleMitigationSnapshot> options, string idSuffix)
     {
-        if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 28.0f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.35f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 2.05f);
         ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.35f);
         ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.8f);
-        DrawCenteredTableHeader("", "Source", "Ability", "Mit%", "Availability");
+        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.95f);
+        DrawCenteredTableHeader("Source", "Ability", "Mit%", "Availability");
 
         foreach (var option in options)
         {
@@ -3642,7 +3644,7 @@ public sealed class RecapWindow : Window, IDisposable
                 }
             }
 
-            ImGui.TableNextColumn();
+            ImGui.SameLine(0.0f, MathF.Max(2.0f, ImGui.GetStyle().ItemInnerSpacing.X * 0.5f));
             DrawPossibleMitigationSource(option);
 
             ImGui.TableNextColumn();
@@ -3652,10 +3654,15 @@ public sealed class RecapWindow : Window, IDisposable
             DrawPossibleMitigationPercentCell(option.Statuses);
 
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(option.Availability, ModernMutedTextColor);
+            DrawCenteredOrWrappedText(FormatPossibleMitigationAvailability(option.Availability), ModernMutedTextColor);
         }
 
         ImGui.EndTable();
+    }
+
+    private static string FormatPossibleMitigationAvailability(string availability)
+    {
+        return availability.TrimEnd('.');
     }
 
     private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option)
@@ -3754,10 +3761,10 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
         bool hasAvailableOptions)
     {
-        DrawLeadUpLabel("What-if result");
+        DrawLeadUpLabel("Mitigation result");
         if (observedDamage is null || damageEvents.Count == 0)
         {
-            ImGui.TextDisabled("Select a death with captured damage to calculate a what-if result.");
+            ImGui.TextDisabled("Select a death with captured damage to calculate a mitigation result.");
             return;
         }
 
@@ -3802,6 +3809,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawMitigationTotal(combinedStatuses);
+        ImGui.Dummy(new Vector2(0.0f, ImGui.GetStyle().ItemSpacing.Y * 1.5f));
     }
 
     private static ulong CalculateDamageWithAdditionalMitigation(
@@ -3901,6 +3909,47 @@ public sealed class RecapWindow : Window, IDisposable
             PossibleMitigationScope.Party => 2,
             PossibleMitigationScope.Boss => 3,
             _ => 4,
+        };
+    }
+
+    private static int GetPossibleMitigationRoleOrder(uint classJobId)
+    {
+        return classJobId switch
+        {
+            1 or 3 or 19 or 21 or 32 or 37 => 0,
+            6 or 24 or 28 or 33 or 40 => 1,
+            2 or 4 or 5 or 7 or 26 or 29 or 20 or 22 or 23 or 25 or 27 or 30 or 31 or 34 or 35 or 36 or 38 or 39 or 41 or 42 => 2,
+            _ => 3,
+        };
+    }
+
+    private static int GetPossibleMitigationClassOrder(uint classJobId)
+    {
+        return classJobId switch
+        {
+            1 or 19 => 0,
+            3 or 21 => 1,
+            32 => 2,
+            37 => 3,
+            6 or 24 => 10,
+            28 => 11,
+            33 => 12,
+            40 => 13,
+            2 or 20 => 20,
+            4 or 22 => 21,
+            29 or 30 => 22,
+            34 => 23,
+            39 => 24,
+            41 => 25,
+            5 or 23 => 30,
+            31 => 31,
+            38 => 32,
+            7 or 25 => 40,
+            26 or 27 => 41,
+            35 => 42,
+            42 => 43,
+            36 => 44,
+            _ => 100,
         };
     }
 
@@ -8066,6 +8115,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.160");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Refined the mitigation What-if table.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.159");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Added more theme options.");
