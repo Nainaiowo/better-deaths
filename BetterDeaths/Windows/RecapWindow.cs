@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.154";
+    private const string CurrentChangelogVersion = "0.1.0.155";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3310,7 +3310,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.TableNextColumn();
             var checkboxValue = selected;
-            if (ImGui.Checkbox($"##PossibleMitigation{selectionKey}", ref checkboxValue))
+            if (DrawThemedCheckbox($"##PossibleMitigation{selectionKey}", ref checkboxValue))
             {
                 if (checkboxValue)
                 {
@@ -3329,7 +3329,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawPossibleMitigationAbility(option);
 
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(FormatPossibleMitigationPercent(option.Statuses));
+            DrawPossibleMitigationPercentCell(option.Statuses);
 
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(option.Availability, ModernMutedTextColor);
@@ -3366,8 +3366,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
         var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var scopeText = FormatPossibleMitigationScope(option.Scope);
-        var label = $"{option.ActionName} ({scopeText})";
+        var label = option.ActionName;
         var groupWidth = (option.ActionIconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(label).X;
         CenterNextItem(groupWidth);
         ImGui.BeginGroup();
@@ -3381,20 +3380,50 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndGroup();
     }
 
-    private static string FormatPossibleMitigationPercent(IReadOnlyList<StatusSnapshot> statuses)
+    private static void DrawPossibleMitigationPercentCell(IReadOnlyList<StatusSnapshot> statuses)
     {
         var parts = statuses
             .SelectMany(status => Plugin.GetMitigationDisplayInfo(status).MitigationPercents)
-            .Select(part => part.Scope switch
-            {
-                Plugin.MitigationPercentScope.Physical => $"P {part.Text}",
-                Plugin.MitigationPercentScope.Magic => $"M {part.Text}",
-                _ => part.Text,
-            })
-            .Distinct(StringComparer.Ordinal)
+            .DistinctBy(part => (part.Scope, part.Text, part.IconId))
             .ToList();
+        if (parts.Count == 0)
+        {
+            DrawCenteredText("-", DisabledColor);
+            return;
+        }
 
-        return parts.Count == 0 ? "-" : string.Join(" / ", parts);
+        var iconSize = Math.Clamp(ImGui.GetTextLineHeight(), 12.0f, 18.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var separatorWidth = ImGui.CalcTextSize("/").X + (spacing * 2.0f);
+        var groupWidth = parts.Sum(part => (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X) +
+            (Math.Max(0, parts.Count - 1) * separatorWidth);
+        CenterNextItem(groupWidth);
+
+        ImGui.BeginGroup();
+        for (var index = 0; index < parts.Count; index++)
+        {
+            if (index > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextUnformatted("/");
+                ImGui.SameLine();
+            }
+
+            DrawPossibleMitigationPercentPart(parts[index], iconSize);
+        }
+
+        ImGui.EndGroup();
+    }
+
+    private static void DrawPossibleMitigationPercentPart(Plugin.MitigationPercentDisplay part, float iconSize)
+    {
+        if (part.IconId != 0)
+        {
+            DrawGameIcon(part.IconId, iconSize, part.Tooltip ?? part.Text);
+            ImGui.SameLine();
+        }
+
+        ImGui.TextUnformatted(part.Text);
     }
 
     private void DrawPossibleMitigationResult(
@@ -3552,18 +3581,6 @@ public sealed class RecapWindow : Window, IDisposable
             PossibleMitigationScope.Party => 2,
             PossibleMitigationScope.Boss => 3,
             _ => 4,
-        };
-    }
-
-    private static string FormatPossibleMitigationScope(PossibleMitigationScope scope)
-    {
-        return scope switch
-        {
-            PossibleMitigationScope.Personal => "self",
-            PossibleMitigationScope.Targeted => "targeted",
-            PossibleMitigationScope.Party => "party",
-            PossibleMitigationScope.Boss => "target",
-            _ => "other",
         };
     }
 
@@ -5207,7 +5224,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawSettingsTab()
     {
         var showWindow = configuration.ShowWindow;
-        if (ImGui.Checkbox("Show Better Deaths window on plugin load", ref showWindow))
+        if (DrawThemedCheckbox("Show Better Deaths window on plugin load", ref showWindow))
         {
             plugin.SetShowWindowByDefault(showWindow);
         }
@@ -5228,7 +5245,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsTooltip("Controls the main Better Deaths window background opacity. Lower values make it easier to see combat behind the review window.");
 
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
-        if (ImGui.Checkbox("Show recap popup when you die", ref showDeathRecapPopup))
+        if (DrawThemedCheckbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
             plugin.SetShowDeathRecapPopup(showDeathRecapPopup);
         }
@@ -5236,7 +5253,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
 
         var redactPlayerNames = configuration.RedactPlayerNames;
-        if (ImGui.Checkbox("Name Redaction", ref redactPlayerNames))
+        if (DrawThemedCheckbox("Name Redaction", ref redactPlayerNames))
         {
             plugin.SetRedactPlayerNames(redactPlayerNames);
         }
@@ -5245,7 +5262,7 @@ public sealed class RecapWindow : Window, IDisposable
 
 
         var removeChatBranding = configuration.RemoveChatBranding;
-        if (ImGui.Checkbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
+        if (DrawThemedCheckbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
         {
             plugin.SetRemoveChatBranding(removeChatBranding);
         }
@@ -5253,7 +5270,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsTooltip(";( sadge, you hate me..");
 
         var postDeathRecapLinksOnDeath = configuration.PostDeathRecapLinksOnDeath;
-        var postDeathRecapLinksChanged = ImGui.Checkbox("##PostDeathRecapLinksOnDeath", ref postDeathRecapLinksOnDeath);
+        var postDeathRecapLinksChanged = DrawThemedCheckbox("##PostDeathRecapLinksOnDeath", ref postDeathRecapLinksOnDeath);
         var postDeathRecapLinksHovered = ImGui.IsItemHovered();
         var postDeathRecapLinksLabelClicked = false;
         ImGui.SameLine();
@@ -5295,7 +5312,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
 
             var captureParty = configuration.CapturePartyDeaths;
-            if (ImGui.Checkbox("Capture party", ref captureParty))
+            if (DrawThemedCheckbox("Capture party", ref captureParty))
             {
                 plugin.SetCapturePartyDeaths(captureParty);
             }
@@ -5306,7 +5323,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             var captureOthers = configuration.CaptureOtherDeaths;
-            if (ImGui.Checkbox("Capture others", ref captureOthers))
+            if (DrawThemedCheckbox("Capture others", ref captureOthers))
             {
                 plugin.SetCaptureOtherDeaths(captureOthers);
             }
@@ -5495,7 +5512,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawWidgetTab()
     {
         var showCurrentPullWidget = configuration.ShowCurrentPullWidget;
-        if (ImGui.Checkbox("Show current pull widget", ref showCurrentPullWidget))
+        if (DrawThemedCheckbox("Show current pull widget", ref showCurrentPullWidget))
         {
             plugin.SetShowCurrentPullWidget(showCurrentPullWidget);
         }
@@ -5947,7 +5964,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextDisabled("Debug data stays until duty enter or manual clear. New pulls inside the same duty will append to the same history.");
 
         var debugEnabled = configuration.DebugLogEnabled;
-        if (ImGui.Checkbox("Enable debug capture", ref debugEnabled))
+        if (DrawThemedCheckbox("Enable debug capture", ref debugEnabled))
         {
             plugin.SetDebugLogEnabled(debugEnabled);
         }
@@ -5960,7 +5977,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.SameLine();
         var freezeOnDeath = plugin.DebugFreezeOnDeathEnabled;
-        if (ImGui.Checkbox("Freeze on death", ref freezeOnDeath))
+        if (DrawThemedCheckbox("Freeze on death", ref freezeOnDeath))
         {
             plugin.SetDebugFreezeOnDeathEnabled(freezeOnDeath);
         }
@@ -5982,7 +5999,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var saveDebugFile = configuration.DebugSaveToFileEnabled;
-        if (ImGui.Checkbox("Save debug file", ref saveDebugFile))
+        if (DrawThemedCheckbox("Save debug file", ref saveDebugFile))
         {
             plugin.SetDebugSaveToFileEnabled(saveDebugFile);
         }
@@ -6112,7 +6129,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
-        ImGui.Checkbox("Hide common UI noise", ref addonInspectorHideCommonNoise);
+        DrawThemedCheckbox("Hide common UI noise", ref addonInspectorHideCommonNoise);
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip("Hides very common HUD addons like nameplates, cast bars, and minimap from the inspector event list.");
@@ -7273,9 +7290,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.154");
+        ImGui.TextUnformatted("v0.1.0.155");
         ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Refined the What-if tab layout.");
+        DrawWrappedBullet("Refined the What-if tab and checkbox visibility.");
 
         ImGui.Separator();
 
@@ -7805,9 +7822,54 @@ public sealed class RecapWindow : Window, IDisposable
         return GetColorLuminance(ModernPanelColor) >= 0.55f;
     }
 
+    private static Vector4 GetCheckboxFrameColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernFrameColor, ModernPanelBorderColor, 0.35f) with { W = 1.0f }
+            : BlendColors(ModernFrameColor, ModernPanelBorderColor, 0.42f) with { W = 0.96f };
+    }
+
+    private static Vector4 GetCheckboxFrameHoveredColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernFrameHoveredColor, ModernPanelBorderColor, 0.25f) with { W = 1.0f }
+            : BlendColors(ModernFrameHoveredColor, ModernAccentSoftColor, 0.28f) with { W = 1.0f };
+    }
+
+    private static Vector4 GetCheckboxFrameActiveColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernAccentSoftColor, ModernPanelBorderColor, 0.28f) with { W = 1.0f }
+            : ModernAccentSoftColor with { W = 1.0f };
+    }
+
+    private static Vector4 GetCheckboxCheckMarkColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? ModernAccentColor with { W = 1.0f }
+            : ModernCheckMarkColor with { W = 1.0f };
+    }
+
+    private static Vector4 GetCheckboxBorderColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelBorderColor, ModernTextColor, 0.14f) with { W = 1.0f }
+            : BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.18f) with { W = 1.0f };
+    }
+
     private static float GetColorLuminance(Vector4 color)
     {
         return (color.X * 0.2126f) + (color.Y * 0.7152f) + (color.Z * 0.0722f);
+    }
+
+    private static Vector4 BlendColors(Vector4 first, Vector4 second, float amount)
+    {
+        var clampedAmount = Math.Clamp(amount, 0.0f, 1.0f);
+        return new Vector4(
+            first.X + ((second.X - first.X) * clampedAmount),
+            first.Y + ((second.Y - first.Y) * clampedAmount),
+            first.Z + ((second.Z - first.Z) * clampedAmount),
+            first.W + ((second.W - first.W) * clampedAmount));
     }
 
     private static Vector4 GetCreatorNoteTextColor()
@@ -8317,6 +8379,31 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PopStyleVar();
             ImGui.PopStyleColor(3);
         }
+    }
+
+    private readonly struct CheckboxStyleScope : IDisposable
+    {
+        public CheckboxStyleScope()
+        {
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, GetCheckboxFrameColor());
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, GetCheckboxFrameHoveredColor());
+            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, GetCheckboxFrameActiveColor());
+            ImGui.PushStyleColor(ImGuiCol.CheckMark, GetCheckboxCheckMarkColor());
+            ImGui.PushStyleColor(ImGuiCol.Border, GetCheckboxBorderColor());
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1.0f);
+        }
+
+        public void Dispose()
+        {
+            ImGui.PopStyleVar();
+            ImGui.PopStyleColor(5);
+        }
+    }
+
+    private static bool DrawThemedCheckbox(string label, ref bool value)
+    {
+        using var checkboxStyle = new CheckboxStyleScope();
+        return ImGui.Checkbox(label, ref value);
     }
 
     private static void DrawCenteredText(string text)

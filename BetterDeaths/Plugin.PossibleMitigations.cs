@@ -172,8 +172,8 @@ public sealed partial class Plugin
             .Select(status => CreatePossibleMitigationStatusSnapshot(status, definition.DurationSeconds, member.EntityId, actionIconId))
             .ToList();
         var availability = use is null || use.SeenAtUtc > deathSeenAtUtc
-            ? "No use seen this pull."
-            : $"Ready again; last used at {FormatMitigationPullTime(use.PullElapsedSeconds)}.";
+            ? "Ready"
+            : $"Ready; Last used: {FormatMitigationPullTime(use.PullElapsedSeconds)}";
 
         return new PossibleMitigationSnapshot(
             $"{member.MemberKey}:{definition.Key}",
