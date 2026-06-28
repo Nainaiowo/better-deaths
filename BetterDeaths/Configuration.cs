@@ -1,5 +1,6 @@
 using Dalamud.Configuration;
 using System;
+using System.Collections.Generic;
 
 namespace BetterDeaths;
 
@@ -54,6 +55,14 @@ public enum BetterDeathsTheme
     Sky,
     Peach,
     Cloud,
+    Abyss,
+    Graphite,
+    Grape,
+    Soda,
+    Callus,
+    Lemonade,
+    Cotton,
+    Banana,
 }
 
 [Serializable]
@@ -70,6 +79,8 @@ public sealed class Configuration : IPluginConfiguration
     public BetterDeathsTheme Theme { get; set; } = BetterDeathsTheme.Classic;
 
     public bool HasChangedTheme { get; set; }
+
+    public List<BetterDeathsTheme> SeenNewThemeBadges { get; set; } = [];
 
     public bool ShowCurrentPullWidget { get; set; }
 

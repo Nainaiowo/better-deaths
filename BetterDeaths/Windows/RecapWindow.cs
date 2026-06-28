@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.158";
+    private const string CurrentChangelogVersion = "0.1.0.159";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -107,6 +107,17 @@ public sealed class RecapWindow : Window, IDisposable
     private const string ThemeNewBadgeText = "New";
     private const uint ClearlyUnsurvivableOverMaxHp = 300_000;
     private const string CompactInfoSeparator = " \u00B7 ";
+    private static readonly BetterDeathsTheme[] NewThemeBadges =
+    [
+        BetterDeathsTheme.Abyss,
+        BetterDeathsTheme.Graphite,
+        BetterDeathsTheme.Grape,
+        BetterDeathsTheme.Soda,
+        BetterDeathsTheme.Callus,
+        BetterDeathsTheme.Lemonade,
+        BetterDeathsTheme.Cotton,
+        BetterDeathsTheme.Banana,
+    ];
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan LeadUpEventDuplicateWindow = TimeSpan.FromMilliseconds(5);
@@ -478,7 +489,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawModernNavButton("Example", MainPage.Example);
         ImGui.SameLine();
         DrawModernNavButton("Customize", MainPage.Customize);
-        if (!configuration.HasChangedTheme)
+        if (HasUnseenNewThemeBadges())
         {
             DrawFloatingNewBadgeOverLastItem();
         }
@@ -3957,6 +3968,8 @@ public sealed class RecapWindow : Window, IDisposable
         DrawLeadUpTableViewButton("Timeline", LeadUpTableView.Timeline, idSuffix);
         ImGui.SameLine(0.0f, 4.0f);
         DrawLeadUpTableViewButton("Events", LeadUpTableView.Events, idSuffix);
+        ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X * 2.0f);
+        DrawLeadUpTimelineTimerToggle(idSuffix);
         ImGui.EndGroup();
     }
 
@@ -3979,8 +3992,6 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var death = resolved.Death;
         DrawLeadUpLabel("10 second HP history");
-        ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X * 2.0f);
-        DrawLeadUpTimelineTimerToggle(idSuffix);
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
         var rows = resolved.TimelineRows;
 
@@ -5037,7 +5048,8 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawCombinedMitigationDebuffCell(
                 GetMergedPlayerStatusesForEvent(death, combatEvent),
-                GetEventSourceMitigationStatuses(death, combatEvent, events));
+                GetEventSourceMitigationStatuses(death, combatEvent, events),
+                configuration.ShowLeadUpTimelineMitigationTimers);
             previousSourceKey = sourceKey;
         }
 
@@ -5052,11 +5064,57 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawLeadUpTimelineTimerToggle(string idSuffix)
     {
         var showTimers = configuration.ShowLeadUpTimelineMitigationTimers;
-        if (DrawThemedCheckbox($"Timers##LeadUpTimelineMitigationTimers{idSuffix}", ref showTimers))
+        if (DrawThemedSwitch("Timers", $"LeadUpTimelineMitigationTimers{idSuffix}", ref showTimers))
         {
             configuration.ShowLeadUpTimelineMitigationTimers = showTimers;
             plugin.SaveConfiguration();
         }
+    }
+
+    private static bool DrawThemedSwitch(string label, string id, ref bool value)
+    {
+        var style = ImGui.GetStyle();
+        var textSize = ImGui.CalcTextSize(label);
+        var switchSize = new Vector2(38.0f, 20.0f);
+        var labelOffsetY = MathF.Max(0.0f, (switchSize.Y - textSize.Y) * 0.5f);
+        var cursor = ImGui.GetCursorScreenPos();
+
+        ImGui.SetCursorScreenPos(cursor + new Vector2(0.0f, labelOffsetY));
+        ImGui.TextUnformatted(label);
+        ImGui.SameLine(0.0f, style.ItemInnerSpacing.X);
+        ImGui.SetCursorScreenPos(new Vector2(ImGui.GetCursorScreenPos().X, cursor.Y));
+
+        var switchPosition = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##{id}", switchSize);
+        if (clicked)
+        {
+            value = !value;
+        }
+
+        var hovered = ImGui.IsItemHovered();
+        var end = switchPosition + switchSize;
+        var rounding = switchSize.Y * 0.5f;
+        var fill = value
+            ? ModernAccentSoftColor with { W = ActiveThemeUsesLightPanels() ? 0.96f : 0.92f }
+            : GetCheckboxFrameColor();
+        var border = hovered
+            ? ModernAccentColor
+            : GetCheckboxBorderColor();
+        var knobColor = value
+            ? ModernAccentColor
+            : BlendColors(ModernMutedTextColor, ModernPanelColor, ActiveThemeUsesLightPanels() ? 0.18f : 0.10f) with { W = 1.0f };
+        var knobRadius = 7.0f;
+        var knobCenterX = value
+            ? end.X - 10.0f
+            : switchPosition.X + 10.0f;
+        var knobCenter = new Vector2(knobCenterX, switchPosition.Y + (switchSize.Y * 0.5f));
+        var drawList = ImGui.GetWindowDrawList();
+
+        drawList.AddRectFilled(switchPosition, end, ImGui.GetColorU32(fill), rounding);
+        drawList.AddRect(switchPosition, end, ImGui.GetColorU32(border), rounding, ImDrawFlags.None, 1.0f);
+        drawList.AddCircleFilled(knobCenter, knobRadius, ImGui.GetColorU32(knobColor), 18);
+
+        return clicked;
     }
 
     private static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
@@ -6048,7 +6106,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawThemeSetting()
     {
         ImGui.TextColored(LeadUpGoldColor, "Theme");
-        if (!configuration.HasChangedTheme)
+        if (HasUnseenNewThemeBadges())
         {
             ImGui.SameLine();
             DrawInlineNewBadge();
@@ -6084,7 +6142,7 @@ public sealed class RecapWindow : Window, IDisposable
         var columnCount = Math.Clamp(
             (int)MathF.Floor((availableWidth + style.ItemSpacing.X) / (minimumTileWidth + style.ItemSpacing.X)),
             1,
-            themes.Count);
+            Math.Min(8, themes.Count));
 
         if (!ImGui.BeginTable($"##ThemePicker{id}", columnCount, ImGuiTableFlags.SizingStretchSame))
         {
@@ -6158,11 +6216,49 @@ public sealed class RecapWindow : Window, IDisposable
         if (clicked)
         {
             plugin.SetTheme(theme.Id);
+            MarkNewThemeBadgeSeen(theme.Id);
             activeTheme = theme;
+        }
+
+        if (ShouldShowNewThemeBadge(theme.Id))
+        {
+            var badgeSize = GetNewBadgeSize();
+            var badgePosition = new Vector2(
+                position.X + ((swatchSize - badgeSize.X) * 0.5f),
+                position.Y - MathF.Min(5.0f, badgeSize.Y * 0.25f));
+            DrawNewBadge(badgePosition, badgeSize);
         }
 
         var labelColor = selected ? LeadUpGoldColor : ModernTextColor;
         DrawCenteredOrWrappedText(theme.Label, labelColor);
+    }
+
+    private bool HasUnseenNewThemeBadges()
+    {
+        return NewThemeBadges.Any(ShouldShowNewThemeBadge);
+    }
+
+    private bool ShouldShowNewThemeBadge(BetterDeathsTheme theme)
+    {
+        return NewThemeBadges.Contains(theme) && !GetSeenNewThemeBadges().Contains(theme);
+    }
+
+    private void MarkNewThemeBadgeSeen(BetterDeathsTheme theme)
+    {
+        var seenThemes = GetSeenNewThemeBadges();
+        if (!NewThemeBadges.Contains(theme) || seenThemes.Contains(theme))
+        {
+            return;
+        }
+
+        seenThemes.Add(theme);
+        plugin.SaveConfiguration();
+    }
+
+    private List<BetterDeathsTheme> GetSeenNewThemeBadges()
+    {
+        configuration.SeenNewThemeBadges ??= [];
+        return configuration.SeenNewThemeBadges;
     }
 
     private void DrawInlineDebugTabButton()
@@ -7970,6 +8066,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.159");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added more theme options.");
+        DrawWrappedBullet("Theme highlights and new-theme badges are easier to see.");
+        DrawWrappedBullet("Moved the 10s lead-up Timers control next to Timeline and Events.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.158");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Refined 10s lead-up event text and What-if chat buttons.");
@@ -8353,7 +8457,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.72");
         ImGui.TextDisabled("Improved responsive layout and reduced background overhead.");
-        ImGui.TextColored(LeadUpGoldColor, "Preparation for public beta testing. Lots of behind-the-scenes optimizations were made.");
+        DrawHighlightedChangelogBullet("Preparation for public beta testing. Lots of behind-the-scenes optimizations were made.");
         DrawWrappedBullet("HP + shields bars now scale to the available table cell width instead of using a fixed maximum size.");
         DrawWrappedBullet("HP bar text now shortens automatically in narrow columns and clips inside the bar.");
         DrawWrappedBullet("Recap, lead-up, status, and debug tables now use weighted responsive columns for cleaner resizing.");
@@ -8500,7 +8604,41 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawBreathingGoldBullet(string text)
     {
-        DrawWrappedBullet(text, GetBreathingGoldColor());
+        DrawHighlightedChangelogBullet(text);
+    }
+
+    private static void DrawHighlightedChangelogBullet(string text)
+    {
+        var style = ImGui.GetStyle();
+        var start = ImGui.GetCursorScreenPos();
+        var width = MathF.Max(ImGui.GetContentRegionAvail().X, ImGui.GetFontSize() * 12.0f);
+        var markerWidth = 3.0f;
+        var paddingX = 8.0f;
+        var paddingY = MathF.Max(2.0f, style.ItemSpacing.Y * 0.35f);
+        var textOffsetX = markerWidth + paddingX;
+        var textWidth = MathF.Max(ImGui.GetFontSize() * 8.0f, width - textOffsetX - paddingX);
+        var lines = WrapTextForWidth(text, textWidth);
+        var lineHeight = ImGui.GetTextLineHeight();
+        var height = MathF.Max(lineHeight + (paddingY * 2.0f), (lineHeight * lines.Count) + (paddingY * 2.0f));
+        var end = start + new Vector2(width, height);
+        var drawList = ImGui.GetWindowDrawList();
+
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(GetChangelogHighlightBackgroundColor()), 3.0f);
+        drawList.AddRectFilled(
+            start + new Vector2(0.0f, 2.0f),
+            new Vector2(start.X + markerWidth, end.Y - 2.0f),
+            ImGui.GetColorU32(GetChangelogHighlightAccentColor()),
+            1.5f);
+
+        var textColor = ImGui.GetColorU32(GetChangelogHighlightTextColor());
+        var textPosition = start + new Vector2(textOffsetX, paddingY);
+        foreach (var line in lines)
+        {
+            drawList.AddText(textPosition, textColor, line);
+            textPosition.Y += lineHeight;
+        }
+
+        ImGui.Dummy(new Vector2(width, height));
     }
 
     private static Vector4 GetBreathingGoldColor()
@@ -8514,6 +8652,47 @@ public sealed class RecapWindow : Window, IDisposable
             MathF.Min(1.0f, baseColor.Y + (pulse * pulseAmount)),
             MathF.Min(1.0f, baseColor.Z + (pulse * pulseAmount)),
             baseColor.W);
+    }
+
+    private static Vector4 GetChangelogHighlightTextColor()
+    {
+        var color = GetBreathingGoldColor();
+        if (ActiveThemeUsesLightPanels())
+        {
+            color = BlendColors(color, ModernTextColor, 0.32f);
+        }
+        else
+        {
+            color = BlendColors(color, new Vector4(1.0f, 1.0f, 1.0f, 1.0f), 0.08f);
+        }
+
+        return color with { W = 1.0f };
+    }
+
+    private static Vector4 GetChangelogHighlightAccentColor()
+    {
+        var pulse = GetChangelogHighlightPulse();
+        var color = ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernAccentColor, ModernTextColor, 0.12f)
+            : ModernAccentColor;
+        var pulseTarget = ActiveThemeUsesLightPanels() ? ModernTextColor : LeadUpGoldColor;
+        var pulseAmount = ActiveThemeUsesLightPanels() ? 0.08f : 0.16f;
+        return BlendColors(color, pulseTarget, pulse * pulseAmount) with { W = 1.0f };
+    }
+
+    private static Vector4 GetChangelogHighlightBackgroundColor()
+    {
+        var pulse = GetChangelogHighlightPulse();
+        var color = ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelAltColor, ModernAccentSoftColor, 0.42f)
+            : BlendColors(ModernPanelAltColor, ModernAccentSoftColor, 0.55f);
+
+        return BlendColors(color, ModernAccentColor, pulse * 0.08f) with { W = ActiveThemeUsesLightPanels() ? 0.70f : 0.36f };
+    }
+
+    private static float GetChangelogHighlightPulse()
+    {
+        return (MathF.Sin((float)ImGui.GetTime() * 2.2f) + 1.0f) * 0.5f;
     }
 
     private static bool ActiveThemeUsesLightPanels()
