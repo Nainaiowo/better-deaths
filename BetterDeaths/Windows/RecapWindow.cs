@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.166";
+    private const string CurrentChangelogVersion = "0.1.0.167";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2628,15 +2628,15 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var snapshot = selection.Snapshot;
-        var overkillDisplay = GetOverkillDisplay(snapshot.CurrentHp, snapshot.ShieldHp, incomingDamage);
+        var overkillDisplay = GetOverkillDisplay(snapshot.CurrentHp, incomingDamage);
         DrawCenteredText(overkillDisplay.CompactText, overkillDisplay.Color);
 
         if (ImGui.IsItemHovered())
         {
-            var effectiveHp = (ulong)snapshot.CurrentHp + snapshot.ShieldHp;
             SetThemedTooltip(
                 $"Incoming damage: {incomingDamage.Value:N0}\n" +
-                $"HP plus shields before hit: {effectiveHp:N0}\n" +
+                $"HP before hit: {snapshot.CurrentHp:N0}\n" +
+                $"Captured shield: {snapshot.ShieldHp:N0}\n" +
                 overkillDisplay.TooltipLine);
         }
     }
@@ -5550,9 +5550,12 @@ public sealed class RecapWindow : Window, IDisposable
             combatEvent.MaxHp > 0 &&
             (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0))
         {
-            var tooltip = combatEvent.HpSource == CombatEventHpSource.LatestPriorSample
-                ? "HP from the latest captured sample before this combat event."
-                : "HP captured with this combat event by the legacy capture path.";
+            var tooltip = combatEvent.HpSource switch
+            {
+                CombatEventHpSource.DirectCombatEventSnapshot => "HP captured directly with this combat event.",
+                CombatEventHpSource.LatestPriorSample => "HP from the latest captured sample before this combat event.",
+                _ => "HP captured with this combat event by the legacy capture path.",
+            };
             return new EventHpDisplay(
                 combatEvent.CurrentHp,
                 combatEvent.ShieldHp,
@@ -8298,6 +8301,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.167");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Death HP capture now uses the hit's own snapshot instead of searching older HP rows.");
+        DrawBreathingGoldBullet("Overkill should now stay tied to the actual fatal hit instead of stale HP or shield data.");
+        DrawWrappedBullet("Player-side mitigation timers now show in the 10s lead-up when Timers is enabled.");
+        DrawWrappedBullet("Source and target statuses are captured closer to the hit, so mitigation and debuff timing should be more reliable.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.166");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Fixed a lethal-hit edge case where a stale HP snapshot could make the 10s lead-up look like the player still had HP after they should have died.");
@@ -10058,11 +10070,10 @@ public sealed class RecapWindow : Window, IDisposable
         var hpWidth = (float)(size.X * hpRatio);
         var shieldWidth = (float)(size.X * shieldRatio);
         var overflowShieldWidth = (float)(size.X * overflowShieldRatio);
-        var effectiveHp = (ulong)currentHp + shieldHp;
         var damageAmount = incomingDamage.GetValueOrDefault();
         var lethalHit = incomingDamage is not null &&
-            effectiveHp > 0 &&
-            damageAmount >= effectiveHp;
+            currentHp > 0 &&
+            damageAmount >= currentHp;
         var clearlyUnsurvivable = incomingDamage is not null &&
             damageAmount >= (ulong)maxHp + ClearlyUnsurvivableOverMaxHp;
 
@@ -10197,14 +10208,14 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawOverkillLine(uint currentHp, uint shieldHp, uint maxHp, ulong? incomingDamage)
     {
         var damageAmount = incomingDamage.GetValueOrDefault();
-        var overkillDisplay = GetOverkillDisplay(currentHp, shieldHp, incomingDamage);
+        var overkillDisplay = GetOverkillDisplay(currentHp, incomingDamage);
         DrawCenteredText(overkillDisplay.Text, overkillDisplay.Color);
 
         if (ImGui.IsItemHovered())
         {
             var tooltip = incomingDamage is null
                 ? "No incoming damage amount was captured for this selected event."
-                : $"Incoming damage: {damageAmount:N0}\nHP plus shields before hit: {(ulong)currentHp + shieldHp:N0}\n{overkillDisplay.TooltipLine}";
+                : $"Incoming damage: {damageAmount:N0}\nHP before hit: {currentHp:N0}\nCaptured shield: {shieldHp:N0}\n{overkillDisplay.TooltipLine}";
             if (maxHp > 0)
             {
                 tooltip += $"\nMax HP: {maxHp:N0}";
@@ -10214,7 +10225,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static OverkillDisplay GetOverkillDisplay(uint currentHp, uint shieldHp, ulong? incomingDamage)
+    private static OverkillDisplay GetOverkillDisplay(uint currentHp, ulong? incomingDamage)
     {
         if (incomingDamage is null)
         {
@@ -10226,10 +10237,9 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var damageAmount = incomingDamage.Value;
-        var effectiveHp = (ulong)currentHp + shieldHp;
-        if (damageAmount > effectiveHp)
+        if (damageAmount > currentHp)
         {
-            var overkillAmount = damageAmount - effectiveHp;
+            var overkillAmount = damageAmount - currentHp;
             return new OverkillDisplay(
                 $"Overkill: {overkillAmount:N0}",
                 FormatWidgetAmount(overkillAmount),
@@ -10237,20 +10247,20 @@ public sealed class RecapWindow : Window, IDisposable
                 $"Overkilled by {overkillAmount:N0}.");
         }
 
-        if (damageAmount == effectiveHp)
+        if (damageAmount == currentHp)
         {
             return new OverkillDisplay(
                 "Exact lethal hit",
                 "Exact",
                 DisabledColor,
-                "Captured hit exactly matched HP plus shields before hit.");
+                "Captured hit exactly matched HP before hit.");
         }
 
         return new OverkillDisplay(
             "No overkill. Follow-up non-hit KO.",
             "Non-hit KO",
             WarningColor,
-            "Captured hit was non-lethal based on HP plus shields before hit. The KO came from a follow-up non-hit event.");
+            "Captured hit was non-lethal based on HP before hit. The KO came from a follow-up non-hit event.");
     }
 
     private static string FormatHp(uint currentHp, uint shieldHp, uint maxHp)

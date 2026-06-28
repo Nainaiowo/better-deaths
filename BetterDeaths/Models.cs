@@ -31,6 +31,7 @@ public enum CombatEventHpSource
     UnknownLegacy,
     LatestPriorSample,
     NoPreHitSample,
+    DirectCombatEventSnapshot,
 }
 
 public sealed record StatusSnapshot(

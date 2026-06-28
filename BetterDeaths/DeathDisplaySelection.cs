@@ -33,13 +33,16 @@ public sealed record FatalEventGroup(IReadOnlyList<CombatEventRecord> Events)
         var first = orderedEvents[0];
         var last = orderedEvents[^1];
         var total = orderedEvents.Aggregate(0UL, (sum, combatEvent) => sum + combatEvent.Amount);
-        return last with
+        return first with
         {
-            SeenAtUtc = first.SeenAtUtc,
-            PullElapsedSeconds = first.PullElapsedSeconds,
             Amount = total > uint.MaxValue ? uint.MaxValue : (uint)total,
             Statuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.Statuses)),
             SourceStatuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.SourceStatuses)),
+            ResultSeenAtUtc = last.ResultSeenAtUtc,
+            ResultCurrentHp = last.ResultCurrentHp,
+            ResultShieldHp = last.ResultShieldHp,
+            ResultMaxHp = last.ResultMaxHp,
+            ResultStatuses = last.ResultStatuses,
             EventIdentity = $"fatal-group:{first.EventIdentity ?? first.SeenAtUtc.Ticks.ToString()}:{last.EventIdentity ?? last.SeenAtUtc.Ticks.ToString()}",
         };
     }
@@ -68,7 +71,8 @@ public static class DeathDisplaySelector
         var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
         var fatalEvents = GetStoredFatalEventGroups(death);
         var events = fatalEvents.Select(group => group.DisplayEvent).ToList();
-        var snapshot = GetFatalTailSnapshot(death, events) ??
+        var snapshot = GetDirectEventSnapshot(events) ??
+            GetFatalTailSnapshot(death, events) ??
             GetMathematicallyFittingSnapshot(death, anchorSeenAtUtc, events) ??
             GetReliablePriorSnapshot(death, anchorSeenAtUtc, events) ??
             GetFallbackSnapshot(death, anchorSeenAtUtc, events);
@@ -148,7 +152,7 @@ public static class DeathDisplaySelector
 
         return GetLeadUpHpHistory(death, anchorSeenAtUtc)
             .Where(snapshot => snapshot.SeenAtUtc <= firstCauseSeenAtUtc)
-            .LastOrDefault(snapshot => SnapshotHpAndShields(snapshot) <= incomingDamage);
+            .LastOrDefault(snapshot => SnapshotHpForDamageMath(snapshot) <= incomingDamage);
     }
 
     private static IReadOnlyList<CombatEventRecord> DeduplicateStoredEvents(IReadOnlyList<CombatEventRecord> orderedEvents)
@@ -189,6 +193,31 @@ public static class DeathDisplaySelector
         return deduplicated;
     }
 
+    private static HpHistorySnapshot? GetDirectEventSnapshot(IReadOnlyList<CombatEventRecord> events)
+    {
+        var combatEvent = events
+            .Where(HasDirectEventHp)
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
+            .FirstOrDefault();
+        return combatEvent is null
+            ? null
+            : new HpHistorySnapshot(
+                combatEvent.SeenAtUtc,
+                combatEvent.PullElapsedSeconds,
+                combatEvent.CurrentHp,
+                combatEvent.ShieldHp,
+                combatEvent.MaxHp,
+                combatEvent.Statuses);
+    }
+
+    private static bool HasDirectEventHp(CombatEventRecord combatEvent)
+    {
+        return combatEvent.HpSource == CombatEventHpSource.DirectCombatEventSnapshot &&
+            combatEvent.MaxHp > 0 &&
+            (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0);
+    }
+
     private static HpHistorySnapshot? GetFallbackSnapshot(
         PartyDeathRecord death,
         DateTime anchorSeenAtUtc,
@@ -221,12 +250,6 @@ public static class DeathDisplaySelector
         }
 
         var lastAliveSnapshot = GetLastAliveSnapshot(death);
-        var combatLogGroups = GetFatalEventGroupsFromCombatLogTail(death, lastAliveSnapshot);
-        if (combatLogGroups.Count > 0)
-        {
-            return combatLogGroups;
-        }
-
         if (death.FatalSequence is { Events.Count: > 0 } sequence)
         {
             var sequenceEvents = sequence.Events
@@ -235,9 +258,30 @@ public static class DeathDisplaySelector
                 .ToList();
             if (sequenceEvents.Count > 0)
             {
+                if (sequenceEvents.Any(HasDirectEventHp))
+                {
+                    var directFatalTail = SelectFatalTail(sequenceEvents, lastAliveSnapshot);
+                    if (directFatalTail.Count > 0)
+                    {
+                        return BuildFatalEventGroups(directFatalTail);
+                    }
+                }
+
+                var combatLogGroups = GetFatalEventGroupsFromCombatLogTail(death, lastAliveSnapshot);
+                if (combatLogGroups.Count > 0)
+                {
+                    return combatLogGroups;
+                }
+
                 var fatalTail = SelectFatalTail(sequenceEvents, lastAliveSnapshot);
                 return BuildFatalEventGroups(fatalTail.Count > 0 ? fatalTail : DeduplicateStoredEvents(sequenceEvents));
             }
+        }
+
+        var fallbackCombatLogGroups = GetFatalEventGroupsFromCombatLogTail(death, lastAliveSnapshot);
+        if (fallbackCombatLogGroups.Count > 0)
+        {
+            return fallbackCombatLogGroups;
         }
 
         var recentTailGroups = GetFatalEventGroupsFromRecentEvents(death, lastAliveSnapshot);
@@ -286,7 +330,7 @@ public static class DeathDisplaySelector
             return null;
         }
 
-        return incomingDamage >= SnapshotHpAndShields(lastAliveSnapshot)
+        return incomingDamage >= SnapshotHpForDamageMath(lastAliveSnapshot)
             ? lastAliveSnapshot
             : null;
     }
@@ -469,13 +513,13 @@ public static class DeathDisplaySelector
         IReadOnlyList<CombatEventRecord> events,
         HpHistorySnapshot? lastAliveSnapshot)
     {
-        if (lastAliveSnapshot is null)
+        if (lastAliveSnapshot is null && !events.Any(HasDirectEventHp))
         {
             return DeduplicateStoredEvents(events);
         }
 
-        var effectiveHp = SnapshotHpAndShields(lastAliveSnapshot);
-        if (effectiveHp == 0)
+        var fallbackHpBeforeHit = lastAliveSnapshot is null ? 0 : SnapshotHpForDamageMath(lastAliveSnapshot);
+        if (fallbackHpBeforeHit == 0 && !events.Any(HasDirectEventHp))
         {
             return DeduplicateStoredEvents(events);
         }
@@ -494,7 +538,10 @@ public static class DeathDisplaySelector
             }
 
             total += combatEvent.Amount;
-            if (total >= effectiveHp)
+            var hpBeforeHit = HasDirectEventHp(combatEvent)
+                ? combatEvent.CurrentHp
+                : fallbackHpBeforeHit;
+            if (hpBeforeHit > 0 && total >= hpBeforeHit)
             {
                 return orderedEvents.Skip(index).ToList();
             }
@@ -512,8 +559,8 @@ public static class DeathDisplaySelector
             return events;
         }
 
-        var effectiveHp = SnapshotHpAndShields(lastAliveSnapshot);
-        if (effectiveHp == 0)
+        var hpBeforeHit = SnapshotHpForDamageMath(lastAliveSnapshot);
+        if (hpBeforeHit == 0)
         {
             return events;
         }
@@ -522,7 +569,7 @@ public static class DeathDisplaySelector
         for (var index = events.Count - 1; index >= 0; index--)
         {
             total += events[index].Amount;
-            if (total >= effectiveHp)
+            if (total >= hpBeforeHit)
             {
                 return events.Skip(index).ToList();
             }
@@ -587,8 +634,8 @@ public static class DeathDisplaySelector
         return total == 0 ? null : total;
     }
 
-    private static ulong SnapshotHpAndShields(HpHistorySnapshot snapshot)
+    private static ulong SnapshotHpForDamageMath(HpHistorySnapshot snapshot)
     {
-        return snapshot.CurrentHp + (ulong)snapshot.ShieldHp;
+        return snapshot.CurrentHp;
     }
 }

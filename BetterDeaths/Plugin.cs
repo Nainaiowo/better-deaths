@@ -272,14 +272,28 @@ public sealed partial class Plugin : IDalamudPlugin
         uint ActionSequence,
         uint CasterEntityId,
         uint ActionId,
+        RawCombatSnapshot? SourceSnapshot,
         IReadOnlyList<RawActionEffectTarget> Targets);
 
     private sealed record RawActionEffectTarget(
         int TargetIndex,
         RawTargetId TargetId,
+        RawCombatSnapshot? TargetSnapshot,
         IReadOnlyList<RawActionEffectSlot> Effects);
 
     private sealed record RawTargetId(ulong Id, uint ObjectId);
+
+    private sealed record RawCombatSnapshot(
+        uint CurrentHp,
+        uint ShieldHp,
+        uint MaxHp,
+        IReadOnlyList<RawStatusSnapshot> Statuses);
+
+    private sealed record RawStatusSnapshot(
+        uint StatusId,
+        uint SourceId,
+        ushort StackCount,
+        float RemainingTime);
 
     private sealed record RawActionEffectSlot(
         int EffectIndex,
@@ -336,7 +350,9 @@ public sealed partial class Plugin : IDalamudPlugin
         uint Param7,
         uint Param8,
         ulong TargetId,
-        byte Param9);
+        byte Param9,
+        RawCombatSnapshot? TargetSnapshot,
+        RawCombatSnapshot? SourceSnapshot);
 
     private sealed record PendingEffectResult(
         RawEffectResultPacket Packet,
@@ -2456,6 +2472,71 @@ public sealed partial class Plugin : IDalamudPlugin
         return (uint)Math.Round(maxHp * shieldPercentage / 100.0, MidpointRounding.AwayFromZero);
     }
 
+    private RawCombatSnapshot? CaptureRawCombatSnapshot(GameObjectId targetId, bool playerOnly = false)
+    {
+        var entityId = GetEntityId(targetId);
+        return entityId == 0 ? null : CaptureRawCombatSnapshot(entityId, playerOnly);
+    }
+
+    private RawCombatSnapshot? CaptureRawCombatSnapshot(uint entityId, bool playerOnly = false)
+    {
+        if (entityId == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var gameObject = ObjectTable.SearchByEntityId(entityId);
+            if (playerOnly && gameObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter)
+            {
+                return null;
+            }
+
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara)
+            {
+                return null;
+            }
+
+            var maxHp = battleChara.MaxHp;
+            var statuses = new List<RawStatusSnapshot>();
+            foreach (var status in battleChara.StatusList)
+            {
+                if (status.StatusId == 0)
+                {
+                    continue;
+                }
+
+                statuses.Add(new RawStatusSnapshot(
+                    status.StatusId,
+                    status.SourceId,
+                    status.Param,
+                    status.RemainingTime));
+            }
+
+            return new RawCombatSnapshot(
+                battleChara.CurrentHp,
+                CalculateShieldHp(battleChara, maxHp),
+                maxHp,
+                statuses);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths raw combat snapshot for {EntityId:X8}.", entityId);
+            return null;
+        }
+    }
+
+    private static uint GetEntityId(GameObjectId targetId)
+    {
+        if (targetId.ObjectId != 0)
+        {
+            return targetId.ObjectId;
+        }
+
+        return targetId.Id <= uint.MaxValue ? (uint)targetId.Id : 0;
+    }
+
     private static string GetEffectResultDebugKey(DebugEffectResultSnapshot snapshot)
     {
         if (!string.IsNullOrWhiteSpace(snapshot.MemberKey))
@@ -2548,6 +2629,16 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        var shouldCaptureSnapshots = category is ActorControlDeathCategory or
+            ActorControlGainEffectCategory or
+            ActorControlLoseEffectCategory or
+            ActorControlUpdateEffectCategory or
+            ActorControlHotCategory or
+            ActorControlDotCategory;
+        var sourceEntityId = category is ActorControlHotCategory or ActorControlDotCategory
+            ? NormalizeActorEntityId(param3)
+            : 0;
+
         EnqueueRawActorControlPacket(new RawActorControlPacket(
             GetNextRawActorControlSequence(),
             now,
@@ -2562,7 +2653,9 @@ public sealed partial class Plugin : IDalamudPlugin
             param7,
             param8,
             targetId,
-            param9));
+            param9,
+            shouldCaptureSnapshots ? CaptureRawCombatSnapshot(entityId, playerOnly: true) : null,
+            sourceEntityId == 0 ? null : CaptureRawCombatSnapshot(sourceEntityId)));
     }
 
     private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
@@ -2625,6 +2718,7 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        var sourceSnapshot = CaptureRawCombatSnapshot(casterEntityId);
         var targetCount = Math.Min((int)header->NumTargets, MaxActionEffectTargets);
         var targets = new List<RawActionEffectTarget>(targetCount);
         for (var targetIndex = 0; targetIndex < targetCount; targetIndex++)
@@ -2657,6 +2751,7 @@ public sealed partial class Plugin : IDalamudPlugin
             targets.Add(new RawActionEffectTarget(
                 targetIndex,
                 new RawTargetId(targetId.Id, targetId.ObjectId),
+                CaptureRawCombatSnapshot(targetId, playerOnly: true),
                 rawEffects));
         }
 
@@ -2671,6 +2766,7 @@ public sealed partial class Plugin : IDalamudPlugin
             header->GlobalSequence,
             casterEntityId,
             header->ActionId,
+            sourceSnapshot,
             targets));
     }
 
@@ -2895,16 +2991,27 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            var priorHp = GetLatestPriorHpStateSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
-            var hpSource = priorHp is null
-                ? CombatEventHpSource.NoPreHitSample
-                : CombatEventHpSource.LatestPriorSample;
-            var playerStatuses = priorHp is null
-                ? GetRelevantDeathStatuses(member.Statuses)
-                : GetRelevantDeathStatuses(member.Statuses.Concat(priorHp.Statuses));
-            var eventCurrentHp = priorHp?.CurrentHp ?? 0;
-            var eventShieldHp = priorHp?.ShieldHp ?? 0;
-            var eventMaxHp = priorHp?.MaxHp ?? member.MaxHp;
+            var targetSnapshot = target.TargetSnapshot;
+            var directTargetStatuses = BuildStatusSnapshots(targetSnapshot);
+            var hasDirectTargetHp = targetSnapshot is { MaxHp: > 0 } &&
+                (targetSnapshot.CurrentHp > 0 || targetSnapshot.ShieldHp > 0);
+            var priorHp = hasDirectTargetHp
+                ? null
+                : GetLatestPriorHpStateSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
+            var hpSource = hasDirectTargetHp
+                ? CombatEventHpSource.DirectCombatEventSnapshot
+                : priorHp is null
+                    ? CombatEventHpSource.NoPreHitSample
+                    : CombatEventHpSource.LatestPriorSample;
+            var statusSource = target.TargetSnapshot is not null
+                ? directTargetStatuses
+                : priorHp is null
+                    ? member.Statuses
+                    : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+            var playerStatuses = GetRelevantDeathStatuses(statusSource);
+            var eventCurrentHp = hasDirectTargetHp ? targetSnapshot!.CurrentHp : priorHp?.CurrentHp ?? 0;
+            var eventShieldHp = hasDirectTargetHp ? targetSnapshot!.ShieldHp : priorHp?.ShieldHp ?? 0;
+            var eventMaxHp = hasDirectTargetHp ? targetSnapshot!.MaxHp : priorHp?.MaxHp ?? member.MaxHp;
 
             foreach (var effect in target.Effects)
             {
@@ -2928,7 +3035,9 @@ public sealed partial class Plugin : IDalamudPlugin
                 var resolvedSourceName = sourceName ??= GetEntityDisplayName(packet.CasterEntityId);
                 var shouldTrackSourceStatuses = kind.Value != DeathEventKind.Heal;
                 var resolvedSourceStatuses = shouldTrackSourceStatuses
-                    ? sourceStatuses ??= GetBossMitigationStatuses(BuildSourceStatusSnapshots(packet.CasterEntityId))
+                    ? sourceStatuses ??= GetBossMitigationStatuses(packet.SourceSnapshot is null
+                        ? BuildSourceStatusSnapshots(packet.CasterEntityId)
+                        : BuildStatusSnapshots(packet.SourceSnapshot))
                     : [];
                 if (shouldTrackSourceStatuses && !trackedSourceStatuses)
                 {
@@ -3491,6 +3600,8 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         EnsurePullStarted(packet.SeenAtUtc);
+        var targetSnapshot = packet.TargetSnapshot;
+        var directTargetStatuses = BuildStatusSnapshots(targetSnapshot);
         var priorHp = GetLatestPriorHpStateSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
         var hpSource = priorHp is null
             ? CombatEventHpSource.NoPreHitSample
@@ -3509,9 +3620,11 @@ public sealed partial class Plugin : IDalamudPlugin
             ? GetStatusName(packet.Param1)
             : "HoT tick";
         var actionIconId = packet.Param1 != 0 ? GetStatusIconId(packet.Param1) : 0;
-        var statusSource = priorHp is null
-            ? GetBestKnownStatuses(member, packet.SeenAtUtc)
-            : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+        var statusSource = packet.TargetSnapshot is not null
+            ? directTargetStatuses
+            : priorHp is null
+                ? GetBestKnownStatuses(member, packet.SeenAtUtc)
+                : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
         var eventOrdinal = GetNextResolvedCombatEventOrdinal();
         var record = new CombatEventRecord(
             packet.SeenAtUtc,
@@ -3555,6 +3668,8 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        var targetSnapshot = packet.TargetSnapshot;
+        var directTargetStatuses = BuildStatusSnapshots(targetSnapshot);
         var priorHp = GetLatestPriorHpStateSnapshot(member.MemberKey, packet.SeenAtUtc, TimeSpan.FromMilliseconds(1500));
         var hpSource = priorHp is null
             ? CombatEventHpSource.NoPreHitSample
@@ -3570,11 +3685,15 @@ public sealed partial class Plugin : IDalamudPlugin
             : GetEntityDisplayName(sourceEntityId);
         var sourceStatuses = sourceEntityId == 0
             ? []
-            : GetBossMitigationStatuses(BuildSourceStatusSnapshots(sourceEntityId));
+            : GetBossMitigationStatuses(packet.SourceSnapshot is null
+                ? BuildSourceStatusSnapshots(sourceEntityId)
+                : BuildStatusSnapshots(packet.SourceSnapshot));
         TrackRecentSourceMitigationSnapshot(sourceEntityId, sourceName, packet.SeenAtUtc, sourceStatuses);
-        var statusSource = priorHp is null
-            ? GetBestKnownStatuses(member, packet.SeenAtUtc)
-            : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+        var statusSource = packet.TargetSnapshot is not null
+            ? directTargetStatuses
+            : priorHp is null
+                ? GetBestKnownStatuses(member, packet.SeenAtUtc)
+                : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
         var eventOrdinal = GetNextResolvedCombatEventOrdinal();
         var record = new CombatEventRecord(
             packet.SeenAtUtc,
@@ -3612,7 +3731,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlStatusChange(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
-        if (!TryCreateActorControlStatusSnapshot(packet, member, out var status))
+        var statusLookup = packet.TargetSnapshot is null
+            ? member.Statuses
+            : BuildStatusSnapshots(packet.TargetSnapshot);
+        if (!TryCreateActorControlStatusSnapshot(packet, statusLookup, out var status))
         {
             return;
         }
@@ -3623,25 +3745,28 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         var statusesForSnapshot = packet.Category == ActorControlLoseEffectCategory
-            ? DeduplicateStatusSnapshots(member.Statuses.Where(existing => !StatusMatchesPacketStatus(existing, status)))
-            : DeduplicateStatusSnapshots(member.Statuses
+            ? DeduplicateStatusSnapshots(statusLookup.Where(existing => !StatusMatchesPacketStatus(existing, status)))
+            : DeduplicateStatusSnapshots(statusLookup
                 .Where(existing => existing.Id != status.Id || existing.SourceId != status.SourceId)
                 .Append(status));
+        var snapshotCurrentHp = packet.TargetSnapshot?.CurrentHp ?? member.CurrentHp;
+        var snapshotShieldHp = packet.TargetSnapshot?.ShieldHp ?? member.ShieldHp;
+        var snapshotMaxHp = packet.TargetSnapshot?.MaxHp ?? member.MaxHp;
 
         AddRecentStatusObservation(
             member.MemberKey,
             packet.SeenAtUtc,
             status,
-            member.CurrentHp,
-            member.ShieldHp,
-            member.MaxHp,
+            snapshotCurrentHp,
+            snapshotShieldHp,
+            snapshotMaxHp,
             statusesForSnapshot);
 
     }
 
     private bool TryCreateActorControlStatusSnapshot(
         RawActorControlPacket packet,
-        PartyMemberSnapshot member,
+        IEnumerable<StatusSnapshot> statuses,
         out StatusSnapshot status)
     {
         var statusId = packet.Category switch
@@ -3658,14 +3783,14 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         var sourceId = packet.Category == ActorControlUpdateEffectCategory
-            ? FindStatusSourceId(member.Statuses, statusId)
+            ? FindStatusSourceId(statuses, statusId)
             : NormalizeActorEntityId(packet.Param3);
         var stackCount = packet.Category == ActorControlUpdateEffectCategory
             ? ClampStatusStackCount(packet.Param3)
             : ClampStatusStackCount(packet.Param2);
         var remainingTime = packet.Category == ActorControlLoseEffectCategory
             ? 0.0f
-            : FindStatusRemainingTime(member.Statuses, statusId, sourceId);
+            : FindStatusRemainingTime(statuses, statusId, sourceId);
         status = new StatusSnapshot(
             statusId,
             GetStatusName(statusId),
@@ -6120,6 +6245,36 @@ public sealed partial class Plugin : IDalamudPlugin
             .ToList();
     }
 
+    private IReadOnlyList<StatusSnapshot> BuildStatusSnapshots(IEnumerable<RawStatusSnapshot> statuses)
+    {
+        var snapshots = new List<StatusSnapshot>();
+        foreach (var status in statuses)
+        {
+            if (status.StatusId == 0)
+            {
+                continue;
+            }
+
+            snapshots.Add(new StatusSnapshot(
+                status.StatusId,
+                GetStatusName(status.StatusId),
+                GetStatusIconId(status.StatusId),
+                status.SourceId,
+                status.StackCount,
+                status.RemainingTime));
+        }
+
+        return snapshots
+            .OrderBy(snapshot => snapshot.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(snapshot => snapshot.Id)
+            .ToList();
+    }
+
+    private IReadOnlyList<StatusSnapshot> BuildStatusSnapshots(RawCombatSnapshot? snapshot)
+    {
+        return snapshot is null ? [] : BuildStatusSnapshots(snapshot.Statuses);
+    }
+
     private IReadOnlyList<StatusSnapshot> BuildSourceStatusSnapshots(uint sourceEntityId)
     {
         if (sourceEntityId == 0)
@@ -6164,7 +6319,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     internal static bool ShouldShowPlayerStatusTimerForDisplay(StatusSnapshot status)
     {
-        return ContainsAny(status.Name, EncounterDebuffNameFragments);
+        return IsRelevantDeathStatus(status) && status.RemainingTime > 0.0f;
     }
 
     private static IReadOnlyList<StatusSnapshot> GetBossMitigationStatuses(IEnumerable<StatusSnapshot> statuses)
@@ -6646,10 +6801,12 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static string FormatDeathChatHp(uint currentHp, uint shieldHp, uint maxHp)
     {
-        var effectiveHp = (ulong)currentHp + shieldHp;
-        return maxHp == 0
-            ? $"{effectiveHp:N0}"
-            : $"{effectiveHp:N0} ({(double)effectiveHp / maxHp:P0})";
+        var hpText = maxHp == 0
+            ? $"{currentHp:N0}"
+            : $"{currentHp:N0} ({(double)currentHp / maxHp:P0})";
+        return shieldHp > 0
+            ? $"{hpText} + {shieldHp:N0} shield"
+            : hpText;
     }
 
     private string FormatDeathChatCauseLine(CombatEventRecord cause, HpHistorySnapshot? snapshot)
@@ -6673,7 +6830,7 @@ public sealed partial class Plugin : IDalamudPlugin
             ? string.Empty
             : $" HP before hit: {hpDisplay.Text}.";
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
-        return $"{totalDamage:N0} damage.{hpSuffix} Overkill: {FormatDeathChatOverkill(totalDamage, hpDisplay.EffectiveHp)}.";
+        return $"{totalDamage:N0} damage.{hpSuffix} Overkill: {FormatDeathChatOverkill(totalDamage, hpDisplay.HpBeforeHit)}.";
     }
 
     private static string? FormatDeathChatHp(HpHistorySnapshot? snapshot, CombatEventRecord fallbackEvent)
@@ -6687,7 +6844,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return new DeathChatHpDisplay(
                 FormatDeathChatHp(snapshot.CurrentHp, snapshot.ShieldHp, snapshot.MaxHp),
-                snapshot.CurrentHp + (ulong)snapshot.ShieldHp);
+                snapshot.CurrentHp);
         }
 
         if (fallbackEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
@@ -6696,21 +6853,21 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             return new DeathChatHpDisplay(
                 FormatDeathChatHp(fallbackEvent.CurrentHp, fallbackEvent.ShieldHp, fallbackEvent.MaxHp),
-                fallbackEvent.CurrentHp + (ulong)fallbackEvent.ShieldHp);
+                fallbackEvent.CurrentHp);
         }
 
         return new DeathChatHpDisplay(null, null);
     }
 
-    private static string FormatDeathChatOverkill(ulong incomingDamage, ulong? effectiveHp)
+    private static string FormatDeathChatOverkill(ulong incomingDamage, ulong? hpBeforeHit)
     {
-        if (effectiveHp is null)
+        if (hpBeforeHit is null)
         {
             return "-";
         }
 
-        return incomingDamage > effectiveHp.Value
-            ? $"{incomingDamage - effectiveHp.Value:N0}"
+        return incomingDamage > hpBeforeHit.Value
+            ? $"{incomingDamage - hpBeforeHit.Value:N0}"
             : "0";
     }
 
@@ -7330,7 +7487,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private readonly record struct DeathChatHpDisplay(
         string? Text,
-        ulong? EffectiveHp);
+        ulong? HpBeforeHit);
 
     private readonly record struct RecentOwnSharedDeathPost(
         SharedDeathPost Post,
