@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.164";
+    private const string CurrentChangelogVersion = "0.1.0.165";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -3102,12 +3102,12 @@ public sealed class RecapWindow : Window, IDisposable
         var buttonWidth = MathF.Min(width, MathF.Max(92.0f, ImGui.GetContentRegionAvail().X));
         var popupId = $"DeathChatChannelPopup{id}";
         var popupWidth = GetDeathChatChannelPopupWidth(buttonWidth);
-        var buttonLabel = $"{Plugin.GetChatChannelLabel(effectiveChannel)} v";
+        var buttonLabel = Plugin.GetChatChannelLabel(effectiveChannel);
 
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 8.0f);
-        ImGui.PushStyleColor(ImGuiCol.Button, ModernFrameColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ModernFrameHoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Button, GetChatChannelSelectorColor());
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, GetChatChannelSelectorHoveredColor());
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, GetChatChannelSelectorActiveColor());
         ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
         if (ImGui.Button($"{buttonLabel}##DeathChatChannel{id}", new Vector2(buttonWidth, ImGui.GetFrameHeight())))
         {
@@ -3119,12 +3119,19 @@ public sealed class RecapWindow : Window, IDisposable
 
         var buttonMin = ImGui.GetItemRectMin();
         var buttonMax = ImGui.GetItemRectMax();
+        ImGui.GetWindowDrawList().AddRect(
+            buttonMin,
+            buttonMax,
+            ImGui.GetColorU32(GetChatChannelSelectorBorderColor()),
+            8.0f,
+            ImDrawFlags.None,
+            1.0f);
         ImGui.SetNextWindowPos(new Vector2(buttonMin.X, buttonMax.Y + 2.0f), ImGuiCond.Appearing);
 
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(6.0f, 6.0f));
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4.0f, 4.0f));
-        ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
-        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, GetChatChannelPopupColor());
+        ImGui.PushStyleColor(ImGuiCol.Border, GetChatChannelSelectorBorderColor());
         ImGui.PushStyleColor(ImGuiCol.Header, ModernHeaderColor);
         ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ModernHeaderHoveredColor);
         ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
@@ -3167,6 +3174,41 @@ public sealed class RecapWindow : Window, IDisposable
             .DefaultIfEmpty(0.0f)
             .Max();
         return MathF.Max(minimumWidth, optionWidth + (style.FramePadding.X * 2.0f) + 8.0f);
+    }
+
+    private static Vector4 GetChatChannelSelectorColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelAltColor, ModernAccentSoftColor, 0.22f) with { W = 1.0f }
+            : BlendColors(ModernFrameColor, ModernAccentSoftColor, 0.36f) with { W = 0.96f };
+    }
+
+    private static Vector4 GetChatChannelSelectorHoveredColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelAltColor, ModernAccentColor, 0.18f) with { W = 1.0f }
+            : BlendColors(ModernFrameHoveredColor, ModernAccentSoftColor, 0.48f) with { W = 1.0f };
+    }
+
+    private static Vector4 GetChatChannelSelectorActiveColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernAccentSoftColor, ModernPanelBorderColor, 0.20f) with { W = 1.0f }
+            : ModernAccentSoftColor with { W = 1.0f };
+    }
+
+    private static Vector4 GetChatChannelSelectorBorderColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.45f) with { W = 1.0f }
+            : BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.55f) with { W = 0.95f };
+    }
+
+    private static Vector4 GetChatChannelPopupColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPopupBgColor, ModernPanelAltColor, 0.22f) with { W = 1.0f }
+            : BlendColors(ModernPopupBgColor, ModernAccentSoftColor, 0.18f) with { W = 0.98f };
     }
 
     private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
@@ -8215,6 +8257,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.165");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Refined chat dropdown styling.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.164");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Refined chat controls.");
