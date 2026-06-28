@@ -97,7 +97,7 @@ public static class DeathDisplaySelector
         events = events.Concat(fatalDisplayEvents);
 
         var orderedEvents = events
-            .Where(combatEvent => combatEvent.SeenAtUtc >= cutoff && combatEvent.SeenAtUtc <= anchorSeenAtUtc)
+            .Where(combatEvent => EventTouchesLeadUpWindow(combatEvent, cutoff, anchorSeenAtUtc))
             .Where(IsDeathRelevantLeadUpEvent)
             .OrderBy(combatEvent => combatEvent.SeenAtUtc)
             .ToList();
@@ -558,9 +558,25 @@ public static class DeathDisplaySelector
         return combatEvent.Kind switch
         {
             DeathEventKind.Damage => combatEvent.Amount > 0,
+            DeathEventKind.Heal => combatEvent.Amount > 0,
             DeathEventKind.Miss or DeathEventKind.Invulnerable or DeathEventKind.Status => true,
             _ => false,
         };
+    }
+
+    private static bool EventTouchesLeadUpWindow(
+        CombatEventRecord combatEvent,
+        DateTime cutoff,
+        DateTime anchorSeenAtUtc)
+    {
+        return IsTimestampInsideLeadUpWindow(combatEvent.SeenAtUtc, cutoff, anchorSeenAtUtc) ||
+            combatEvent.ResultSeenAtUtc is { } resultSeenAtUtc &&
+            IsTimestampInsideLeadUpWindow(resultSeenAtUtc, cutoff, anchorSeenAtUtc);
+    }
+
+    private static bool IsTimestampInsideLeadUpWindow(DateTime seenAtUtc, DateTime cutoff, DateTime anchorSeenAtUtc)
+    {
+        return seenAtUtc >= cutoff && seenAtUtc <= anchorSeenAtUtc;
     }
 
     private static ulong? GetIncomingDamageAmount(IReadOnlyList<CombatEventRecord> events)
