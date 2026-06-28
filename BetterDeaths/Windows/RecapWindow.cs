@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.165";
+    private const string CurrentChangelogVersion = "0.1.0.166";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -153,6 +153,7 @@ public sealed class RecapWindow : Window, IDisposable
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
         HpHistoryDisplayRow Row,
+        HpHistorySnapshot HpSnapshot,
         IReadOnlyList<CombatEventRecord> Events,
         IReadOnlyList<StatusSnapshot> SourceStatuses);
 
@@ -3297,11 +3298,12 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
+        var hpSnapshot = summary.HpSnapshot;
         DrawHpShieldBar(
-            row.LastSnapshot.CurrentHp,
-            row.LastSnapshot.ShieldHp,
-            row.LastSnapshot.MaxHp,
-            $"LeadUpSummaryHp{death.MemberKey}{death.SeenAtUtc.Ticks}{row.LastSnapshot.SeenAtUtc.Ticks}",
+            hpSnapshot.CurrentHp,
+            hpSnapshot.ShieldHp,
+            hpSnapshot.MaxHp,
+            $"LeadUpSummaryHp{death.MemberKey}{death.SeenAtUtc.Ticks}{hpSnapshot.SeenAtUtc.Ticks}",
             GetIncomingDamageAmount(summary.Events),
             true);
         ImGui.TableNextColumn();
@@ -3401,7 +3403,8 @@ public sealed class RecapWindow : Window, IDisposable
                     exactSnapshotRow,
                     events,
                     leadUpEvents,
-                    [exactSnapshotRow]);
+                    [exactSnapshotRow],
+                    snapshot);
             }
         }
 
@@ -3420,7 +3423,8 @@ public sealed class RecapWindow : Window, IDisposable
                 matchedFatalRows[0],
                 events,
                 leadUpEvents,
-                matchedFatalRows);
+                matchedFatalRows,
+                selection.Snapshot);
         }
 
         return GetLeadUpSummaryRowFallback(death, selection, leadUpEvents);
@@ -3448,7 +3452,7 @@ public sealed class RecapWindow : Window, IDisposable
         var sourceStatuses = events.Count > 0
             ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
             : GetActiveSourceMitigationStatuses(death, row.LastSnapshot.SeenAtUtc, null, leadUpEvents);
-        return new LeadUpSummaryRow(anchorSeenAtUtc, row, events, sourceStatuses);
+        return new LeadUpSummaryRow(anchorSeenAtUtc, row, selection.Snapshot, events, sourceStatuses);
     }
 
     private LeadUpSummaryRow CreateLeadUpSummaryRowFromTimelineRow(
@@ -3457,7 +3461,8 @@ public sealed class RecapWindow : Window, IDisposable
         LeadUpTimelineRow timelineRow,
         IReadOnlyList<CombatEventRecord> events,
         IReadOnlyList<CombatEventRecord> leadUpEvents,
-        IReadOnlyList<LeadUpTimelineRow> matchedRows)
+        IReadOnlyList<LeadUpTimelineRow> matchedRows,
+        HpHistorySnapshot? summarySnapshot = null)
     {
         var statuses = timelineRow.Statuses
             .Concat(timelineRow.NearbyHpStatuses)
@@ -3479,7 +3484,7 @@ public sealed class RecapWindow : Window, IDisposable
             : events.Count > 0
                 ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
                 : GetActiveSourceMitigationStatuses(death, timelineRow.SeenAtUtc, null, leadUpEvents);
-        return new LeadUpSummaryRow(anchorSeenAtUtc, row, events, sourceStatuses);
+        return new LeadUpSummaryRow(anchorSeenAtUtc, row, summarySnapshot ?? snapshot, events, sourceStatuses);
     }
 
     private static IReadOnlyList<LeadUpTimelineRow> GetTimelineRowsForFatalEvents(
@@ -4297,6 +4302,12 @@ public sealed class RecapWindow : Window, IDisposable
 
             var combatEvent = events[eventIndex++];
             var (hpDisplay, healChange) = GetTimelineEventHpDisplay(death, combatEvent, history, events);
+            if (ShouldKeepLethalDerivedHp(combatEvent.SeenAtUtc, pendingDerivedHp))
+            {
+                hpDisplay = CreateLethalDerivedHpDisplay(pendingDerivedHp!, hpDisplay.MaxHp);
+                healChange = null;
+            }
+
             AddLeadUpTimelineRow(rows, new LeadUpTimelineRow(
                 combatEvent.SeenAtUtc,
                 combatEvent.PullElapsedSeconds,
@@ -4539,10 +4550,11 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
             IsStalePostHitSample(snapshot, pendingDerivedHp))
         {
-            var displayShieldHp = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
+            var isLethalDerivedHit = IsLethalDerivedHpState(pendingDerivedHp);
+            var displayShieldHp = isLethalDerivedHit || snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
                 ? pendingDerivedHp.DerivedShieldHp
                 : snapshot.ShieldHp;
-            var shieldSourceText = snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
+            var shieldSourceText = isLethalDerivedHit || snapshot.ShieldHp == pendingDerivedHp.SourceShieldHp
                 ? "shield was also derived from the hit"
                 : "shield came from the captured sample";
             var resultSourceText = pendingDerivedHp.UsesCapturedResult ? "Captured HP after" : "Derived HP after";
@@ -4577,8 +4589,37 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static bool IsStalePostHitSample(HpHistorySnapshot snapshot, DerivedHpState pendingDerivedHp)
     {
-        return snapshot.CurrentHp == pendingDerivedHp.SourceCurrentHp &&
-            (snapshot.MaxHp == 0 || pendingDerivedHp.SourceMaxHp == 0 || snapshot.MaxHp == pendingDerivedHp.SourceMaxHp);
+        if (snapshot.MaxHp != 0 &&
+            pendingDerivedHp.SourceMaxHp != 0 &&
+            snapshot.MaxHp != pendingDerivedHp.SourceMaxHp)
+        {
+            return false;
+        }
+
+        return snapshot.CurrentHp == pendingDerivedHp.SourceCurrentHp ||
+            (IsLethalDerivedHpState(pendingDerivedHp) && (snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0));
+    }
+
+    private static bool ShouldKeepLethalDerivedHp(DateTime seenAtUtc, DerivedHpState? pendingDerivedHp)
+    {
+        return pendingDerivedHp is not null &&
+            seenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
+            IsLethalDerivedHpState(pendingDerivedHp);
+    }
+
+    private EventHpDisplay CreateLethalDerivedHpDisplay(DerivedHpState pendingDerivedHp, uint fallbackMaxHp)
+    {
+        return new EventHpDisplay(
+            0,
+            0,
+            pendingDerivedHp.SourceMaxHp > 0 ? pendingDerivedHp.SourceMaxHp : fallbackMaxHp,
+            $"HP stayed at zero after {FormatKnownPlayerName(pendingDerivedHp.SourceName)}: {FormatActionNameForDisplay(pendingDerivedHp.ActionName)}.");
+    }
+
+    private static bool IsLethalDerivedHpState(DerivedHpState pendingDerivedHp)
+    {
+        return pendingDerivedHp.DerivedCurrentHp == 0 &&
+            pendingDerivedHp.DerivedShieldHp == 0;
     }
 
     private static DerivedHpState? TryCreateDerivedHpState(CombatEventRecord combatEvent, EventHpDisplay hpDisplay)
@@ -8257,6 +8298,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.166");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Fixed a lethal-hit edge case where a stale HP snapshot could make the 10s lead-up look like the player still had HP after they should have died.");
+        DrawWrappedBullet("Summary overkill now stays tied to the selected fatal hit instead of falling onto a later zero-HP row.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.165");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added a What-if mitigation review, so you can check how extra mitigation would have changed a death.");
