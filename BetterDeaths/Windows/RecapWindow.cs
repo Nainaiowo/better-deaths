@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.161";
+    private const string CurrentChangelogVersion = "0.1.0.162";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -6075,23 +6075,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
 
-        var redactPlayerNames = configuration.RedactPlayerNames;
-        if (DrawThemedCheckbox("Name Redaction", ref redactPlayerNames))
-        {
-            plugin.SetRedactPlayerNames(redactPlayerNames);
-        }
-
-        DrawSettingsTooltip("A way to show information to others without doxxing your party");
-
-
-        var removeChatBranding = configuration.RemoveChatBranding;
-        if (DrawThemedCheckbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
-        {
-            plugin.SetRemoveChatBranding(removeChatBranding);
-        }
-
-        DrawSettingsTooltip(";( sadge, you hate me..");
-
         var postDeathRecapLinksOnDeath = configuration.PostDeathRecapLinksOnDeath;
         var postDeathRecapLinksChanged = DrawThemedCheckbox("##PostDeathRecapLinksOnDeath", ref postDeathRecapLinksOnDeath);
         var postDeathRecapLinksHovered = ImGui.IsItemHovered();
@@ -6123,6 +6106,23 @@ public sealed class RecapWindow : Window, IDisposable
         {
             SetThemedTooltip("Opt-in. When enabled, Better Deaths posts a clickable recap link to chat after captured deaths. Manual chat posts still include their own recap link.");
         }
+
+        var redactPlayerNames = configuration.RedactPlayerNames;
+        if (DrawThemedCheckbox("Name Redaction", ref redactPlayerNames))
+        {
+            plugin.SetRedactPlayerNames(redactPlayerNames);
+        }
+
+        DrawSettingsTooltip("A way to show information to others without doxxing your party");
+
+
+        var removeChatBranding = configuration.RemoveChatBranding;
+        if (DrawThemedCheckbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
+        {
+            plugin.SetRemoveChatBranding(removeChatBranding);
+        }
+
+        DrawSettingsTooltip(";( sadge, you hate me..");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Capture Settings");
@@ -8151,6 +8151,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.162");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Cleaned up available mitigation options.");
+        DrawWrappedBullet("Grouped death follow-up settings together.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.161");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Added an option to enable scrollbars.");
