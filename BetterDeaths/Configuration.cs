@@ -106,6 +106,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float PullBrowserWidth { get; set; } = 300.0f;
 
+    public bool ShowLeadUpTimelineMitigationTimers { get; set; } = true;
+
     public bool ShowDebugTab { get; set; }
 
     public bool DebugLogEnabled { get; set; }

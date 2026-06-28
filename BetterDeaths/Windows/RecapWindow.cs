@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.156";
+    private const string CurrentChangelogVersion = "0.1.0.157";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -144,11 +144,25 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<CombatEventRecord> Events,
         IReadOnlyList<StatusSnapshot> SourceStatuses);
 
+    private sealed record ResolvedDeathDisplay(
+        PartyDeathRecord Death,
+        DeathDisplaySelection Selection,
+        IReadOnlyList<CombatEventRecord> CauseEvents,
+        IReadOnlyList<CombatEventRecord> LeadUpEvents,
+        IReadOnlyList<LeadUpTimelineRow> TimelineRows,
+        LeadUpSummaryRow? SummaryRow,
+        IReadOnlyList<StatusSnapshot> SummaryMitigationDebuffStatuses,
+        IReadOnlyList<StatusSnapshot> SelectedMitigationDebuffStatuses);
+
     private sealed record EventHpDisplay(
         uint CurrentHp,
         uint ShieldHp,
         uint MaxHp,
         string TooltipDetail);
+
+    private sealed record HpBarHealChange(
+        uint PreviousCurrentHp,
+        uint PreviousShieldHp);
 
     private sealed record LeadUpTimelineRow(
         DateTime SeenAtUtc,
@@ -160,7 +174,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> NearbyHpStatuses,
         IReadOnlyList<StatusSnapshot> SourceStatuses,
         CombatEventRecord? Event,
-        string? HpTooltipDetail);
+        string? HpTooltipDetail,
+        HpBarHealChange? HealChange);
 
     private sealed record DerivedHpState(
         DateTime EventSeenAtUtc,
@@ -1384,22 +1399,23 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSelectedDeathHeader(pull, death);
         var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+        var resolved = ResolveDeathDisplay(death);
         DrawDeathDetailSwitcher(deathId);
         ImGui.Spacing();
 
         switch (selectedDeathDetailPage)
         {
             case DeathDetailPage.Mitigation:
-                DrawExtraMitigationContext(death, deathId);
+                DrawExtraMitigationContext(resolved, deathId);
                 break;
             case DeathDetailPage.WhatIf:
-                DrawPossibleMitigationContext(death, deathId);
+                DrawPossibleMitigationContext(resolved, deathId);
                 break;
             case DeathDetailPage.LeadUp:
-                DrawBetterDeathsInformationContent(death, deathId);
+                DrawBetterDeathsInformationContent(resolved, deathId);
                 break;
             default:
-                DrawCauseSummary(death);
+                DrawCauseSummary(resolved);
                 break;
         }
     }
@@ -2107,13 +2123,10 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return pulls
-            .GroupBy(entry => entry.Summary.TerritoryId)
-            .OrderByDescending(group => group.Max(entry => entry.PullNumber))
-            .ThenBy(group => group
-                .Select(entry => entry.Summary.TerritoryName)
-                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty,
-                StringComparer.OrdinalIgnoreCase)
-            .SelectMany(group => group.OrderByDescending(entry => entry.PullNumber));
+            .OrderByDescending(entry => entry.PullNumber)
+            .ThenByDescending(entry => entry.Summary.CapturedAtUtc)
+            .ThenBy(entry => entry.Summary.TerritoryName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entry => entry.Summary.TerritoryId);
     }
 
     private void DrawDeathTimeline(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix)
@@ -2201,11 +2214,18 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static void DrawCenteredHpShieldBar(uint currentHp, uint shieldHp, uint maxHp, string id, ulong? incomingDamage = null, string? tooltipDetail = null)
+    private static void DrawCenteredHpShieldBar(
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp,
+        string id,
+        ulong? incomingDamage = null,
+        string? tooltipDetail = null,
+        HpBarHealChange? healChange = null)
     {
         var width = GetHpShieldBarWidth(maxHp);
         CenterNextItem(width);
-        DrawHpShieldBar(currentHp, shieldHp, maxHp, id, incomingDamage, centerLabel: true, tooltipDetail: tooltipDetail);
+        DrawHpShieldBar(currentHp, shieldHp, maxHp, id, incomingDamage, centerLabel: true, tooltipDetail: tooltipDetail, healChange: healChange);
     }
 
     private IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(PartyDeathRecord death)
@@ -2437,8 +2457,8 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatTimelineCauseLine(CombatEventRecord combatEvent)
     {
-        return combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0
-            ? $"{FormatActionNameForDisplay(combatEvent)}: {FormatAmount(combatEvent.Amount)}"
+        return EventHasSignedAmount(combatEvent)
+            ? $"{FormatActionNameForDisplay(combatEvent)}: {FormatSignedEventAmount(combatEvent)}"
             : FormatActionNameForDisplay(combatEvent);
     }
 
@@ -2481,18 +2501,18 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
         if (damageEvents.Count > 1)
         {
-            return $"{damageEvents.Count} hits | {FormatWidgetAmount(totalDamage)} total";
+            return $"{damageEvents.Count} hits | {FormatSignedDamageAmount(totalDamage)} total";
         }
 
         if (causeEvents.Count > 1 && totalDamage > 0)
         {
-            return $"{causeEvents.Count} events | {FormatWidgetAmount(totalDamage)} damage";
+            return $"{causeEvents.Count} events | {FormatSignedDamageAmount(totalDamage)} damage";
         }
 
         var cause = causeEvents[0];
         return cause.Kind == DeathEventKind.Status
             ? $"{FormatActionNameForDisplay(cause)} from {FormatKnownPlayerName(cause.SourceName)}"
-            : $"{FormatWidgetAmount(cause.Amount)} {FormatActionNameForDisplay(cause)}";
+            : $"{FormatSignedEventAmount(cause)} {FormatActionNameForDisplay(cause)}";
     }
 
     private static string FormatConciseWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -2506,7 +2526,7 @@ public sealed class RecapWindow : Window, IDisposable
             .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
             .Aggregate(0UL, (sum, cause) => sum + cause.Amount);
 
-        return totalDamage > 0 ? FormatWidgetAmount(totalDamage) : "-";
+        return totalDamage > 0 ? FormatSignedDamageAmount(totalDamage) : "-";
     }
 
     private static void DrawWidgetOverkillSummary(DeathDisplaySelection selection)
@@ -2830,6 +2850,11 @@ public sealed class RecapWindow : Window, IDisposable
             return DamageColor;
         }
 
+        if (causeEvents.Any(cause => cause.Kind == DeathEventKind.Heal && cause.Amount > 0))
+        {
+            return HealColor;
+        }
+
         if (causeEvents.Any(cause => cause.Kind == DeathEventKind.Status))
         {
             return WarningColor;
@@ -2888,12 +2913,13 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             using var deathDetailIndent = new ImGuiIndentScope(DeathDetailIndent);
-            DrawCauseSummary(death);
+            var resolved = ResolveDeathDisplay(death);
+            DrawCauseSummary(resolved);
             var deathId = $"{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}";
             ImGui.Separator();
-            DrawExtraMitigationContext(death, deathId);
+            DrawExtraMitigationContext(resolved, deathId);
             ImGui.Separator();
-            DrawBetterDeathsInformation(death, deathId);
+            DrawBetterDeathsInformation(resolved, deathId);
         }
     }
 
@@ -2912,12 +2938,36 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private void DrawCauseSummary(PartyDeathRecord death)
+    private ResolvedDeathDisplay ResolveDeathDisplay(PartyDeathRecord death)
     {
+        var selection = DeathDisplaySelector.Select(death);
+        var causeEvents = GetTimelineCauseEvents(selection);
+        var leadUpEvents = GetLeadUpEvents(death);
+        var timelineRows = GetLeadUpTimelineRows(death, GetLeadUpDisplayAnchorSeenAtUtc(death), leadUpEvents);
+        var summaryRow = GetLeadUpSummaryRow(death, selection, leadUpEvents, timelineRows);
+        var summaryMitigationDebuffStatuses = summaryRow is not null
+            ? GetLeadUpSummaryMitigationDebuffStatuses(summaryRow, out _)
+            : GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
+        var selectedMitigationDebuffStatuses = GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
+
+        return new ResolvedDeathDisplay(
+            death,
+            selection,
+            causeEvents,
+            leadUpEvents,
+            timelineRows,
+            summaryRow,
+            summaryMitigationDebuffStatuses,
+            selectedMitigationDebuffStatuses);
+    }
+
+    private void DrawCauseSummary(ResolvedDeathDisplay resolved)
+    {
+        var death = resolved.Death;
         ImGui.TextUnformatted("Player death information");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        var causeEvents = GetTimelineCauseEvents(death);
-        var summaryRow = GetLeadUpSummaryRow(death);
+        var causeEvents = resolved.CauseEvents;
+        var summaryRow = resolved.SummaryRow;
         if (summaryRow is not null)
         {
             DrawLeadUpDeathSummary(death, summaryRow);
@@ -2980,7 +3030,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawFatalEventRow(death, causeEvents);
-        DrawFatalSequenceSummary(death);
+        DrawFatalSequenceSummary(death, resolved.Selection.AnchorSeenAtUtc);
     }
 
     private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
@@ -3105,7 +3155,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCenteredText(death.ClassJobName);
     }
 
-    private void DrawFatalSequenceSummary(PartyDeathRecord death)
+    private void DrawFatalSequenceSummary(PartyDeathRecord death, DateTime anchorSeenAtUtc)
     {
         if (death.FatalSequence is not { } sequence)
         {
@@ -3131,7 +3181,7 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.Indent();
                 DrawCombatEventLine(
                     combatEvent,
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), combatEvent.SeenAtUtc)} ",
+                    $"{FormatRelativeToDeath(anchorSeenAtUtc, combatEvent.SeenAtUtc)} ",
                     includeFlags: true);
                 ImGui.Unindent();
             }
@@ -3143,24 +3193,69 @@ public sealed class RecapWindow : Window, IDisposable
             foreach (var logEvent in sequence.LogEvents.OrderBy(logEvent => logEvent.SeenAtUtc))
             {
                 ImGui.Indent();
+                ImGui.PushStyleColor(ImGuiCol.Text, DamageColor);
                 ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(GetLeadUpAnchorSeenAtUtc(death), logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {FormatActionNameForDisplay(logEvent.ActionName)} {FormatAmount(logEvent.Amount)}");
+                    $"{FormatRelativeToDeath(anchorSeenAtUtc, logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {FormatActionNameForDisplay(logEvent.ActionName)} {FormatSignedDamageAmount(logEvent.Amount)}");
+                ImGui.PopStyleColor();
                 ImGui.Unindent();
             }
         }
     }
 
-    private LeadUpSummaryRow? GetLeadUpSummaryRow(PartyDeathRecord death)
+    private LeadUpSummaryRow? GetLeadUpSummaryRow(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection,
+        IReadOnlyList<CombatEventRecord> leadUpEvents,
+        IReadOnlyList<LeadUpTimelineRow> timelineRows)
     {
-        var selection = DeathDisplaySelector.Select(death);
         var anchorSeenAtUtc = selection.AnchorSeenAtUtc;
-        var rows = GetLeadUpHpHistoryRows(death, anchorSeenAtUtc);
-        if (rows.Count == 0)
+        if (selection.Snapshot is { } snapshot)
         {
-            return null;
+            var exactSnapshotRow = timelineRows.LastOrDefault(row =>
+                row.Event is null &&
+                row.SeenAtUtc == snapshot.SeenAtUtc);
+            if (exactSnapshotRow is not null)
+            {
+                IReadOnlyList<CombatEventRecord> events = selection.Events.Count > 0 ? selection.Events : [];
+                return CreateLeadUpSummaryRowFromTimelineRow(
+                    death,
+                    anchorSeenAtUtc,
+                    exactSnapshotRow,
+                    events,
+                    leadUpEvents,
+                    [exactSnapshotRow]);
+            }
         }
 
-        if (selection.Snapshot is null)
+        var matchedFatalRows = GetTimelineRowsForFatalEvents(selection, timelineRows);
+        if (matchedFatalRows.Count > 0)
+        {
+            IReadOnlyList<CombatEventRecord> events = selection.Events.Count > 0
+                ? selection.Events
+                : matchedFatalRows
+                    .Select(row => row.Event)
+                    .OfType<CombatEventRecord>()
+                    .ToList();
+            return CreateLeadUpSummaryRowFromTimelineRow(
+                death,
+                anchorSeenAtUtc,
+                matchedFatalRows[0],
+                events,
+                leadUpEvents,
+                matchedFatalRows);
+        }
+
+        return GetLeadUpSummaryRowFallback(death, selection, leadUpEvents);
+    }
+
+    private LeadUpSummaryRow? GetLeadUpSummaryRowFallback(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        var anchorSeenAtUtc = selection.AnchorSeenAtUtc;
+        var rows = GetLeadUpHpHistoryRows(death, anchorSeenAtUtc, leadUpEvents);
+        if (rows.Count == 0 || selection.Snapshot is null)
         {
             return null;
         }
@@ -3173,37 +3268,112 @@ public sealed class RecapWindow : Window, IDisposable
 
         var events = selection.Events.Count > 0 ? selection.Events : row.Events;
         var sourceStatuses = events.Count > 0
-            ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent)).ToList()
-            : GetActiveSourceMitigationStatuses(death, row.LastSnapshot.SeenAtUtc);
+            ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
+            : GetActiveSourceMitigationStatuses(death, row.LastSnapshot.SeenAtUtc, null, leadUpEvents);
         return new LeadUpSummaryRow(anchorSeenAtUtc, row, events, sourceStatuses);
     }
 
-    private void DrawExtraMitigationContext(PartyDeathRecord death, string idSuffix)
+    private LeadUpSummaryRow CreateLeadUpSummaryRowFromTimelineRow(
+        PartyDeathRecord death,
+        DateTime anchorSeenAtUtc,
+        LeadUpTimelineRow timelineRow,
+        IReadOnlyList<CombatEventRecord> events,
+        IReadOnlyList<CombatEventRecord> leadUpEvents,
+        IReadOnlyList<LeadUpTimelineRow> matchedRows)
     {
-        ImGui.TextUnformatted("Extra mitigation context");
-        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        var summary = GetLeadUpSummaryRow(death);
-        var statuses = summary is not null
-            ? GetLeadUpSummaryMitigationDebuffStatuses(summary, out _)
-            : GetSelectedMitigationDebuffStatuses(death);
-        DrawStatusSnapshot(
-            statuses,
-            $"{idSuffix}AtDeath");
-        ImGui.Separator();
-        DrawEarlierBossDebuffsNotOnFatalHit(death, idSuffix);
+        var statuses = timelineRow.Statuses
+            .Concat(timelineRow.NearbyHpStatuses)
+            .ToList();
+        var snapshot = new HpHistorySnapshot(
+            timelineRow.SeenAtUtc,
+            timelineRow.PullElapsedSeconds,
+            timelineRow.CurrentHp,
+            timelineRow.ShieldHp,
+            timelineRow.MaxHp,
+            statuses);
+        IReadOnlyList<CombatEventRecord> rowEvents = timelineRow.Event is null ? [] : [timelineRow.Event];
+        var row = new HpHistoryDisplayRow(snapshot, snapshot, rowEvents, 1);
+        var matchedSourceStatuses = matchedRows
+            .SelectMany(row => row.SourceStatuses)
+            .ToList();
+        var sourceStatuses = matchedSourceStatuses.Count > 0
+            ? matchedSourceStatuses
+            : events.Count > 0
+                ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
+                : GetActiveSourceMitigationStatuses(death, timelineRow.SeenAtUtc, null, leadUpEvents);
+        return new LeadUpSummaryRow(anchorSeenAtUtc, row, events, sourceStatuses);
     }
 
-    private void DrawPossibleMitigationContext(PartyDeathRecord death, string idSuffix)
+    private static IReadOnlyList<LeadUpTimelineRow> GetTimelineRowsForFatalEvents(
+        DeathDisplaySelection selection,
+        IReadOnlyList<LeadUpTimelineRow> timelineRows)
     {
+        var rawFatalEvents = selection.FatalEvents
+            .SelectMany(group => group.Events)
+            .Where(IsFatalEvent)
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
+            .ToList();
+        if (rawFatalEvents.Count == 0)
+        {
+            return [];
+        }
+
+        foreach (var fatalEvent in rawFatalEvents)
+        {
+            var matchingRows = timelineRows
+                .Where(row => row.Event is not null && CombatEventsMatchForSummary(row.Event, fatalEvent))
+                .OrderBy(row => row.SeenAtUtc)
+                .ThenBy(row => row.Event?.EventOrdinal ?? 0)
+                .ToList();
+            if (matchingRows.Count > 0)
+            {
+                return matchingRows;
+            }
+        }
+
+        return [];
+    }
+
+    private static bool CombatEventsMatchForSummary(CombatEventRecord left, CombatEventRecord right)
+    {
+        if (!string.IsNullOrWhiteSpace(left.EventIdentity) &&
+            !string.IsNullOrWhiteSpace(right.EventIdentity))
+        {
+            return string.Equals(left.EventIdentity, right.EventIdentity, StringComparison.Ordinal);
+        }
+
+        return left.SeenAtUtc == right.SeenAtUtc &&
+            left.MemberKey == right.MemberKey &&
+            left.SourceEntityId == right.SourceEntityId &&
+            left.ActionId == right.ActionId &&
+            left.Kind == right.Kind &&
+            left.Amount == right.Amount;
+    }
+
+    private void DrawExtraMitigationContext(ResolvedDeathDisplay resolved, string idSuffix)
+    {
+        var death = resolved.Death;
+        ImGui.TextUnformatted("Extra mitigation context");
+        using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
+        DrawStatusSnapshot(
+            resolved.SummaryMitigationDebuffStatuses,
+            $"{idSuffix}AtDeath");
+        ImGui.Separator();
+        DrawEarlierBossDebuffsNotOnFatalHit(resolved, idSuffix);
+    }
+
+    private void DrawPossibleMitigationContext(ResolvedDeathDisplay resolved, string idSuffix)
+    {
+        var death = resolved.Death;
         ImGui.TextUnformatted("Mitigation what-if");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
-        var selection = DeathDisplaySelector.Select(death);
-        var damageEvents = selection.Events
+        var damageEvents = resolved.CauseEvents
             .Where(combatEvent => combatEvent.Kind == DeathEventKind.Damage && combatEvent.Amount > 0)
             .ToList();
         var observedDamage = GetIncomingDamageAmount(damageEvents);
-        var hpDisplay = GetWhatIfHpDisplay(death, damageEvents);
-        var activeStatuses = GetSelectedMitigationDebuffStatuses(death);
+        var hpDisplay = GetWhatIfHpDisplay(resolved, damageEvents);
+        var activeStatuses = resolved.SelectedMitigationDebuffStatuses;
         var options = GetPossibleMitigationOptions(death, activeStatuses).ToList();
         var selectedOptions = options
             .Where(option => selectedPossibleMitigationKeys.Contains(BuildPossibleMitigationSelectionKey(idSuffix, option)))
@@ -3250,19 +3420,19 @@ public sealed class RecapWindow : Window, IDisposable
             options.Count > 0);
     }
 
-    private EventHpDisplay GetWhatIfHpDisplay(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> damageEvents)
+    private EventHpDisplay GetWhatIfHpDisplay(ResolvedDeathDisplay resolved, IReadOnlyList<CombatEventRecord> damageEvents)
     {
-        var summary = GetLeadUpSummaryRow(death);
-        if (summary is not null && summary.Row.LastSnapshot.MaxHp > 0)
+        var death = resolved.Death;
+        if (resolved.SummaryRow is not null && resolved.SummaryRow.Row.LastSnapshot.MaxHp > 0)
         {
             return new EventHpDisplay(
-                summary.Row.LastSnapshot.CurrentHp,
-                summary.Row.LastSnapshot.ShieldHp,
-                summary.Row.LastSnapshot.MaxHp,
+                resolved.SummaryRow.Row.LastSnapshot.CurrentHp,
+                resolved.SummaryRow.Row.LastSnapshot.ShieldHp,
+                resolved.SummaryRow.Row.LastSnapshot.MaxHp,
                 "HP from the selected death lead-up row.");
         }
 
-        var eventForHp = damageEvents.LastOrDefault() ?? GetTimelineCauseEvents(death).LastOrDefault();
+        var eventForHp = damageEvents.LastOrDefault() ?? resolved.CauseEvents.LastOrDefault();
         if (eventForHp is not null)
         {
             return GetEventHpDisplay(death, eventForHp);
@@ -3584,7 +3754,7 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
-    private void DrawBetterDeathsInformation(PartyDeathRecord death, string idSuffix)
+    private void DrawBetterDeathsInformation(ResolvedDeathDisplay resolved, string idSuffix)
     {
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
         var isOpen = ImGui.CollapsingHeader($"Better Deaths information - {LeadUpHistorySeconds:0}s lead-up###BetterDeathsInfo{idSuffix}");
@@ -3594,10 +3764,10 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawBetterDeathsInformationContent(death, idSuffix);
+        DrawBetterDeathsInformationContent(resolved, idSuffix);
     }
 
-    private void DrawBetterDeathsInformationContent(PartyDeathRecord death, string idSuffix)
+    private void DrawBetterDeathsInformationContent(ResolvedDeathDisplay resolved, string idSuffix)
     {
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         ImGui.TextDisabled("Older saved pulls may show less detail if that data was not captured at the time.");
@@ -3605,11 +3775,11 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Spacing();
         if (selectedLeadUpTableView == LeadUpTableView.Timeline)
         {
-            DrawHpHistory(death, idSuffix);
+            DrawHpHistory(resolved, idSuffix);
         }
         else
         {
-            DrawLeadUpEvents(death, idSuffix);
+            DrawLeadUpEvents(resolved, idSuffix);
         }
     }
 
@@ -3666,18 +3836,20 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(4);
     }
 
-    private void DrawHpHistory(PartyDeathRecord death, string idSuffix)
+    private void DrawHpHistory(ResolvedDeathDisplay resolved, string idSuffix)
     {
+        var death = resolved.Death;
         DrawLeadUpLabel("10 second HP history");
-        var anchorSeenAtUtc = GetLeadUpAnchorSeenAtUtc(death);
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
-        var rows = GetLeadUpTimelineRows(death, displayAnchorSeenAtUtc);
+        var rows = resolved.TimelineRows;
 
         if (rows.Count == 0)
         {
             ImGui.TextDisabled("No HP samples or combat events captured in the last 10 seconds before KO.");
             return;
         }
+
+        DrawLeadUpTimelineTimerToggle(idSuffix);
 
         if (!ImGui.BeginTable($"##HpHistory{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
@@ -3711,11 +3883,12 @@ public sealed class RecapWindow : Window, IDisposable
                 row.MaxHp,
                 $"HpHistoryBar{idSuffix}{row.SeenAtUtc.Ticks}{i}",
                 row.Event is not null ? GetIncomingDamageAmount(row.Event) : null,
-                valueOnlyTooltip: true);
+                valueOnlyTooltip: true,
+                healChange: row.HealChange);
             ImGui.TableNextColumn();
             DrawTimelineEventCell(row.Event);
             ImGui.TableNextColumn();
-            DrawMitigationDebuffSummaryCell(row);
+            DrawMitigationDebuffSummaryCell(row, configuration.ShowLeadUpTimelineMitigationTimers);
         }
 
         ImGui.EndTable();
@@ -3725,13 +3898,21 @@ public sealed class RecapWindow : Window, IDisposable
         PartyDeathRecord death,
         DateTime displayAnchorSeenAtUtc)
     {
+        return GetLeadUpTimelineRows(death, displayAnchorSeenAtUtc, GetLeadUpEvents(death));
+    }
+
+    private IReadOnlyList<LeadUpTimelineRow> GetLeadUpTimelineRows(
+        PartyDeathRecord death,
+        DateTime displayAnchorSeenAtUtc,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
         var cutoff = displayAnchorSeenAtUtc - TimeSpan.FromSeconds(LeadUpHistorySeconds);
         var history = death.HpHistory
             .Where(snapshot => snapshot.SeenAtUtc >= cutoff && snapshot.SeenAtUtc <= displayAnchorSeenAtUtc)
             .Where(snapshot => snapshot.CurrentHp > 0 || snapshot.ShieldHp > 0)
             .OrderBy(snapshot => snapshot.SeenAtUtc)
             .ToList();
-        var events = GetLeadUpEvents(death)
+        var events = leadUpEvents
             .OrderBy(combatEvent => combatEvent.SeenAtUtc)
             .ToList();
         var displayHistory = GetDisplayLeadUpHpHistory(history, events);
@@ -3752,7 +3933,7 @@ public sealed class RecapWindow : Window, IDisposable
                     snapshot,
                     pendingDerivedHp,
                     displayAnchorSeenAtUtc,
-                    GetActiveSourceMitigationStatuses(death, snapshot.SeenAtUtc));
+                    GetActiveSourceMitigationStatuses(death, snapshot.SeenAtUtc, null, events));
                 AddLeadUpTimelineRow(rows, timelineRow);
 
                 if (pendingDerivedHp is not null &&
@@ -3766,7 +3947,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             var combatEvent = events[eventIndex++];
-            var hpDisplay = GetEventHpDisplay(death, combatEvent);
+            var (hpDisplay, healChange) = GetTimelineEventHpDisplay(death, combatEvent, history, events);
             AddLeadUpTimelineRow(rows, new LeadUpTimelineRow(
                 combatEvent.SeenAtUtc,
                 combatEvent.PullElapsedSeconds,
@@ -3775,9 +3956,10 @@ public sealed class RecapWindow : Window, IDisposable
                 hpDisplay.MaxHp,
                 combatEvent.Statuses,
                 GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
-                GetEventSourceMitigationStatuses(death, combatEvent),
+                GetEventSourceMitigationStatuses(death, combatEvent, events),
                 combatEvent,
-                hpDisplay.TooltipDetail));
+                hpDisplay.TooltipDetail,
+                healChange));
 
             pendingDerivedHp = TryCreateDerivedHpState(combatEvent, hpDisplay) ?? pendingDerivedHp;
         }
@@ -3827,6 +4009,11 @@ public sealed class RecapWindow : Window, IDisposable
                 return true;
             }
 
+            if (IsPostHealHpSampleCoveredByHealEvent(snapshot, combatEvent, events))
+            {
+                return true;
+            }
+
             if (!IsWithinLeadUpEventHpSampleWindow(snapshot.SeenAtUtc, combatEvent.SeenAtUtc))
             {
                 continue;
@@ -3840,6 +4027,38 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return false;
+    }
+
+    private static bool IsPostHealHpSampleCoveredByHealEvent(
+        HpHistorySnapshot snapshot,
+        CombatEventRecord combatEvent,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        if (combatEvent.Kind != DeathEventKind.Heal ||
+            combatEvent.Amount == 0 ||
+            snapshot.SeenAtUtc < combatEvent.SeenAtUtc ||
+            snapshot.SeenAtUtc - combatEvent.SeenAtUtc > LeadUpStatusMergeWindow ||
+            HasInterveningHpChangingEvent(combatEvent, snapshot.SeenAtUtc, events))
+        {
+            return false;
+        }
+
+        if (CombatEventHasResultHp(combatEvent))
+        {
+            return HpSampleMatchesEffectResult(snapshot, combatEvent);
+        }
+
+        if (!EventHasCapturedHp(combatEvent))
+        {
+            return false;
+        }
+
+        var preHealDisplay = new EventHpDisplay(
+            combatEvent.CurrentHp,
+            combatEvent.ShieldHp,
+            combatEvent.MaxHp,
+            string.Empty);
+        return PostHealSnapshotMatches(combatEvent, preHealDisplay, snapshot);
     }
 
     private static bool IsIntermediateEffectResultHpSample(
@@ -3989,7 +4208,8 @@ public sealed class RecapWindow : Window, IDisposable
                 snapshot.Statuses,
                 sourceStatuses,
                 null,
-                tooltip);
+                tooltip,
+                null);
         }
 
         return new LeadUpTimelineRow(
@@ -4001,6 +4221,7 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.Statuses,
             snapshot.Statuses,
             sourceStatuses,
+            null,
             null,
             null);
     }
@@ -4103,10 +4324,18 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawCenteredCombatEventLine(combatEvent);
+        DrawCenteredWrappedCombatEventLine(combatEvent);
     }
 
     private IReadOnlyList<HpHistoryDisplayRow> GetLeadUpHpHistoryRows(PartyDeathRecord death, DateTime anchorSeenAtUtc)
+    {
+        return GetLeadUpHpHistoryRows(death, anchorSeenAtUtc, GetLeadUpEvents(death));
+    }
+
+    private IReadOnlyList<HpHistoryDisplayRow> GetLeadUpHpHistoryRows(
+        PartyDeathRecord death,
+        DateTime anchorSeenAtUtc,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
         var cutoff = anchorSeenAtUtc - TimeSpan.FromSeconds(LeadUpHistorySeconds);
         var history = death.HpHistory
@@ -4116,7 +4345,7 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
         return history.Count == 0
             ? []
-            : BuildHpHistoryDisplayRows(anchorSeenAtUtc, history, GetLeadUpEvents(death));
+            : BuildHpHistoryDisplayRows(anchorSeenAtUtc, history, leadUpEvents);
     }
 
     private static IReadOnlyList<HpHistoryDisplayRow> BuildHpHistoryDisplayRows(
@@ -4516,17 +4745,18 @@ public sealed class RecapWindow : Window, IDisposable
         return DeathDisplaySelector.Select(death).Snapshot?.Statuses ?? death.StatusesAtDeath;
     }
 
-    private void DrawEarlierBossDebuffsNotOnFatalHit(PartyDeathRecord death, string idSuffix)
+    private void DrawEarlierBossDebuffsNotOnFatalHit(ResolvedDeathDisplay resolved, string idSuffix)
     {
+        var death = resolved.Death;
         DrawLeadUpLabel("Mitigations that expired on the leadup to the hit");
-        var selection = DeathDisplaySelector.Select(death);
+        var selection = resolved.Selection;
         if (selection.Events.Count == 0)
         {
             ImGui.TextDisabled("No fatal hit was captured to compare against.");
             return;
         }
 
-        var rows = GetEarlierBossDebuffsNotOnFatalHit(death, selection);
+        var rows = GetEarlierBossDebuffsNotOnFatalHit(death, selection, resolved.LeadUpEvents);
         if (rows.Count == 0)
         {
             ImGui.TextDisabled("No earlier boss damage-down debuffs were captured outside the fatal hit.");
@@ -4565,23 +4795,24 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static IReadOnlyList<EarlierBossDebuffRow> GetEarlierBossDebuffsNotOnFatalHit(
         PartyDeathRecord death,
-        DeathDisplaySelection selection)
+        DeathDisplaySelection selection,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
         var firstFatalHitAtUtc = selection.Events
             .Select(combatEvent => combatEvent.SeenAtUtc)
             .OrderBy(seenAtUtc => seenAtUtc)
             .FirstOrDefault();
         var fatalEventKeys = selection.Events
-            .SelectMany(combatEvent => Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent))
+            .SelectMany(combatEvent => Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents))
                 .Select(status => BuildBossDebuffKey(GetSourceKey(combatEvent), status.Id)))
             .ToHashSet(StringComparer.Ordinal);
 
-        return GetLeadUpEvents(death)
+        return leadUpEvents
             .Where(combatEvent => combatEvent.SeenAtUtc < firstFatalHitAtUtc)
             .SelectMany(combatEvent =>
             {
                 var sourceKey = GetSourceKey(combatEvent);
-                return Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent))
+                return Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents))
                     .Where(status => !fatalEventKeys.Contains(BuildBossDebuffKey(sourceKey, status.Id)))
                     .Select(status => new EarlierBossDebuffRow(
                         combatEvent.SeenAtUtc,
@@ -4611,10 +4842,11 @@ public sealed class RecapWindow : Window, IDisposable
             : combatEvent.SourceEntityId.ToString("X8");
     }
 
-    private void DrawLeadUpEvents(PartyDeathRecord death, string idSuffix)
+    private void DrawLeadUpEvents(ResolvedDeathDisplay resolved, string idSuffix)
     {
+        var death = resolved.Death;
         DrawLeadUpLabel("Captured hits/events in last 10 seconds");
-        var events = GetLeadUpEvents(death);
+        var events = resolved.LeadUpEvents;
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
 
         if (events.Count == 0)
@@ -4636,14 +4868,20 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 2.55f);
         DrawLeadUpEventsTableHeader();
 
+        string? previousSourceKey = null;
         foreach (var combatEvent in events)
         {
-            var hpDisplay = GetEventHpDisplay(death, combatEvent);
+            var (hpDisplay, healChange) = GetTimelineEventHpDisplay(death, combatEvent, death.HpHistory, events);
+            var sourceKey = GetSourceKey(combatEvent);
+            var sourceChanged = previousSourceKey is not null &&
+                !string.Equals(previousSourceKey, sourceKey, StringComparison.Ordinal);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, combatEvent.SeenAtUtc));
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(FormatKnownPlayerName(combatEvent.SourceName));
+            DrawCenteredOrWrappedText(
+                FormatKnownPlayerName(combatEvent.SourceName),
+                sourceChanged ? LeadUpGoldColor : null);
             ImGui.TableNextColumn();
             DrawActionText(combatEvent, false);
             ImGui.TableNextColumn();
@@ -4655,11 +4893,13 @@ public sealed class RecapWindow : Window, IDisposable
                 hpDisplay.MaxHp,
                 $"TimelineHp{idSuffix}{combatEvent.MemberKey}{combatEvent.SeenAtUtc.Ticks}",
                 GetIncomingDamageAmount(combatEvent),
-                hpDisplay.TooltipDetail);
+                hpDisplay.TooltipDetail,
+                healChange);
             ImGui.TableNextColumn();
             DrawCombinedMitigationDebuffCell(
                 GetMergedPlayerStatusesForEvent(death, combatEvent),
-                GetEventSourceMitigationStatuses(death, combatEvent));
+                GetEventSourceMitigationStatuses(death, combatEvent, events));
+            previousSourceKey = sourceKey;
         }
 
         ImGui.EndTable();
@@ -4668,6 +4908,25 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawLeadUpLabel(string label)
     {
         ImGui.TextColored(LeadUpGoldColor, label);
+    }
+
+    private void DrawLeadUpTimelineTimerToggle(string idSuffix)
+    {
+        var showTimers = configuration.ShowLeadUpTimelineMitigationTimers;
+        const string visibleLabel = "Timers";
+        var labelWidth = ImGui.CalcTextSize(visibleLabel).X;
+        var checkboxWidth = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + labelWidth;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        if (availableWidth > checkboxWidth)
+        {
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableWidth - checkboxWidth);
+        }
+
+        if (DrawThemedCheckbox($"{visibleLabel}##LeadUpTimelineMitigationTimers{idSuffix}", ref showTimers))
+        {
+            configuration.ShowLeadUpTimelineMitigationTimers = showTimers;
+            plugin.SaveConfiguration();
+        }
     }
 
     private static IReadOnlyList<CombatEventRecord> GetLeadUpEvents(PartyDeathRecord death)
@@ -4741,6 +5000,123 @@ public sealed class RecapWindow : Window, IDisposable
         return death.SeenAtUtc;
     }
 
+    private static (EventHpDisplay HpDisplay, HpBarHealChange? HealChange) GetTimelineEventHpDisplay(
+        PartyDeathRecord death,
+        CombatEventRecord combatEvent,
+        IReadOnlyList<HpHistorySnapshot> history,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        var hpDisplay = GetEventHpDisplay(death, combatEvent);
+        var postHealDisplay = TryGetPostHealHpDisplay(combatEvent, hpDisplay, history, events);
+        if (postHealDisplay is null)
+        {
+            return (hpDisplay, null);
+        }
+
+        return (postHealDisplay, new HpBarHealChange(hpDisplay.CurrentHp, hpDisplay.ShieldHp));
+    }
+
+    private static EventHpDisplay? TryGetPostHealHpDisplay(
+        CombatEventRecord combatEvent,
+        EventHpDisplay preHealDisplay,
+        IReadOnlyList<HpHistorySnapshot> history,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        if (combatEvent.Kind != DeathEventKind.Heal || combatEvent.Amount == 0 || preHealDisplay.MaxHp == 0)
+        {
+            return null;
+        }
+
+        if (CombatEventHasResultHp(combatEvent))
+        {
+            var resultMaxHp = combatEvent.ResultMaxHp == 0 ? preHealDisplay.MaxHp : combatEvent.ResultMaxHp;
+            var resultCurrentHp = Math.Min(combatEvent.ResultCurrentHp, resultMaxHp);
+            if (HpOrShieldIncreased(preHealDisplay, resultCurrentHp, combatEvent.ResultShieldHp))
+            {
+                return new EventHpDisplay(
+                    resultCurrentHp,
+                    combatEvent.ResultShieldHp,
+                    resultMaxHp,
+                    preHealDisplay.TooltipDetail);
+            }
+        }
+
+        var postHealSnapshot = FindPostHealHpSnapshot(combatEvent, preHealDisplay, history, events);
+        if (postHealSnapshot is not null &&
+            HpOrShieldIncreased(preHealDisplay, postHealSnapshot.CurrentHp, postHealSnapshot.ShieldHp))
+        {
+            var snapshotCurrentHp = Math.Min(postHealSnapshot.CurrentHp, postHealSnapshot.MaxHp);
+            return new EventHpDisplay(
+                snapshotCurrentHp,
+                postHealSnapshot.ShieldHp,
+                postHealSnapshot.MaxHp,
+                preHealDisplay.TooltipDetail);
+        }
+
+        var restoredCurrentHp = (ulong)preHealDisplay.CurrentHp + combatEvent.Amount;
+        var derivedCurrentHp = (uint)Math.Min((ulong)preHealDisplay.MaxHp, restoredCurrentHp);
+        return derivedCurrentHp > preHealDisplay.CurrentHp
+            ? new EventHpDisplay(
+                derivedCurrentHp,
+                preHealDisplay.ShieldHp,
+                preHealDisplay.MaxHp,
+                preHealDisplay.TooltipDetail)
+            : null;
+    }
+
+    private static HpHistorySnapshot? FindPostHealHpSnapshot(
+        CombatEventRecord combatEvent,
+        EventHpDisplay preHealDisplay,
+        IReadOnlyList<HpHistorySnapshot> history,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        return history
+            .Where(snapshot => snapshot.SeenAtUtc >= combatEvent.SeenAtUtc)
+            .Where(snapshot => snapshot.SeenAtUtc - combatEvent.SeenAtUtc <= LeadUpStatusMergeWindow)
+            .Where(snapshot => !HasInterveningHpChangingEvent(combatEvent, snapshot.SeenAtUtc, events))
+            .Where(snapshot => PostHealSnapshotMatches(combatEvent, preHealDisplay, snapshot))
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .FirstOrDefault();
+    }
+
+    private static bool HasInterveningHpChangingEvent(
+        CombatEventRecord combatEvent,
+        DateTime snapshotSeenAtUtc,
+        IReadOnlyList<CombatEventRecord> events)
+    {
+        return events.Any(candidate =>
+            candidate.SeenAtUtc > combatEvent.SeenAtUtc &&
+            candidate.SeenAtUtc < snapshotSeenAtUtc &&
+            candidate.Amount > 0 &&
+            candidate.Kind is DeathEventKind.Damage or DeathEventKind.Heal);
+    }
+
+    private static bool PostHealSnapshotMatches(
+        CombatEventRecord combatEvent,
+        EventHpDisplay preHealDisplay,
+        HpHistorySnapshot snapshot)
+    {
+        if (CombatEventHasResultHp(combatEvent))
+        {
+            return HpSampleMatchesEffectResult(snapshot, combatEvent);
+        }
+
+        if (snapshot.MaxHp != preHealDisplay.MaxHp)
+        {
+            return false;
+        }
+
+        var restoredCurrentHp = (ulong)preHealDisplay.CurrentHp + combatEvent.Amount;
+        var expectedCurrentHp = (uint)Math.Min((ulong)preHealDisplay.MaxHp, restoredCurrentHp);
+        return snapshot.CurrentHp == expectedCurrentHp &&
+            snapshot.ShieldHp >= preHealDisplay.ShieldHp;
+    }
+
+    private static bool HpOrShieldIncreased(EventHpDisplay previous, uint currentHp, uint shieldHp)
+    {
+        return currentHp > previous.CurrentHp || shieldHp > previous.ShieldHp;
+    }
+
     private static EventHpDisplay GetEventHpDisplay(PartyDeathRecord death, CombatEventRecord combatEvent)
     {
         if (combatEvent.HpSource != CombatEventHpSource.NoPreHitSample &&
@@ -4790,7 +5166,7 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = GetIncomingDamageAmount(events);
         if (totalDamage is not null)
         {
-            DrawCenteredDamageSummary(events, $"Hit for {FormatAmount(totalDamage.Value)}");
+            DrawCenteredDamageSummary(events, $"Hit for {FormatSignedDamageAmount(totalDamage.Value)}");
             DrawPostMitigationHitTooltip();
         }
         else
@@ -4798,7 +5174,7 @@ public sealed class RecapWindow : Window, IDisposable
             var shownEvents = events.Take(maxEvents).ToList();
             foreach (var combatEvent in shownEvents)
             {
-                DrawCenteredOrWrappedText(FormatFatalEventLine(combatEvent));
+                DrawCenteredOrWrappedText(FormatFatalEventLine(combatEvent), GetEventColor(combatEvent.Kind));
             }
 
             var hiddenCount = events.Count - shownEvents.Count;
@@ -4833,7 +5209,7 @@ public sealed class RecapWindow : Window, IDisposable
             return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {FormatActionNameForDisplay(combatEvent)} | Flags: {FormatEventFlags(combatEvent)}";
         }
 
-        return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {FormatActionNameForDisplay(combatEvent)} | Amount: {FormatAmount(combatEvent.Amount)} | Flags: {FormatEventFlags(combatEvent)}";
+        return $"{FormatKnownPlayerName(combatEvent.SourceName)}: {FormatActionNameForDisplay(combatEvent)} | Amount: {FormatSignedEventAmount(combatEvent)} | Flags: {FormatEventFlags(combatEvent)}";
     }
 
     private void DrawCombatEventLine(
@@ -4855,6 +5231,62 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCombatEventLineCore(combatEvent, centered: true, includeFlags: false);
     }
 
+    private void DrawCenteredWrappedCombatEventLine(CombatEventRecord combatEvent)
+    {
+        var sourceText = $"{FormatKnownPlayerName(combatEvent.SourceName)}:";
+        var actionText = FormatActionNameForDisplay(combatEvent);
+        var amountText = FormatSignedEventAmountSuffix(combatEvent);
+        var textAfterIcon = $"{actionText}{amountText}";
+        var iconId = GetDamageTypeIconId(combatEvent);
+        var iconSize = GetInlineDamageTypeIconSize(iconId);
+        var spacing = 4.0f;
+        var fullWidth = ImGui.CalcTextSize(sourceText).X + spacing +
+            (iconId == 0 ? 0.0f : iconSize + spacing) +
+            ImGui.CalcTextSize(textAfterIcon).X;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        if (fullWidth <= availableWidth)
+        {
+            DrawCombatEventLineCore(combatEvent, centered: true, includeFlags: false);
+            return;
+        }
+
+        ImGui.BeginGroup();
+        DrawCenteredOrWrappedText(sourceText, GetEventColor(combatEvent.Kind));
+        DrawCenteredWrappedActionTextWithIcon(combatEvent, textAfterIcon);
+        ImGui.EndGroup();
+        DrawLikelyAutoAttackTooltip(combatEvent);
+    }
+
+    private static void DrawCenteredWrappedActionTextWithIcon(CombatEventRecord combatEvent, string text)
+    {
+        var iconId = GetDamageTypeIconId(combatEvent);
+        if (iconId == 0)
+        {
+            DrawCenteredOrWrappedText(text, GetEventColor(combatEvent.Kind));
+            return;
+        }
+
+        var iconSize = GetInlineDamageTypeIconSize(iconId);
+        var spacing = 4.0f;
+        var availableTextWidth = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X - iconSize - spacing);
+        var lines = WrapTextForWidth(text, availableTextWidth);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            if (i == 0)
+            {
+                CenterNextItem(iconSize + spacing + ImGui.CalcTextSize(line).X);
+                DrawDamageTypeIconInline(combatEvent, iconSize);
+                ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(combatEvent.Kind));
+                ImGui.TextUnformatted(line);
+                ImGui.PopStyleColor();
+                continue;
+            }
+
+            DrawCenteredText(line, GetEventColor(combatEvent.Kind));
+        }
+    }
+
     private void DrawCombatEventLineCore(
         CombatEventRecord combatEvent,
         bool centered,
@@ -4862,12 +5294,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var sourceText = $"{FormatKnownPlayerName(combatEvent.SourceName)}:";
         var actionText = FormatActionNameForDisplay(combatEvent);
-        var amountText = combatEvent.Kind switch
-        {
-            DeathEventKind.Damage when combatEvent.Amount > 0 => $" {FormatAmount(combatEvent.Amount)}",
-            DeathEventKind.Heal when combatEvent.Amount > 0 => $" +{FormatAmount(combatEvent.Amount)}",
-            _ => string.Empty,
-        };
+        var amountText = FormatSignedEventAmountSuffix(combatEvent);
         var flagsText = includeFlags ? $" | Flags: {FormatEventFlags(combatEvent)}" : string.Empty;
         var textAfterIcon = $"{actionText}{amountText}{flagsText}";
         var iconId = GetDamageTypeIconId(combatEvent);
@@ -4900,7 +5327,7 @@ public sealed class RecapWindow : Window, IDisposable
         var iconSize = GetInlineDamageTypeIconSize(iconId);
         if (iconId == 0)
         {
-            DrawCenteredOrWrappedText(text);
+            DrawCenteredOrWrappedText(text, DamageColor);
             return;
         }
 
@@ -4912,7 +5339,9 @@ public sealed class RecapWindow : Window, IDisposable
         CenterNextItem(groupWidth);
         DrawGameIcon(iconId, iconSize, GetDamageTypeIconTooltip(tooltipDamageType));
         ImGui.SameLine(0.0f, spacing);
+        ImGui.PushStyleColor(ImGuiCol.Text, DamageColor);
         ImGui.TextUnformatted(text);
+        ImGui.PopStyleColor();
     }
 
     private static uint GetSharedDamageTypeIconId(IReadOnlyList<CombatEventRecord> events)
@@ -4962,11 +5391,12 @@ public sealed class RecapWindow : Window, IDisposable
             true);
     }
 
-    private void DrawMitigationDebuffSummaryCell(LeadUpTimelineRow row)
+    private void DrawMitigationDebuffSummaryCell(LeadUpTimelineRow row, bool showTimers)
     {
         DrawCombinedMitigationDebuffCell(
             row.Statuses.Concat(row.NearbyHpStatuses),
             row.SourceStatuses,
+            showTimers,
             maxStatusesPerRow: 4);
     }
 
@@ -4981,6 +5411,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCombinedMitigationDebuffCell(
         IEnumerable<StatusSnapshot> playerStatusSource,
         IEnumerable<StatusSnapshot> bossStatusSource,
+        bool showTimers = true,
         int? maxStatusesPerRow = null)
     {
         var statuses = GetCombinedMitigationDebuffStatuses(playerStatusSource, bossStatusSource, out var bossStatusKeys);
@@ -4988,8 +5419,10 @@ public sealed class RecapWindow : Window, IDisposable
         DrawStatusSummaryCell(
             statuses,
             true,
-            status => bossStatusKeys.Contains(GetStatusKey(status)) ||
-                Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
+            showTimers
+                ? status => bossStatusKeys.Contains(GetStatusKey(status)) ||
+                    Plugin.ShouldShowPlayerStatusTimerForDisplay(status)
+                : _ => false,
             true,
             maxStatusesPerRow);
     }
@@ -5019,8 +5452,16 @@ public sealed class RecapWindow : Window, IDisposable
         PartyDeathRecord death,
         CombatEventRecord combatEvent)
     {
+        return GetEventSourceMitigationStatuses(death, combatEvent, GetLeadUpEvents(death));
+    }
+
+    private static IReadOnlyList<StatusSnapshot> GetEventSourceMitigationStatuses(
+        PartyDeathRecord death,
+        CombatEventRecord combatEvent,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
         return combatEvent.SourceStatuses
-            .Concat(GetActiveSourceMitigationStatuses(death, combatEvent.SeenAtUtc, combatEvent.SourceEntityId))
+            .Concat(GetActiveSourceMitigationStatuses(death, combatEvent.SeenAtUtc, combatEvent.SourceEntityId, leadUpEvents))
             .GroupBy(GetStatusKey)
             .Select(group => group
                 .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
@@ -5034,7 +5475,16 @@ public sealed class RecapWindow : Window, IDisposable
         DateTime seenAtUtc,
         uint? sourceEntityId = null)
     {
-        var sourceMitigationHistory = GetSourceMitigationHistoryForDisplay(death);
+        return GetActiveSourceMitigationStatuses(death, seenAtUtc, sourceEntityId, GetLeadUpEvents(death));
+    }
+
+    private static IReadOnlyList<StatusSnapshot> GetActiveSourceMitigationStatuses(
+        PartyDeathRecord death,
+        DateTime seenAtUtc,
+        uint? sourceEntityId,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        var sourceMitigationHistory = GetSourceMitigationHistoryForDisplay(death, leadUpEvents);
         if (sourceMitigationHistory.Count == 0)
         {
             return [];
@@ -5057,8 +5507,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static IReadOnlyList<SourceMitigationSnapshot> GetSourceMitigationHistoryForDisplay(PartyDeathRecord death)
     {
+        return GetSourceMitigationHistoryForDisplay(death, GetLeadUpEvents(death));
+    }
+
+    private static IReadOnlyList<SourceMitigationSnapshot> GetSourceMitigationHistoryForDisplay(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
         var sourceMitigationHistory = death.SourceMitigationHistory?.ToList() ?? [];
-        sourceMitigationHistory.AddRange(GetLeadUpEvents(death)
+        sourceMitigationHistory.AddRange(leadUpEvents
             .Where(combatEvent => combatEvent.SourceEntityId != 0)
             .Select(combatEvent => new SourceMitigationSnapshot(
                 combatEvent.SeenAtUtc,
@@ -5100,9 +5557,17 @@ public sealed class RecapWindow : Window, IDisposable
     private IReadOnlyList<StatusSnapshot> GetSelectedMitigationDebuffStatuses(PartyDeathRecord death)
     {
         var selection = DeathDisplaySelector.Select(death);
+        return GetSelectedMitigationDebuffStatuses(death, selection, GetLeadUpEvents(death));
+    }
+
+    private IReadOnlyList<StatusSnapshot> GetSelectedMitigationDebuffStatuses(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
         return GetCombinedMitigationDebuffStatuses(
             GetSelectedPlayerStatuses(death),
-            selection.Events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent)),
+            selection.Events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)),
             out _);
     }
 
@@ -7358,6 +7823,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.157");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added a Timers toggle for the 10s lead-up Mits/Debuffs column.");
+        DrawWrappedBullet("Refined 10s lead-up health and heal display.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.156");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Cleaned up 10s lead-up capture so hits, HP, shields, and heals line up more reliably.");
@@ -8849,7 +9321,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawAmountValue(CombatEventRecord combatEvent)
     {
-        DrawCenteredText(FormatAmount(combatEvent.Amount));
+        DrawCenteredText(FormatSignedEventAmount(combatEvent), GetEventAmountColor(combatEvent));
         DrawAmountTooltip(combatEvent.Kind);
     }
 
@@ -8871,6 +9343,76 @@ public sealed class RecapWindow : Window, IDisposable
     private static string FormatAmount(ulong amount)
     {
         return amount > 0 ? amount.ToString("N0") : "-";
+    }
+
+    private static bool EventHasSignedAmount(CombatEventRecord combatEvent)
+    {
+        return combatEvent.Amount > 0 &&
+            combatEvent.Kind is DeathEventKind.Damage or DeathEventKind.Heal;
+    }
+
+    private static string FormatSignedEventAmountSuffix(CombatEventRecord combatEvent)
+    {
+        return EventHasSignedAmount(combatEvent)
+            ? $" {FormatSignedEventAmount(combatEvent)}"
+            : string.Empty;
+    }
+
+    private static string FormatSignedEventAmount(CombatEventRecord combatEvent)
+    {
+        if (combatEvent.Amount == 0)
+        {
+            return "-";
+        }
+
+        return combatEvent.Kind switch
+        {
+            DeathEventKind.Damage => FormatSignedDamageAmount(combatEvent.Amount),
+            DeathEventKind.Heal => $"+{FormatAmount(combatEvent.Amount)}",
+            _ => FormatAmount(combatEvent.Amount),
+        };
+    }
+
+    private static string FormatSignedDamageAmount(ulong amount)
+    {
+        return amount > 0 ? $"-{FormatAmount(amount)}" : "-";
+    }
+
+    private static Vector4 GetEventAmountColor(CombatEventRecord combatEvent)
+    {
+        return combatEvent.Kind switch
+        {
+            DeathEventKind.Damage when combatEvent.Amount > 0 => DamageColor,
+            DeathEventKind.Heal when combatEvent.Amount > 0 => HealColor,
+            _ => DisabledColor,
+        };
+    }
+
+    private static Vector4 GetHealIncreaseBarColor()
+    {
+        var lightGreen = ActiveThemeUsesLightPanels()
+            ? new Vector4(0.50f, 0.92f, 0.52f, 1.0f)
+            : new Vector4(0.68f, 1.0f, 0.62f, 1.0f);
+        return BlendColors(HpBarColor, lightGreen, 0.62f) with { W = 1.0f };
+    }
+
+    private static Vector4 GetHpBarLabelColor(bool lethalHit, bool clearlyUnsurvivable)
+    {
+        if (clearlyUnsurvivable)
+        {
+            return OverkillColor;
+        }
+
+        return lethalHit
+            ? GetLethalHitBarTextColor()
+            : ModernTextColor;
+    }
+
+    private static Vector4 GetLethalHitBarTextColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? new Vector4(0.72f, 0.36f, 0.00f, 1.0f)
+            : new Vector4(1.0f, 0.86f, 0.34f, 1.0f);
     }
 
     private static string FormatEnemyHpPercent(EnemyHpSnapshot enemy)
@@ -8904,7 +9446,17 @@ public sealed class RecapWindow : Window, IDisposable
         return total == 0 ? null : total;
     }
 
-    private static void DrawHpShieldBar(uint currentHp, uint shieldHp, uint maxHp, string id, ulong? incomingDamage = null, bool showOverkillLine = false, bool centerLabel = false, string? tooltipDetail = null, bool valueOnlyTooltip = false)
+    private static void DrawHpShieldBar(
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp,
+        string id,
+        ulong? incomingDamage = null,
+        bool showOverkillLine = false,
+        bool centerLabel = false,
+        string? tooltipDetail = null,
+        bool valueOnlyTooltip = false,
+        HpBarHealChange? healChange = null)
     {
         if (maxHp == 0)
         {
@@ -8938,10 +9490,36 @@ public sealed class RecapWindow : Window, IDisposable
         var overflowShieldWidth = (float)(size.X * overflowShieldRatio);
         var effectiveHp = (ulong)currentHp + shieldHp;
         var damageAmount = incomingDamage.GetValueOrDefault();
+        var lethalHit = incomingDamage is not null &&
+            effectiveHp > 0 &&
+            damageAmount >= effectiveHp;
         var clearlyUnsurvivable = incomingDamage is not null &&
             damageAmount >= (ulong)maxHp + ClearlyUnsurvivableOverMaxHp;
 
-        if (hpWidth > 0.0f)
+        var healStartRatio = 0.0;
+        var healEndRatio = 0.0;
+        if (healChange is not null && currentHp > healChange.PreviousCurrentHp)
+        {
+            healStartRatio = Math.Clamp((double)healChange.PreviousCurrentHp / maxHp, 0.0, 1.0);
+            healEndRatio = Math.Clamp((double)currentHp / maxHp, 0.0, 1.0);
+        }
+
+        if (healEndRatio > healStartRatio)
+        {
+            var preHealHpWidth = (float)(size.X * healStartRatio);
+            var postHealHpWidth = (float)(size.X * healEndRatio);
+            if (preHealHpWidth > 0.0f)
+            {
+                drawList.AddRectFilled(position, new Vector2(position.X + preHealHpWidth, barEnd.Y), ImGui.GetColorU32(HpBarColor), rounding);
+            }
+
+            drawList.AddRectFilled(
+                new Vector2(position.X + preHealHpWidth, position.Y),
+                new Vector2(position.X + postHealHpWidth, barEnd.Y),
+                ImGui.GetColorU32(GetHealIncreaseBarColor()),
+                rounding);
+        }
+        else if (hpWidth > 0.0f)
         {
             drawList.AddRectFilled(position, new Vector2(position.X + hpWidth, barEnd.Y), ImGui.GetColorU32(HpBarColor), rounding);
         }
@@ -8966,7 +9544,7 @@ public sealed class RecapWindow : Window, IDisposable
             centerLabel ? position.X + MathF.Max(4.0f, (size.X - textSize.X) * 0.5f) : position.X + 4.0f,
             position.Y + MathF.Max(1.0f, (size.Y - textSize.Y) * 0.5f));
         ImGui.PushClipRect(position, barEnd, true);
-        drawList.AddText(textPosition, ImGui.GetColorU32(clearlyUnsurvivable ? OverkillColor : ModernTextColor), label);
+        drawList.AddText(textPosition, ImGui.GetColorU32(GetHpBarLabelColor(lethalHit, clearlyUnsurvivable)), label);
         ImGui.PopClipRect();
 
         if (ImGui.IsItemHovered())

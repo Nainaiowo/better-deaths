@@ -121,6 +121,9 @@ internal sealed class BetterDeathsUiTheme
 
 internal static class BetterDeathsThemeCatalog
 {
+    private static readonly Vector4 LightThemeDamageColor = new(0.74f, 0.04f, 0.04f, 1.0f);
+    private static readonly Vector4 LightThemeHealColor = new(0.02f, 0.46f, 0.20f, 1.0f);
+
     private static readonly BetterDeathsUiTheme ClassicTheme = new()
     {
         Id = BetterDeathsTheme.Classic,
@@ -276,6 +279,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.33f, 0.39f, 0.43f, 1.0f),
         text: new Vector4(0.06f, 0.08f, 0.09f, 1.0f),
         danger: new Vector4(0.86f, 0.05f, 0.02f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.76f, 0.84f, 0.87f, 0.98f),
         frameHovered: new Vector4(0.68f, 0.81f, 0.84f, 1.0f),
         popup: new Vector4(0.94f, 0.97f, 0.97f, 0.99f),
@@ -301,6 +306,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.12f, 0.09f, 0.18f, 1.0f),
         text: new Vector4(0.10f, 0.07f, 0.14f, 1.0f),
         danger: new Vector4(0.82f, 0.05f, 0.08f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.80f, 0.72f, 0.90f, 0.98f),
         frameHovered: new Vector4(0.72f, 0.62f, 0.84f, 1.0f),
         popup: new Vector4(0.97f, 0.94f, 1.0f, 0.99f),
@@ -326,6 +333,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.12f, 0.05f, 0.05f, 1.0f),
         text: new Vector4(0.14f, 0.06f, 0.06f, 1.0f),
         danger: new Vector4(0.82f, 0.03f, 0.04f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.90f, 0.72f, 0.72f, 0.98f),
         frameHovered: new Vector4(0.84f, 0.62f, 0.62f, 1.0f),
         popup: new Vector4(1.0f, 0.94f, 0.94f, 0.99f),
@@ -351,6 +360,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.36f, 0.38f, 0.40f, 1.0f),
         text: new Vector4(0.08f, 0.09f, 0.10f, 1.0f),
         danger: new Vector4(0.80f, 0.06f, 0.04f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         navButton: new Vector4(0.72f, 0.74f, 0.75f, 0.98f),
         navButtonHovered: new Vector4(0.64f, 0.68f, 0.70f, 1.0f),
         navButtonSelected: new Vector4(0.56f, 0.67f, 0.72f, 0.98f),
@@ -385,6 +396,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.25f, 0.40f, 0.36f, 1.0f),
         text: new Vector4(0.04f, 0.10f, 0.09f, 1.0f),
         danger: new Vector4(0.86f, 0.06f, 0.04f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.70f, 0.86f, 0.80f, 0.98f),
         frameHovered: new Vector4(0.62f, 0.80f, 0.74f, 1.0f),
         popup: new Vector4(0.91f, 0.97f, 0.94f, 0.99f),
@@ -410,6 +423,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.25f, 0.36f, 0.46f, 1.0f),
         text: new Vector4(0.04f, 0.08f, 0.12f, 1.0f),
         danger: new Vector4(0.84f, 0.05f, 0.06f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.68f, 0.82f, 0.92f, 0.98f),
         frameHovered: new Vector4(0.58f, 0.76f, 0.88f, 1.0f),
         popup: new Vector4(0.91f, 0.96f, 1.0f, 0.99f),
@@ -435,6 +450,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.43f, 0.30f, 0.26f, 1.0f),
         text: new Vector4(0.12f, 0.06f, 0.04f, 1.0f),
         danger: new Vector4(0.86f, 0.04f, 0.03f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.88f, 0.70f, 0.64f, 0.98f),
         frameHovered: new Vector4(0.82f, 0.62f, 0.56f, 1.0f),
         popup: new Vector4(1.0f, 0.93f, 0.89f, 0.99f),
@@ -460,6 +477,8 @@ internal static class BetterDeathsThemeCatalog
         muted: new Vector4(0.34f, 0.38f, 0.44f, 1.0f),
         text: new Vector4(0.06f, 0.08f, 0.10f, 1.0f),
         danger: new Vector4(0.82f, 0.05f, 0.05f, 1.0f),
+        damage: LightThemeDamageColor,
+        heal: LightThemeHealColor,
         frame: new Vector4(0.76f, 0.82f, 0.88f, 0.98f),
         frameHovered: new Vector4(0.68f, 0.76f, 0.84f, 1.0f),
         popup: new Vector4(0.96f, 0.98f, 1.0f, 0.99f),
@@ -520,6 +539,8 @@ internal static class BetterDeathsThemeCatalog
         Vector4 muted,
         Vector4? text = null,
         Vector4? danger = null,
+        Vector4? damage = null,
+        Vector4? heal = null,
         Vector4? frame = null,
         Vector4? frameHovered = null,
         Vector4? popup = null,
@@ -546,8 +567,8 @@ internal static class BetterDeathsThemeCatalog
         {
             Id = id,
             Label = label,
-            DamageColor = new Vector4(1.0f, 0.36f, 0.26f, 1.0f),
-            HealColor = new Vector4(0.27f, 0.88f, 0.45f, 1.0f),
+            DamageColor = damage ?? new Vector4(1.0f, 0.36f, 0.26f, 1.0f),
+            HealColor = heal ?? new Vector4(0.27f, 0.88f, 0.45f, 1.0f),
             WarningColor = new Vector4(1.0f, 0.68f, 0.28f, 1.0f),
             LeadUpGoldColor = highlight,
             SpamWarningColor = dangerColor,
