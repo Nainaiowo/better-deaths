@@ -63,6 +63,7 @@ public enum BetterDeathsTheme
     Lemonade,
     Cotton,
     Banana,
+    Hamtaro,
 }
 
 [Serializable]

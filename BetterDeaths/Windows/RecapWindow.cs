@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.162";
+    private const string CurrentChangelogVersion = "0.1.0.163";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -117,6 +117,7 @@ public sealed class RecapWindow : Window, IDisposable
         BetterDeathsTheme.Lemonade,
         BetterDeathsTheme.Cotton,
         BetterDeathsTheme.Banana,
+        BetterDeathsTheme.Hamtaro,
     ];
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
@@ -8151,6 +8152,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.163");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Updated theme options.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.162");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Cleaned up available mitigation options.");
