@@ -819,6 +819,12 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetShowScrollbars(bool show)
+    {
+        Configuration.ShowScrollbars = show;
+        SaveConfiguration();
+    }
+
     public void SetTheme(BetterDeathsTheme theme)
     {
         if (!Enum.IsDefined(theme) || Configuration.Theme == theme)

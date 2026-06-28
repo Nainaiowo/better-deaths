@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.160";
+    private const string CurrentChangelogVersion = "0.1.0.161";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -261,6 +261,10 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, GetScrollbarBackgroundColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, GetScrollbarGrabColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, GetScrollbarGrabHoveredColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, GetScrollbarGrabActiveColor());
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 0.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 6.0f));
@@ -271,7 +275,7 @@ public sealed class RecapWindow : Window, IDisposable
         public void Dispose()
         {
             ImGui.PopStyleVar(5);
-            ImGui.PopStyleColor(14);
+            ImGui.PopStyleColor(18);
         }
     }
 
@@ -295,6 +299,10 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, GetScrollbarBackgroundColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, GetScrollbarGrabColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, GetScrollbarGrabHoveredColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, GetScrollbarGrabActiveColor());
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 9.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 7.0f));
@@ -304,7 +312,7 @@ public sealed class RecapWindow : Window, IDisposable
         public void Dispose()
         {
             ImGui.PopStyleVar(4);
-            ImGui.PopStyleColor(16);
+            ImGui.PopStyleColor(20);
         }
     }
 
@@ -318,6 +326,10 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, GetScrollbarBackgroundColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, GetScrollbarGrabColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, GetScrollbarGrabHoveredColor());
+            ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, GetScrollbarGrabActiveColor());
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
             ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(6.0f, 4.0f));
         }
@@ -325,7 +337,7 @@ public sealed class RecapWindow : Window, IDisposable
         public void Dispose()
         {
             ImGui.PopStyleVar(2);
-            ImGui.PopStyleColor(6);
+            ImGui.PopStyleColor(10);
         }
     }
 
@@ -353,7 +365,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         Size = DefaultWindowSize;
         SizeCondition = ImGuiCond.FirstUseEver;
-        Flags |= ImGuiWindowFlags.NoScrollbar;
+        ApplyScrollbarWindowFlag();
     }
 
     public void Dispose()
@@ -363,6 +375,7 @@ public sealed class RecapWindow : Window, IDisposable
     public override void PreDraw()
     {
         ApplyConfiguredTheme();
+        ApplyScrollbarWindowFlag();
         if (configuration.ApplyWideDefaultWindowSizeOnNextOpen)
         {
             ImGui.SetNextWindowSize(DefaultWindowSize, ImGuiCond.Always);
@@ -382,6 +395,21 @@ public sealed class RecapWindow : Window, IDisposable
     private void ApplyConfiguredTheme()
     {
         activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
+    }
+
+    private ImGuiWindowFlags OptionalScrollbarFlags => configuration.ShowScrollbars
+        ? ImGuiWindowFlags.None
+        : ImGuiWindowFlags.NoScrollbar;
+
+    private void ApplyScrollbarWindowFlag()
+    {
+        if (configuration.ShowScrollbars)
+        {
+            Flags &= ~ImGuiWindowFlags.NoScrollbar;
+            return;
+        }
+
+        Flags |= ImGuiWindowFlags.NoScrollbar;
     }
 
     public override void Draw()
@@ -437,7 +465,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
-        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             using var shellIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
             DrawModernHeader();
@@ -985,13 +1013,13 @@ public sealed class RecapWindow : Window, IDisposable
             indentContent: false);
     }
 
-    private static void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true)
+    private void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, indentContent ? new Vector2(ReviewPaneContentIndent, 6.0f) : Vector2.Zero);
-        if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild(id, size, false, OptionalScrollbarFlags))
         {
             if (indentContent)
             {
@@ -1009,11 +1037,11 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(3);
     }
 
-    private static void DrawReviewPane(string id, Vector2 size, Action draw)
+    private void DrawReviewPane(string id, Vector2 size, Action draw)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneHorizontalPadding, 6.0f));
-        if (ImGui.BeginChild(id, size, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild(id, size, false, OptionalScrollbarFlags))
         {
             draw();
         }
@@ -1062,7 +1090,7 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             foreach (var pull in pulls)
             {
@@ -1141,7 +1169,7 @@ public sealed class RecapWindow : Window, IDisposable
         var size = new Vector2(PullBrowserCollapsedWidth, height);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        if (ImGui.BeginChild($"##{id}", size, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild($"##{id}", size, false, OptionalScrollbarFlags))
         {
             ImGui.SetCursorPosY(4.0f);
 
@@ -1163,7 +1191,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, ImGuiWindowFlags.NoScrollbar))
+            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
             {
                 foreach (var pull in pulls)
                 {
@@ -1748,7 +1776,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
         }
@@ -6031,6 +6059,14 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Controls the main Better Deaths window background opacity. Lower values make it easier to see combat behind the review window.");
 
+        var showScrollbars = configuration.ShowScrollbars;
+        if (DrawThemedCheckbox("Enable scrollbars", ref showScrollbars))
+        {
+            plugin.SetShowScrollbars(showScrollbars);
+        }
+
+        DrawSettingsTooltip("Mouse-wheel scrolling still works when this is off. This option is for users whose mouse scrolling is broken or malfunctioning.");
+
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
         if (DrawThemedCheckbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
@@ -6419,7 +6455,7 @@ public sealed class RecapWindow : Window, IDisposable
         var theme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, OptionalScrollbarFlags))
         {
             var titleHeight = DrawWidgetPreviewBackground(theme, opacity);
             ImGui.SetCursorPos(new Vector2(0.0f, titleHeight));
@@ -6633,7 +6669,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, UpdateBannerBgColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
-        if (ImGui.BeginChild("##BetterDeathsUpdateBanner", new Vector2(0.0f, 52.0f), true, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.BeginChild("##BetterDeathsUpdateBanner", new Vector2(0.0f, 52.0f), true, OptionalScrollbarFlags))
         {
             ImGui.TextColored(UpdateBannerTextColor, GetPluginUpdateStatusText(status));
             ImGui.TextDisabled("Open the Dalamud plugin installer to update Better Deaths.");
@@ -8115,6 +8151,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.161");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Added an option to enable scrollbars.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.160");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Refined the mitigation What-if table.");
@@ -8788,6 +8830,30 @@ public sealed class RecapWindow : Window, IDisposable
         return ActiveThemeUsesLightPanels()
             ? BlendColors(ModernPanelBorderColor, ModernTextColor, 0.14f) with { W = 1.0f }
             : BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.18f) with { W = 1.0f };
+    }
+
+    private static Vector4 GetScrollbarBackgroundColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelColor, ModernPanelBorderColor, 0.16f) with { W = 0.76f }
+            : BlendColors(ModernShellColor, ModernPanelColor, 0.58f) with { W = 0.70f };
+    }
+
+    private static Vector4 GetScrollbarGrabColor()
+    {
+        return ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.30f) with { W = 0.84f }
+            : BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.40f) with { W = 0.78f };
+    }
+
+    private static Vector4 GetScrollbarGrabHoveredColor()
+    {
+        return BlendColors(GetScrollbarGrabColor(), ModernAccentColor, 0.34f) with { W = 0.94f };
+    }
+
+    private static Vector4 GetScrollbarGrabActiveColor()
+    {
+        return BlendColors(ModernAccentColor, ModernTextColor, ActiveThemeUsesLightPanels() ? 0.08f : 0.04f) with { W = 1.0f };
     }
 
     private static float GetColorLuminance(Vector4 color)
