@@ -1428,6 +1428,16 @@ public sealed partial class Plugin : IDalamudPlugin
         QueueDeathRecapLinkMessage(death);
     }
 
+    public void QueueBetterDeathsChatMessage(string message)
+    {
+        QueueChat(Configuration.DeathChatChannel, $"{GetChatBrandingPrefix()}{message}");
+    }
+
+    public void QueuePlainChatMessage(string message)
+    {
+        QueueChat(Configuration.DeathChatChannel, message);
+    }
+
     public static string GetChatChannelLabel(DeathChatChannel channel)
     {
         return GetChatChannelOption(channel).Label;

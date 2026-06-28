@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.157";
+    private const string CurrentChangelogVersion = "0.1.0.158";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2230,13 +2230,23 @@ public sealed class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(PartyDeathRecord death)
     {
-        return GetTimelineCauseEvents(DeathDisplaySelector.Select(death));
+        return GetRawTimelineCauseEvents(DeathDisplaySelector.Select(death));
     }
 
     private static IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(DeathDisplaySelection selection)
     {
         return selection.Events
             .Where(IsFatalEvent)
+            .ToList();
+    }
+
+    private static IReadOnlyList<CombatEventRecord> GetRawTimelineCauseEvents(DeathDisplaySelection selection)
+    {
+        return selection.FatalEvents
+            .SelectMany(group => group.Events)
+            .Where(IsFatalEvent)
+            .OrderBy(combatEvent => combatEvent.SeenAtUtc)
+            .ThenBy(combatEvent => combatEvent.EventOrdinal)
             .ToList();
     }
 
@@ -3002,27 +3012,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
-        var effectiveChannel = Plugin.GetEffectiveChatChannel(configuration.DeathChatChannel);
-        ImGui.SetNextItemWidth(185.0f);
-        if (ImGui.BeginCombo($"##DeathChatChannel{buttonId}", Plugin.GetChatChannelLabel(effectiveChannel)))
-        {
-            foreach (var option in Plugin.ChatChannelOptions)
-            {
-                var selected = effectiveChannel == option.Channel;
-                if (ImGui.Selectable(option.Label, selected))
-                {
-                    plugin.SetDeathChatChannel(option.Channel);
-                }
-
-                if (selected)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
-            }
-
-            ImGui.EndCombo();
-        }
-
+        DrawDeathChatChannelCombo(buttonId);
         ImGui.SameLine();
         if (ImGui.Button($"Post information to chat##PostInfo{buttonId}"))
         {
@@ -3031,6 +3021,32 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawFatalEventRow(death, causeEvents);
         DrawFatalSequenceSummary(death, resolved.Selection.AnchorSeenAtUtc);
+    }
+
+    private void DrawDeathChatChannelCombo(string id, float width = 185.0f)
+    {
+        var effectiveChannel = Plugin.GetEffectiveChatChannel(configuration.DeathChatChannel);
+        ImGui.SetNextItemWidth(width);
+        if (!ImGui.BeginCombo($"##DeathChatChannel{id}", Plugin.GetChatChannelLabel(effectiveChannel)))
+        {
+            return;
+        }
+
+        foreach (var option in Plugin.ChatChannelOptions)
+        {
+            var selected = effectiveChannel == option.Channel;
+            if (ImGui.Selectable(option.Label, selected))
+            {
+                plugin.SetDeathChatChannel(option.Channel);
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndCombo();
     }
 
     private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
@@ -3397,6 +3413,14 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
 
         DrawLeadUpLabel("Available mitigation");
+        DrawWhatIfChatControls(
+            death,
+            idSuffix,
+            options,
+            selectedOptions,
+            damageEvents,
+            observedDamage,
+            hpDisplay);
         if (death.PossibleMitigations.Count == 0)
         {
             ImGui.TextDisabled("No available mitigation data was captured for this death.");
@@ -3418,6 +3442,121 @@ public sealed class RecapWindow : Window, IDisposable
             activeStatuses,
             selectedOptions,
             options.Count > 0);
+    }
+
+    private void DrawWhatIfChatControls(
+        PartyDeathRecord death,
+        string idSuffix,
+        IReadOnlyList<PossibleMitigationSnapshot> options,
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay)
+    {
+        var style = ImGui.GetStyle();
+        var controlId = $"WhatIf{idSuffix}";
+        var comboWidth = MathF.Min(185.0f, MathF.Max(120.0f, ImGui.GetContentRegionAvail().X));
+        DrawDeathChatChannelCombo(controlId, comboWidth);
+        ImGui.Spacing();
+
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var canFitTwoButtons = availableWidth >= 284.0f + style.ItemSpacing.X;
+        var buttonWidth = canFitTwoButtons
+            ? MathF.Min(170.0f, (availableWidth - style.ItemSpacing.X) * 0.5f)
+            : MathF.Min(170.0f, availableWidth);
+
+        ImGui.BeginDisabled(options.Count == 0);
+        if (ImGui.Button($"Send available mits##WhatIfAvailableMits{controlId}", new Vector2(buttonWidth, 0.0f)))
+        {
+            QueueWhatIfMitigationChat("Available mits", options);
+        }
+
+        ImGui.EndDisabled();
+
+        if (canFitTwoButtons)
+        {
+            ImGui.SameLine();
+        }
+
+        ImGui.BeginDisabled(selectedOptions.Count == 0 || observedDamage is null || damageEvents.Count == 0);
+        if (ImGui.Button($"Send outcome##WhatIfSelectedMits{controlId}", new Vector2(buttonWidth, 0.0f)))
+        {
+            QueueWhatIfSelectedMitigationOutcomeChat(
+                selectedOptions,
+                damageEvents,
+                observedDamage,
+                hpDisplay);
+        }
+
+        ImGui.EndDisabled();
+        ImGui.Spacing();
+    }
+
+    private void QueueWhatIfMitigationChat(
+        string label,
+        IReadOnlyList<PossibleMitigationSnapshot> options)
+    {
+        plugin.QueueBetterDeathsChatMessage(
+            $"{label}: {FormatPossibleMitigationChatOptions(options)}.");
+    }
+
+    private void QueueWhatIfSelectedMitigationOutcomeChat(
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay)
+    {
+        plugin.QueueBetterDeathsChatMessage(
+            $"Outcome with selected mits: {FormatPossibleMitigationChatOptions(selectedOptions)}.");
+
+        if (BuildWhatIfOutcomeChatLine(damageEvents, observedDamage, hpDisplay, selectedOptions) is { } outcomeLine)
+        {
+            plugin.QueuePlainChatMessage(outcomeLine);
+        }
+    }
+
+    private string FormatPossibleMitigationChatOptions(IReadOnlyList<PossibleMitigationSnapshot> options)
+    {
+        return options.Count == 0
+            ? "none"
+            : string.Join("; ", options.Select(FormatPossibleMitigationChatOption));
+    }
+
+    private string FormatPossibleMitigationChatOption(PossibleMitigationSnapshot option)
+    {
+        return $"{option.ActionName} ({option.ClassJobName})";
+    }
+
+    private static string? BuildWhatIfOutcomeChatLine(
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay,
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions)
+    {
+        if (observedDamage is null || damageEvents.Count == 0 || selectedOptions.Count == 0)
+        {
+            return null;
+        }
+
+        var selectedStatuses = selectedOptions
+            .SelectMany(option => option.Statuses)
+            .ToList();
+        var potentialDamage = CalculateDamageWithAdditionalMitigation(damageEvents, selectedStatuses);
+        var preventedDamage = observedDamage.Value > potentialDamage
+            ? observedDamage.Value - potentialDamage
+            : 0UL;
+        var resultText = "HP before hit was not captured.";
+        if (hpDisplay.MaxHp > 0)
+        {
+            var effectiveHp = (ulong)hpDisplay.CurrentHp + hpDisplay.ShieldHp;
+            resultText = potentialDamage < effectiveHp
+                ? $"survives by {effectiveHp - potentialDamage:N0}"
+                : potentialDamage == effectiveHp
+                    ? "exactly lethal"
+                    : $"still short by {potentialDamage - effectiveHp:N0}";
+        }
+
+        return $"{observedDamage.Value:N0} -> {potentialDamage:N0}; reduced by {preventedDamage:N0}; {resultText}.";
     }
 
     private EventHpDisplay GetWhatIfHpDisplay(ResolvedDeathDisplay resolved, IReadOnlyList<CombatEventRecord> damageEvents)
@@ -3840,6 +3979,8 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var death = resolved.Death;
         DrawLeadUpLabel("10 second HP history");
+        ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X * 2.0f);
+        DrawLeadUpTimelineTimerToggle(idSuffix);
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
         var rows = resolved.TimelineRows;
 
@@ -3848,8 +3989,6 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TextDisabled("No HP samples or combat events captured in the last 10 seconds before KO.");
             return;
         }
-
-        DrawLeadUpTimelineTimerToggle(idSuffix);
 
         if (!ImGui.BeginTable($"##HpHistory{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
@@ -4913,16 +5052,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawLeadUpTimelineTimerToggle(string idSuffix)
     {
         var showTimers = configuration.ShowLeadUpTimelineMitigationTimers;
-        const string visibleLabel = "Timers";
-        var labelWidth = ImGui.CalcTextSize(visibleLabel).X;
-        var checkboxWidth = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + labelWidth;
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        if (availableWidth > checkboxWidth)
-        {
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableWidth - checkboxWidth);
-        }
-
-        if (DrawThemedCheckbox($"{visibleLabel}##LeadUpTimelineMitigationTimers{idSuffix}", ref showTimers))
+        if (DrawThemedCheckbox($"Timers##LeadUpTimelineMitigationTimers{idSuffix}", ref showTimers))
         {
             configuration.ShowLeadUpTimelineMitigationTimers = showTimers;
             plugin.SaveConfiguration();
@@ -5166,7 +5296,7 @@ public sealed class RecapWindow : Window, IDisposable
         var totalDamage = GetIncomingDamageAmount(events);
         if (totalDamage is not null)
         {
-            DrawCenteredDamageSummary(events, $"Hit for {FormatSignedDamageAmount(totalDamage.Value)}");
+            DrawCenteredDamageSummary(events, FormatSignedDamageAmount(totalDamage.Value));
             DrawPostMitigationHitTooltip();
         }
         else
@@ -5233,28 +5363,45 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCenteredWrappedCombatEventLine(CombatEventRecord combatEvent)
     {
-        var sourceText = $"{FormatKnownPlayerName(combatEvent.SourceName)}:";
         var actionText = FormatActionNameForDisplay(combatEvent);
         var amountText = FormatSignedEventAmountSuffix(combatEvent);
-        var textAfterIcon = $"{actionText}{amountText}";
+        var text = $"{actionText}{amountText}";
         var iconId = GetDamageTypeIconId(combatEvent);
         var iconSize = GetInlineDamageTypeIconSize(iconId);
         var spacing = 4.0f;
-        var fullWidth = ImGui.CalcTextSize(sourceText).X + spacing +
-            (iconId == 0 ? 0.0f : iconSize + spacing) +
-            ImGui.CalcTextSize(textAfterIcon).X;
+        var fullWidth = (iconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(text).X;
         var availableWidth = ImGui.GetContentRegionAvail().X;
+        var hovered = false;
         if (fullWidth <= availableWidth)
         {
-            DrawCombatEventLineCore(combatEvent, centered: true, includeFlags: false);
-            return;
+            CenterNextItem(fullWidth);
+            ImGui.BeginGroup();
+            if (iconId != 0)
+            {
+                DrawGameIcon(iconId, iconSize, GetDamageTypeIconTooltip(combatEvent.DamageType));
+                hovered |= ImGui.IsItemHovered();
+                ImGui.SameLine(0.0f, spacing);
+            }
+
+            ImGui.PushStyleColor(ImGuiCol.Text, GetEventColor(combatEvent.Kind));
+            ImGui.TextUnformatted(text);
+            hovered |= ImGui.IsItemHovered();
+            ImGui.PopStyleColor();
+            ImGui.EndGroup();
+            hovered |= ImGui.IsItemHovered();
+        }
+        else
+        {
+            ImGui.BeginGroup();
+            DrawCenteredWrappedActionTextWithIcon(combatEvent, text);
+            ImGui.EndGroup();
+            hovered |= ImGui.IsItemHovered();
         }
 
-        ImGui.BeginGroup();
-        DrawCenteredOrWrappedText(sourceText, GetEventColor(combatEvent.Kind));
-        DrawCenteredWrappedActionTextWithIcon(combatEvent, textAfterIcon);
-        ImGui.EndGroup();
-        DrawLikelyAutoAttackTooltip(combatEvent);
+        if (hovered)
+        {
+            SetThemedTooltip($"Source: {FormatKnownPlayerName(combatEvent.SourceName)}");
+        }
     }
 
     private static void DrawCenteredWrappedActionTextWithIcon(CombatEventRecord combatEvent, string text)
@@ -7823,6 +7970,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.158");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Refined 10s lead-up event text and What-if chat buttons.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.157");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Added a Timers toggle for the 10s lead-up Mits/Debuffs column.");
