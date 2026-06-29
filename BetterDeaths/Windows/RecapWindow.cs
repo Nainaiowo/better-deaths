@@ -5,6 +5,7 @@ using Dalamud.Interface.Textures;
 using Dalamud.Interface.Windowing;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
@@ -92,7 +93,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.172";
+    private const string CurrentChangelogVersion = "0.1.0.173";
+    private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
+    private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -534,6 +537,8 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine();
         DrawModernNavButton("Data", MainPage.Data);
         ImGui.SameLine();
+        DrawModernNavButton("Feedback", MainPage.Feedback);
+        ImGui.SameLine();
         DrawModernNavButton("Updates", MainPage.Updates, ShouldHighlightChangelogTab());
         if (showDebugTab)
         {
@@ -554,6 +559,9 @@ public sealed class RecapWindow : Window, IDisposable
                 break;
             case MainPage.Data:
                 DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
+                break;
+            case MainPage.Feedback:
+                DrawReviewPanel("##FeedbackModern", Vector2.Zero, DrawFeedbackPage);
                 break;
             case MainPage.Updates:
                 plugin.MarkChangelogVersionSeen(CurrentChangelogVersion);
@@ -1462,9 +1470,6 @@ public sealed class RecapWindow : Window, IDisposable
             case DeathDetailPage.LeadUp:
                 DrawBetterDeathsInformationContent(resolved, deathId);
                 break;
-            case DeathDetailPage.Replay:
-                DrawDeathReplayContext(resolved, deathId);
-                break;
             default:
                 DrawCauseSummary(resolved);
                 break;
@@ -1507,12 +1512,17 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine();
         DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
         ImGui.SameLine();
-        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId);
+        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId, disabled: true, tooltip: "Coming soon");
     }
 
-    private void DrawDeathDetailButton(string label, DeathDetailPage page, string deathId)
+    private void DrawDeathDetailButton(
+        string label,
+        DeathDetailPage page,
+        string deathId,
+        bool disabled = false,
+        string? tooltip = null)
     {
-        var selected = selectedDeathDetailPage == page;
+        var selected = !disabled && selectedDeathDetailPage == page;
         var buttonColor = selected ? ModernAccentSoftColor : ModernPanelAltColor;
         var hoveredColor = selected
             ? ModernAccentSoftColor with { W = 1.0f }
@@ -1522,9 +1532,25 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
         ImGui.PushStyleColor(ImGuiCol.Text, selected ? ModernAccentColor : ModernTextColor);
+        if (disabled)
+        {
+            ImGui.BeginDisabled();
+        }
+
         if (ImGui.Button($"{label}##DeathDetail{deathId}{page}", new Vector2(112.0f, 28.0f)))
         {
             selectedDeathDetailPage = page;
+        }
+
+        if (disabled)
+        {
+            ImGui.EndDisabled();
+        }
+
+        if (!string.IsNullOrWhiteSpace(tooltip) &&
+            ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+        {
+            SetThemedTooltip(tooltip);
         }
 
         ImGui.PopStyleColor(4);
@@ -8605,6 +8631,7 @@ public sealed class RecapWindow : Window, IDisposable
         Example,
         Customize,
         Data,
+        Feedback,
         Updates,
         Debug,
     }
@@ -8666,7 +8693,7 @@ public sealed class RecapWindow : Window, IDisposable
         var data = GetDataPageSnapshot();
 
         ImGui.TextColored(LeadUpGoldColor, "Privacy & Data");
-        ImGui.TextWrapped("Better Deaths does not upload your data. It does not have any upload functions, telemetry, analytics, webhooks, feedback endpoints, or hidden network reporting built into the plugin in any way, shape, or form.");
+        ImGui.TextWrapped("Better Deaths does not upload your data. It does not have any upload functions, telemetry, analytics, webhooks, or hidden network reporting built into the plugin in any way, shape, or form.");
         ImGui.TextWrapped("That is intentional, and it will remain that way.");
 
         ImGui.Separator();
@@ -8693,6 +8720,78 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Sharing");
         DrawWrappedBullet("Chat posting is opt-in. If you post recap information to chat, that information is shared through the selected in-game chat channel.");
         DrawWrappedBullet("Recap links are not web links and do not send data to a Better Deaths server. They are local Dalamud chat payloads used to find a matching recap.");
+        DrawWrappedBullet("The Feedback tab only opens a Google Forms link in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
+    }
+
+    private void DrawFeedbackPage()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "Feedback");
+        ImGui.TextWrapped("Use this if you want to send feedback, bug reports, or ideas through the Better Deaths feedback form.");
+        ImGui.TextWrapped("The button opens an anonymous Google Forms link in your browser after you confirm.");
+
+        ImGui.Spacing();
+        DrawDataStat("URL", FeedbackFormUrl);
+
+        ImGui.Spacing();
+        if (DrawThemedActionButton("Open feedback form", "OpenBetterDeathsFeedbackForm"))
+        {
+            ImGui.OpenPopup(FeedbackConfirmPopupId);
+        }
+
+        DrawFeedbackConfirmationPopup();
+    }
+
+    private static void DrawFeedbackConfirmationPopup()
+    {
+        ImGui.SetNextWindowSize(new Vector2(460.0f, 0.0f), ImGuiCond.Appearing);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12.0f, 10.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8.0f, 8.0f));
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+        if (!ImGui.BeginPopup(FeedbackConfirmPopupId, ImGuiWindowFlags.NoMove))
+        {
+            ImGui.PopStyleColor(2);
+            ImGui.PopStyleVar(2);
+            return;
+        }
+
+        ImGui.TextColored(LeadUpGoldColor, "Open feedback form?");
+        ImGui.TextWrapped("This will open an anonymous Google Forms link in your browser.");
+        ImGui.TextWrapped(FeedbackFormUrl);
+        ImGui.Separator();
+
+        if (DrawThemedActionButton("OK", "ConfirmOpenBetterDeathsFeedbackForm", 92.0f))
+        {
+            OpenFeedbackFormUrl();
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.SameLine();
+        if (DrawThemedActionButton("Cancel", "CancelOpenBetterDeathsFeedbackForm", 92.0f))
+        {
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+        ImGui.PopStyleColor(2);
+        ImGui.PopStyleVar(2);
+    }
+
+    private static void OpenFeedbackFormUrl()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = FeedbackFormUrl,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Could not open Better Deaths feedback form.");
+            Plugin.ChatGui.Print($"[Better Deaths] Could not open the feedback form. URL: {FeedbackFormUrl}");
+        }
     }
 
     private DataPageSnapshot GetDataPageSnapshot()
@@ -8746,6 +8845,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.173");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added a Feedback tab with a confirmation before opening the Google Forms link.");
+        DrawWrappedBullet("Replay now stays visible as a disabled Coming soon tab while replay work continues.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.172");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Added an early Death Replay tab with captured player and enemy positions around the selected death.");
