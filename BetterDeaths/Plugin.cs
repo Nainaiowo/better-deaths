@@ -101,6 +101,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
     private const int MaxRecentReplayMarkersPerActor = 64;
+    private const int MaxRecentReplayMechanicsPerSource = 96;
     private const uint ActorControlDeathCategory = 0x6;
     private const uint ActorControlGainEffectCategory = 0x14;
     private const uint ActorControlLoseEffectCategory = 0x15;
@@ -124,7 +125,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan EffectResultHpHistoryPreResultWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan EffectResultHpHistoryPostResultWindow = TimeSpan.FromMilliseconds(5);
@@ -453,6 +454,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<HpHistorySnapshot>> recentHpHistoryByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayPositionSnapshot>> recentReplayPositionsByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<ReplayMechanicSnapshot>> recentReplayMechanicsBySource = new(StringComparer.Ordinal);
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
@@ -4248,6 +4250,9 @@ public sealed partial class Plugin : IDalamudPlugin
                 deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
                 deathSeenAtUtc),
             ReplayMarkers = GetReplayMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
+            ReplayMechanics = GetRecentReplayMechanics(
+                deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+                deathSeenAtUtc),
         };
     }
 
@@ -4723,6 +4728,11 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             AddRecentReplayPositionSnapshot(enemy);
         }
+
+        foreach (var mechanic in CaptureKnownReplayMechanicSnapshots(now))
+        {
+            AddRecentReplayMechanicSnapshot(mechanic);
+        }
     }
 
     private ReplayPositionSnapshot CreatePlayerReplayPositionSnapshot(PartyMemberSnapshot member, DateTime seenAtUtc)
@@ -4808,6 +4818,81 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         history.Add(snapshot);
+    }
+
+    private IReadOnlyList<ReplayMechanicSnapshot> CaptureKnownReplayMechanicSnapshots(DateTime seenAtUtc)
+    {
+        var snapshots = new List<ReplayMechanicSnapshot>();
+        var seenEntityIds = new HashSet<uint>();
+        foreach (var gameObject in ObjectTable)
+        {
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                battleNpc.EntityId == 0 ||
+                battleNpc.EntityId == InvalidActorEntityId ||
+                !seenEntityIds.Add(battleNpc.EntityId))
+            {
+                continue;
+            }
+
+            var name = battleNpc.Name.TextValue;
+            if (!string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            snapshots.Add(new ReplayMechanicSnapshot(
+                seenAtUtc,
+                CalculatePullElapsed(seenAtUtc),
+                (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
+                $"object:{battleNpc.EntityId:X8}",
+                name,
+                ReplayMechanicShape.Circle,
+                battleNpc.Position.X,
+                battleNpc.Position.Y,
+                battleNpc.Position.Z,
+                battleNpc.Rotation,
+                3.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                name,
+                "object",
+                battleNpc.BaseId,
+                battleNpc.EntityId,
+                true));
+        }
+
+        return snapshots;
+    }
+
+    private void AddRecentReplayMechanicSnapshot(ReplayMechanicSnapshot snapshot)
+    {
+        if (!recentReplayMechanicsBySource.TryGetValue(snapshot.SourceKey, out var history))
+        {
+            history = [];
+            recentReplayMechanicsBySource[snapshot.SourceKey] = history;
+        }
+
+        var last = history.Count == 0 ? null : history[^1];
+        if (last is not null &&
+            last.RawEventId == snapshot.RawEventId &&
+            Vector3.Distance(new Vector3(last.X, last.Y, last.Z), new Vector3(snapshot.X, snapshot.Y, snapshot.Z)) <= 0.05f &&
+            Duration(last.SeenAtUtc, snapshot.SeenAtUtc) <= ReplayPositionSampleInterval)
+        {
+            history[^1] = last with
+            {
+                DurationSeconds = Math.Max(
+                    last.DurationSeconds,
+                    (float)(snapshot.SeenAtUtc - last.SeenAtUtc).TotalSeconds + snapshot.DurationSeconds),
+            };
+            return;
+        }
+
+        history.Add(snapshot);
+        while (history.Count > MaxRecentReplayMechanicsPerSource)
+        {
+            history.RemoveAt(0);
+        }
     }
 
     private bool ShouldSkipIntermediateEffectResultHpHistorySnapshot(
@@ -5298,10 +5383,29 @@ public sealed partial class Plugin : IDalamudPlugin
             .ToList();
     }
 
+    private IReadOnlyList<ReplayMechanicSnapshot> GetRecentReplayMechanics(DateTime startAtUtc, DateTime endAtUtc)
+    {
+        if (recentReplayMechanicsBySource.Count == 0 || endAtUtc < startAtUtc)
+        {
+            return [];
+        }
+
+        return recentReplayMechanicsBySource.Values
+            .SelectMany(history => history)
+            .Where(snapshot => snapshot.SeenAtUtc <= endAtUtc &&
+                snapshot.SeenAtUtc.AddSeconds(Math.Max(0.05f, snapshot.DurationSeconds)) >= startAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(snapshot => snapshot.SourceKey, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private void UpdateCurrentDeathReplayPositions(DateTime now)
     {
         if (currentDeaths.Count == 0 ||
-            recentReplayPositionsByActor.Count == 0 && recentReplayMarkersByActor.Count == 0)
+            recentReplayPositionsByActor.Count == 0 &&
+            recentReplayMarkersByActor.Count == 0 &&
+            recentReplayMechanicsBySource.Count == 0)
         {
             return;
         }
@@ -5324,8 +5428,14 @@ public sealed partial class Plugin : IDalamudPlugin
             var replayMarkers = recentReplayMarkersByActor.Count == 0
                 ? death.ReplayMarkers
                 : GetReplayMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
+            var replayMechanics = recentReplayMechanicsBySource.Count == 0
+                ? death.ReplayMechanics
+                : GetRecentReplayMechanics(
+                    death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+                    replayEndAtUtc);
             if (replayPositions.Count <= death.ReplayPositions.Count &&
-                replayMarkers.Count <= death.ReplayMarkers.Count)
+                replayMarkers.Count <= death.ReplayMarkers.Count &&
+                replayMechanics.Count <= death.ReplayMechanics.Count)
             {
                 continue;
             }
@@ -5334,6 +5444,7 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 ReplayPositions = replayPositions,
                 ReplayMarkers = replayMarkers,
+                ReplayMechanics = replayMechanics,
             };
         }
     }
@@ -5387,6 +5498,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PruneRecentHpHistory(now);
         PruneRecentReplayPositions(now);
         PruneRecentReplayMarkers(now);
+        PruneRecentReplayMechanics(now);
         PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }
@@ -5460,6 +5572,24 @@ public sealed partial class Plugin : IDalamudPlugin
             if (recentReplayMarkersByActor[actorKey].Count == 0)
             {
                 recentReplayMarkersByActor.Remove(actorKey);
+            }
+        }
+    }
+
+    private void PruneRecentReplayMechanics(DateTime now)
+    {
+        if (recentReplayMechanicsBySource.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = now - TimeSpan.FromSeconds(DeathReplayRetentionSeconds);
+        foreach (var sourceKey in recentReplayMechanicsBySource.Keys.ToList())
+        {
+            recentReplayMechanicsBySource[sourceKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
+            if (recentReplayMechanicsBySource[sourceKey].Count == 0)
+            {
+                recentReplayMechanicsBySource.Remove(sourceKey);
             }
         }
     }
@@ -5639,6 +5769,7 @@ public sealed partial class Plugin : IDalamudPlugin
         recentHpHistoryByMember.Clear();
         recentReplayPositionsByActor.Clear();
         recentReplayMarkersByActor.Clear();
+        recentReplayMechanicsBySource.Clear();
         recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
         possibleMitigationUsesByMember.Clear();

@@ -3,7 +3,15 @@ namespace BetterDeaths;
 using System.Collections.Generic;
 using System.Linq;
 
-internal readonly record struct ReplayMarkerInfo(string ShortLabel, string Description);
+internal readonly record struct ReplayMarkerInfo(
+    string ShortLabel,
+    string Description,
+    ReplayMechanicShape? Shape = null,
+    float Radius = 0.0f,
+    float Length = 0.0f,
+    float Width = 0.0f,
+    float AngleDegrees = 0.0f,
+    float DurationSeconds = 8.0f);
 
 internal interface IReplayEncounterModule
 {
@@ -80,18 +88,18 @@ internal static class ReplayEncounterModules
         {
             info = markerId switch
             {
-                127 => new ReplayMarkerInfo("Spread", "Fire spread"),
-                128 => new ReplayMarkerInfo("Stack", "Fire stack"),
-                161 => new ReplayMarkerInfo("Stack", "Final stack"),
-                715 => new ReplayMarkerInfo("Stack", "Forsaken stack"),
-                716 => new ReplayMarkerInfo("Spread", "Forsaken spread"),
-                717 => new ReplayMarkerInfo("Cone", "Forsaken cone"),
+                127 => new ReplayMarkerInfo("Spread", "Fire spread", ReplayMechanicShape.Spread, Radius: 5.0f),
+                128 => new ReplayMarkerInfo("Stack", "Fire stack", ReplayMechanicShape.Stack, Radius: 5.0f),
+                161 => new ReplayMarkerInfo("Stack", "Final stack", ReplayMechanicShape.Stack, Radius: 5.0f, DurationSeconds: 10.0f),
+                715 => new ReplayMarkerInfo("Stack", "Forsaken stack", ReplayMechanicShape.Stack, Radius: 5.0f),
+                716 => new ReplayMarkerInfo("Spread", "Forsaken spread", ReplayMechanicShape.Spread, Radius: 5.0f),
+                717 => new ReplayMarkerInfo("Cone", "Forsaken cone", ReplayMechanicShape.Cone, Radius: 18.0f, Length: 18.0f, AngleDegrees: 60.0f),
                 3004 => new ReplayMarkerInfo("1st", "First in line"),
                 3005 => new ReplayMarkerInfo("2nd", "Second in line"),
                 3006 => new ReplayMarkerInfo("3rd", "Third in line"),
-                5084 => new ReplayMarkerInfo("Stack", "Head stack"),
-                5085 => new ReplayMarkerInfo("Circle", "Circle"),
-                5086 => new ReplayMarkerInfo("Fan", "Fan"),
+                5084 => new ReplayMarkerInfo("Stack", "Head stack", ReplayMechanicShape.Stack, Radius: 5.0f),
+                5085 => new ReplayMarkerInfo("Circle", "Circle", ReplayMechanicShape.Circle, Radius: 5.0f),
+                5086 => new ReplayMarkerInfo("Fan", "Fan", ReplayMechanicShape.Cone, Radius: 18.0f, Length: 18.0f, AngleDegrees: 70.0f),
                 _ => default,
             };
             return !string.IsNullOrEmpty(info.ShortLabel) ||
