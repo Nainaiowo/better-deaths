@@ -75,6 +75,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
     private const int DeathReplayLeadUpSeconds = 20;
     private const int DeathReplayPostDeathSeconds = 10;
+    private const int DeathReplayMarkerCarryInSeconds = 30;
     private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -99,10 +100,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
     private const int MaxCombatLogEventsPerMember = 80;
+    private const int MaxRecentReplayMarkersPerActor = 64;
     private const uint ActorControlDeathCategory = 0x6;
     private const uint ActorControlGainEffectCategory = 0x14;
     private const uint ActorControlLoseEffectCategory = 0x15;
     private const uint ActorControlUpdateEffectCategory = 0x16;
+    private const uint ActorControlTargetIconCategory = 0x22;
     private const uint ActorControlHotCategory = 0x604;
     private const uint ActorControlDotCategory = 0x605;
     private const uint InvalidActorEntityId = 0xE0000000;
@@ -449,6 +452,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<StatusObservation>> recentStatusesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<HpHistorySnapshot>> recentHpHistoryByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayPositionSnapshot>> recentReplayPositionsByActor = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
@@ -3413,6 +3417,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
         var member = FindCurrentMemberByEntityId(packet.EntityId);
+        if (packet.Category == ActorControlTargetIconCategory)
+        {
+            CaptureActorControlTargetIcon(packet, member);
+        }
+
         if (member is not null)
         {
             CaptureActorControlStatusChange(packet, member);
@@ -3510,6 +3519,122 @@ public sealed partial class Plugin : IDalamudPlugin
         return currentMembers.FirstOrDefault(member =>
             member.EntityId != 0 &&
             (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
+    }
+
+    private void CaptureActorControlTargetIcon(RawActorControlPacket packet, PartyMemberSnapshot? member)
+    {
+        var markerId = NormalizeTargetIconId(packet.Param1);
+        if (markerId == 0)
+        {
+            return;
+        }
+
+        var marker = CreateReplayMarkerSnapshot(packet, markerId, member);
+        if (marker is null)
+        {
+            return;
+        }
+
+        AddRecentReplayMarkerSnapshot(marker);
+    }
+
+    private ReplayMarkerSnapshot? CreateReplayMarkerSnapshot(
+        RawActorControlPacket packet,
+        uint markerId,
+        PartyMemberSnapshot? member)
+    {
+        var entityId = NormalizeActorEntityId(packet.EntityId);
+        if (entityId == 0)
+        {
+            return null;
+        }
+
+        if (member is not null)
+        {
+            return new ReplayMarkerSnapshot(
+                packet.SeenAtUtc,
+                CalculatePullElapsed(packet.SeenAtUtc),
+                $"player:{member.MemberKey}",
+                member.MemberName,
+                ReplayActorKind.Player,
+                member.PartyIndex,
+                member.EntityId,
+                member.ClassJobId,
+                member.ClassJobName,
+                markerId,
+                packet.Param1);
+        }
+
+        try
+        {
+            var gameObject = ObjectTable.SearchByEntityId(entityId);
+            if (gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player)
+            {
+                var classJobId = player.ClassJob.RowId;
+                return new ReplayMarkerSnapshot(
+                    packet.SeenAtUtc,
+                    CalculatePullElapsed(packet.SeenAtUtc),
+                    $"player:entity:{player.EntityId:X8}",
+                    player.Name.TextValue,
+                    ReplayActorKind.Player,
+                    1000 + player.ObjectIndex,
+                    player.EntityId,
+                    classJobId,
+                    GetClassJobName(classJobId),
+                    markerId,
+                    packet.Param1);
+            }
+
+            if (gameObject is Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc)
+            {
+                return new ReplayMarkerSnapshot(
+                    packet.SeenAtUtc,
+                    CalculatePullElapsed(packet.SeenAtUtc),
+                    $"enemy:{battleNpc.EntityId:X8}",
+                    battleNpc.Name.TextValue,
+                    ReplayActorKind.Enemy,
+                    2000 + battleNpc.ObjectIndex,
+                    battleNpc.EntityId,
+                    0,
+                    string.Empty,
+                    markerId,
+                    packet.Param1);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths replay marker for {EntityId:X8}.", entityId);
+        }
+
+        return null;
+    }
+
+    private void AddRecentReplayMarkerSnapshot(ReplayMarkerSnapshot snapshot)
+    {
+        if (!recentReplayMarkersByActor.TryGetValue(snapshot.ActorKey, out var history))
+        {
+            history = [];
+            recentReplayMarkersByActor[snapshot.ActorKey] = history;
+        }
+
+        var last = history.Count == 0 ? null : history[^1];
+        if (last is not null &&
+            last.MarkerId == snapshot.MarkerId &&
+            Duration(last.SeenAtUtc, snapshot.SeenAtUtc) <= TimeSpan.FromMilliseconds(50))
+        {
+            return;
+        }
+
+        history.Add(snapshot);
+        while (history.Count > MaxRecentReplayMarkersPerActor)
+        {
+            history.RemoveAt(0);
+        }
+    }
+
+    private static uint NormalizeTargetIconId(uint markerId)
+    {
+        return markerId;
     }
 
     private HpHistorySnapshot? GetLatestPriorHpSnapshot(string memberKey, DateTime seenAtUtc, TimeSpan maxAge)
@@ -4097,6 +4222,7 @@ public sealed partial class Plugin : IDalamudPlugin
             ReplayPositions = GetRecentReplayPositions(
                 deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
                 deathSeenAtUtc),
+            ReplayMarkers = GetReplayMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
         };
     }
 
@@ -5121,9 +5247,36 @@ public sealed partial class Plugin : IDalamudPlugin
             .ToList();
     }
 
+    private IReadOnlyList<ReplayMarkerSnapshot> GetReplayMarkersForDeath(DateTime deathSeenAtUtc, DateTime endAtUtc)
+    {
+        var fallbackStartAtUtc = deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayMarkerCarryInSeconds);
+        var startAtUtc = pullStartedAtUtc is { } pullStarted
+            ? pullStarted
+            : fallbackStartAtUtc;
+        return GetRecentReplayMarkers(startAtUtc, endAtUtc);
+    }
+
+    private IReadOnlyList<ReplayMarkerSnapshot> GetRecentReplayMarkers(DateTime startAtUtc, DateTime endAtUtc)
+    {
+        if (recentReplayMarkersByActor.Count == 0 || endAtUtc < startAtUtc)
+        {
+            return [];
+        }
+
+        return recentReplayMarkersByActor.Values
+            .SelectMany(history => history)
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= endAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.ActorKind)
+            .ThenBy(snapshot => snapshot.PartyIndex)
+            .ThenBy(snapshot => snapshot.ActorName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private void UpdateCurrentDeathReplayPositions(DateTime now)
     {
-        if (currentDeaths.Count == 0 || recentReplayPositionsByActor.Count == 0)
+        if (currentDeaths.Count == 0 ||
+            recentReplayPositionsByActor.Count == 0 && recentReplayMarkersByActor.Count == 0)
         {
             return;
         }
@@ -5137,10 +5290,17 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            var replayPositions = GetRecentReplayPositions(
-                death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
-                now <= endAtUtc ? now : endAtUtc);
-            if (replayPositions.Count <= death.ReplayPositions.Count)
+            var replayEndAtUtc = now <= endAtUtc ? now : endAtUtc;
+            var replayPositions = recentReplayPositionsByActor.Count == 0
+                ? death.ReplayPositions
+                : GetRecentReplayPositions(
+                    death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+                    replayEndAtUtc);
+            var replayMarkers = recentReplayMarkersByActor.Count == 0
+                ? death.ReplayMarkers
+                : GetReplayMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
+            if (replayPositions.Count <= death.ReplayPositions.Count &&
+                replayMarkers.Count <= death.ReplayMarkers.Count)
             {
                 continue;
             }
@@ -5148,6 +5308,7 @@ public sealed partial class Plugin : IDalamudPlugin
             currentDeaths[index] = death with
             {
                 ReplayPositions = replayPositions,
+                ReplayMarkers = replayMarkers,
             };
         }
     }
@@ -5200,6 +5361,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PruneRecentStatuses(now);
         PruneRecentHpHistory(now);
         PruneRecentReplayPositions(now);
+        PruneRecentReplayMarkers(now);
         PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }
@@ -5255,6 +5417,24 @@ public sealed partial class Plugin : IDalamudPlugin
             if (recentReplayPositionsByActor[actorKey].Count == 0)
             {
                 recentReplayPositionsByActor.Remove(actorKey);
+            }
+        }
+    }
+
+    private void PruneRecentReplayMarkers(DateTime now)
+    {
+        if (recentReplayMarkersByActor.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = pullStartedAtUtc ?? now - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayMarkerCarryInSeconds + DeathReplayPostDeathSeconds + 5);
+        foreach (var actorKey in recentReplayMarkersByActor.Keys.ToList())
+        {
+            recentReplayMarkersByActor[actorKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
+            if (recentReplayMarkersByActor[actorKey].Count == 0)
+            {
+                recentReplayMarkersByActor.Remove(actorKey);
             }
         }
     }
@@ -5433,6 +5613,7 @@ public sealed partial class Plugin : IDalamudPlugin
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
         recentReplayPositionsByActor.Clear();
+        recentReplayMarkersByActor.Clear();
         recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
         possibleMitigationUsesByMember.Clear();

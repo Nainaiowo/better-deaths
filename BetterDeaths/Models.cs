@@ -86,6 +86,19 @@ public sealed record ReplayPositionSnapshot(
     bool IsDead,
     bool IsTargetable);
 
+public sealed record ReplayMarkerSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string ActorKey,
+    string ActorName,
+    ReplayActorKind ActorKind,
+    int PartyIndex,
+    uint EntityId,
+    uint ClassJobId,
+    string ClassJobName,
+    uint MarkerId,
+    uint RawMarkerId);
+
 public sealed record CombatEventRecord(
     DateTime SeenAtUtc,
     float PullElapsedSeconds,
@@ -223,6 +236,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<PossibleMitigationSnapshot> PossibleMitigations { get; init; } = [];
 
     public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
+
+    public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(
