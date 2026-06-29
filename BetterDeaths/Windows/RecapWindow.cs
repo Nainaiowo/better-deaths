@@ -37,6 +37,7 @@ public sealed class RecapWindow : Window, IDisposable
     private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
     private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
     private readonly HashSet<string> selectedPossibleMitigationKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, float> replayScrubSecondsByDeathId = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
     private MainPage currentMainPage = MainPage.Review;
@@ -91,7 +92,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.171";
+    private const string CurrentChangelogVersion = "0.1.0.172";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -1461,6 +1462,9 @@ public sealed class RecapWindow : Window, IDisposable
             case DeathDetailPage.LeadUp:
                 DrawBetterDeathsInformationContent(resolved, deathId);
                 break;
+            case DeathDetailPage.Replay:
+                DrawDeathReplayContext(resolved, deathId);
+                break;
             default:
                 DrawCauseSummary(resolved);
                 break;
@@ -1502,6 +1506,8 @@ public sealed class RecapWindow : Window, IDisposable
         DrawDeathDetailButton("What-if", DeathDetailPage.WhatIf, deathId);
         ImGui.SameLine();
         DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
+        ImGui.SameLine();
+        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId);
     }
 
     private void DrawDeathDetailButton(string label, DeathDetailPage page, string deathId)
@@ -4237,6 +4243,302 @@ public sealed class RecapWindow : Window, IDisposable
                 SetThemedTooltip($"{enemy.Name}\nHP: {enemy.CurrentHp:N0} / {enemy.MaxHp:N0}\nEntity: {enemy.EntityId:X8}\n{FormatEnemyTargetable(enemy)}");
             }
         }
+    }
+
+    private void DrawDeathReplayContext(ResolvedDeathDisplay resolved, string idSuffix)
+    {
+        var death = resolved.Death;
+        var positions = death.ReplayPositions;
+
+        DrawLeadUpLabel("Death replay");
+        ImGui.TextDisabled("Shows captured positions around the selected death. Older pulls may not have replay data.");
+
+        if (positions.Count == 0)
+        {
+            ImGui.TextDisabled("No replay position data was captured for this death.");
+            return;
+        }
+
+        var minOffset = (float)positions.Min(position => (position.SeenAtUtc - death.SeenAtUtc).TotalSeconds);
+        var maxOffset = (float)positions.Max(position => (position.SeenAtUtc - death.SeenAtUtc).TotalSeconds);
+        if (maxOffset - minOffset < 0.05f)
+        {
+            minOffset -= 0.5f;
+            maxOffset += 0.5f;
+        }
+
+        if (!replayScrubSecondsByDeathId.TryGetValue(idSuffix, out var scrubSeconds))
+        {
+            scrubSeconds = Math.Clamp(0.0f, minOffset, maxOffset);
+            replayScrubSecondsByDeathId[idSuffix] = scrubSeconds;
+        }
+
+        scrubSeconds = Math.Clamp(scrubSeconds, minOffset, maxOffset);
+        ImGui.SetNextItemWidth(MathF.Max(180.0f, ImGui.GetContentRegionAvail().X - 122.0f));
+        if (ImGui.SliderFloat($"##DeathReplayScrub{idSuffix}", ref scrubSeconds, minOffset, maxOffset, FormatReplayOffset(scrubSeconds)))
+        {
+            replayScrubSecondsByDeathId[idSuffix] = scrubSeconds;
+        }
+
+        ImGui.SameLine();
+        if (DrawThemedActionButton("Death", $"ReplayDeath{idSuffix}", 82.0f))
+        {
+            scrubSeconds = Math.Clamp(0.0f, minOffset, maxOffset);
+            replayScrubSecondsByDeathId[idSuffix] = scrubSeconds;
+        }
+
+        ImGui.TextDisabled($"{FormatReplayOffset(scrubSeconds)} | Pull {FormatCombatTimer(death.PullElapsedSeconds + scrubSeconds)}");
+        var selectedAtUtc = death.SeenAtUtc.AddSeconds(scrubSeconds);
+        var actorStates = SelectReplayActorStates(positions, selectedAtUtc);
+        DrawDeathReplayCanvas(death, positions, actorStates, selectedAtUtc, idSuffix);
+        DrawDeathReplayLegend();
+    }
+
+    private static IReadOnlyList<ReplayPositionSnapshot> SelectReplayActorStates(
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        DateTime selectedAtUtc)
+    {
+        return positions
+            .Where(position => position.SeenAtUtc <= selectedAtUtc)
+            .GroupBy(position => position.ActorKey, StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(position => position.SeenAtUtc).First())
+            .Where(position => selectedAtUtc - position.SeenAtUtc <= TimeSpan.FromSeconds(1.5))
+            .OrderBy(position => position.ActorKind)
+            .ThenBy(position => position.PartyIndex)
+            .ThenBy(position => position.ActorName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void DrawDeathReplayCanvas(
+        PartyDeathRecord death,
+        IReadOnlyList<ReplayPositionSnapshot> allPositions,
+        IReadOnlyList<ReplayPositionSnapshot> actorStates,
+        DateTime selectedAtUtc,
+        string idSuffix)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var canvasWidth = MathF.Max(260.0f, availableWidth);
+        var canvasHeight = Math.Clamp(canvasWidth * 0.44f, 260.0f, 420.0f);
+        var canvasStart = ImGui.GetCursorScreenPos();
+        var canvasSize = new Vector2(canvasWidth, canvasHeight);
+        ImGui.InvisibleButton($"##DeathReplayCanvas{idSuffix}", canvasSize);
+
+        var drawList = ImGui.GetWindowDrawList();
+        var canvasEnd = canvasStart + canvasSize;
+        drawList.AddRectFilled(canvasStart, canvasEnd, ImGui.GetColorU32(ModernPanelAltColor with { W = 0.62f }), 5.0f);
+        drawList.AddRect(canvasStart, canvasEnd, ImGui.GetColorU32(ModernPanelBorderColor), 5.0f);
+
+        if (!TryGetReplayBounds(allPositions, out var minX, out var maxX, out var minZ, out var maxZ))
+        {
+            DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
+            return;
+        }
+
+        DrawReplayGrid(drawList, canvasStart, canvasSize);
+        var actorScreenPositions = new List<(ReplayPositionSnapshot Actor, Vector2 ScreenPosition, float Radius)>();
+        foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Enemy))
+        {
+            DrawReplayActor(drawList, death, actor, canvasStart, canvasSize, minX, maxX, minZ, maxZ, actorScreenPositions);
+        }
+
+        foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Player))
+        {
+            DrawReplayActor(drawList, death, actor, canvasStart, canvasSize, minX, maxX, minZ, maxZ, actorScreenPositions);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            var mouse = ImGui.GetIO().MousePos;
+            var hovered = actorScreenPositions
+                .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius + 4.0f)
+                .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
+                .FirstOrDefault();
+            if (hovered.Actor is not null)
+            {
+                SetThemedTooltip(FormatReplayActorTooltip(hovered.Actor, selectedAtUtc));
+            }
+        }
+    }
+
+    private static bool TryGetReplayBounds(
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        out float minX,
+        out float maxX,
+        out float minZ,
+        out float maxZ)
+    {
+        var mapped = positions
+            .Where(position => float.IsFinite(position.X) && float.IsFinite(position.Z))
+            .ToList();
+        if (mapped.Count == 0)
+        {
+            minX = maxX = minZ = maxZ = 0.0f;
+            return false;
+        }
+
+        minX = mapped.Min(position => position.X);
+        maxX = mapped.Max(position => position.X);
+        minZ = mapped.Min(position => position.Z);
+        maxZ = mapped.Max(position => position.Z);
+        if (maxX - minX < 1.0f)
+        {
+            minX -= 1.0f;
+            maxX += 1.0f;
+        }
+
+        if (maxZ - minZ < 1.0f)
+        {
+            minZ -= 1.0f;
+            maxZ += 1.0f;
+        }
+
+        return true;
+    }
+
+    private static void DrawReplayGrid(ImDrawListPtr drawList, Vector2 canvasStart, Vector2 canvasSize)
+    {
+        var gridColor = ImGui.GetColorU32(ModernDividerColor with { W = 0.32f });
+        const int gridLines = 4;
+        for (var i = 1; i < gridLines; i++)
+        {
+            var x = canvasStart.X + (canvasSize.X * i / gridLines);
+            var y = canvasStart.Y + (canvasSize.Y * i / gridLines);
+            drawList.AddLine(new Vector2(x, canvasStart.Y), new Vector2(x, canvasStart.Y + canvasSize.Y), gridColor, 1.0f);
+            drawList.AddLine(new Vector2(canvasStart.X, y), new Vector2(canvasStart.X + canvasSize.X, y), gridColor, 1.0f);
+        }
+    }
+
+    private void DrawReplayActor(
+        ImDrawListPtr drawList,
+        PartyDeathRecord death,
+        ReplayPositionSnapshot actor,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        List<(ReplayPositionSnapshot Actor, Vector2 ScreenPosition, float Radius)> actorScreenPositions)
+    {
+        var screenPosition = ReplayWorldToScreen(actor, canvasStart, canvasSize, minX, maxX, minZ, maxZ);
+        var isDeathTarget = IsReplayDeathTarget(death, actor);
+        var radius = isDeathTarget ? 7.0f : actor.ActorKind == ReplayActorKind.Enemy ? 6.0f : 5.0f;
+        var color = GetReplayActorColor(death, actor);
+        drawList.AddCircleFilled(screenPosition, radius, ImGui.GetColorU32(color), 22);
+        drawList.AddCircle(screenPosition, radius + 1.5f, ImGui.GetColorU32(isDeathTarget ? LeadUpGoldColor : ModernPanelBorderColor), 22, 1.3f);
+
+        if (!actor.IsTargetable && actor.ActorKind == ReplayActorKind.Enemy)
+        {
+            drawList.AddCircle(screenPosition, radius + 4.0f, ImGui.GetColorU32(ModernMutedTextColor with { W = 0.55f }), 18, 1.0f);
+        }
+
+        var label = FormatReplayActorLabel(actor);
+        var textPosition = screenPosition + new Vector2(radius + 5.0f, -ImGui.GetTextLineHeight() * 0.5f);
+        drawList.AddText(textPosition, ImGui.GetColorU32(isDeathTarget ? LeadUpGoldColor : ModernTextColor), label);
+        actorScreenPositions.Add((actor, screenPosition, radius));
+    }
+
+    private static Vector2 ReplayWorldToScreen(
+        ReplayPositionSnapshot actor,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ)
+    {
+        const float padding = 30.0f;
+        var innerWidth = MathF.Max(1.0f, canvasSize.X - (padding * 2.0f));
+        var innerHeight = MathF.Max(1.0f, canvasSize.Y - (padding * 2.0f));
+        var xRatio = Math.Clamp((actor.X - minX) / MathF.Max(1.0f, maxX - minX), 0.0f, 1.0f);
+        var zRatio = Math.Clamp((actor.Z - minZ) / MathF.Max(1.0f, maxZ - minZ), 0.0f, 1.0f);
+        return new Vector2(
+            canvasStart.X + padding + (innerWidth * xRatio),
+            canvasStart.Y + padding + (innerHeight * (1.0f - zRatio)));
+    }
+
+    private string FormatReplayActorLabel(ReplayPositionSnapshot actor)
+    {
+        if (actor.ActorKind == ReplayActorKind.Enemy)
+        {
+            return actor.ActorName;
+        }
+
+        if (configuration.RedactPlayerNames)
+        {
+            var slot = actor.PartyIndex >= 0 && actor.PartyIndex < 1000
+                ? actor.PartyIndex + 1
+                : actor.PartyIndex;
+            return string.IsNullOrWhiteSpace(actor.ClassJobName)
+                ? $"Party {slot}"
+                : $"Party {slot} ({actor.ClassJobName})";
+        }
+
+        var name = FormatKnownPlayerName(actor.ActorName);
+        return string.IsNullOrWhiteSpace(actor.ClassJobName)
+            ? name
+            : $"{name} ({actor.ClassJobName})";
+    }
+
+    private static bool IsReplayDeathTarget(PartyDeathRecord death, ReplayPositionSnapshot actor)
+    {
+        return actor.ActorKind == ReplayActorKind.Player &&
+            string.Equals(actor.ActorKey, $"player:{death.MemberKey}", StringComparison.Ordinal);
+    }
+
+    private static Vector4 GetReplayActorColor(PartyDeathRecord death, ReplayPositionSnapshot actor)
+    {
+        if (IsReplayDeathTarget(death, actor))
+        {
+            return OverkillColor;
+        }
+
+        return actor.ActorKind switch
+        {
+            ReplayActorKind.Enemy => actor.IsTargetable
+                ? DamageColor
+                : ModernMutedTextColor with { W = 0.78f },
+            _ => actor.IsDead
+                ? DisabledColor
+                : ModernAccentColor,
+        };
+    }
+
+    private string FormatReplayActorTooltip(ReplayPositionSnapshot actor, DateTime selectedAtUtc)
+    {
+        var hpText = actor.MaxHp == 0
+            ? "HP: -"
+            : $"HP: {actor.CurrentHp:N0}{(actor.ShieldHp > 0 ? $" + {actor.ShieldHp:N0} shield" : string.Empty)} / {actor.MaxHp:N0}";
+        var targetableText = actor.ActorKind == ReplayActorKind.Enemy
+            ? $"\n{(actor.IsTargetable ? "Targetable" : "Not targetable")}"
+            : string.Empty;
+        return $"{FormatReplayActorLabel(actor)}\n{hpText}\nPosition: {actor.X:0.0}, {actor.Z:0.0}\nSample: {FormatReplayOffset((float)(actor.SeenAtUtc - selectedAtUtc).TotalSeconds)} from replay time{targetableText}";
+    }
+
+    private static string FormatReplayOffset(float seconds)
+    {
+        if (MathF.Abs(seconds) < 0.005f)
+        {
+            return "Death";
+        }
+
+        return seconds < 0.0f
+            ? $"{seconds:0.00}s"
+            : $"+{seconds:0.00}s";
+    }
+
+    private static void DrawCenteredCanvasText(ImDrawListPtr drawList, Vector2 canvasStart, Vector2 canvasSize, string text)
+    {
+        var textSize = ImGui.CalcTextSize(text);
+        drawList.AddText(
+            canvasStart + ((canvasSize - textSize) * 0.5f),
+            ImGui.GetColorU32(ModernMutedTextColor),
+            text);
+    }
+
+    private static void DrawDeathReplayLegend()
+    {
+        ImGui.TextDisabled("Gold/red marks the selected death target. Red marks enemies. Muted enemy rings mean not targetable.");
     }
 
     private void DrawLeadUpTableViewToggle(string idSuffix)
@@ -8313,6 +8615,7 @@ public sealed class RecapWindow : Window, IDisposable
         Mitigation,
         WhatIf,
         LeadUp,
+        Replay,
     }
 
     private sealed record RecordedPullDutyOption(uint TerritoryId, string TerritoryName, int PullCount);
@@ -8443,6 +8746,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.172");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added an early Death Replay tab with captured player and enemy positions around the selected death.");
+        DrawWrappedBullet("Replay data starts with new pulls; older saved pulls will not have position replay data.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.171");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("10s lead-up HP bars now show damage loss and healing growth more clearly.");
@@ -9301,6 +9611,7 @@ public sealed class RecapWindow : Window, IDisposable
             statusesAtDeath)
         {
             EnemyHpAtDeath = CreateExampleEnemyHpAtDeath(deathElapsed),
+            ReplayPositions = CreateExampleReplayPositions(player, deathElapsed),
         };
     }
 
@@ -9328,7 +9639,77 @@ public sealed class RecapWindow : Window, IDisposable
             statusesAtDeath)
         {
             EnemyHpAtDeath = CreateExampleEnemyHpAtDeath(deathElapsed),
+            ReplayPositions = CreateExampleReplayPositions(player, deathElapsed),
         };
+    }
+
+    private static IReadOnlyList<ReplayPositionSnapshot> CreateExampleReplayPositions(ExamplePlayer focusPlayer, float deathElapsed)
+    {
+        var snapshots = new List<ReplayPositionSnapshot>();
+        var startElapsed = MathF.Max(0.0f, deathElapsed - 20.0f);
+        var endElapsed = deathElapsed + 10.0f;
+        var players = ExamplePlayers.Values
+            .OrderBy(player => player.PartyIndex)
+            .ToList();
+
+        for (var elapsed = startElapsed; elapsed <= endElapsed + 0.001f; elapsed += 1.0f)
+        {
+            var phase = elapsed - startElapsed;
+            foreach (var player in players)
+            {
+                var angle = ((MathF.PI * 2.0f) / players.Count) * player.PartyIndex + (phase * 0.07f);
+                var spread = player.PartyIndex < 4 ? 13.0f : 18.0f;
+                var isFocus = string.Equals(player.Key, focusPlayer.Key, StringComparison.Ordinal);
+                var isDead = isFocus && elapsed >= deathElapsed;
+                var currentHp = isDead
+                    ? 0u
+                    : (uint)Math.Round(player.MaxHp * Math.Clamp(0.72f + (MathF.Sin(phase * 0.23f + player.PartyIndex) * 0.12f), 0.35f, 1.0f));
+
+                snapshots.Add(new ReplayPositionSnapshot(
+                    ExamplePullStartedAtUtc.AddSeconds(elapsed),
+                    elapsed,
+                    $"player:{player.Key}",
+                    player.Name,
+                    ReplayActorKind.Player,
+                    player.PartyIndex,
+                    (uint)(10_000 + player.PartyIndex),
+                    player.ClassJobId,
+                    player.Job,
+                    MathF.Cos(angle) * spread,
+                    0.0f,
+                    MathF.Sin(angle) * spread,
+                    angle,
+                    currentHp,
+                    0,
+                    player.MaxHp,
+                    isDead,
+                    true));
+            }
+
+            const uint kefkaMaxHp = 58_000_000;
+            var kefkaHpRatio = Math.Clamp(0.88 - (elapsed / 400.0f), 0.08f, 0.95f);
+            snapshots.Add(new ReplayPositionSnapshot(
+                ExamplePullStartedAtUtc.AddSeconds(elapsed),
+                elapsed,
+                $"enemy:{GetExampleSourceId("Kefka"):X8}",
+                "Kefka",
+                ReplayActorKind.Enemy,
+                2000,
+                GetExampleSourceId("Kefka"),
+                0,
+                string.Empty,
+                0.0f,
+                0.0f,
+                -4.0f + (MathF.Sin(phase * 0.12f) * 1.5f),
+                0.0f,
+                (uint)Math.Round(kefkaMaxHp * kefkaHpRatio),
+                0,
+                kefkaMaxHp,
+                false,
+                true));
+        }
+
+        return snapshots;
     }
 
     private static IReadOnlyList<EnemyHpSnapshot> CreateExampleEnemyHpAtDeath(float deathElapsed)

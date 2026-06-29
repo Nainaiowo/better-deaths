@@ -73,6 +73,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private const ushort ChatGreenColorKey = 45;
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
+    private const int DeathReplayLeadUpSeconds = 20;
+    private const int DeathReplayPostDeathSeconds = 10;
+    private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int CombatLogEventRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -91,6 +94,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRecentHpHistoryPerMember = 240;
     private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxEnemyHpSnapshotsAtDeath = 5;
+    private const int MaxReplayEnemyActors = 12;
     private const int MaxActionEffectTargets = 32;
     private const int MaxEffectResultEntries = 4;
     private const int MaxRecentEventsPerMember = 160;
@@ -117,6 +121,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan EffectResultHpHistoryPreResultWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan EffectResultHpHistoryPostResultWindow = TimeSpan.FromMilliseconds(5);
@@ -443,10 +448,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<CombatLogEventRecord>> recentCombatLogEventsByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<StatusObservation>> recentStatusesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<HpHistorySnapshot>> recentHpHistoryByMember = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<ReplayPositionSnapshot>> recentReplayPositionsByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
+    private DateTime lastReplayPositionSampleAtUtc = DateTime.MinValue;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);
@@ -2265,6 +2272,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         TrackRecentStatuses(currentMembers, now);
         TrackRecentHpHistory(currentMembers, now);
+        TrackRecentReplayPositions(currentMembers, now);
 
         foreach (var member in currentMembers)
         {
@@ -2283,6 +2291,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
             TryCaptureDeath(member, now, "Framework");
         }
+
+        UpdateCurrentDeathReplayPositions(now);
     }
 
     private List<PartyMemberSnapshot> BuildTrackedCharacterSnapshots()
@@ -2333,6 +2343,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 member.MaxHP,
                 isDead,
                 true,
+                member.GameObject?.Position ?? Vector3.Zero,
+                member.GameObject?.Rotation ?? 0.0f,
                 BuildCharacterStatusSnapshots(member.GameObject, member.Statuses)));
             partyIndex++;
         }
@@ -2378,6 +2390,8 @@ public sealed partial class Plugin : IDalamudPlugin
                     player.MaxHp,
                     player.IsDead || player.CurrentHp == 0,
                     false,
+                    player.Position,
+                    player.Rotation,
                     statusSnapshots));
             }
         }
@@ -2426,6 +2440,8 @@ public sealed partial class Plugin : IDalamudPlugin
             localPlayer.MaxHp,
             localPlayer.IsDead || localPlayer.CurrentHp == 0,
             true,
+            localPlayer.Position,
+            localPlayer.Rotation,
             statusSnapshots));
         trackedEntityIds.Add(localPlayer.EntityId);
         trackedNames.Add(memberName);
@@ -4078,6 +4094,9 @@ public sealed partial class Plugin : IDalamudPlugin
             SourceMitigationHistory = sourceMitigationHistory,
             EnemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc),
             PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
+            ReplayPositions = GetRecentReplayPositions(
+                deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+                deathSeenAtUtc),
         };
     }
 
@@ -4536,6 +4555,110 @@ public sealed partial class Plugin : IDalamudPlugin
         UpdateLastHpHistorySample(memberKey, snapshot.SeenAtUtc);
     }
 
+    private void TrackRecentReplayPositions(IReadOnlyList<PartyMemberSnapshot> members, DateTime now)
+    {
+        if (Duration(now, lastReplayPositionSampleAtUtc) < ReplayPositionSampleInterval)
+        {
+            return;
+        }
+
+        lastReplayPositionSampleAtUtc = now;
+        foreach (var member in members)
+        {
+            AddRecentReplayPositionSnapshot(CreatePlayerReplayPositionSnapshot(member, now));
+        }
+
+        foreach (var enemy in CaptureEnemyReplayPositionSnapshots(now))
+        {
+            AddRecentReplayPositionSnapshot(enemy);
+        }
+    }
+
+    private ReplayPositionSnapshot CreatePlayerReplayPositionSnapshot(PartyMemberSnapshot member, DateTime seenAtUtc)
+    {
+        return new ReplayPositionSnapshot(
+            seenAtUtc,
+            CalculatePullElapsed(seenAtUtc),
+            $"player:{member.MemberKey}",
+            member.MemberName,
+            ReplayActorKind.Player,
+            member.PartyIndex,
+            member.EntityId,
+            member.ClassJobId,
+            member.ClassJobName,
+            member.Position.X,
+            member.Position.Y,
+            member.Position.Z,
+            member.Rotation,
+            member.CurrentHp,
+            member.ShieldHp,
+            member.MaxHp,
+            member.IsDead,
+            true);
+    }
+
+    private IReadOnlyList<ReplayPositionSnapshot> CaptureEnemyReplayPositionSnapshots(DateTime seenAtUtc)
+    {
+        var snapshots = new List<ReplayPositionSnapshot>();
+        var seenEntityIds = new HashSet<uint>();
+        foreach (var gameObject in ObjectTable)
+        {
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
+                battleNpc.EntityId == 0 ||
+                battleNpc.EntityId == InvalidActorEntityId ||
+                battleNpc.MaxHp == 0 ||
+                !seenEntityIds.Add(battleNpc.EntityId))
+            {
+                continue;
+            }
+
+            var name = battleNpc.Name.TextValue;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            snapshots.Add(new ReplayPositionSnapshot(
+                seenAtUtc,
+                CalculatePullElapsed(seenAtUtc),
+                $"enemy:{battleNpc.EntityId:X8}",
+                name,
+                ReplayActorKind.Enemy,
+                2000 + battleNpc.ObjectIndex,
+                battleNpc.EntityId,
+                0,
+                string.Empty,
+                battleNpc.Position.X,
+                battleNpc.Position.Y,
+                battleNpc.Position.Z,
+                battleNpc.Rotation,
+                battleNpc.CurrentHp,
+                CalculateShieldHp(battleNpc, battleNpc.MaxHp),
+                battleNpc.MaxHp,
+                battleNpc.IsDead || battleNpc.CurrentHp == 0,
+                battleNpc.IsTargetable));
+        }
+
+        return snapshots
+            .OrderByDescending(snapshot => snapshot.IsTargetable)
+            .ThenByDescending(snapshot => snapshot.MaxHp)
+            .ThenBy(snapshot => snapshot.ActorName, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxReplayEnemyActors)
+            .ToList();
+    }
+
+    private void AddRecentReplayPositionSnapshot(ReplayPositionSnapshot snapshot)
+    {
+        if (!recentReplayPositionsByActor.TryGetValue(snapshot.ActorKey, out var history))
+        {
+            history = [];
+            recentReplayPositionsByActor[snapshot.ActorKey] = history;
+        }
+
+        history.Add(snapshot);
+    }
+
     private bool ShouldSkipIntermediateEffectResultHpHistorySnapshot(
         string memberKey,
         HpHistorySnapshot snapshot,
@@ -4981,6 +5104,54 @@ public sealed partial class Plugin : IDalamudPlugin
             .ToList();
     }
 
+    private IReadOnlyList<ReplayPositionSnapshot> GetRecentReplayPositions(DateTime startAtUtc, DateTime endAtUtc)
+    {
+        if (recentReplayPositionsByActor.Count == 0 || endAtUtc < startAtUtc)
+        {
+            return [];
+        }
+
+        return recentReplayPositionsByActor.Values
+            .SelectMany(history => history)
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= endAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.ActorKind)
+            .ThenBy(snapshot => snapshot.PartyIndex)
+            .ThenBy(snapshot => snapshot.ActorName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void UpdateCurrentDeathReplayPositions(DateTime now)
+    {
+        if (currentDeaths.Count == 0 || recentReplayPositionsByActor.Count == 0)
+        {
+            return;
+        }
+
+        for (var index = 0; index < currentDeaths.Count; index++)
+        {
+            var death = currentDeaths[index];
+            var endAtUtc = death.SeenAtUtc + TimeSpan.FromSeconds(DeathReplayPostDeathSeconds);
+            if (now < death.SeenAtUtc || now > endAtUtc + ReplayPositionSampleInterval)
+            {
+                continue;
+            }
+
+            var replayPositions = GetRecentReplayPositions(
+                death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+                now <= endAtUtc ? now : endAtUtc);
+            if (replayPositions.Count <= death.ReplayPositions.Count)
+            {
+                continue;
+            }
+
+            currentDeaths[index] = death with
+            {
+                ReplayPositions = replayPositions,
+            };
+        }
+    }
+
     private IReadOnlyList<CombatEventRecord> GetRecentEvents(string memberKey, DateTime endAtUtc, int seconds)
     {
         if (!recentEventsByMember.TryGetValue(memberKey, out var events))
@@ -5028,6 +5199,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PruneRecentCombatLogEvents(now);
         PruneRecentStatuses(now);
         PruneRecentHpHistory(now);
+        PruneRecentReplayPositions(now);
         PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }
@@ -5065,6 +5237,24 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 recentHpHistoryByMember.Remove(key);
                 lastHpHistorySampleByMember.Remove(key);
+            }
+        }
+    }
+
+    private void PruneRecentReplayPositions(DateTime now)
+    {
+        if (recentReplayPositionsByActor.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = now - TimeSpan.FromSeconds(DeathReplayRetentionSeconds);
+        foreach (var actorKey in recentReplayPositionsByActor.Keys.ToList())
+        {
+            recentReplayPositionsByActor[actorKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
+            if (recentReplayPositionsByActor[actorKey].Count == 0)
+            {
+                recentReplayPositionsByActor.Remove(actorKey);
             }
         }
     }
@@ -5242,10 +5432,12 @@ public sealed partial class Plugin : IDalamudPlugin
         recentCombatLogEventsByMember.Clear();
         recentStatusesByMember.Clear();
         recentHpHistoryByMember.Clear();
+        recentReplayPositionsByActor.Clear();
         recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
         possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
+        lastReplayPositionSampleAtUtc = DateTime.MinValue;
         lock (rawCombatQueueLock)
         {
             rawActionEffectPackets.Clear();

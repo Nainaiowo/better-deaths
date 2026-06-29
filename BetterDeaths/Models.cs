@@ -2,6 +2,7 @@ namespace BetterDeaths;
 
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 public enum DeathEventKind
 {
@@ -34,6 +35,12 @@ public enum CombatEventHpSource
     DirectCombatEventSnapshot,
 }
 
+public enum ReplayActorKind
+{
+    Player,
+    Enemy,
+}
+
 public sealed record StatusSnapshot(
     uint Id,
     string Name,
@@ -55,7 +62,29 @@ public sealed record PartyMemberSnapshot(
     uint MaxHp,
     bool IsDead,
     bool IsPartyMember,
+    Vector3 Position,
+    float Rotation,
     IReadOnlyList<StatusSnapshot> Statuses);
+
+public sealed record ReplayPositionSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string ActorKey,
+    string ActorName,
+    ReplayActorKind ActorKind,
+    int PartyIndex,
+    uint EntityId,
+    uint ClassJobId,
+    string ClassJobName,
+    float X,
+    float Y,
+    float Z,
+    float Rotation,
+    uint CurrentHp,
+    uint ShieldHp,
+    uint MaxHp,
+    bool IsDead,
+    bool IsTargetable);
 
 public sealed record CombatEventRecord(
     DateTime SeenAtUtc,
@@ -192,6 +221,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<EnemyHpSnapshot> EnemyHpAtDeath { get; init; } = [];
 
     public IReadOnlyList<PossibleMitigationSnapshot> PossibleMitigations { get; init; } = [];
+
+    public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(
