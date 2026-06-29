@@ -8846,7 +8846,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v0.1.0.173");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added a Feedback tab with a confirmation before opening the Google Forms link.");
         DrawWrappedBullet("Replay now stays visible as a disabled Coming soon tab while replay work continues.");
 
