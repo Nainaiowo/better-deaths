@@ -8444,27 +8444,11 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v0.1.0.171");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("The in-plugin information page was updated to match the current Better Deaths features.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.170");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Help markers and HP change bars were cleaned up visually.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.169");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("HP bars now show damage loss and healing growth more clearly in the 10s lead-up.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.168");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("10s lead-up now shows the event source in the Timeline view.");
-        DrawWrappedBullet("Healing in HP bars now looks like growth instead of a separate attached block.");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("10s lead-up HP bars now show damage loss and healing growth more clearly.");
+        DrawWrappedBullet("10s lead-up Timeline now shows the event source.");
+        DrawWrappedBullet("Help markers were cleaned up visually.");
+        DrawWrappedBullet("The in-plugin information page was updated to match the current Better Deaths features.");
 
         ImGui.Separator();
 
