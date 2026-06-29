@@ -91,13 +91,14 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.169";
+    private const string CurrentChangelogVersion = "0.1.0.170";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
     private const float ReviewPaneContentIndent = 8.0f;
     private const float ReviewPaneHorizontalPadding = 9.0f;
+    private const float SectionHelpMarkerRightInset = 12.0f;
     private const float PullBrowserCollapsedWidth = 60.0f;
     private const float RecordedPullDutyFilterComboWidth = 260.0f;
     private const float PullBrowserExpandedWidth = RecordedPullDutyFilterComboWidth + (ReviewPaneHorizontalPadding * 2.0f);
@@ -1434,7 +1435,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawSelectedDeathPanel(ReviewPull pull, PartyDeathRecord? death, string idPrefix)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-        DrawModernSectionTitle("Selected Death", pull.Title);
+        DrawSelectedDeathSectionTitle(pull.Title);
         if (death is null)
         {
             ImGui.TextDisabled(pull.Deaths.Count == 0
@@ -1570,6 +1571,25 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
     }
 
+    private static void DrawSelectedDeathSectionTitle(string? subtitle)
+    {
+        var startCursor = ImGui.GetCursorPos();
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        ImGui.TextColored(LeadUpGoldColor, "Selected Death");
+        var afterTitleCursor = ImGui.GetCursorPos();
+        DrawRightAlignedQuestionTooltipMarker(
+            "SelectedDeathSnapshotInfo",
+            startCursor,
+            availableWidth,
+            () => SetThemedTooltip("Events are shown as accurately as possible while dealing with snapshotted information. We use hooks to obtain as precise data as possible while doing our best to render accurate information, however sometimes you may see HP and data fields not update immediately."));
+
+        ImGui.SetCursorPos(afterTitleCursor);
+        if (!string.IsNullOrWhiteSpace(subtitle))
+        {
+            ImGui.TextDisabled(subtitle);
+        }
+    }
+
     private static void DrawModernSectionTitle(string title, string? subtitle = null)
     {
         ImGui.TextColored(LeadUpGoldColor, title);
@@ -1583,26 +1603,64 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var startCursor = ImGui.GetCursorPos();
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var helpText = "?";
-        var helpSize = ImGui.CalcTextSize(helpText);
 
         ImGui.TextColored(LeadUpGoldColor, title);
         var afterTitleCursor = ImGui.GetCursorPos();
-
-        ImGui.SetCursorPos(new Vector2(
-            startCursor.X + MathF.Max(0.0f, availableWidth - helpSize.X - 2.0f),
-            startCursor.Y));
-        ImGui.TextColored(LeadUpGoldColor, helpText);
-        if (ImGui.IsItemHovered())
-        {
-            DrawReviewLegendTooltip();
-        }
+        DrawRightAlignedQuestionTooltipMarker(
+            $"ReviewLegendHelp{title}{subtitle}",
+            startCursor,
+            availableWidth,
+            DrawReviewLegendTooltip);
 
         ImGui.SetCursorPos(afterTitleCursor);
         if (!string.IsNullOrWhiteSpace(subtitle))
         {
             ImGui.TextDisabled(subtitle);
         }
+    }
+
+    private static void DrawRightAlignedQuestionTooltipMarker(
+        string id,
+        Vector2 rowStartCursor,
+        float availableWidth,
+        Action drawTooltip)
+    {
+        var restoreCursor = ImGui.GetCursorPos();
+        var textSize = ImGui.CalcTextSize("?");
+        var hitSize = new Vector2(
+            MathF.Max(18.0f, textSize.X + 10.0f),
+            MathF.Max(18.0f, textSize.Y + 8.0f));
+        var markerX = rowStartCursor.X + MathF.Max(
+            0.0f,
+            availableWidth - SectionHelpMarkerRightInset - ((hitSize.X + textSize.X) * 0.5f));
+
+        ImGui.SetCursorPos(new Vector2(markerX, rowStartCursor.Y));
+        DrawQuestionTooltipMarker(id, drawTooltip);
+        ImGui.SetCursorPos(restoreCursor);
+    }
+
+    private static void DrawQuestionTooltipMarker(string id, Action drawTooltip)
+    {
+        ImGui.TextColored(LeadUpGoldColor, "?");
+        var textMin = ImGui.GetItemRectMin();
+        var textMax = ImGui.GetItemRectMax();
+        var restoreCursor = ImGui.GetCursorPos();
+        var textSize = textMax - textMin;
+        var hitSize = new Vector2(
+            MathF.Max(18.0f, textSize.X + 10.0f),
+            MathF.Max(18.0f, textSize.Y + 8.0f));
+        var hitPosition = new Vector2(
+            textMin.X - MathF.Max(0.0f, (hitSize.X - textSize.X) * 0.5f),
+            textMin.Y - MathF.Max(0.0f, (hitSize.Y - textSize.Y) * 0.5f));
+
+        ImGui.SetCursorScreenPos(hitPosition);
+        ImGui.InvisibleButton($"##{id}", hitSize);
+        if (ImGui.IsItemHovered())
+        {
+            drawTooltip();
+        }
+
+        ImGui.SetCursorPos(restoreCursor);
     }
 
     private static void DrawReviewLegendTooltip()
@@ -8385,6 +8443,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.170");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Help markers and HP change bars were cleaned up visually.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.169");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("HP bars now show damage loss and healing growth more clearly in the 10s lead-up.");
@@ -10207,7 +10271,7 @@ public sealed class RecapWindow : Window, IDisposable
             drawList.AddRectFilled(position, new Vector2(position.X + overflowShieldWidth, barEnd.Y), ImGui.GetColorU32(ShieldBarColor), rounding);
         }
 
-        if (damageChange is not null)
+        if (damageChange is not null && healEndRatio <= healStartRatio)
         {
             DrawDamageLossOverlay(drawList, position, size, currentHp, shieldHp, maxHp, damageChange);
         }
@@ -10255,50 +10319,26 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var softLeadIn = MathF.Min(10.0f, MathF.Max(3.0f, growthWidth * 0.35f));
-        var startX = position.X + MathF.Max(0.0f, preHealHpWidth - softLeadIn);
+        var startX = position.X + preHealHpWidth;
         var endX = position.X + MathF.Max(postHealHpWidth - 1.0f, preHealHpWidth + 1.0f);
         if (endX <= startX)
         {
             return;
         }
 
-        var top = position.Y + 2.0f;
-        var bottom = position.Y + MathF.Max(3.0f, size.Y - 2.0f);
+        var top = position.Y + 3.0f;
+        var bottom = position.Y + MathF.Max(4.0f, size.Y - 3.0f);
         if (bottom <= top)
         {
             return;
         }
 
         var overlayColor = GetHealIncreaseBarColor();
-        var leftColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.20f : 0.24f };
-        var rightColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.82f };
-        drawList.AddRectFilledMultiColor(
+        drawList.AddRectFilled(
             new Vector2(startX, top),
             new Vector2(endX, bottom),
-            ImGui.GetColorU32(leftColor),
-            ImGui.GetColorU32(rightColor),
-            ImGui.GetColorU32(rightColor),
-            ImGui.GetColorU32(leftColor));
-
-        var coreStartX = position.X + preHealHpWidth;
-        if (endX > coreStartX)
-        {
-            var coreColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.34f : 0.42f };
-            drawList.AddRectFilled(
-                new Vector2(coreStartX, top + 1.0f),
-                new Vector2(endX, bottom - 1.0f),
-                ImGui.GetColorU32(coreColor),
-                1.0f);
-        }
-
-        var edgeWidth = MathF.Min(3.0f, MathF.Max(1.5f, growthWidth * 0.16f));
-        var edgeColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.82f };
-        drawList.AddRectFilled(
-            new Vector2(endX - edgeWidth, top + 1.0f),
-            new Vector2(endX, bottom - 1.0f),
-            ImGui.GetColorU32(edgeColor),
-            1.0f);
+            ImGui.GetColorU32(overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.82f }),
+            1.5f);
     }
 
     private static void DrawDamageLossOverlay(
