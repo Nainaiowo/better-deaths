@@ -14,6 +14,8 @@ internal interface IReplayEncounterModule
     bool IsReplayOverheadStatus(uint statusId);
 
     bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info);
+
+    IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death);
 }
 
 internal static class ReplayEncounterModules
@@ -53,6 +55,11 @@ internal static class ReplayEncounterModules
             info = default;
             return false;
         }
+
+        public IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death)
+        {
+            return death.ReplayMechanics;
+        }
     }
 
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
@@ -90,6 +97,11 @@ internal static class ReplayEncounterModules
             return !string.IsNullOrEmpty(info.ShortLabel) ||
                 !string.IsNullOrEmpty(info.Description) ||
                 FallbackModule.TryGetMarkerInfo(markerId, out info);
+        }
+
+        public IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death)
+        {
+            return death.ReplayMechanics;
         }
     }
 

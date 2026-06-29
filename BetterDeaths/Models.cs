@@ -41,6 +41,17 @@ public enum ReplayActorKind
     Enemy,
 }
 
+public enum ReplayMechanicShape
+{
+    Circle,
+    Cone,
+    Line,
+    Tower,
+    Stack,
+    Spread,
+    Label,
+}
+
 public sealed record StatusSnapshot(
     uint Id,
     string Name,
@@ -98,6 +109,27 @@ public sealed record ReplayMarkerSnapshot(
     string ClassJobName,
     uint MarkerId,
     uint RawMarkerId);
+
+public sealed record ReplayMechanicSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    float DurationSeconds,
+    string SourceKey,
+    string SourceName,
+    ReplayMechanicShape Shape,
+    float X,
+    float Y,
+    float Z,
+    float Rotation,
+    float Radius,
+    float Length,
+    float Width,
+    float AngleDegrees,
+    string Label,
+    string RawEventKind,
+    uint RawEventId,
+    uint RawState,
+    bool IsKnown);
 
 public sealed record CombatEventRecord(
     DateTime SeenAtUtc,
@@ -238,6 +270,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
 
     public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];
+
+    public IReadOnlyList<ReplayMechanicSnapshot> ReplayMechanics { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(
