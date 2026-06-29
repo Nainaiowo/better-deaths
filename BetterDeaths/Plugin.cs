@@ -2653,6 +2653,7 @@ public sealed partial class Plugin : IDalamudPlugin
             ActorControlGainEffectCategory or
             ActorControlLoseEffectCategory or
             ActorControlUpdateEffectCategory or
+            ActorControlTargetIconCategory or
             ActorControlHotCategory or
             ActorControlDotCategory;
         var sourceEntityId = category is ActorControlHotCategory or ActorControlDotCategory
@@ -3880,6 +3881,8 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        CaptureReplayOverheadStatus(packet, member, status);
+
         if (!IsRelevantDeathStatus(status) && !IsTrackedStatusDeathCandidate(status))
         {
             return;
@@ -3903,6 +3906,28 @@ public sealed partial class Plugin : IDalamudPlugin
             snapshotMaxHp,
             statusesForSnapshot);
 
+    }
+
+    private void CaptureReplayOverheadStatus(RawActorControlPacket packet, PartyMemberSnapshot member, StatusSnapshot status)
+    {
+        if (packet.Category != ActorControlGainEffectCategory ||
+            !ReplayEncounterModules.IsReplayOverheadStatus(currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId, status.Id))
+        {
+            return;
+        }
+
+        AddRecentReplayMarkerSnapshot(new ReplayMarkerSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            $"player:{member.MemberKey}",
+            member.MemberName,
+            ReplayActorKind.Player,
+            member.PartyIndex,
+            member.EntityId,
+            member.ClassJobId,
+            member.ClassJobName,
+            status.Id,
+            status.Id));
     }
 
     private bool TryCreateActorControlStatusSnapshot(
