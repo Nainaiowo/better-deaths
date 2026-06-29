@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.168";
+    private const string CurrentChangelogVersion = "0.1.0.169";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -177,6 +177,10 @@ public sealed class RecapWindow : Window, IDisposable
         uint PreviousCurrentHp,
         uint PreviousShieldHp);
 
+    private sealed record HpBarDamageChange(
+        uint ResultCurrentHp,
+        uint ResultShieldHp);
+
     private sealed record LeadUpTimelineRow(
         DateTime SeenAtUtc,
         float PullElapsedSeconds,
@@ -188,7 +192,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> SourceStatuses,
         CombatEventRecord? Event,
         string? HpTooltipDetail,
-        HpBarHealChange? HealChange);
+        HpBarHealChange? HealChange,
+        HpBarDamageChange? DamageChange);
 
     private sealed record DerivedHpState(
         DateTime EventSeenAtUtc,
@@ -2295,11 +2300,21 @@ public sealed class RecapWindow : Window, IDisposable
         string id,
         ulong? incomingDamage = null,
         string? tooltipDetail = null,
-        HpBarHealChange? healChange = null)
+        HpBarHealChange? healChange = null,
+        HpBarDamageChange? damageChange = null)
     {
         var width = GetHpShieldBarWidth(maxHp);
         CenterNextItem(width);
-        DrawHpShieldBar(currentHp, shieldHp, maxHp, id, incomingDamage, centerLabel: true, tooltipDetail: tooltipDetail, healChange: healChange);
+        DrawHpShieldBar(
+            currentHp,
+            shieldHp,
+            maxHp,
+            id,
+            incomingDamage,
+            centerLabel: true,
+            tooltipDetail: tooltipDetail,
+            healChange: healChange,
+            damageChange: damageChange);
     }
 
     private IReadOnlyList<CombatEventRecord> GetTimelineCauseEvents(PartyDeathRecord death)
@@ -4243,7 +4258,8 @@ public sealed class RecapWindow : Window, IDisposable
                 $"HpHistoryBar{idSuffix}{row.SeenAtUtc.Ticks}{i}",
                 row.Event is not null ? GetIncomingDamageAmount(row.Event) : null,
                 valueOnlyTooltip: true,
-                healChange: row.HealChange);
+                healChange: row.HealChange,
+                damageChange: row.DamageChange);
             ImGui.TableNextColumn();
             DrawTimelineEventCell(row.Event);
             ImGui.TableNextColumn();
@@ -4323,11 +4339,12 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             var combatEvent = events[eventIndex++];
-            var (hpDisplay, healChange) = GetTimelineEventHpDisplay(death, combatEvent, history, events);
+            var (hpDisplay, healChange, damageChange) = GetTimelineEventHpDisplay(death, combatEvent, history, events);
             if (ShouldKeepLethalDerivedHp(combatEvent.SeenAtUtc, pendingDerivedHp))
             {
                 hpDisplay = CreateLethalDerivedHpDisplay(pendingDerivedHp!, hpDisplay.MaxHp);
                 healChange = null;
+                damageChange = null;
             }
 
             AddLeadUpTimelineRow(rows, new LeadUpTimelineRow(
@@ -4341,7 +4358,8 @@ public sealed class RecapWindow : Window, IDisposable
                 GetEventSourceMitigationStatuses(death, combatEvent, events),
                 combatEvent,
                 hpDisplay.TooltipDetail,
-                healChange));
+                healChange,
+                damageChange));
 
             pendingDerivedHp = TryCreateDerivedHpState(combatEvent, hpDisplay) ?? pendingDerivedHp;
         }
@@ -4592,6 +4610,7 @@ public sealed class RecapWindow : Window, IDisposable
                 sourceStatuses,
                 null,
                 tooltip,
+                null,
                 null);
         }
 
@@ -4604,6 +4623,7 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.Statuses,
             snapshot.Statuses,
             sourceStatuses,
+            null,
             null,
             null,
             null);
@@ -5283,7 +5303,7 @@ public sealed class RecapWindow : Window, IDisposable
         string? previousSourceKey = null;
         foreach (var combatEvent in events)
         {
-            var (hpDisplay, healChange) = GetTimelineEventHpDisplay(death, combatEvent, death.HpHistory, events);
+            var (hpDisplay, healChange, damageChange) = GetTimelineEventHpDisplay(death, combatEvent, death.HpHistory, events);
             var sourceKey = GetSourceKey(combatEvent);
             var sourceChanged = previousSourceKey is not null &&
                 !string.Equals(previousSourceKey, sourceKey, StringComparison.Ordinal);
@@ -5306,7 +5326,8 @@ public sealed class RecapWindow : Window, IDisposable
                 $"TimelineHp{idSuffix}{combatEvent.MemberKey}{combatEvent.SeenAtUtc.Ticks}",
                 GetIncomingDamageAmount(combatEvent),
                 hpDisplay.TooltipDetail,
-                healChange);
+                healChange: healChange,
+                damageChange: damageChange);
             ImGui.TableNextColumn();
             DrawCombinedMitigationDebuffCell(
                 GetMergedPlayerStatusesForEvent(death, combatEvent),
@@ -5449,20 +5470,56 @@ public sealed class RecapWindow : Window, IDisposable
         return death.SeenAtUtc;
     }
 
-    private static (EventHpDisplay HpDisplay, HpBarHealChange? HealChange) GetTimelineEventHpDisplay(
+    private static (EventHpDisplay HpDisplay, HpBarHealChange? HealChange, HpBarDamageChange? DamageChange) GetTimelineEventHpDisplay(
         PartyDeathRecord death,
         CombatEventRecord combatEvent,
         IReadOnlyList<HpHistorySnapshot> history,
         IReadOnlyList<CombatEventRecord> events)
     {
         var hpDisplay = GetEventHpDisplay(death, combatEvent);
+        var damageChange = TryGetPostDamageHpChange(combatEvent, hpDisplay);
         var postHealDisplay = TryGetPostHealHpDisplay(combatEvent, hpDisplay, history, events);
         if (postHealDisplay is null)
         {
-            return (hpDisplay, null);
+            return (hpDisplay, null, damageChange);
         }
 
-        return (postHealDisplay, new HpBarHealChange(hpDisplay.CurrentHp, hpDisplay.ShieldHp));
+        return (postHealDisplay, new HpBarHealChange(hpDisplay.CurrentHp, hpDisplay.ShieldHp), null);
+    }
+
+    private static HpBarDamageChange? TryGetPostDamageHpChange(CombatEventRecord combatEvent, EventHpDisplay preDamageDisplay)
+    {
+        if (combatEvent.Kind != DeathEventKind.Damage ||
+            combatEvent.Amount == 0 ||
+            preDamageDisplay.MaxHp == 0 ||
+            (preDamageDisplay.CurrentHp == 0 && preDamageDisplay.ShieldHp == 0))
+        {
+            return null;
+        }
+
+        if (CombatEventHasResultHp(combatEvent))
+        {
+            var resultMaxHp = combatEvent.ResultMaxHp == 0 ? preDamageDisplay.MaxHp : combatEvent.ResultMaxHp;
+            var resultCurrentHp = Math.Min(combatEvent.ResultCurrentHp, resultMaxHp);
+            var resultShieldHp = combatEvent.ResultShieldHp;
+            return HpOrShieldDecreased(preDamageDisplay, resultCurrentHp, resultShieldHp)
+                ? new HpBarDamageChange(resultCurrentHp, resultShieldHp)
+                : null;
+        }
+
+        var remainingDamage = (ulong)combatEvent.Amount;
+        var derivedResultShieldHp = (ulong)preDamageDisplay.ShieldHp;
+        var shieldDamage = Math.Min(derivedResultShieldHp, remainingDamage);
+        derivedResultShieldHp -= shieldDamage;
+        remainingDamage -= shieldDamage;
+
+        var derivedResultCurrentHp = (ulong)preDamageDisplay.CurrentHp;
+        var hpDamage = Math.Min(derivedResultCurrentHp, remainingDamage);
+        derivedResultCurrentHp -= hpDamage;
+
+        return HpOrShieldDecreased(preDamageDisplay, (uint)derivedResultCurrentHp, (uint)derivedResultShieldHp)
+            ? new HpBarDamageChange((uint)derivedResultCurrentHp, (uint)derivedResultShieldHp)
+            : null;
     }
 
     private static EventHpDisplay? TryGetPostHealHpDisplay(
@@ -5564,6 +5621,11 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool HpOrShieldIncreased(EventHpDisplay previous, uint currentHp, uint shieldHp)
     {
         return currentHp > previous.CurrentHp || shieldHp > previous.ShieldHp;
+    }
+
+    private static bool HpOrShieldDecreased(EventHpDisplay previous, uint currentHp, uint shieldHp)
+    {
+        return currentHp < previous.CurrentHp || shieldHp < previous.ShieldHp;
     }
 
     private static EventHpDisplay GetEventHpDisplay(PartyDeathRecord death, CombatEventRecord combatEvent)
@@ -8323,6 +8385,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.169");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("HP bars now show damage loss and healing growth more clearly in the 10s lead-up.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.168");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("10s lead-up now shows the event source in the Timeline view.");
@@ -10067,7 +10135,8 @@ public sealed class RecapWindow : Window, IDisposable
         bool centerLabel = false,
         string? tooltipDetail = null,
         bool valueOnlyTooltip = false,
-        HpBarHealChange? healChange = null)
+        HpBarHealChange? healChange = null,
+        HpBarDamageChange? damageChange = null)
     {
         if (maxHp == 0)
         {
@@ -10138,6 +10207,11 @@ public sealed class RecapWindow : Window, IDisposable
             drawList.AddRectFilled(position, new Vector2(position.X + overflowShieldWidth, barEnd.Y), ImGui.GetColorU32(ShieldBarColor), rounding);
         }
 
+        if (damageChange is not null)
+        {
+            DrawDamageLossOverlay(drawList, position, size, currentHp, shieldHp, maxHp, damageChange);
+        }
+
         drawList.AddRect(position, barEnd, ImGui.GetColorU32(BarBorderColor), rounding);
 
         var label = FormatHpForBar(currentHp, shieldHp, maxHp, size.X);
@@ -10197,8 +10271,8 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var overlayColor = GetHealIncreaseBarColor();
-        var leftColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.08f : 0.10f };
-        var rightColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.42f : 0.50f };
+        var leftColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.20f : 0.24f };
+        var rightColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.82f };
         drawList.AddRectFilledMultiColor(
             new Vector2(startX, top),
             new Vector2(endX, bottom),
@@ -10207,13 +10281,115 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.GetColorU32(rightColor),
             ImGui.GetColorU32(leftColor));
 
-        var edgeWidth = MathF.Min(2.0f, MathF.Max(1.0f, growthWidth * 0.12f));
-        var edgeColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.32f : 0.38f };
+        var coreStartX = position.X + preHealHpWidth;
+        if (endX > coreStartX)
+        {
+            var coreColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.34f : 0.42f };
+            drawList.AddRectFilled(
+                new Vector2(coreStartX, top + 1.0f),
+                new Vector2(endX, bottom - 1.0f),
+                ImGui.GetColorU32(coreColor),
+                1.0f);
+        }
+
+        var edgeWidth = MathF.Min(3.0f, MathF.Max(1.5f, growthWidth * 0.16f));
+        var edgeColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.82f };
         drawList.AddRectFilled(
             new Vector2(endX - edgeWidth, top + 1.0f),
             new Vector2(endX, bottom - 1.0f),
             ImGui.GetColorU32(edgeColor),
             1.0f);
+    }
+
+    private static void DrawDamageLossOverlay(
+        ImDrawListPtr drawList,
+        Vector2 position,
+        Vector2 size,
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp,
+        HpBarDamageChange damageChange)
+    {
+        if (maxHp == 0)
+        {
+            return;
+        }
+
+        var top = position.Y + 2.0f;
+        var bottom = position.Y + MathF.Max(3.0f, size.Y - 2.0f);
+        if (bottom <= top)
+        {
+            return;
+        }
+
+        var currentHpRatio = Math.Clamp((double)currentHp / maxHp, 0.0, 1.0);
+        var resultHpRatio = Math.Clamp((double)damageChange.ResultCurrentHp / maxHp, 0.0, 1.0);
+        DrawDamageLossSegment(
+            drawList,
+            position,
+            top,
+            bottom,
+            (float)(size.X * resultHpRatio),
+            (float)(size.X * currentHpRatio),
+            GetHpDamageLossBarColor());
+
+        var missingHpRatio = Math.Max(0.0, 1.0 - currentHpRatio);
+        var shieldRatio = Math.Min(Math.Clamp((double)shieldHp / maxHp, 0.0, double.PositiveInfinity), missingHpRatio);
+        var resultShieldRatio = Math.Min(Math.Clamp((double)damageChange.ResultShieldHp / maxHp, 0.0, double.PositiveInfinity), missingHpRatio);
+        DrawDamageLossSegment(
+            drawList,
+            position,
+            top,
+            bottom,
+            (float)(size.X * (currentHpRatio + resultShieldRatio)),
+            (float)(size.X * (currentHpRatio + shieldRatio)),
+            GetShieldDamageLossBarColor());
+    }
+
+    private static void DrawDamageLossSegment(
+        ImDrawListPtr drawList,
+        Vector2 position,
+        float top,
+        float bottom,
+        float startOffset,
+        float endOffset,
+        Vector4 color)
+    {
+        if (endOffset - startOffset <= 0.5f)
+        {
+            return;
+        }
+
+        var startX = position.X + startOffset;
+        var endX = position.X + endOffset;
+        drawList.AddRectFilled(
+            new Vector2(startX, top),
+            new Vector2(endX, bottom),
+            ImGui.GetColorU32(color),
+            1.0f);
+
+        var edgeWidth = MathF.Min(2.0f, MathF.Max(1.0f, (endX - startX) * 0.12f));
+        drawList.AddRectFilled(
+            new Vector2(startX, top + 1.0f),
+            new Vector2(startX + edgeWidth, bottom - 1.0f),
+            ImGui.GetColorU32(color with { W = MathF.Min(1.0f, color.W + 0.14f) }),
+            1.0f);
+    }
+
+    private static Vector4 GetHpDamageLossBarColor()
+    {
+        var lossColor = ActiveThemeUsesLightPanels()
+            ? new Vector4(0.04f, 0.16f, 0.08f, 0.64f)
+            : new Vector4(0.01f, 0.08f, 0.04f, 0.72f);
+        return BlendColors(HpBarColor, lossColor, ActiveThemeUsesLightPanels() ? 0.76f : 0.70f) with { W = lossColor.W };
+    }
+
+    private static Vector4 GetShieldDamageLossBarColor()
+    {
+        var lossColor = ActiveThemeUsesLightPanels()
+            ? new Vector4(0.04f, 0.12f, 0.18f, 0.62f)
+            : new Vector4(0.01f, 0.05f, 0.09f, 0.70f);
+        return BlendColors(ShieldBarColor, lossColor, ActiveThemeUsesLightPanels() ? 0.74f : 0.68f) with { W = lossColor.W };
     }
 
     private static float GetHpShieldBarWidth(uint maxHp)
