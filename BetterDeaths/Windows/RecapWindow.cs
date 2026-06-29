@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.167";
+    private const string CurrentChangelogVersion = "0.1.0.168";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -2254,7 +2254,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         DrawCenteredIconHeaderCell(FontAwesomeIcon.Clock);
-        DrawCenteredHeaderCell("Timer");
+        DrawCenteredHeaderCell("Source");
         DrawCenteredHeaderCell("HP + shields");
         DrawCenteredHeaderCell("Events");
         DrawCenteredHeaderCell("Mits/Debuffs");
@@ -4210,16 +4210,21 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+        ImGui.TableSetupColumn("Before KO", ImGuiTableColumnFlags.WidthStretch, 0.75f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        ImGui.TableSetupColumn("Events", ImGuiTableColumnFlags.WidthStretch, 1.5f);
-        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 1.9f);
+        ImGui.TableSetupColumn("Events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
+        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 2.0f);
         DrawHpHistoryTableHeader();
 
+        string? previousSourceKey = null;
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
+            var sourceKey = row.Event is null ? null : GetSourceKey(row.Event);
+            var sourceChanged = previousSourceKey is not null &&
+                sourceKey is not null &&
+                !string.Equals(previousSourceKey, sourceKey, StringComparison.Ordinal);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, row.SeenAtUtc));
@@ -4229,7 +4234,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatCombatTimer(row.PullElapsedSeconds));
+            DrawLeadUpTimelineSourceCell(row, sourceChanged);
             ImGui.TableNextColumn();
             DrawHpShieldBar(
                 row.CurrentHp,
@@ -4243,9 +4248,26 @@ public sealed class RecapWindow : Window, IDisposable
             DrawTimelineEventCell(row.Event);
             ImGui.TableNextColumn();
             DrawMitigationDebuffSummaryCell(row, configuration.ShowLeadUpTimelineMitigationTimers);
+            if (sourceKey is not null)
+            {
+                previousSourceKey = sourceKey;
+            }
         }
 
         ImGui.EndTable();
+    }
+
+    private void DrawLeadUpTimelineSourceCell(LeadUpTimelineRow row, bool sourceChanged)
+    {
+        if (row.Event is null)
+        {
+            DrawCenteredText("-", DisabledColor);
+            return;
+        }
+
+        DrawCenteredOrWrappedText(
+            FormatKnownPlayerName(row.Event.SourceName),
+            sourceChanged ? LeadUpGoldColor : null);
     }
 
     private IReadOnlyList<LeadUpTimelineRow> GetLeadUpTimelineRows(
@@ -8301,6 +8323,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.168");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("10s lead-up now shows the event source in the Timeline view.");
+        DrawWrappedBullet("Healing in HP bars now looks like growth instead of a separate attached block.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.167");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Death HP capture now uses the hit's own snapshot instead of searching older HP rows.");
@@ -10089,16 +10118,8 @@ public sealed class RecapWindow : Window, IDisposable
         {
             var preHealHpWidth = (float)(size.X * healStartRatio);
             var postHealHpWidth = (float)(size.X * healEndRatio);
-            if (preHealHpWidth > 0.0f)
-            {
-                drawList.AddRectFilled(position, new Vector2(position.X + preHealHpWidth, barEnd.Y), ImGui.GetColorU32(HpBarColor), rounding);
-            }
-
-            drawList.AddRectFilled(
-                new Vector2(position.X + preHealHpWidth, position.Y),
-                new Vector2(position.X + postHealHpWidth, barEnd.Y),
-                ImGui.GetColorU32(GetHealIncreaseBarColor()),
-                rounding);
+            drawList.AddRectFilled(position, new Vector2(position.X + postHealHpWidth, barEnd.Y), ImGui.GetColorU32(HpBarColor), rounding);
+            DrawHealGrowthOverlay(drawList, position, size, preHealHpWidth, postHealHpWidth);
         }
         else if (hpWidth > 0.0f)
         {
@@ -10150,6 +10171,49 @@ public sealed class RecapWindow : Window, IDisposable
         {
             DrawOverkillLine(currentHp, shieldHp, maxHp, incomingDamage);
         }
+    }
+
+    private static void DrawHealGrowthOverlay(ImDrawListPtr drawList, Vector2 position, Vector2 size, float preHealHpWidth, float postHealHpWidth)
+    {
+        var growthWidth = postHealHpWidth - preHealHpWidth;
+        if (growthWidth <= 0.0f)
+        {
+            return;
+        }
+
+        var softLeadIn = MathF.Min(10.0f, MathF.Max(3.0f, growthWidth * 0.35f));
+        var startX = position.X + MathF.Max(0.0f, preHealHpWidth - softLeadIn);
+        var endX = position.X + MathF.Max(postHealHpWidth - 1.0f, preHealHpWidth + 1.0f);
+        if (endX <= startX)
+        {
+            return;
+        }
+
+        var top = position.Y + 2.0f;
+        var bottom = position.Y + MathF.Max(3.0f, size.Y - 2.0f);
+        if (bottom <= top)
+        {
+            return;
+        }
+
+        var overlayColor = GetHealIncreaseBarColor();
+        var leftColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.08f : 0.10f };
+        var rightColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.42f : 0.50f };
+        drawList.AddRectFilledMultiColor(
+            new Vector2(startX, top),
+            new Vector2(endX, bottom),
+            ImGui.GetColorU32(leftColor),
+            ImGui.GetColorU32(rightColor),
+            ImGui.GetColorU32(rightColor),
+            ImGui.GetColorU32(leftColor));
+
+        var edgeWidth = MathF.Min(2.0f, MathF.Max(1.0f, growthWidth * 0.12f));
+        var edgeColor = overlayColor with { W = ActiveThemeUsesLightPanels() ? 0.32f : 0.38f };
+        drawList.AddRectFilled(
+            new Vector2(endX - edgeWidth, top + 1.0f),
+            new Vector2(endX, bottom - 1.0f),
+            ImGui.GetColorU32(edgeColor),
+            1.0f);
     }
 
     private static float GetHpShieldBarWidth(uint maxHp)
