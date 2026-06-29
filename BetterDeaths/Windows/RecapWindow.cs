@@ -91,7 +91,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.170";
+    private const string CurrentChangelogVersion = "0.1.0.171";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -8443,6 +8443,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.171");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("The in-plugin information page was updated to match the current Better Deaths features.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.170");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Help markers and HP change bars were cleaned up visually.");
