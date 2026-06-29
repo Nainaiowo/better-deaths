@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Better Deaths - FFXIV Dalamud Death Recap Plugin</title>
-  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, mitigation review, pull history, HP plus shields, and recent combat timeline analysis.">
+  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, and 10-second lead-up analysis.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
-  <meta property="og:description" content="Review raid deaths with likely causes, HP plus shields, mitigations, boss damage-downs, and a 10 second combat lead-up.">
+  <meta property="og:description" content="Review raid deaths with fatal events, HP plus shields, mitigation context, what-if checks, and a 10-second combat lead-up.">
   <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
   <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -24,7 +24,7 @@
     "name": "Better Deaths",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows",
-    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, mitigation review, pull history, HP plus shields, and recent combat timeline analysis.",
+    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, and 10-second lead-up analysis.",
     "softwareRequirements": "Dalamud",
     "url": "https://nainaiowo.github.io/better-deaths/",
     "codeRepository": "https://github.com/Nainaiowo/better-deaths",
@@ -354,7 +354,7 @@
           <p class="eyebrow">FFXIV Dalamud plugin</p>
         </div>
         <h1>Better Deaths</h1>
-        <p class="lead">A raid-focused death recap tool for reviewing likely causes, HP plus shields, mitigation coverage, boss-targeted damage-downs, and the 10 second lead-up before each KO.</p>
+        <p class="lead">A raid-focused death recap tool for reviewing fatal events, HP plus shields, mitigation coverage, enemy HP at death, What-if mitigation, and the 10-second lead-up before each KO.</p>
         <div class="actions">
           <a class="button primary" href="#install">Install with Dalamud</a>
           <a class="button" href="https://github.com/Nainaiowo/better-deaths">View GitHub Repo</a>
@@ -374,28 +374,47 @@
       <p class="muted">Better Deaths keeps deaths grouped by pull and puts the useful review data in one place, so a wipe can be checked without digging through scattered combat text.</p>
       <div class="feature-grid">
         <article class="feature">
-          <h3>Likely Cause And Hit Details</h3>
-          <p>See the selected hit or event, source, amount, flags, overkill, and HP plus shields before the likely lethal damage.</p>
+          <h3>Fatal Event Review</h3>
+          <p>See the hit or event that caused the death with source, amount, damage type, overkill, and HP plus shields before impact.</p>
         </article>
         <article class="feature">
           <h3>Mitigation Context</h3>
-          <p>Review player mitigations, shields, encounter debuffs, and boss-targeted mitigations such as Reprisal, Addle, and Feint.</p>
+          <p>Review player mitigations, shields, debuffs, target mitigation, expired context, and calculated mitigation totals.</p>
         </article>
         <article class="feature">
           <h3>10 Second Lead-Up</h3>
-          <p>Inspect recent HP samples and captured combat events leading into a death, including relevant status icons at each point.</p>
+          <p>Inspect recent HP samples, healing, damage, sources, status timers, and captured events leading into the death.</p>
         </article>
         <article class="feature">
-          <h3>Pull History</h3>
-          <p>Keep recorded pull groups after wipes, recommences, territory changes, and plugin reloads for later review.</p>
+          <h3>What-if Mitigation</h3>
+          <p>Pick available mitigation and see how selected tools would have changed the damage outcome.</p>
         </article>
         <article class="feature">
           <h3>Current Pull Widget</h3>
-          <p>Keep a compact current-pull view open during progression with the death time, player, cause, overkill, and mitigation icons.</p>
+          <p>Keep a compact current-pull view open during progression with normal and concise display modes.</p>
         </article>
         <article class="feature">
-          <h3>Shareable Recap Links</h3>
-          <p>Post concise recap information to chat and generate clickable recap links for party members who also use Better Deaths.</p>
+          <h3>Themes And Sharing</h3>
+          <p>Use theme options, name redaction, local pull history, and optional chat recap links for other Better Deaths users.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap" id="privacy">
+      <h2>Local data, no uploads</h2>
+      <p class="muted">Better Deaths does not upload your data. It has no upload functions, telemetry, analytics, webhook, feedback endpoint, or hidden network reporting built into the plugin.</p>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Saved Locally</h3>
+          <p>Recorded pulls stay on your machine so they remain available after wipes, resets, reloads, or plugin updates.</p>
+        </article>
+        <article class="feature">
+          <h3>What Gets Saved</h3>
+          <p>Saved pull files can include player names, jobs, duty names, death timing, HP, shields, damage events, actions, statuses, and mitigation context.</p>
+        </article>
+        <article class="feature">
+          <h3>Name Redaction</h3>
+          <p>Name Redaction helps with screenshots and shared display, but local saved pull files may still contain the original captured names.</p>
         </article>
       </div>
     </section>
@@ -404,20 +423,20 @@
       <h2>What it looks like</h2>
       <div class="screens">
         <figure class="screenshot">
-          <img src="assets/death-timeline.png" alt="Better Deaths death timeline showing ordered party deaths and likely causes">
-          <figcaption>Death timeline with ordered player deaths, jobs, timers, and likely causes.</figcaption>
+          <img src="assets/death-timeline.png" alt="Better Deaths death timeline showing ordered party deaths and fatal events">
+          <figcaption>Death timeline with ordered player deaths, jobs, fatal events, and selected death summary.</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/player-death-information.png" alt="Better Deaths player death information with HP plus shields and captured mitigations">
-          <figcaption>Player death information with HP plus shields, captured hits, active mitigations, and debuffs.</figcaption>
-        </figure>
-        <figure class="screenshot">
-          <img src="assets/mitigation-context.png" alt="Better Deaths mitigation context with active mitigations and total mitigation">
-          <figcaption>Mitigation context with active mitigations, linked effects, and total mitigation.</figcaption>
+          <img src="assets/what-if-mitigation.png" alt="Better Deaths What-if mitigation review with available party mitigations">
+          <figcaption>What-if mitigation review with available party tools and projected outcome.</figcaption>
         </figure>
         <figure class="screenshot">
           <img src="assets/lead-up-history.png" alt="Better Deaths 10 second lead-up table with HP history and combat events">
-          <figcaption>10 second lead-up history with HP samples, captured events, and mitigation/debuff icons.</figcaption>
+          <figcaption>10 second lead-up history with HP samples, sources, events, and mitigation/debuff icons.</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/customize-themes-widget.png" alt="Better Deaths customization tab with theme options and widget preview">
+          <figcaption>Theme controls and widget preview showing how the current pull widget can be customized.</figcaption>
         </figure>
       </div>
     </section>

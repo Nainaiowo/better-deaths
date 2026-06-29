@@ -8341,15 +8341,15 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawNotesTab()
     {
         ImGui.TextUnformatted("What Better Deaths adds");
-        DrawWrappedBullet("Duty-only death review built around raid pulls, wipes, recommences, and resets.");
+        DrawWrappedBullet("Pull-based death review for wipes, recommences, resets, and saved pull history.");
         DrawWrappedBullet("Current Pull and the optional widget show live death order while combat is happening.");
-        DrawWrappedBullet("Last Pull Review keeps the most recent wiped/reset pull visible until the next duty pull starts.");
-        DrawWrappedBullet("Recorded pull groups save immediately after wipes or resets, then restore when the plugin loads.");
         DrawWrappedBullet("Timeline-first recap shows who died, when they died, and the fatal events before opening player details.");
-        DrawWrappedBullet("Fatal sequence summaries include source, action, amount, damage type, blocks, parries, crits, direct hits, and combat-log confirmations.");
-        DrawWrappedBullet("HP plus shields before the fatal hit is shown as a clear bar with overkill context.");
-        DrawWrappedBullet("Nested 10-second lead-up under each death shows HP, shields, player mitigations, encounter debuffs, and captured hits before KO.");
-        DrawWrappedBullet("Active player mitigations and boss damage-down debuffs are grouped so Reprisal, Addle, Feint, and similar effects are easier to audit.");
+        DrawWrappedBullet("Summary details tie the fatal event to source, action, amount, damage type, HP plus shields, overkill context, and enemy HP at death.");
+        DrawWrappedBullet("10-second lead-up shows HP and shield movement, sources, heals, hits, status timers, and captured events before KO.");
+        DrawWrappedBullet("Mitigation review groups player mitigation, shields, debuffs, target mitigation, expired context, and calculated mitigation total.");
+        DrawWrappedBullet("What-if mitigation lets you select available tools and see how the damage result would have changed.");
+        DrawWrappedBullet("Themes, widget opacity controls, optional scrollbars, and name redaction help shape the review view around how you share and play.");
+        DrawWrappedBullet("The Data tab explains what is saved locally and makes clear that Better Deaths does not upload your data.");
         DrawWrappedBullet("Chat-posted death summaries can include clickable recap links for other Better Deaths users with the same captured pull.");
         ImGui.Separator();
         ImGui.TextWrapped("The goal is to make wipe review fast: see who died, see why, see what was active, and keep the pull context intact between attempts.");
