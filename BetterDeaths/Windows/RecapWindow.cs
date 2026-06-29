@@ -93,7 +93,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.173";
+    private const string CurrentChangelogVersion = "0.1.0.174";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const float LeadUpHistorySeconds = 10.0f;
@@ -1470,6 +1470,9 @@ public sealed class RecapWindow : Window, IDisposable
             case DeathDetailPage.LeadUp:
                 DrawBetterDeathsInformationContent(resolved, deathId);
                 break;
+            case DeathDetailPage.Replay:
+                DrawDeathReplayContext(resolved, deathId);
+                break;
             default:
                 DrawCauseSummary(resolved);
                 break;
@@ -1512,7 +1515,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine();
         DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
         ImGui.SameLine();
-        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId, disabled: true, tooltip: "Coming soon");
+        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId);
     }
 
     private void DrawDeathDetailButton(
@@ -8845,6 +8848,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.174");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Enabled the Replay tab for testing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.173");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added a Feedback tab with a confirmation before opening the Google Forms link.");
