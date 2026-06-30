@@ -47,8 +47,6 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly Dictionary<string, float> replayZoomByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Vector2> replayPanByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> replayFocusedActorKeyByDeathId = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, float> replayParentScrollYByDeathId = new(StringComparer.Ordinal);
-    private readonly HashSet<string> replayCanvasHoveredLastFrameByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReplayStaticDisplayCache> replayStaticDisplayCacheByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReplayFrameDisplayCache> replayFrameDisplayCacheByDeathId = new(StringComparer.Ordinal);
     private readonly HashSet<string> replayCanvasPressedByDeathId = new(StringComparer.Ordinal);
@@ -107,7 +105,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.184";
+    private const string CurrentChangelogVersion = "0.1.0.185";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -123,8 +121,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayZoomSliderWidth = 220.0f;
     private const float ReplayZoomOverlayPadding = 10.0f;
     private const float ReplayZoomOverlayHeight = 30.0f;
+    private const float ReplayWheelScrollSinkHeight = 1.0f;
     private const float LeadUpTableRightPadding = 10.0f;
-    private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoBackground;
+    private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground;
     private const int MaxReplayTrailPointsPerActor = 24;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -5500,19 +5499,17 @@ public sealed class RecapWindow : Window, IDisposable
 
         var canvasSize = new Vector2(canvasSide, canvasSide);
         ImGui.SetCursorScreenPos(new Vector2(canvasX, cursorStart.Y));
-        var parentScrollYBeforeCanvas = ImGui.GetScrollY();
-        var wasCanvasHoveredLastFrame = replayCanvasHoveredLastFrameByDeathId.Contains(idSuffix);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         var canvasChildVisible = ImGui.BeginChild($"##DeathReplayCanvasScrollBlock{idSuffix}", canvasSize, false, ReplayCanvasChildFlags);
         ImGui.PopStyleVar();
         if (!canvasChildVisible)
         {
             ImGui.EndChild();
-            RememberReplayParentScroll(idSuffix, parentScrollYBeforeCanvas, hovered: false);
             RestoreCursorAfterReplayCanvas(cursorStart);
             return;
         }
 
+        ImGui.SetScrollY(0.0f);
         var canvasStart = ImGui.GetCursorScreenPos();
         var zoom = GetReplayZoom(idSuffix);
         var pan = GetReplayPan(idSuffix, zoom, canvasSize);
@@ -5522,7 +5519,6 @@ public sealed class RecapWindow : Window, IDisposable
         var canvasHovered = canvasWindowHovered && IsMouseInsideRect(canvasStart, canvasSize);
         var canvasInputHovered = canvasHovered && !zoomOverlayHovered;
         var canvasActive = UpdateReplayCanvasPressState(idSuffix, canvasInputHovered);
-        var blockParentWheelScroll = ShouldBlockReplayParentWheelScroll(wasCanvasHoveredLastFrame, canvasHovered);
         HandleReplayCanvasWheelZoom(idSuffix, canvasHovered, canvasStart, canvasSize, ref zoom, ref pan);
         HandleReplayCanvasPan(idSuffix, canvasActive, zoom, canvasSize, ref pan);
 
@@ -5542,9 +5538,8 @@ public sealed class RecapWindow : Window, IDisposable
         if (!TryGetReplayBounds(allPositions, boundsMechanics, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
+            AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
             ImGui.EndChild();
-            RestoreReplayParentScrollAfterWheel(idSuffix, blockParentWheelScroll, parentScrollYBeforeCanvas);
-            RememberReplayParentScroll(idSuffix, ImGui.GetScrollY(), canvasHovered || zoomOverlayHovered);
             RestoreCursorAfterReplayCanvas(cursorStart);
             return;
         }
@@ -5612,9 +5607,8 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
+        AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
         ImGui.EndChild();
-        RestoreReplayParentScrollAfterWheel(idSuffix, blockParentWheelScroll, parentScrollYBeforeCanvas);
-        RememberReplayParentScroll(idSuffix, ImGui.GetScrollY(), canvasHovered || zoomOverlayHovered);
         if (canvasTooltip is not null)
         {
             SetThemedTooltip(canvasTooltip);
@@ -5623,35 +5617,12 @@ public sealed class RecapWindow : Window, IDisposable
         RestoreCursorAfterReplayCanvas(cursorStart);
     }
 
-    private static bool ShouldBlockReplayParentWheelScroll(bool wasCanvasHoveredLastFrame, bool canvasHovered)
+    private static void AddReplayCanvasWheelScrollSink(Vector2 canvasStart, Vector2 canvasSize)
     {
-        return (wasCanvasHoveredLastFrame || canvasHovered) && MathF.Abs(ImGui.GetIO().MouseWheel) > 0.001f;
-    }
-
-    private void RestoreReplayParentScrollAfterWheel(string idSuffix, bool shouldRestore, float fallbackScrollY)
-    {
-        if (!shouldRestore)
-        {
-            return;
-        }
-
-        var scrollY = replayParentScrollYByDeathId.TryGetValue(idSuffix, out var storedScrollY)
-            ? storedScrollY
-            : fallbackScrollY;
-        ImGui.SetScrollY(scrollY);
-    }
-
-    private void RememberReplayParentScroll(string idSuffix, float scrollY, bool hovered)
-    {
-        replayParentScrollYByDeathId[idSuffix] = scrollY;
-        if (hovered)
-        {
-            replayCanvasHoveredLastFrameByDeathId.Add(idSuffix);
-        }
-        else
-        {
-            replayCanvasHoveredLastFrameByDeathId.Remove(idSuffix);
-        }
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        ImGui.SetCursorScreenPos(canvasStart);
+        ImGui.Dummy(new Vector2(canvasSize.X, canvasSize.Y + ReplayWheelScrollSinkHeight));
+        ImGui.SetCursorScreenPos(cursorBefore);
     }
 
     private bool UpdateReplayCanvasPressState(string idSuffix, bool canvasInputHovered)
@@ -10921,6 +10892,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.185");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Replay mouse wheel handling should no longer stutter the selected death panel.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.184");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Replay zoom and scrolling interactions were fixed.");
