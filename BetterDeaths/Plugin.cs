@@ -460,6 +460,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private DateTime lastReplayPositionSampleAtUtc = DateTime.MinValue;
+    private DateTime lastCurrentDeathReplayUpdateAtUtc = DateTime.MinValue;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);
@@ -4724,12 +4725,13 @@ public sealed partial class Plugin : IDalamudPlugin
             AddRecentReplayPositionSnapshot(CreatePlayerReplayPositionSnapshot(member, now));
         }
 
-        foreach (var enemy in CaptureEnemyReplayPositionSnapshots(now))
+        var (enemySnapshots, mechanicSnapshots) = CaptureReplayObjectSnapshots(now);
+        foreach (var enemy in enemySnapshots)
         {
             AddRecentReplayPositionSnapshot(enemy);
         }
 
-        foreach (var mechanic in CaptureKnownReplayMechanicSnapshots(now))
+        foreach (var mechanic in mechanicSnapshots)
         {
             AddRecentReplayMechanicSnapshot(mechanic);
         }
@@ -4758,17 +4760,16 @@ public sealed partial class Plugin : IDalamudPlugin
             true);
     }
 
-    private IReadOnlyList<ReplayPositionSnapshot> CaptureEnemyReplayPositionSnapshots(DateTime seenAtUtc)
+    private (IReadOnlyList<ReplayPositionSnapshot> EnemySnapshots, IReadOnlyList<ReplayMechanicSnapshot> MechanicSnapshots) CaptureReplayObjectSnapshots(DateTime seenAtUtc)
     {
-        var snapshots = new List<ReplayPositionSnapshot>();
+        var enemySnapshots = new List<ReplayPositionSnapshot>();
+        var mechanicSnapshots = new List<ReplayMechanicSnapshot>();
         var seenEntityIds = new HashSet<uint>();
         foreach (var gameObject in ObjectTable)
         {
             if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
-                battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
                 battleNpc.EntityId == 0 ||
                 battleNpc.EntityId == InvalidActorEntityId ||
-                battleNpc.MaxHp == 0 ||
                 !seenEntityIds.Add(battleNpc.EntityId))
             {
                 continue;
@@ -4780,7 +4781,37 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            snapshots.Add(new ReplayPositionSnapshot(
+            if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
+            {
+                mechanicSnapshots.Add(new ReplayMechanicSnapshot(
+                    seenAtUtc,
+                    CalculatePullElapsed(seenAtUtc),
+                    (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
+                    $"object:{battleNpc.EntityId:X8}",
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position.X,
+                    battleNpc.Position.Y,
+                    battleNpc.Position.Z,
+                    battleNpc.Rotation,
+                    3.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    name,
+                    "object",
+                    battleNpc.BaseId,
+                    battleNpc.EntityId,
+                    true));
+            }
+
+            if (battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
+                battleNpc.MaxHp == 0)
+            {
+                continue;
+            }
+
+            enemySnapshots.Add(new ReplayPositionSnapshot(
                 seenAtUtc,
                 CalculatePullElapsed(seenAtUtc),
                 $"enemy:{battleNpc.EntityId:X8}",
@@ -4801,12 +4832,14 @@ public sealed partial class Plugin : IDalamudPlugin
                 battleNpc.IsTargetable));
         }
 
-        return snapshots
-            .OrderByDescending(snapshot => snapshot.IsTargetable)
-            .ThenByDescending(snapshot => snapshot.MaxHp)
-            .ThenBy(snapshot => snapshot.ActorName, StringComparer.OrdinalIgnoreCase)
-            .Take(MaxReplayEnemyActors)
-            .ToList();
+        return (
+            enemySnapshots
+                .OrderByDescending(snapshot => snapshot.IsTargetable)
+                .ThenByDescending(snapshot => snapshot.MaxHp)
+                .ThenBy(snapshot => snapshot.ActorName, StringComparer.OrdinalIgnoreCase)
+                .Take(MaxReplayEnemyActors)
+                .ToList(),
+            mechanicSnapshots);
     }
 
     private void AddRecentReplayPositionSnapshot(ReplayPositionSnapshot snapshot)
@@ -4818,51 +4851,6 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         history.Add(snapshot);
-    }
-
-    private IReadOnlyList<ReplayMechanicSnapshot> CaptureKnownReplayMechanicSnapshots(DateTime seenAtUtc)
-    {
-        var snapshots = new List<ReplayMechanicSnapshot>();
-        var seenEntityIds = new HashSet<uint>();
-        foreach (var gameObject in ObjectTable)
-        {
-            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
-                battleNpc.EntityId == 0 ||
-                battleNpc.EntityId == InvalidActorEntityId ||
-                !seenEntityIds.Add(battleNpc.EntityId))
-            {
-                continue;
-            }
-
-            var name = battleNpc.Name.TextValue;
-            if (!string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            snapshots.Add(new ReplayMechanicSnapshot(
-                seenAtUtc,
-                CalculatePullElapsed(seenAtUtc),
-                (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
-                $"object:{battleNpc.EntityId:X8}",
-                name,
-                ReplayMechanicShape.Circle,
-                battleNpc.Position.X,
-                battleNpc.Position.Y,
-                battleNpc.Position.Z,
-                battleNpc.Rotation,
-                3.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                name,
-                "object",
-                battleNpc.BaseId,
-                battleNpc.EntityId,
-                true));
-        }
-
-        return snapshots;
     }
 
     private void AddRecentReplayMechanicSnapshot(ReplayMechanicSnapshot snapshot)
@@ -5410,6 +5398,12 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        if (Duration(now, lastCurrentDeathReplayUpdateAtUtc) < ReplayPositionSampleInterval)
+        {
+            return;
+        }
+
+        lastCurrentDeathReplayUpdateAtUtc = now;
         for (var index = 0; index < currentDeaths.Count; index++)
         {
             var death = currentDeaths[index];
@@ -5775,6 +5769,7 @@ public sealed partial class Plugin : IDalamudPlugin
         possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
         lastReplayPositionSampleAtUtc = DateTime.MinValue;
+        lastCurrentDeathReplayUpdateAtUtc = DateTime.MinValue;
         lock (rawCombatQueueLock)
         {
             rawActionEffectPackets.Clear();

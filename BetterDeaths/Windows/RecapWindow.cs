@@ -47,6 +47,8 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly Dictionary<string, float> replayZoomByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Vector2> replayPanByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> replayFocusedActorKeyByDeathId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ReplayStaticDisplayCache> replayStaticDisplayCacheByDeathId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ReplayFrameDisplayCache> replayFrameDisplayCacheByDeathId = new(StringComparer.Ordinal);
     private readonly HashSet<string> replayCanvasDraggedByDeathId = new(StringComparer.Ordinal);
     private readonly ReviewSelectionState recapReviewSelection = new();
     private readonly ReviewSelectionState exampleReviewSelection = new();
@@ -102,9 +104,10 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.182";
+    private const string CurrentChangelogVersion = "0.1.0.183";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
+    private const string ReplayBetaBadgeText = "beta";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float DeathReplayLeadUpSeconds = 20.0f;
     private const float ReplayMarkerCarryInSeconds = 30.0f;
@@ -115,7 +118,10 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayMaxZoom = 4.0f;
     private const float ReplayContentRightPadding = 12.0f;
     private const float ReplayZoomSliderWidth = 220.0f;
+    private const float ReplayZoomOverlayPadding = 10.0f;
+    private const float ReplayZoomOverlayHeight = 30.0f;
     private const float LeadUpTableRightPadding = 10.0f;
+    private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoBackground;
     private const int MaxReplayTrailPointsPerActor = 24;
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
@@ -186,6 +192,45 @@ public sealed class RecapWindow : Window, IDisposable
         ReplayMarkerSnapshot? Marker,
         Vector2 ScreenPosition,
         float Radius);
+
+    private readonly record struct ReplayDisplayDataSignature(
+        IReadOnlyList<ReplayPositionSnapshot> PositionReference,
+        int PositionCount,
+        long FirstPositionTicks,
+        long LastPositionTicks,
+        IReadOnlyList<ReplayMarkerSnapshot> MarkerReference,
+        int MarkerCount,
+        long FirstMarkerTicks,
+        long LastMarkerTicks,
+        IReadOnlyList<ReplayMechanicSnapshot> MechanicReference,
+        int MechanicCount,
+        long FirstMechanicTicks,
+        long LastMechanicTicks);
+
+    private readonly record struct ReplayStaticDisplayCacheKey(
+        long DeathSeenAtTicks,
+        uint TerritoryId,
+        bool ShowEarlierMarkers,
+        ReplayDisplayDataSignature DataSignature);
+
+    private readonly record struct ReplayFrameDisplayCacheKey(
+        ReplayStaticDisplayCacheKey StaticKey,
+        long SelectedAtTicks);
+
+    private sealed record ReplayStaticDisplayCache(
+        ReplayStaticDisplayCacheKey Key,
+        DateTime ReplayStartAtUtc,
+        IReadOnlyList<ReplayMechanicSnapshot> Mechanics,
+        IReadOnlyList<ReplayMarkerSnapshot> DetectedOverheadMarkers,
+        float MinOffset,
+        float MaxOffset);
+
+    private sealed record ReplayFrameDisplayCache(
+        ReplayFrameDisplayCacheKey Key,
+        IReadOnlyList<ReplayPositionSnapshot> ActorStates,
+        IReadOnlyList<ReplayMarkerSnapshot> MarkerStates,
+        IReadOnlyList<ReplayMechanicSnapshot> MechanicStates,
+        IReadOnlyList<ResolvedReplayMarkerState> ResolvedMarkerStates);
 
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
@@ -1552,7 +1597,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine();
         DrawDeathDetailButton("10s Lead-up", DeathDetailPage.LeadUp, deathId);
         ImGui.SameLine();
-        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId);
+        DrawDeathDetailButton("Replay", DeathDetailPage.Replay, deathId, badgeText: ReplayBetaBadgeText);
     }
 
     private void DrawDeathDetailButton(
@@ -1560,7 +1605,8 @@ public sealed class RecapWindow : Window, IDisposable
         DeathDetailPage page,
         string deathId,
         bool disabled = false,
-        string? tooltip = null)
+        string? tooltip = null,
+        string? badgeText = null)
     {
         var selected = !disabled && selectedDeathDetailPage == page;
         var buttonColor = selected ? ModernAccentSoftColor : ModernPanelAltColor;
@@ -1581,6 +1627,12 @@ public sealed class RecapWindow : Window, IDisposable
         {
             selectedDeathDetailPage = page;
         }
+        var buttonMin = ImGui.GetItemRectMin();
+        var buttonMax = ImGui.GetItemRectMax();
+        if (!string.IsNullOrWhiteSpace(badgeText))
+        {
+            DrawFloatingTabPill(buttonMin, buttonMax, badgeText);
+        }
 
         if (disabled)
         {
@@ -1594,6 +1646,32 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PopStyleColor(4);
+    }
+
+    private static void DrawFloatingTabPill(Vector2 buttonMin, Vector2 buttonMax, string text)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var textSize = ImGui.CalcTextSize(text);
+        var padding = new Vector2(7.0f, 2.0f);
+        var size = textSize + (padding * 2.0f);
+        var position = new Vector2(
+            buttonMax.X - size.X - 6.0f,
+            buttonMin.Y - 5.0f);
+        var pillMin = position;
+        var pillMax = position + size;
+        var shadow = ModernShellColor with { W = ActiveThemeUsesLightPanels() ? 0.22f : 0.48f };
+        var fill = LeadUpGoldColor with { W = ActiveThemeUsesLightPanels() ? 0.92f : 0.88f };
+        var border = ActiveThemeUsesLightPanels()
+            ? ModernPanelBorderColor with { W = 0.92f }
+            : ModernTextColor with { W = 0.22f };
+        var textColor = ActiveThemeUsesLightPanels()
+            ? ModernShellColor
+            : new Vector4(0.08f, 0.08f, 0.08f, 1.0f);
+
+        drawList.AddRectFilled(pillMin + new Vector2(1.0f, 1.0f), pillMax + new Vector2(1.0f, 1.0f), ImGui.GetColorU32(shadow), size.Y * 0.5f);
+        drawList.AddRectFilled(pillMin, pillMax, ImGui.GetColorU32(fill), size.Y * 0.5f);
+        drawList.AddRect(pillMin, pillMax, ImGui.GetColorU32(border), size.Y * 0.5f);
+        drawList.AddText(pillMin + padding, ImGui.GetColorU32(textColor), text);
     }
 
     private static bool DrawSegmentedButton(string label, string id, bool selected, float width)
@@ -4328,21 +4406,23 @@ public sealed class RecapWindow : Window, IDisposable
         var replayStartAtUtc = death.SeenAtUtc.AddSeconds(-DeathReplayLeadUpSeconds);
         var showEarlierMarkers = GetShowEarlierReplayMarkers(death, idSuffix, replayStartAtUtc);
         var replayModule = ReplayEncounterModules.Get(resolved.TerritoryId);
-        var replayMechanics = GetReplayMechanicsForDisplay(death, replayModule, replayStartAtUtc, showEarlierMarkers);
 
         DrawLeadUpLabel("Death replay");
         DrawMutedWrappedText("Shows captured positions around the selected death. Older pulls may not have replay data.");
         DrawShowEarlierReplayMarkersToggle(death, idSuffix, replayStartAtUtc, ref showEarlierMarkers);
+        KeepOnlyActiveReplayDisplayCache(idSuffix);
+        var replayDisplay = GetReplayStaticDisplayCache(idSuffix, death, resolved.TerritoryId, replayModule, showEarlierMarkers);
+        var replayMechanics = replayDisplay.Mechanics;
 
         if (positions.Count == 0 && replayMechanics.Count == 0)
         {
             DrawMutedWrappedText("No replay position data was captured for this death.");
-            DrawDetectedReplayOverheadMechanics(death, replayStartAtUtc, showEarlierMarkers, replayModule);
-            DrawReplayRawEventViewer(death, replayMechanics, replayModule, idSuffix);
+            DrawDetectedReplayOverheadMechanics(death, replayDisplay.DetectedOverheadMarkers, replayModule);
             return;
         }
 
-        GetReplayTimeBounds(death, positions, replayMechanics, out var minOffset, out var maxOffset);
+        var minOffset = replayDisplay.MinOffset;
+        var maxOffset = replayDisplay.MaxOffset;
 
         if (!replayScrubSecondsByDeathId.TryGetValue(idSuffix, out var scrubSeconds))
         {
@@ -4360,40 +4440,174 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawMutedWrappedText($"{FormatReplayOffset(scrubSeconds)} | Pull {FormatCombatTimer(death.PullElapsedSeconds + scrubSeconds)}");
         var selectedAtUtc = death.SeenAtUtc.AddSeconds(scrubSeconds);
+        var replayFrame = GetReplayFrameDisplayCache(idSuffix, death, positions, replayDisplay, selectedAtUtc, showEarlierMarkers, replayModule);
+        var showTrails = GetReplayShowTrails(idSuffix);
+        DrawDeathReplayCanvas(
+            death,
+            positions,
+            replayMechanics,
+            replayFrame.ActorStates,
+            replayFrame.MarkerStates,
+            replayFrame.MechanicStates,
+            replayFrame.ResolvedMarkerStates,
+            selectedAtUtc,
+            idSuffix,
+            replayModule,
+            showTrails);
+        DrawDeathReplayLegend();
+        DrawDetectedReplayOverheadMechanics(death, replayDisplay.DetectedOverheadMarkers, replayModule);
+    }
+
+    private ReplayStaticDisplayCache GetReplayStaticDisplayCache(
+        string idSuffix,
+        PartyDeathRecord death,
+        uint territoryId,
+        IReplayEncounterModule replayModule,
+        bool showEarlierMarkers)
+    {
+        var dataSignature = CreateReplayDisplayDataSignature(death);
+        var key = new ReplayStaticDisplayCacheKey(death.SeenAtUtc.Ticks, territoryId, showEarlierMarkers, dataSignature);
+        if (replayStaticDisplayCacheByDeathId.TryGetValue(idSuffix, out var cached) && cached.Key.Equals(key))
+        {
+            return cached;
+        }
+
+        var replayStartAtUtc = death.SeenAtUtc.AddSeconds(-DeathReplayLeadUpSeconds);
+        var mechanics = GetReplayMechanicsForDisplay(death, replayModule, replayStartAtUtc, showEarlierMarkers);
+        var detectedOverheadMarkers = SelectDetectedReplayOverheadMechanics(death.ReplayMarkers, replayStartAtUtc, showEarlierMarkers);
+        GetReplayTimeBounds(death, death.ReplayPositions, mechanics, out var minOffset, out var maxOffset);
+        var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, mechanics, detectedOverheadMarkers, minOffset, maxOffset);
+        replayStaticDisplayCacheByDeathId[idSuffix] = updated;
+        replayFrameDisplayCacheByDeathId.Remove(idSuffix);
+        return updated;
+    }
+
+    private ReplayFrameDisplayCache GetReplayFrameDisplayCache(
+        string idSuffix,
+        PartyDeathRecord death,
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        ReplayStaticDisplayCache replayDisplay,
+        DateTime selectedAtUtc,
+        bool showEarlierMarkers,
+        IReplayEncounterModule replayModule)
+    {
+        var key = new ReplayFrameDisplayCacheKey(replayDisplay.Key, selectedAtUtc.Ticks);
+        if (replayFrameDisplayCacheByDeathId.TryGetValue(idSuffix, out var cached) && cached.Key.Equals(key))
+        {
+            return cached;
+        }
+
         var actorStates = SelectReplayActorStates(positions, selectedAtUtc);
-        var markerStates = SelectReplayMarkerStates(death.ReplayMarkers, positions, selectedAtUtc, replayStartAtUtc, showEarlierMarkers, replayModule);
-        var mechanicStates = SelectReplayMechanicStates(replayMechanics, death.ReplayMarkers, positions, actorStates, selectedAtUtc, replayModule);
+        var markerStates = SelectReplayMarkerStates(death.ReplayMarkers, positions, selectedAtUtc, replayDisplay.ReplayStartAtUtc, showEarlierMarkers, replayModule);
+        var mechanicStates = SelectReplayMechanicStates(replayDisplay.Mechanics, death.ReplayMarkers, positions, actorStates, selectedAtUtc, replayModule);
         var resolvedMarkerStates = SelectResolvedReplayMarkerStates(
             death.ReplayMarkers,
             positions,
             selectedAtUtc,
-            replayStartAtUtc,
+            replayDisplay.ReplayStartAtUtc,
             showEarlierMarkers,
             replayModule,
             markerStates);
-        var showTrails = GetReplayShowTrails(idSuffix);
-        DrawDeathReplayCanvas(death, positions, replayMechanics, actorStates, markerStates, mechanicStates, resolvedMarkerStates, selectedAtUtc, idSuffix, replayModule, showTrails);
-        DrawDeathReplayLegend();
-        DrawDetectedReplayOverheadMechanics(death, replayStartAtUtc, showEarlierMarkers, replayModule);
-        DrawReplayRawEventViewer(death, replayMechanics, replayModule, idSuffix);
+        var updated = new ReplayFrameDisplayCache(key, actorStates, markerStates, mechanicStates, resolvedMarkerStates);
+        replayFrameDisplayCacheByDeathId[idSuffix] = updated;
+        return updated;
     }
 
-    private void DrawDeathReplayZoomControl(string idSuffix, float sliderWidth)
+    private void KeepOnlyActiveReplayDisplayCache(string activeDeathId)
     {
-        var zoom = GetReplayZoom(idSuffix);
-        var clampedSliderWidth = Math.Clamp(sliderWidth, 150.0f, ReplayZoomSliderWidth);
-        ImGui.TextWrapped("Zoom");
-        ImGui.SameLine(0.0f, 8.0f);
-        ImGui.SetNextItemWidth(clampedSliderWidth);
-        if (ImGui.SliderFloat($"##DeathReplayZoom{idSuffix}", ref zoom, ReplayMinZoom, ReplayMaxZoom, $"{zoom:0.0}x"))
+        KeepOnlyActiveReplayDisplayCacheEntry(replayStaticDisplayCacheByDeathId, activeDeathId);
+        KeepOnlyActiveReplayDisplayCacheEntry(replayFrameDisplayCacheByDeathId, activeDeathId);
+    }
+
+    private static void KeepOnlyActiveReplayDisplayCacheEntry<T>(Dictionary<string, T> cache, string activeDeathId)
+    {
+        if (cache.Count == 0)
         {
-            SetReplayZoom(idSuffix, zoom);
+            return;
         }
 
-        if (ImGui.IsItemHovered())
+        if (cache.Count == 1)
         {
-            SetThemedTooltip("Zooms the replay view. You can also use the mouse wheel over the replay square.");
+            string? staleKey = null;
+            foreach (var key in cache.Keys)
+            {
+                if (!string.Equals(key, activeDeathId, StringComparison.Ordinal))
+                {
+                    staleKey = key;
+                }
+            }
+
+            if (staleKey is not null)
+            {
+                cache.Remove(staleKey);
+            }
+
+            return;
         }
+
+        foreach (var key in cache.Keys.Where(key => !string.Equals(key, activeDeathId, StringComparison.Ordinal)).ToList())
+        {
+            cache.Remove(key);
+        }
+    }
+
+    private static ReplayDisplayDataSignature CreateReplayDisplayDataSignature(PartyDeathRecord death)
+    {
+        GetReplaySeenAtRange(death.ReplayPositions, out var firstPositionTicks, out var lastPositionTicks);
+        GetReplaySeenAtRange(death.ReplayMarkers, out var firstMarkerTicks, out var lastMarkerTicks);
+        GetReplaySeenAtRange(death.ReplayMechanics, out var firstMechanicTicks, out var lastMechanicTicks);
+        return new ReplayDisplayDataSignature(
+            death.ReplayPositions,
+            death.ReplayPositions.Count,
+            firstPositionTicks,
+            lastPositionTicks,
+            death.ReplayMarkers,
+            death.ReplayMarkers.Count,
+            firstMarkerTicks,
+            lastMarkerTicks,
+            death.ReplayMechanics,
+            death.ReplayMechanics.Count,
+            firstMechanicTicks,
+            lastMechanicTicks);
+    }
+
+    private static void GetReplaySeenAtRange(IReadOnlyList<ReplayPositionSnapshot> snapshots, out long firstTicks, out long lastTicks)
+    {
+        if (snapshots.Count == 0)
+        {
+            firstTicks = 0L;
+            lastTicks = 0L;
+            return;
+        }
+
+        firstTicks = snapshots[0].SeenAtUtc.Ticks;
+        lastTicks = snapshots[^1].SeenAtUtc.Ticks;
+    }
+
+    private static void GetReplaySeenAtRange(IReadOnlyList<ReplayMarkerSnapshot> snapshots, out long firstTicks, out long lastTicks)
+    {
+        if (snapshots.Count == 0)
+        {
+            firstTicks = 0L;
+            lastTicks = 0L;
+            return;
+        }
+
+        firstTicks = snapshots[0].SeenAtUtc.Ticks;
+        lastTicks = snapshots[^1].SeenAtUtc.Ticks;
+    }
+
+    private static void GetReplaySeenAtRange(IReadOnlyList<ReplayMechanicSnapshot> snapshots, out long firstTicks, out long lastTicks)
+    {
+        if (snapshots.Count == 0)
+        {
+            firstTicks = 0L;
+            lastTicks = 0L;
+            return;
+        }
+
+        firstTicks = snapshots[0].SeenAtUtc.Ticks;
+        lastTicks = snapshots[^1].SeenAtUtc.Ticks;
     }
 
     private static IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanicsForDisplay(
@@ -4492,10 +4706,28 @@ public sealed class RecapWindow : Window, IDisposable
             : markerSeenAtUtc > displayEndAtUtc
                 ? displayEndAtUtc
                 : markerSeenAtUtc;
-        return positions
-            .Where(position => string.Equals(position.ActorKey, actorKey, StringComparison.Ordinal))
-            .OrderBy(position => Math.Abs((position.SeenAtUtc - clampedAtUtc).TotalMilliseconds))
-            .FirstOrDefault();
+        ReplayPositionSnapshot? bestPosition = null;
+        var bestDistance = TimeSpan.MaxValue;
+        foreach (var position in positions)
+        {
+            if (!string.Equals(position.ActorKey, actorKey, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var distance = position.SeenAtUtc >= clampedAtUtc
+                ? position.SeenAtUtc - clampedAtUtc
+                : clampedAtUtc - position.SeenAtUtc;
+            if (distance >= bestDistance)
+            {
+                continue;
+            }
+
+            bestPosition = position;
+            bestDistance = distance;
+        }
+
+        return bestPosition;
     }
 
     private static DateTime MinDateTime(DateTime left, DateTime right)
@@ -4515,29 +4747,47 @@ public sealed class RecapWindow : Window, IDisposable
         out float minOffset,
         out float maxOffset)
     {
-        var offsets = new List<float>(positions.Count + (mechanics.Count * 2));
-        offsets.AddRange(positions.Select(position => (float)(position.SeenAtUtc - death.SeenAtUtc).TotalSeconds));
+        var hasOffset = false;
+        minOffset = 0.0f;
+        maxOffset = 0.0f;
+        foreach (var position in positions)
+        {
+            IncludeReplayTimeOffset((float)(position.SeenAtUtc - death.SeenAtUtc).TotalSeconds, ref hasOffset, ref minOffset, ref maxOffset);
+        }
+
         foreach (var mechanic in mechanics)
         {
             var startOffset = (float)(mechanic.SeenAtUtc - death.SeenAtUtc).TotalSeconds;
-            offsets.Add(startOffset);
-            offsets.Add(startOffset + MathF.Max(0.0f, mechanic.DurationSeconds));
+            IncludeReplayTimeOffset(startOffset, ref hasOffset, ref minOffset, ref maxOffset);
+            IncludeReplayTimeOffset(startOffset + MathF.Max(0.0f, mechanic.DurationSeconds), ref hasOffset, ref minOffset, ref maxOffset);
         }
 
-        if (offsets.Count == 0)
+        if (!hasOffset)
         {
             minOffset = -DeathReplayLeadUpSeconds;
             maxOffset = 0.0f;
             return;
         }
 
-        minOffset = offsets.Min();
-        maxOffset = offsets.Max();
         if (maxOffset - minOffset < 0.05f)
         {
             minOffset -= 0.5f;
             maxOffset += 0.5f;
         }
+    }
+
+    private static void IncludeReplayTimeOffset(float offset, ref bool hasOffset, ref float minOffset, ref float maxOffset)
+    {
+        if (!hasOffset)
+        {
+            minOffset = offset;
+            maxOffset = offset;
+            hasOffset = true;
+            return;
+        }
+
+        minOffset = MathF.Min(minOffset, offset);
+        maxOffset = MathF.Max(maxOffset, offset);
     }
 
     private void DrawDeathReplayControls(string idSuffix, float minOffset, float maxOffset, ref float scrubSeconds)
@@ -4749,16 +4999,23 @@ public sealed class RecapWindow : Window, IDisposable
         IEnumerable<ReplayPositionSnapshot> actorPositions,
         DateTime selectedAtUtc)
     {
-        var ordered = actorPositions
-            .OrderBy(position => position.SeenAtUtc)
-            .ToList();
-        if (ordered.Count == 0)
+        ReplayPositionSnapshot? previous = null;
+        ReplayPositionSnapshot? next = null;
+        foreach (var position in actorPositions)
         {
-            return null;
+            if (position.SeenAtUtc <= selectedAtUtc &&
+                (previous is null || position.SeenAtUtc > previous.SeenAtUtc))
+            {
+                previous = position;
+            }
+
+            if (position.SeenAtUtc >= selectedAtUtc &&
+                (next is null || position.SeenAtUtc < next.SeenAtUtc))
+            {
+                next = position;
+            }
         }
 
-        var previous = ordered.LastOrDefault(position => position.SeenAtUtc <= selectedAtUtc);
-        var next = ordered.FirstOrDefault(position => position.SeenAtUtc >= selectedAtUtc);
         if (previous is null)
         {
             return next is not null && next.SeenAtUtc - selectedAtUtc <= TimeSpan.FromSeconds(0.75)
@@ -5128,13 +5385,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawDetectedReplayOverheadMechanics(
         PartyDeathRecord death,
-        DateTime replayStartAtUtc,
-        bool showEarlierMarkers,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
         IReplayEncounterModule replayModule)
     {
         ImGui.Spacing();
         DrawLeadUpLabel("Detected overhead mechanics");
-        var markers = SelectDetectedReplayOverheadMechanics(death.ReplayMarkers, replayStartAtUtc, showEarlierMarkers);
         if (markers.Count == 0)
         {
             ImGui.TextDisabled("No overhead mechanics detected.");
@@ -5186,64 +5441,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return selected;
-    }
-
-    private void DrawReplayRawEventViewer(
-        PartyDeathRecord death,
-        IReadOnlyList<ReplayMechanicSnapshot> mechanics,
-        IReplayEncounterModule replayModule,
-        string idSuffix)
-    {
-        ImGui.Spacing();
-        if (!ImGui.CollapsingHeader($"Raw replay events###ReplayRawEvents{idSuffix}"))
-        {
-            return;
-        }
-
-        ImGui.TextDisabled($"Module: {replayModule.Name}");
-        if (death.ReplayMarkers.Count == 0 && mechanics.Count == 0)
-        {
-            ImGui.TextDisabled("No raw replay markers or mechanics captured.");
-            return;
-        }
-
-        if (!ImGui.BeginTable($"##ReplayRawEventTable{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
-        {
-            return;
-        }
-
-        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.55f);
-        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthStretch, 0.75f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.25f);
-        ImGui.TableSetupColumn("Label", ImGuiTableColumnFlags.WidthStretch, 1.35f);
-        ImGui.TableSetupColumn("Raw", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        ImGui.TableHeadersRow();
-
-        foreach (var marker in death.ReplayMarkers.OrderBy(marker => marker.SeenAtUtc))
-        {
-            var known = replayModule.TryGetMarkerInfo(marker.MarkerId, out var markerInfo);
-            ImGui.TableNextRow();
-            DrawTableText(0, FormatReplayOffset((float)(marker.SeenAtUtc - death.SeenAtUtc).TotalSeconds));
-            DrawTableText(1, known ? "Marker" : "Unknown marker", disabled: !known);
-            DrawTableText(2, FormatReplayMarkerActorLabel(marker), wrap: true);
-            DrawTableText(3, known ? markerInfo.Description : $"ID {marker.MarkerId}", wrap: true, disabled: !known);
-            DrawTableText(4, $"{marker.RawMarkerId}", wrap: true);
-        }
-
-        foreach (var mechanic in mechanics.OrderBy(mechanic => mechanic.SeenAtUtc))
-        {
-            var label = string.IsNullOrWhiteSpace(mechanic.Label)
-                ? mechanic.Shape.ToString()
-                : mechanic.Label;
-            ImGui.TableNextRow();
-            DrawTableText(0, FormatReplayOffset((float)(mechanic.SeenAtUtc - death.SeenAtUtc).TotalSeconds));
-            DrawTableText(1, mechanic.IsKnown ? mechanic.Shape.ToString() : $"Unknown {mechanic.Shape}", disabled: !mechanic.IsKnown);
-            DrawTableText(2, mechanic.SourceName, wrap: true);
-            DrawTableText(3, label, wrap: true, disabled: !mechanic.IsKnown);
-            DrawTableText(4, $"{mechanic.RawEventKind} {mechanic.RawEventId}/{mechanic.RawState}", wrap: true);
-        }
-
-        ImGui.EndTable();
     }
 
     private static Vector2 GetRightPaddedTableSize(float rightPadding)
@@ -5298,20 +5495,28 @@ public sealed class RecapWindow : Window, IDisposable
         var canvasSide = MathF.Min(paddedWidth, ReplayCanvasMaxSide);
         var canvasX = cursorStart.X + MathF.Max(0.0f, (paddedWidth - canvasSide) * 0.5f);
 
-        ImGui.SetCursorScreenPos(new Vector2(canvasX, cursorStart.Y));
-        DrawDeathReplayZoomControl(idSuffix, MathF.Min(ReplayZoomSliderWidth, canvasSide));
-        ImGui.Spacing();
-
-        var canvasStart = new Vector2(canvasX, ImGui.GetCursorScreenPos().Y);
-        ImGui.SetCursorScreenPos(canvasStart);
         var canvasSize = new Vector2(canvasSide, canvasSide);
+        ImGui.SetCursorScreenPos(new Vector2(canvasX, cursorStart.Y));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        var canvasChildVisible = ImGui.BeginChild($"##DeathReplayCanvasScrollBlock{idSuffix}", canvasSize, false, ReplayCanvasChildFlags);
+        ImGui.PopStyleVar();
+        if (!canvasChildVisible)
+        {
+            ImGui.EndChild();
+            RestoreCursorAfterReplayCanvas(cursorStart);
+            return;
+        }
+
+        var canvasStart = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton($"##DeathReplayCanvas{idSuffix}", canvasSize);
         var canvasHovered = ImGui.IsItemHovered();
         var canvasActive = ImGui.IsItemActive();
         var zoom = GetReplayZoom(idSuffix);
         var pan = GetReplayPan(idSuffix, zoom, canvasSize);
+        var zoomOverlayRect = GetReplayZoomOverlayRect(canvasStart, canvasSize);
+        var zoomOverlayHovered = IsMouseInsideRect(zoomOverlayRect.Start, zoomOverlayRect.Size);
         HandleReplayCanvasWheelZoom(idSuffix, canvasHovered, canvasStart, canvasSize, ref zoom, ref pan);
-        HandleReplayCanvasPan(idSuffix, canvasActive, zoom, canvasSize, ref pan);
+        HandleReplayCanvasPan(idSuffix, canvasActive && !zoomOverlayHovered, zoom, canvasSize, ref pan);
 
         var drawList = ImGui.GetWindowDrawList();
         var canvasEnd = canvasStart + canvasSize;
@@ -5329,6 +5534,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (!TryGetReplayBounds(allPositions, boundsMechanics, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
+            ImGui.EndChild();
             RestoreCursorAfterReplayCanvas(cursorStart);
             return;
         }
@@ -5368,9 +5574,11 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.PopClipRect();
-        HandleReplayCanvasFocus(idSuffix, canvasHovered, actorScreenPositions);
+        DrawDeathReplayZoomOverlay(idSuffix, canvasStart, canvasSize);
+        HandleReplayCanvasFocus(idSuffix, canvasHovered && !zoomOverlayHovered, actorScreenPositions);
 
-        if (canvasHovered)
+        string? canvasTooltip = null;
+        if (canvasHovered && !zoomOverlayHovered)
         {
             var mouse = ImGui.GetIO().MousePos;
             var hovered = actorScreenPositions
@@ -5379,21 +5587,74 @@ public sealed class RecapWindow : Window, IDisposable
                 .FirstOrDefault();
             if (hovered is not null)
             {
-                SetThemedTooltip(FormatReplayActorTooltip(hovered.Actor, hovered.Marker, selectedAtUtc, replayModule));
-                return;
+                canvasTooltip = FormatReplayActorTooltip(hovered.Actor, hovered.Marker, selectedAtUtc, replayModule);
             }
-
-            var hoveredMechanic = mechanicScreenRegions
-                .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius)
-                .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
-                .FirstOrDefault();
-            if (hoveredMechanic.Mechanic is not null)
+            else
             {
-                SetThemedTooltip(FormatReplayMechanicTooltip(hoveredMechanic.Mechanic, selectedAtUtc));
+                var hoveredMechanic = mechanicScreenRegions
+                    .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius)
+                    .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
+                    .FirstOrDefault();
+                if (hoveredMechanic.Mechanic is not null)
+                {
+                    canvasTooltip = FormatReplayMechanicTooltip(hoveredMechanic.Mechanic, selectedAtUtc);
+                }
             }
         }
 
+        ImGui.EndChild();
+        if (canvasTooltip is not null)
+        {
+            SetThemedTooltip(canvasTooltip);
+        }
+
         RestoreCursorAfterReplayCanvas(cursorStart);
+    }
+
+    private void DrawDeathReplayZoomOverlay(string idSuffix, Vector2 canvasStart, Vector2 canvasSize)
+    {
+        var (overlayStart, overlaySize) = GetReplayZoomOverlayRect(canvasStart, canvasSize);
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(overlayStart, overlayStart + overlaySize, ImGui.GetColorU32(ModernPanelColor with { W = 0.82f }), 6.0f);
+        drawList.AddRect(overlayStart, overlayStart + overlaySize, ImGui.GetColorU32(ModernPanelBorderColor), 6.0f);
+
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        ImGui.SetCursorScreenPos(overlayStart + new Vector2(8.0f, 5.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6.0f, 2.0f));
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+        var zoom = GetReplayZoom(idSuffix);
+        ImGui.TextUnformatted("Zoom");
+        ImGui.SameLine(0.0f, 7.0f);
+        ImGui.SetNextItemWidth(MathF.Max(72.0f, overlaySize.X - 62.0f));
+        if (ImGui.SliderFloat($"##DeathReplayZoom{idSuffix}", ref zoom, ReplayMinZoom, ReplayMaxZoom, $"{zoom:0.0}x"))
+        {
+            SetReplayZoom(idSuffix, zoom);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Zooms the replay view. You can also use the mouse wheel over the replay square.");
+        }
+
+        ImGui.PopStyleColor();
+        ImGui.PopStyleVar();
+        ImGui.SetCursorScreenPos(cursorBefore);
+    }
+
+    private static (Vector2 Start, Vector2 Size) GetReplayZoomOverlayRect(Vector2 canvasStart, Vector2 canvasSize)
+    {
+        var maxWidth = MathF.Max(128.0f, canvasSize.X - (ReplayZoomOverlayPadding * 2.0f));
+        var width = MathF.Min(Math.Clamp(canvasSize.X * 0.42f, 158.0f, ReplayZoomSliderWidth + 58.0f), maxWidth);
+        return (canvasStart + new Vector2(ReplayZoomOverlayPadding, ReplayZoomOverlayPadding), new Vector2(width, ReplayZoomOverlayHeight));
+    }
+
+    private static bool IsMouseInsideRect(Vector2 start, Vector2 size)
+    {
+        var mouse = ImGui.GetIO().MousePos;
+        return mouse.X >= start.X &&
+            mouse.X <= start.X + size.X &&
+            mouse.Y >= start.Y &&
+            mouse.Y <= start.Y + size.Y;
     }
 
     private void HandleReplayCanvasWheelZoom(
@@ -5501,29 +5762,33 @@ public sealed class RecapWindow : Window, IDisposable
         out float minZ,
         out float maxZ)
     {
-        var mappedPositions = positions
-            .Where(position => float.IsFinite(position.X) && float.IsFinite(position.Z))
-            .ToList();
-        var mappedMechanics = mechanics
-            .Where(mechanic => float.IsFinite(mechanic.X) && float.IsFinite(mechanic.Z))
-            .ToList();
-        if (mappedPositions.Count == 0 && mappedMechanics.Count == 0)
+        var hasBounds = false;
+        minX = maxX = minZ = maxZ = 0.0f;
+        foreach (var position in positions)
+        {
+            if (!float.IsFinite(position.X) || !float.IsFinite(position.Z))
+            {
+                continue;
+            }
+
+            IncludeReplayBounds(position.X, position.X, position.Z, position.Z, ref hasBounds, ref minX, ref maxX, ref minZ, ref maxZ);
+        }
+
+        foreach (var mechanic in mechanics)
+        {
+            if (!float.IsFinite(mechanic.X) || !float.IsFinite(mechanic.Z))
+            {
+                continue;
+            }
+
+            var radius = GetReplayMechanicBoundsRadius(mechanic);
+            IncludeReplayBounds(mechanic.X - radius, mechanic.X + radius, mechanic.Z - radius, mechanic.Z + radius, ref hasBounds, ref minX, ref maxX, ref minZ, ref maxZ);
+        }
+
+        if (!hasBounds)
         {
             minX = maxX = minZ = maxZ = 0.0f;
             return false;
-        }
-
-        minX = mappedPositions.Count == 0 ? mappedMechanics.Min(mechanic => mechanic.X) : mappedPositions.Min(position => position.X);
-        maxX = mappedPositions.Count == 0 ? mappedMechanics.Max(mechanic => mechanic.X) : mappedPositions.Max(position => position.X);
-        minZ = mappedPositions.Count == 0 ? mappedMechanics.Min(mechanic => mechanic.Z) : mappedPositions.Min(position => position.Z);
-        maxZ = mappedPositions.Count == 0 ? mappedMechanics.Max(mechanic => mechanic.Z) : mappedPositions.Max(position => position.Z);
-        foreach (var mechanic in mappedMechanics)
-        {
-            var radius = GetReplayMechanicBoundsRadius(mechanic);
-            minX = MathF.Min(minX, mechanic.X - radius);
-            maxX = MathF.Max(maxX, mechanic.X + radius);
-            minZ = MathF.Min(minZ, mechanic.Z - radius);
-            maxZ = MathF.Max(maxZ, mechanic.Z + radius);
         }
 
         if (maxX - minX < 1.0f)
@@ -5549,6 +5814,33 @@ public sealed class RecapWindow : Window, IDisposable
         maxZ = centerZ + (evenRange * 0.5f);
 
         return true;
+    }
+
+    private static void IncludeReplayBounds(
+        float candidateMinX,
+        float candidateMaxX,
+        float candidateMinZ,
+        float candidateMaxZ,
+        ref bool hasBounds,
+        ref float minX,
+        ref float maxX,
+        ref float minZ,
+        ref float maxZ)
+    {
+        if (!hasBounds)
+        {
+            minX = candidateMinX;
+            maxX = candidateMaxX;
+            minZ = candidateMinZ;
+            maxZ = candidateMaxZ;
+            hasBounds = true;
+            return;
+        }
+
+        minX = MathF.Min(minX, candidateMinX);
+        maxX = MathF.Max(maxX, candidateMaxX);
+        minZ = MathF.Min(minZ, candidateMinZ);
+        maxZ = MathF.Max(maxZ, candidateMaxZ);
     }
 
     private static void DrawReplayGrid(ImDrawListPtr drawList, Vector2 canvasStart, Vector2 canvasSize)
@@ -10568,6 +10860,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.183");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Replay view should run smoother while playing and scrubbing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.182");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Replay view spacing, zooming, and player markers were cleaned up.");
