@@ -241,8 +241,10 @@ internal static class ReplayEncounterModules
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions)
         {
-            var pairs = BuildForsakenPairs(markers, positions);
+            // Forsaken pairings are fixed by the opening marker assignment. Later marker changes
+            // advance the active resolve group, but they must not re-pair players mid-replay.
             var initialMarkerKinds = GetInitialForsakenMarkerKinds(markers);
+            var pairs = BuildForsakenPairs(markers, positions, initialMarkerKinds);
             var actorGroups = new Dictionary<string, ReplayMarkerResolveGroup>(StringComparer.Ordinal);
             foreach (var pair in pairs)
             {
@@ -259,7 +261,8 @@ internal static class ReplayEncounterModules
 
         private static IReadOnlyList<IReadOnlyList<string>> BuildForsakenPairs(
             IReadOnlyList<ReplayMarkerSnapshot> markers,
-            IReadOnlyList<ReplayPositionSnapshot> positions)
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyDictionary<string, ForsakenMarkerKind> initialMarkerKinds)
         {
             var actors = BuildForsakenActors(markers, positions);
             var tanks = actors
@@ -277,13 +280,140 @@ internal static class ReplayEncounterModules
                 .OrderBy(actor => GetDpsSortKey(actor.ClassJobName))
                 .ThenBy(actor => actor.PartyIndex)
                 .ToList();
+            var meleeDps = dps
+                .Where(actor => IsMeleeDps(actor.ClassJobName))
+                .ToList();
+            var rangedDps = dps
+                .Where(actor => IsRangedDps(actor.ClassJobName))
+                .ToList();
             var pairs = new List<IReadOnlyList<string>>();
+
             AddPair(pairs, tanks.ElementAtOrDefault(0), healers.ElementAtOrDefault(0));
-            AddPair(pairs, dps.ElementAtOrDefault(0), dps.ElementAtOrDefault(2));
+            pairs.AddRange(BuildForsakenDpsPairs(dps, meleeDps, rangedDps, initialMarkerKinds));
             AddPair(pairs, tanks.ElementAtOrDefault(1), healers.ElementAtOrDefault(1));
-            AddPair(pairs, dps.ElementAtOrDefault(1), dps.ElementAtOrDefault(3));
 
             return pairs;
+        }
+
+        private static IReadOnlyList<IReadOnlyList<string>> BuildForsakenDpsPairs(
+            IReadOnlyList<ForsakenActor> dps,
+            IReadOnlyList<ForsakenActor> meleeDps,
+            IReadOnlyList<ForsakenActor> rangedDps,
+            IReadOnlyDictionary<string, ForsakenMarkerKind> initialMarkerKinds)
+        {
+            var fallbackPairs = CreateForsakenPairLayout(
+                dps.ElementAtOrDefault(0),
+                dps.ElementAtOrDefault(2),
+                dps.ElementAtOrDefault(1),
+                dps.ElementAtOrDefault(3));
+            if (dps.Count != 4 || fallbackPairs.Count == 0)
+            {
+                return fallbackPairs;
+            }
+
+            var candidates = BuildForsakenDpsPairCandidates(dps);
+            var dpsByActorKey = dps.ToDictionary(actor => actor.ActorKey, StringComparer.Ordinal);
+            if (candidates.Count == 0)
+            {
+                return fallbackPairs;
+            }
+
+            var hasExpectedRoleSplit = meleeDps.Count == 2 && rangedDps.Count == 2;
+            if (hasExpectedRoleSplit)
+            {
+                var roleCompatibleCandidates = candidates
+                    .Where(candidate => candidate.All(pair => IsMixedDpsRolePair(pair, dpsByActorKey)))
+                    .ToList();
+                if (roleCompatibleCandidates.Count > 0)
+                {
+                    candidates = roleCompatibleCandidates;
+                }
+            }
+
+            return candidates
+                .OrderByDescending(candidate => ScoreForsakenPairLayout(candidate, initialMarkerKinds))
+                .ThenBy(candidate => IsSamePairLayout(candidate, fallbackPairs) ? 0 : 1)
+                .First();
+        }
+
+        private static IReadOnlyList<IReadOnlyList<string>> CreateForsakenPairLayout(
+            ForsakenActor? firstA,
+            ForsakenActor? secondA,
+            ForsakenActor? firstB,
+            ForsakenActor? secondB)
+        {
+            var pairs = new List<IReadOnlyList<string>>();
+            AddPair(pairs, firstA, secondA);
+            AddPair(pairs, firstB, secondB);
+            return pairs;
+        }
+
+        private static IReadOnlyList<IReadOnlyList<IReadOnlyList<string>>> BuildForsakenDpsPairCandidates(
+            IReadOnlyList<ForsakenActor> dps)
+        {
+            return
+            [
+                CreateForsakenPairLayout(dps[0], dps[2], dps[1], dps[3]),
+                CreateForsakenPairLayout(dps[0], dps[1], dps[2], dps[3]),
+                CreateForsakenPairLayout(dps[0], dps[3], dps[1], dps[2]),
+            ];
+        }
+
+        private static int ScoreForsakenPairLayout(
+            IReadOnlyList<IReadOnlyList<string>> pairs,
+            IReadOnlyDictionary<string, ForsakenMarkerKind> initialMarkerKinds)
+        {
+            var groups = pairs
+                .Select(pair => GetForsakenPairGroup(pair, initialMarkerKinds))
+                .ToList();
+            var knownGroupCount = groups.Count(group => group != ReplayMarkerResolveGroup.Unknown);
+            var score = knownGroupCount * 10;
+
+            if (groups.Contains(ReplayMarkerResolveGroup.GroupA) &&
+                groups.Contains(ReplayMarkerResolveGroup.GroupB))
+            {
+                score += 100;
+            }
+
+            return score;
+        }
+
+        private static bool IsSamePairLayout(
+            IReadOnlyList<IReadOnlyList<string>> left,
+            IReadOnlyList<IReadOnlyList<string>> right)
+        {
+            if (left.Count != right.Count)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < left.Count; index++)
+            {
+                if (left[index].Count != 2 ||
+                    right[index].Count != 2 ||
+                    !string.Equals(left[index][0], right[index][0], StringComparison.Ordinal) ||
+                    !string.Equals(left[index][1], right[index][1], StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsMixedDpsRolePair(
+            IReadOnlyList<string> pair,
+            IReadOnlyDictionary<string, ForsakenActor> dpsByActorKey)
+        {
+            if (pair.Count < 2 ||
+                !dpsByActorKey.TryGetValue(pair[0], out var first) ||
+                !dpsByActorKey.TryGetValue(pair[1], out var second))
+            {
+                return false;
+            }
+
+            return IsMeleeDps(first.ClassJobName) && IsRangedDps(second.ClassJobName) ||
+                IsRangedDps(first.ClassJobName) && IsMeleeDps(second.ClassJobName);
         }
 
         private static IReadOnlyList<ForsakenActor> BuildForsakenActors(
@@ -381,6 +511,16 @@ internal static class ReplayEncounterModules
         private static bool IsHealer(string classJobName)
         {
             return NormalizeJob(classJobName) is "WHM" or "SCH" or "AST" or "SGE" or "WHITEMAGE" or "SCHOLAR" or "ASTROLOGIAN" or "SAGE";
+        }
+
+        private static bool IsMeleeDps(string classJobName)
+        {
+            return NormalizeJob(classJobName) is "MNK" or "MONK" or "DRG" or "DRAGOON" or "NIN" or "NINJA" or "SAM" or "SAMURAI" or "RPR" or "REAPER" or "VPR" or "VIPER";
+        }
+
+        private static bool IsRangedDps(string classJobName)
+        {
+            return NormalizeJob(classJobName) is "BRD" or "BARD" or "MCH" or "MACHINIST" or "DNC" or "DANCER" or "BLM" or "BLACKMAGE" or "SMN" or "SUMMONER" or "RDM" or "REDMAGE" or "PCT" or "PICTOMANCER";
         }
 
         private static int GetTankSortKey(string classJobName)

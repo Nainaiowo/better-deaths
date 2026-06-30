@@ -102,7 +102,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.180";
+    private const string CurrentChangelogVersion = "0.1.0.181";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const float LeadUpHistorySeconds = 10.0f;
@@ -10416,6 +10416,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.181");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Forsaken replay pairing now respects fixed mechanic partners.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.180");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Replay view now supports zooming, panning, and focused player selection.");
