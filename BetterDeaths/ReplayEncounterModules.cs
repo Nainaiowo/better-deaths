@@ -88,7 +88,7 @@ internal static class ReplayEncounterModules
 
     private sealed class GenericReplayEncounterModule : IReplayEncounterModule
     {
-        public string Name => "Generic";
+        public string Name => "Universal";
 
         public bool AppliesTo(uint territoryId) => true;
 
@@ -108,13 +108,19 @@ internal static class ReplayEncounterModules
                 return true;
             }
 
-            info = default;
-            return false;
+            info = markerId == 0
+                ? new ReplayMarkerInfo("?", "Unknown marker")
+                : new ReplayMarkerInfo($"#{markerId}", "Unknown marker");
+            return true;
         }
 
         public bool ShouldCreateReplayMarkerMechanic(
             ReplayMarkerSnapshot marker,
-            IReadOnlyList<ReplayMarkerSnapshot> markers) => true;
+            IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            return TryGetMarkerInfo(marker.MarkerId, out var info) &&
+                info.Shape is not null;
+        }
 
         public bool ShouldDisplayReplayMarker(
             ReplayMarkerSnapshot marker,

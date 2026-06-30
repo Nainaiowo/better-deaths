@@ -105,7 +105,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.187";
+    private const string CurrentChangelogVersion = "0.1.0.188";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -5920,9 +5920,11 @@ public sealed class RecapWindow : Window, IDisposable
             maxZ += 1.0f;
         }
 
+        const float inferredMinimumRange = 30.0f;
+        const float inferredPaddingScale = 1.18f;
         var xRange = maxX - minX;
         var zRange = maxZ - minZ;
-        var evenRange = MathF.Max(xRange, zRange);
+        var evenRange = MathF.Max(MathF.Max(xRange, zRange), inferredMinimumRange) * inferredPaddingScale;
         var centerX = (minX + maxX) * 0.5f;
         var centerZ = (minZ + maxZ) * 0.5f;
         minX = centerX - (evenRange * 0.5f);
@@ -6658,16 +6660,25 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatReplayMarkerSummaryLabel(ReplayMarkerSnapshot marker, IReplayEncounterModule replayModule)
     {
+        var idText = FormatReplayMarkerIdText(marker);
         return replayModule.TryGetMarkerInfo(marker.MarkerId, out var info)
-            ? $"{info.Description} (ID {marker.MarkerId})"
-            : $"ID {marker.MarkerId}";
+            ? $"{info.Description} ({idText})"
+            : idText;
     }
 
     private static string FormatReplayMarkerTooltipLabel(ReplayMarkerSnapshot marker, IReplayEncounterModule replayModule)
     {
+        var idText = FormatReplayMarkerIdText(marker);
         return replayModule.TryGetMarkerInfo(marker.MarkerId, out var info)
-            ? $"{info.Description} ({marker.MarkerId})"
-            : $"Marker {marker.MarkerId}";
+            ? $"{info.Description} ({idText})"
+            : $"Marker {idText}";
+    }
+
+    private static string FormatReplayMarkerIdText(ReplayMarkerSnapshot marker)
+    {
+        return marker.RawMarkerId != 0 && marker.RawMarkerId != marker.MarkerId
+            ? $"ID {marker.MarkerId}, raw {marker.RawMarkerId}"
+            : $"ID {marker.MarkerId}";
     }
 
     private static string FormatReplayOffset(float seconds)
@@ -10989,92 +11000,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.187");
+        ImGui.TextUnformatted("v0.1.0.188");
         ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Forsaken replay cones now wait for the correct turn before showing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.186");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay arena positioning now lines up correctly in DMU.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.185");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay mouse wheel handling should no longer stutter the selected death panel.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.184");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay zoom and scrolling interactions were fixed.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.183");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay view should run smoother while playing and scrubbing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.182");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay view spacing, zooming, and player markers were cleaned up.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.181");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Forsaken replay pairing now respects fixed mechanic partners.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.180");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay view now supports zooming, panning, and focused player selection.");
-        DrawWrappedBullet("Selected Death help text now better explains snapshot limits.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.179");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Forsaken replay markers now focus on the active resolving group.");
-        DrawWrappedBullet("Resolved replay markers now briefly freeze, glow, and fade when the next set begins.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.178");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay now uses a square arena view with smoother movement.");
-        DrawWrappedBullet("Known overhead markers now draw replay overlays for testing.");
+        DrawBreathingGoldBullet("Death Replay beta is now available, with player positions, overhead markers, zooming, panning, and focused player selection.");
+        DrawBreathingGoldBullet("DMU replay support was improved with better arena positioning, Forsaken grouping, cone timing, and resolving marker fades.");
+        DrawBreathingGoldBullet("Replay UI interactions were cleaned up, including mouse wheel behavior, scrolling, spacing, and player markers.");
+        DrawWrappedBullet("Known overhead markers now draw replay overlays.");
+        DrawWrappedBullet("Replay marker labels now use fight-specific modules.");
         DrawWrappedBullet("Replay captures known Black Hole helper objects for new pulls.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.177");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay controls and mock mechanic rendering were added for testing.");
-        DrawWrappedBullet("Replay now has a raw event viewer to help map captured markers and mechanics.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.176");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay marker labels now use fight-specific modules during testing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.175");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Replay now captures and shows player markers during testing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.174");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Enabled the Replay tab for testing.");
+        DrawWrappedBullet("Unknown fights now use a better universal replay fallback with clearer marker IDs and inferred arena spacing.");
 
         ImGui.Separator();
 
