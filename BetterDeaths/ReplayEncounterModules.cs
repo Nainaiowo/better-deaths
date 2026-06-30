@@ -31,11 +31,25 @@ internal readonly record struct ReplayMarkerInfo(
     bool AnchorsToActor = true,
     bool ConeBaitsClosestPlayer = false);
 
+internal enum ReplayArenaShape
+{
+    Circle,
+    Square,
+}
+
+internal readonly record struct ReplayArenaInfo(
+    float CenterX,
+    float CenterZ,
+    float Radius,
+    ReplayArenaShape Shape);
+
 internal interface IReplayEncounterModule
 {
     string Name { get; }
 
     bool AppliesTo(uint territoryId);
+
+    bool TryGetReplayArena(out ReplayArenaInfo arena);
 
     bool IsReplayOverheadStatus(uint statusId);
 
@@ -74,6 +88,12 @@ internal static class ReplayEncounterModules
 
         public bool AppliesTo(uint territoryId) => true;
 
+        public bool TryGetReplayArena(out ReplayArenaInfo arena)
+        {
+            arena = default;
+            return false;
+        }
+
         public bool IsReplayOverheadStatus(uint statusId) => false;
 
         public bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
@@ -103,6 +123,7 @@ internal static class ReplayEncounterModules
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
     {
         private const uint TerritoryDancingMadUltimate = 1363;
+        private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
         private static readonly ReplayMarkerResolveGroup[] ForsakenTowerResolveSequence =
         [
             ReplayMarkerResolveGroup.GroupA,
@@ -118,6 +139,12 @@ internal static class ReplayEncounterModules
         public string Name => "Dancing Mad Ultimate";
 
         public bool AppliesTo(uint territoryId) => territoryId == TerritoryDancingMadUltimate;
+
+        public bool TryGetReplayArena(out ReplayArenaInfo arena)
+        {
+            arena = Arena;
+            return true;
+        }
 
         public bool IsReplayOverheadStatus(uint statusId)
         {
