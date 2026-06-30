@@ -105,7 +105,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.186";
+    private const string CurrentChangelogVersion = "0.1.0.187";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -4635,6 +4635,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             if (!showEarlierMarkers && marker.SeenAtUtc < replayStartAtUtc ||
                 marker.SeenAtUtc > displayEndAtUtc ||
+                !replayModule.ShouldCreateReplayMarkerMechanic(marker, death.ReplayMarkers) ||
                 !replayModule.TryGetMarkerInfo(marker.MarkerId, out var markerInfo) ||
                 markerInfo.Shape is not { } shape)
             {
@@ -10988,6 +10989,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.187");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Forsaken replay cones now wait for the correct turn before showing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.186");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Replay arena positioning now lines up correctly in DMU.");

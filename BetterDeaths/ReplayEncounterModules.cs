@@ -55,6 +55,10 @@ internal interface IReplayEncounterModule
 
     bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info);
 
+    bool ShouldCreateReplayMarkerMechanic(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers);
+
     bool ShouldDisplayReplayMarker(
         ReplayMarkerSnapshot marker,
         IReadOnlyList<ReplayMarkerSnapshot> markers,
@@ -107,6 +111,10 @@ internal static class ReplayEncounterModules
             info = default;
             return false;
         }
+
+        public bool ShouldCreateReplayMarkerMechanic(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers) => true;
 
         public bool ShouldDisplayReplayMarker(
             ReplayMarkerSnapshot marker,
@@ -175,6 +183,25 @@ internal static class ReplayEncounterModules
                 FallbackModule.TryGetMarkerInfo(markerId, out info);
         }
 
+        public bool ShouldCreateReplayMarkerMechanic(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            if (!IsForsakenTowerMarker(marker.MarkerId))
+            {
+                return true;
+            }
+
+            var relevantMarkers = GetForsakenTowerMarkers(markers);
+            if (relevantMarkers.Count == 0)
+            {
+                return true;
+            }
+
+            var initialBatchEnd = relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
+            return marker.SeenAtUtc > initialBatchEnd;
+        }
+
         public IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death)
         {
             return death.ReplayMechanics;
@@ -203,10 +230,7 @@ internal static class ReplayEncounterModules
             IReadOnlyList<ReplayPositionSnapshot> positions,
             DateTime selectedAtUtc)
         {
-            var relevantMarkers = markers
-                .Where(marker => IsForsakenTowerMarker(marker.MarkerId))
-                .OrderBy(marker => marker.SeenAtUtc)
-                .ToList();
+            var relevantMarkers = GetForsakenTowerMarkers(markers);
             if (relevantMarkers.Count == 0)
             {
                 return ReplayMarkerResolveGroup.Unknown;
@@ -463,10 +487,7 @@ internal static class ReplayEncounterModules
 
         private static Dictionary<string, ForsakenMarkerKind> GetInitialForsakenMarkerKinds(IReadOnlyList<ReplayMarkerSnapshot> markers)
         {
-            var relevantMarkers = markers
-                .Where(marker => IsForsakenTowerMarker(marker.MarkerId))
-                .OrderBy(marker => marker.SeenAtUtc)
-                .ToList();
+            var relevantMarkers = GetForsakenTowerMarkers(markers);
             if (relevantMarkers.Count == 0)
             {
                 return [];
@@ -517,6 +538,14 @@ internal static class ReplayEncounterModules
         private static bool IsForsakenTowerMarker(uint markerId)
         {
             return markerId is 715 or 716 or 717 or 5084 or 5085 or 5086;
+        }
+
+        private static List<ReplayMarkerSnapshot> GetForsakenTowerMarkers(IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            return markers
+                .Where(marker => IsForsakenTowerMarker(marker.MarkerId))
+                .OrderBy(marker => marker.SeenAtUtc)
+                .ToList();
         }
 
         private static ForsakenMarkerKind GetForsakenMarkerKind(uint markerId)
