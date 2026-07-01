@@ -107,7 +107,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.190";
+    private const string CurrentChangelogVersion = "0.1.0.191";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -1697,6 +1697,70 @@ public sealed class RecapWindow : Window, IDisposable
         return clicked;
     }
 
+    private static bool DrawTextSelectorOption(string label, string id, bool selected)
+    {
+        var textSize = ImGui.CalcTextSize(label);
+        var size = new Vector2(textSize.X, ImGui.GetTextLineHeight());
+        var start = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##{id}", size);
+        var hovered = ImGui.IsItemHovered();
+        var color = GetTextSelectorColor(selected, hovered);
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddText(start, ImGui.GetColorU32(color), label);
+
+        if (selected || hovered)
+        {
+            var underlineY = start.Y + textSize.Y + 1.0f;
+            drawList.AddLine(
+                new Vector2(start.X, underlineY),
+                new Vector2(start.X + textSize.X, underlineY),
+                ImGui.GetColorU32(color with { W = selected ? 0.95f : 0.72f }),
+                selected ? 1.4f : 1.0f);
+        }
+
+        return clicked;
+    }
+
+    private static void DrawTextSelectorSeparator()
+    {
+        ImGui.SameLine(0.0f, 4.0f);
+        ImGui.TextColored(ModernMutedTextColor, "|");
+        ImGui.SameLine(0.0f, 4.0f);
+    }
+
+    private static float GetTextSelectorWidth(params string[] labels)
+    {
+        var width = 0.0f;
+        foreach (var label in labels)
+        {
+            width += ImGui.CalcTextSize(label).X;
+        }
+
+        if (labels.Length > 1)
+        {
+            width += ImGui.CalcTextSize("|").X * (labels.Length - 1);
+            width += 8.0f * (labels.Length - 1);
+        }
+
+        return width;
+    }
+
+    private static Vector4 GetTextSelectorColor(bool selected, bool hovered)
+    {
+        var color = selected
+            ? LeadUpGoldColor
+            : ModernAccentColor;
+
+        if (hovered)
+        {
+            color = BlendColors(color, ModernTextColor, selected ? 0.12f : 0.26f);
+        }
+
+        return GetColorContrast(ModernPanelColor, color) >= 2.1f
+            ? color with { W = 1.0f }
+            : GetReadableTextColorForBackground(ModernPanelColor);
+    }
+
     private static bool DrawThemedActionButton(string label, string id, float width = 0.0f)
     {
         var buttonWidth = width <= 0.0f
@@ -1811,14 +1875,14 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawReviewDisplayModeToggle(string idSuffix)
     {
         DrawReviewDisplayModeButton(ReviewDisplayMode.Focused, idSuffix);
-        ImGui.SameLine(0.0f, 4.0f);
+        DrawTextSelectorSeparator();
         DrawReviewDisplayModeButton(ReviewDisplayMode.Detailed, idSuffix);
     }
 
     private void DrawReviewDisplayModeButton(ReviewDisplayMode mode, string idSuffix)
     {
         var selected = configuration.ReviewDisplayMode == mode;
-        if (DrawSegmentedButton(GetReviewDisplayModeLabel(mode), $"ReviewDisplayMode{mode}{idSuffix}", selected, 74.0f) &&
+        if (DrawTextSelectorOption(GetReviewDisplayModeLabel(mode), $"ReviewDisplayMode{mode}{idSuffix}", selected) &&
             !selected)
         {
             plugin.SetReviewDisplayMode(mode);
@@ -1834,7 +1898,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static float GetReviewDisplayModeToggleWidth()
     {
-        return 74.0f + 4.0f + 74.0f;
+        return GetTextSelectorWidth("Focused", "Detailed");
     }
 
     private static string GetReviewDisplayModeLabel(ReviewDisplayMode mode)
@@ -10207,7 +10271,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("Clock Display");
         DrawClockDisplayModeSegment("24-hour", ClockDisplayMode.TwentyFourHour);
-        ImGui.SameLine(0.0f, 4.0f);
+        DrawTextSelectorSeparator();
         DrawClockDisplayModeSegment("12-hour", ClockDisplayMode.TwelveHour);
 
         DrawSettingsTooltip("Controls local clock times shown in recorded pull descriptions.");
@@ -10216,7 +10280,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawClockDisplayModeSegment(string label, ClockDisplayMode mode)
     {
         var selected = configuration.ClockDisplayMode == mode;
-        if (DrawSegmentedButton(label, $"ClockDisplayMode{mode}", selected, 74.0f))
+        if (DrawTextSelectorOption(label, $"ClockDisplayMode{mode}", selected))
         {
             plugin.SetClockDisplayMode(mode);
         }
@@ -10226,14 +10290,14 @@ public sealed class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("Display");
         DrawWidgetDisplayModeSegment(WidgetDisplayMode.Normal);
-        ImGui.SameLine(0.0f, 4.0f);
+        DrawTextSelectorSeparator();
         DrawWidgetDisplayModeSegment(WidgetDisplayMode.Concise);
     }
 
     private void DrawWidgetDisplayModeSegment(WidgetDisplayMode mode)
     {
         var selected = configuration.WidgetDisplayMode == mode;
-        if (DrawSegmentedButton(GetWidgetDisplayModeLabel(mode), $"WidgetDisplayMode{mode}", selected, 86.0f))
+        if (DrawTextSelectorOption(GetWidgetDisplayModeLabel(mode), $"WidgetDisplayMode{mode}", selected))
         {
             plugin.SetWidgetDisplayMode(mode);
         }
@@ -11753,6 +11817,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.191");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Focused/Detailed, Clock Display, and Widget Display now use cleaner text-style selectors.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.190");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Added Focused and Detailed review modes, so death review can be cleaner without losing the full data view.");
