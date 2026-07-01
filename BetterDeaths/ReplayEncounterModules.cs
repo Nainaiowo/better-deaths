@@ -86,6 +86,11 @@ internal static class ReplayEncounterModules
         return Get(territoryId).IsReplayOverheadStatus(statusId);
     }
 
+    public static bool IsDancingMadUltimate(uint territoryId)
+    {
+        return territoryId == DmuReplayEncounterModule.TerritoryDancingMadUltimate;
+    }
+
     private sealed class GenericReplayEncounterModule : IReplayEncounterModule
     {
         public string Name => "Universal";
@@ -136,7 +141,7 @@ internal static class ReplayEncounterModules
 
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
     {
-        private const uint TerritoryDancingMadUltimate = 1363;
+        public const uint TerritoryDancingMadUltimate = 1363;
         private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
         private static readonly ReplayMarkerResolveGroup[] ForsakenTowerResolveSequence =
         [

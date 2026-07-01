@@ -50,6 +50,7 @@ public enum ReplayMechanicShape
     Stack,
     Spread,
     Label,
+    Tether,
 }
 
 public sealed record StatusSnapshot(

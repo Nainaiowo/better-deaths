@@ -77,6 +77,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int DeathReplayPostDeathSeconds = 10;
     private const int DeathReplayMarkerCarryInSeconds = 30;
     private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
+    private const uint DmuBlackHoleTetherId = 84;
+    private const uint DmuBlackHoleNothingnessActionId = 47868;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int CombatLogEventRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -280,6 +282,7 @@ public sealed partial class Plugin : IDalamudPlugin
         DateTime SeenAtUtc,
         uint ActionSequence,
         uint CasterEntityId,
+        string CasterName,
         uint ActionId,
         RawCombatSnapshot? SourceSnapshot,
         IReadOnlyList<RawActionEffectTarget> Targets);
@@ -2789,6 +2792,7 @@ public sealed partial class Plugin : IDalamudPlugin
             now,
             header->GlobalSequence,
             casterEntityId,
+            GetEntityDisplayName(casterEntityId),
             header->ActionId,
             sourceSnapshot,
             targets));
@@ -2999,6 +3003,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
         TrackPossibleMitigationActionUse(packet);
+        CaptureReplayBlackHoleBlast(packet);
 
         string? actionName = null;
         uint? actionIconId = null;
@@ -3056,7 +3061,9 @@ public sealed partial class Plugin : IDalamudPlugin
                 EnsurePullStarted(packet.SeenAtUtc);
                 var resolvedActionName = actionName ??= GetActionName(packet.ActionId);
                 var resolvedActionIconId = actionIconId ??= GetActionIconId(packet.ActionId);
-                var resolvedSourceName = sourceName ??= GetEntityDisplayName(packet.CasterEntityId);
+                var resolvedSourceName = sourceName ??= string.IsNullOrWhiteSpace(packet.CasterName)
+                    ? GetEntityDisplayName(packet.CasterEntityId)
+                    : packet.CasterName;
                 var shouldTrackSourceStatuses = kind.Value != DeathEventKind.Heal;
                 var resolvedSourceStatuses = shouldTrackSourceStatuses
                     ? sourceStatuses ??= GetBossMitigationStatuses(packet.SourceSnapshot is null
@@ -3069,11 +3076,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     trackedSourceStatuses = true;
                 }
 
-                var amount = effect.Value;
-                if ((effect.Param4 & 0x40) == 0x40)
-                {
-                    amount += effect.Param3 << 16;
-                }
+                var amount = CalculateRawActionEffectAmount(effect);
 
                 var eventOrdinal = GetNextResolvedCombatEventOrdinal();
                 var record = new CombatEventRecord(
@@ -3117,6 +3120,72 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             AddDebugLog($"Captured {actionName} ({packet.ActionId}).");
         }
+    }
+
+    private void CaptureReplayBlackHoleBlast(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            packet.ActionId != DmuBlackHoleNothingnessActionId ||
+            !IsReplayBlackHoleObject(packet.CasterEntityId, packet.CasterName))
+        {
+            return;
+        }
+
+        foreach (var target in packet.Targets)
+        {
+            var member = FindCurrentMemberByTargetId(target.TargetId);
+            if (member is null)
+            {
+                continue;
+            }
+
+            foreach (var effect in target.Effects)
+            {
+                if (GetEventKind((ActionEffectKind)effect.Type) != DeathEventKind.Damage)
+                {
+                    continue;
+                }
+
+                var amount = CalculateRawActionEffectAmount(effect);
+                if (amount == 0)
+                {
+                    continue;
+                }
+
+                AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+                    packet.SeenAtUtc,
+                    CalculatePullElapsed(packet.SeenAtUtc),
+                    1.4f,
+                    $"black-hole-blast:{packet.CasterEntityId:X8}:{member.MemberKey}:{packet.Sequence}:{target.TargetIndex}",
+                    $"Black Hole -> {member.MemberName}",
+                    ReplayMechanicShape.Circle,
+                    member.Position.X,
+                    member.Position.Y,
+                    member.Position.Z,
+                    member.Rotation,
+                    4.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Blast",
+                    "black-hole-blast",
+                    packet.ActionId,
+                    amount,
+                    true));
+                break;
+            }
+        }
+    }
+
+    private static uint CalculateRawActionEffectAmount(RawActionEffectSlot effect)
+    {
+        var amount = effect.Value;
+        if ((effect.Param4 & 0x40) == 0x40)
+        {
+            amount += effect.Param3 << 16;
+        }
+
+        return amount;
     }
 
     private void ResolveRawCombatLogMessage(RawCombatLogMessage message)
@@ -4803,6 +4872,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     battleNpc.BaseId,
                     battleNpc.EntityId,
                     true));
+                CaptureReplayBlackHoleTethers(battleNpc, seenAtUtc, mechanicSnapshots);
             }
 
             if (battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
@@ -4842,6 +4912,115 @@ public sealed partial class Plugin : IDalamudPlugin
             mechanicSnapshots);
     }
 
+    private unsafe void CaptureReplayBlackHoleTethers(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            battleNpc is not Dalamud.Game.ClientState.Objects.Types.ICharacter character ||
+            character.Address == nint.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            var characterStruct = (Character*)character.Address;
+            var tethers = characterStruct->Vfx.Tethers;
+            for (var index = 0; index < tethers.Length; index++)
+            {
+                var tether = tethers[index];
+                if (tether.Id != DmuBlackHoleTetherId ||
+                    tether.TargetId.ObjectId == 0)
+                {
+                    continue;
+                }
+
+                var targetMember = FindCurrentMemberByEntityId(tether.TargetId.ObjectId);
+                if (targetMember is null)
+                {
+                    continue;
+                }
+
+                var source = battleNpc.Position;
+                var target = targetMember.Position;
+                if (!float.IsFinite(source.X) ||
+                    !float.IsFinite(source.Z) ||
+                    !float.IsFinite(target.X) ||
+                    !float.IsFinite(target.Z))
+                {
+                    continue;
+                }
+
+                var dx = target.X - source.X;
+                var dz = target.Z - source.Z;
+                var distance = MathF.Sqrt((dx * dx) + (dz * dz));
+                if (distance <= 0.05f)
+                {
+                    continue;
+                }
+
+                mechanicSnapshots.Add(new ReplayMechanicSnapshot(
+                    seenAtUtc,
+                    CalculatePullElapsed(seenAtUtc),
+                    (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
+                    $"black-hole-tether:{battleNpc.EntityId:X8}",
+                    $"Black Hole -> {targetMember.MemberName}",
+                    ReplayMechanicShape.Tether,
+                    source.X + (dx * 0.5f),
+                    (source.Y + target.Y) * 0.5f,
+                    source.Z + (dz * 0.5f),
+                    MathF.Atan2(dz, dx),
+                    0.0f,
+                    distance,
+                    0.35f,
+                    0.0f,
+                    "Tether",
+                    "black-hole-tether",
+                    tether.Id,
+                    targetMember.EntityId,
+                    true));
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths Black Hole replay tether for {EntityId:X8}.", battleNpc.EntityId);
+        }
+    }
+
+    private bool IsDmuReplayCaptureContext()
+    {
+        var territoryId = currentPullTerritoryId == 0
+            ? currentTerritoryId
+            : currentPullTerritoryId;
+        return ReplayEncounterModules.IsDancingMadUltimate(territoryId);
+    }
+
+    private bool IsReplayBlackHoleObject(uint entityId, string capturedName)
+    {
+        if (string.Equals(capturedName, "Black Hole", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (entityId == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return ObjectTable.SearchByEntityId(entityId) is Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc &&
+                string.Equals(battleNpc.Name.TextValue, "Black Hole", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not inspect Better Deaths replay object {EntityId:X8}.", entityId);
+            return false;
+        }
+    }
+
     private void AddRecentReplayPositionSnapshot(ReplayPositionSnapshot snapshot)
     {
         if (!recentReplayPositionsByActor.TryGetValue(snapshot.ActorKey, out var history))
@@ -4863,7 +5042,20 @@ public sealed partial class Plugin : IDalamudPlugin
 
         var last = history.Count == 0 ? null : history[^1];
         if (last is not null &&
+            IsReplaySingleActiveSourceMechanic(snapshot) &&
+            string.Equals(last.RawEventKind, snapshot.RawEventKind, StringComparison.OrdinalIgnoreCase) &&
+            snapshot.SeenAtUtc > last.SeenAtUtc)
+        {
+            history[^1] = last with
+            {
+                DurationSeconds = Math.Max(0.05f, (float)(snapshot.SeenAtUtc - last.SeenAtUtc).TotalSeconds),
+            };
+            last = history[^1];
+        }
+
+        if (last is not null &&
             last.RawEventId == snapshot.RawEventId &&
+            last.RawState == snapshot.RawState &&
             Vector3.Distance(new Vector3(last.X, last.Y, last.Z), new Vector3(snapshot.X, snapshot.Y, snapshot.Z)) <= 0.05f &&
             Duration(last.SeenAtUtc, snapshot.SeenAtUtc) <= ReplayPositionSampleInterval)
         {
@@ -4881,6 +5073,11 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             history.RemoveAt(0);
         }
+    }
+
+    private static bool IsReplaySingleActiveSourceMechanic(ReplayMechanicSnapshot snapshot)
+    {
+        return string.Equals(snapshot.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool ShouldSkipIntermediateEffectResultHpHistorySnapshot(

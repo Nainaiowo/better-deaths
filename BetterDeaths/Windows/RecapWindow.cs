@@ -105,7 +105,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.188";
+    private const string CurrentChangelogVersion = "0.1.0.189";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -6092,6 +6092,9 @@ public sealed class RecapWindow : Window, IDisposable
             case ReplayMechanicShape.Line:
                 DrawReplayLineMechanic(drawList, mechanic, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, border);
                 break;
+            case ReplayMechanicShape.Tether:
+                DrawReplayTetherMechanic(drawList, mechanic, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, border);
+                break;
             case ReplayMechanicShape.Tower:
                 drawList.AddCircleFilled(center, radius, ImGui.GetColorU32(fill), 40);
                 drawList.AddCircle(center, radius, ImGui.GetColorU32(border), 40, 2.2f);
@@ -6117,7 +6120,8 @@ public sealed class RecapWindow : Window, IDisposable
                 break;
         }
 
-        if (!resolved || alpha > 0.22f)
+        if (mechanic.Shape != ReplayMechanicShape.Tether &&
+            (!resolved || alpha > 0.22f))
         {
             DrawReplayMechanicLabel(drawList, mechanic, center, border, alpha);
         }
@@ -6218,6 +6222,50 @@ public sealed class RecapWindow : Window, IDisposable
         var thickness = Math.Clamp(ReplayWorldLengthToScreenRadius(Math.Max(1.0f, mechanic.Width), canvasSize, minX, maxX, minZ, maxZ, zoom), 3.0f, 34.0f);
         drawList.AddLine(start, end, ImGui.GetColorU32(border with { W = 0.26f }), thickness);
         drawList.AddLine(start, end, ImGui.GetColorU32(border), MathF.Min(3.0f, thickness));
+    }
+
+    private static void DrawReplayTetherMechanic(
+        ImDrawListPtr drawList,
+        ReplayMechanicSnapshot mechanic,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        float zoom,
+        Vector2 pan,
+        Vector4 border)
+    {
+        var length = Math.Max(0.1f, mechanic.Length);
+        var halfLength = length * 0.5f;
+        var start = ReplayWorldPointToScreen(
+            mechanic.X - (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.Z - (MathF.Sin(mechanic.Rotation) * halfLength),
+            canvasStart,
+            canvasSize,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            zoom,
+            pan);
+        var end = ReplayWorldPointToScreen(
+            mechanic.X + (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.Z + (MathF.Sin(mechanic.Rotation) * halfLength),
+            canvasStart,
+            canvasSize,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            zoom,
+            pan);
+
+        drawList.AddLine(start, end, ImGui.GetColorU32(border with { W = 0.20f }), 6.0f);
+        drawList.AddLine(start, end, ImGui.GetColorU32(border with { W = 0.92f }), 2.1f);
+        drawList.AddCircleFilled(start, 3.0f, ImGui.GetColorU32(border with { W = 0.72f }), 16);
+        drawList.AddCircleFilled(end, 3.8f, ImGui.GetColorU32(border), 16);
     }
 
     private static void DrawReplayMechanicLabel(ImDrawListPtr drawList, ReplayMechanicSnapshot mechanic, Vector2 center, Vector4 color, float alpha = 1.0f)
@@ -6491,6 +6539,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ReplayMechanicShape.Cone => Math.Max(mechanic.Radius, mechanic.Length),
             ReplayMechanicShape.Line => Math.Max(mechanic.Radius, mechanic.Length * 0.5f) + Math.Max(0.0f, mechanic.Width * 0.5f),
+            ReplayMechanicShape.Tether => Math.Max(2.0f, mechanic.Length * 0.5f),
             ReplayMechanicShape.Label => 2.0f,
             _ => Math.Max(2.0f, mechanic.Radius),
         };
@@ -6503,6 +6552,16 @@ public sealed class RecapWindow : Window, IDisposable
             return WarningColor;
         }
 
+        if (string.Equals(mechanic.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase))
+        {
+            return OverkillColor;
+        }
+
+        if (string.Equals(mechanic.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModernAccentColor;
+        }
+
         return mechanic.Shape switch
         {
             ReplayMechanicShape.Stack => ModernAccentColor,
@@ -6511,6 +6570,7 @@ public sealed class RecapWindow : Window, IDisposable
             ReplayMechanicShape.Cone => DamageColor,
             ReplayMechanicShape.Line => OverkillColor,
             ReplayMechanicShape.Label => ModernTextColor,
+            ReplayMechanicShape.Tether => ModernAccentColor,
             _ => LeadUpGoldColor,
         };
     }
@@ -6645,6 +6705,16 @@ public sealed class RecapWindow : Window, IDisposable
         var label = string.IsNullOrWhiteSpace(mechanic.Label)
             ? mechanic.Shape.ToString()
             : mechanic.Label;
+        if (string.Equals(mechanic.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{label}\nSource: {mechanic.SourceName}\nDamage: {mechanic.RawState:N0}\nSample: {offset} from replay time\nAction: Nothingness ({mechanic.RawEventId})";
+        }
+
+        if (string.Equals(mechanic.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{label}\nSource: {mechanic.SourceName}\nTether ID: {mechanic.RawEventId}\nSample: {offset} from replay time";
+        }
+
         return $"{label}\nSource: {mechanic.SourceName}\nShape: {mechanic.Shape}\nSample: {offset} from replay time\nRaw: {mechanic.RawEventKind} {mechanic.RawEventId} / {mechanic.RawState}";
     }
 
@@ -6704,7 +6774,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawDeathReplayLegend()
     {
-        DrawMutedWrappedText("Players are role-colored: blue tanks, green healers, red DPS. X means dead. Gold marks the selected death target. Muted enemy rings mean not targetable.");
+        DrawMutedWrappedText("Players are role-colored: blue tanks, green healers, red DPS. X means dead. Gold marks the selected death target. Thin accent lines are captured tethers. Muted enemy rings mean not targetable.");
     }
 
     private void DrawLeadUpTableViewToggle(string idSuffix)
@@ -11000,6 +11070,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.189");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("DMU replay now captures Black Hole tethers and blasts.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.188");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Death Replay beta is now available, with player positions, overhead markers, zooming, panning, and focused player selection.");
