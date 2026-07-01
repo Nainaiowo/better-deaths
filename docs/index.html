@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Better Deaths - FFXIV Dalamud Death Recap Plugin</title>
-  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, and 10-second lead-up analysis.">
+  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, 10-second lead-up analysis, and Death Replay in beta.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
-  <meta property="og:description" content="Review raid deaths with fatal events, HP plus shields, mitigation context, what-if checks, and a 10-second combat lead-up.">
+  <meta property="og:description" content="Review raid deaths with fatal events, HP plus shields, mitigation context, what-if checks, a 10-second combat lead-up, and Death Replay in beta.">
   <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
   <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
-  <meta name="twitter:description" content="A Dalamud plugin for clearer FFXIV raid death review.">
+  <meta name="twitter:description" content="A Dalamud plugin for clearer FFXIV raid death review, with Death Replay in beta.">
   <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
   <script type="application/ld+json">
   {
@@ -24,7 +24,7 @@
     "name": "Better Deaths",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows",
-    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, and 10-second lead-up analysis.",
+    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, 10-second lead-up analysis, and Death Replay in beta.",
     "softwareRequirements": "Dalamud",
     "url": "https://nainaiowo.github.io/better-deaths/",
     "codeRepository": "https://github.com/Nainaiowo/better-deaths",
@@ -354,7 +354,7 @@
           <p class="eyebrow">FFXIV Dalamud plugin</p>
         </div>
         <h1>Better Deaths</h1>
-        <p class="lead">A raid-focused death recap tool for reviewing fatal events, HP plus shields, mitigation coverage, enemy HP at death, What-if mitigation, and the 10-second lead-up before each KO.</p>
+        <p class="lead">A raid-focused death recap tool for reviewing fatal events, HP plus shields, mitigation coverage, enemy HP at death, What-if mitigation, the 10-second lead-up before each KO, and Death Replay in beta.</p>
         <div class="actions">
           <a class="button primary" href="#install">Install with Dalamud</a>
           <a class="button" href="https://github.com/Nainaiowo/better-deaths">View GitHub Repo</a>
@@ -362,6 +362,7 @@
         <div class="status-row" aria-label="Project details">
           <span class="tag"><strong>Duty-only</strong> recap capture</span>
           <span class="tag"><strong>Saved</strong> pull history</span>
+          <span class="tag"><strong>Replay</strong> in beta</span>
           <span class="tag"><strong>Testing</strong> and stable builds</span>
         </div>
       </div>
@@ -388,6 +389,10 @@
         <article class="feature">
           <h3>What-if Mitigation</h3>
           <p>Pick available mitigation and see how selected tools would have changed the damage outcome.</p>
+        </article>
+        <article class="feature">
+          <h3>Death Replay (IN BETA)</h3>
+          <p>Review captured positions, markers, mechanics, and movement around the selected death while replay work continues.</p>
         </article>
         <article class="feature">
           <h3>Current Pull Widget</h3>
@@ -431,8 +436,16 @@
           <figcaption>What-if mitigation review with available party tools and projected outcome.</figcaption>
         </figure>
         <figure class="screenshot">
+          <img src="assets/mitigation-context.png" alt="Better Deaths mitigation context showing active mitigation and calculated mitigation totals">
+          <figcaption>Mitigation context with active effects, shields, debuffs, and calculated mitigation totals.</figcaption>
+        </figure>
+        <figure class="screenshot">
           <img src="assets/lead-up-history.png" alt="Better Deaths 10 second lead-up table with HP history and combat events">
           <figcaption>10 second lead-up history with HP samples, sources, events, and mitigation/debuff icons.</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/death-replay-beta.png" alt="Better Deaths Death Replay beta showing captured positions and Black Hole mechanics">
+          <figcaption>Death Replay, IN BETA, with captured positions, role-colored players, markers, mechanics, zoom, and playback controls.</figcaption>
         </figure>
         <figure class="screenshot">
           <img src="assets/customize-themes-widget.png" alt="Better Deaths customization tab with theme options and widget preview">
