@@ -31,10 +31,74 @@ public enum WidgetDisplayMode
     Concise,
 }
 
+public enum ReviewDisplayMode
+{
+    Detailed,
+    Focused,
+}
+
 public enum ClockDisplayMode
 {
     TwentyFourHour,
     TwelveHour,
+}
+
+[Serializable]
+public sealed class ThemeColorValue
+{
+    public float R { get; set; }
+
+    public float G { get; set; }
+
+    public float B { get; set; }
+
+    public float A { get; set; } = 1.0f;
+
+    public ThemeColorValue()
+    {
+    }
+
+    public ThemeColorValue(float r, float g, float b, float a = 1.0f)
+    {
+        R = r;
+        G = g;
+        B = b;
+        A = a;
+    }
+}
+
+[Serializable]
+public sealed class CustomThemeConfiguration
+{
+    public bool Enabled { get; set; }
+
+    public bool Initialized { get; set; }
+
+    public ThemeColorValue WindowBackground { get; set; } = new();
+
+    public ThemeColorValue ContentBackground { get; set; } = new();
+
+    public ThemeColorValue RaisedBackground { get; set; } = new();
+
+    public ThemeColorValue Border { get; set; } = new();
+
+    public ThemeColorValue RegularText { get; set; } = new();
+
+    public ThemeColorValue MutedText { get; set; } = new();
+
+    public ThemeColorValue GoldText { get; set; } = new();
+
+    public ThemeColorValue DamageText { get; set; } = new();
+
+    public ThemeColorValue HealText { get; set; } = new();
+
+    public ThemeColorValue WarningText { get; set; } = new();
+
+    public ThemeColorValue ButtonColor { get; set; } = new();
+
+    public ThemeColorValue SelectedButtonColor { get; set; } = new();
+
+    public ThemeColorValue ButtonText { get; set; } = new();
 }
 
 public enum BetterDeathsTheme
@@ -81,6 +145,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public BetterDeathsTheme Theme { get; set; } = BetterDeathsTheme.Classic;
 
+    public CustomThemeConfiguration CustomTheme { get; set; } = new();
+
     public bool HasChangedTheme { get; set; }
 
     public List<BetterDeathsTheme> SeenNewThemeBadges { get; set; } = [];
@@ -92,6 +158,8 @@ public sealed class Configuration : IPluginConfiguration
     public float WidgetIconSize { get; set; } = 20.0f;
 
     public WidgetDisplayMode WidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;
+
+    public ReviewDisplayMode ReviewDisplayMode { get; set; } = ReviewDisplayMode.Detailed;
 
     public bool RemoveChatBranding { get; set; }
 

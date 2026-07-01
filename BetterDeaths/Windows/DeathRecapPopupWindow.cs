@@ -144,7 +144,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             return;
         }
 
-        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme);
+        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration);
         ImGui.PushStyleColor(ImGuiCol.WindowBg, WithAlpha(theme.WidgetWindowBackgroundColor, PopupBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.TitleBg, WithAlpha(theme.WidgetTitleBackgroundColor, PopupBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.TitleBgActive, WithAlpha(theme.WidgetTitleActiveBackgroundColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
@@ -154,7 +154,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, WithAlpha(theme.ModernNavButtonSelectedHoveredColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.12f)));
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, WithAlpha(theme.ModernNavButtonActiveColor, MathF.Min(1.0f, PopupBackgroundOpacity + 0.20f)));
         ImGui.PushStyleColor(ImGuiCol.PopupBg, theme.ModernPopupBgColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernTextColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernSelectedButtonTextColor);
         ImGui.PushStyleColor(ImGuiCol.TextDisabled, theme.ModernMutedTextColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1.0f);

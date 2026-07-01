@@ -1372,6 +1372,14 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetReviewDisplayMode(ReviewDisplayMode mode)
+    {
+        Configuration.ReviewDisplayMode = Enum.IsDefined(mode)
+            ? mode
+            : ReviewDisplayMode.Detailed;
+        SaveConfiguration();
+    }
+
     public void SetWidgetIconSize(float size)
     {
         Configuration.WidgetIconSize = Math.Clamp(size, MinWidgetIconSize, MaxWidgetIconSize);
@@ -1898,6 +1906,12 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (!Enum.IsDefined(Configuration.ReviewDisplayMode))
+        {
+            Configuration.ReviewDisplayMode = ReviewDisplayMode.Detailed;
+            changed = true;
+        }
+
         if (!Enum.IsDefined(Configuration.ClockDisplayMode))
         {
             Configuration.ClockDisplayMode = ClockDisplayMode.TwentyFourHour;
@@ -1907,6 +1921,17 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.Theme))
         {
             Configuration.Theme = BetterDeathsTheme.Classic;
+            changed = true;
+        }
+
+        if (Configuration.CustomTheme is null)
+        {
+            Configuration.CustomTheme = new CustomThemeConfiguration();
+            changed = true;
+        }
+
+        if (NormalizeCustomTheme(Configuration.CustomTheme))
+        {
             changed = true;
         }
 
@@ -2551,6 +2576,90 @@ public sealed partial class Plugin : IDalamudPlugin
             Log.Debug(ex, "Could not capture Better Deaths raw combat snapshot for {EntityId:X8}.", entityId);
             return null;
         }
+    }
+
+    private static bool NormalizeCustomTheme(CustomThemeConfiguration customTheme)
+    {
+        var changed = false;
+        if (customTheme.WindowBackground is null)
+        {
+            customTheme.WindowBackground = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.ContentBackground is null)
+        {
+            customTheme.ContentBackground = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.RaisedBackground is null)
+        {
+            customTheme.RaisedBackground = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.Border is null)
+        {
+            customTheme.Border = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.RegularText is null)
+        {
+            customTheme.RegularText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.MutedText is null)
+        {
+            customTheme.MutedText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.GoldText is null)
+        {
+            customTheme.GoldText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.DamageText is null)
+        {
+            customTheme.DamageText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.HealText is null)
+        {
+            customTheme.HealText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.WarningText is null)
+        {
+            customTheme.WarningText = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.ButtonColor is null)
+        {
+            customTheme.ButtonColor = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.SelectedButtonColor is null)
+        {
+            customTheme.SelectedButtonColor = new ThemeColorValue();
+            changed = true;
+        }
+
+        if (customTheme.ButtonText is null)
+        {
+            customTheme.ButtonText = new ThemeColorValue();
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static uint GetEntityId(GameObjectId targetId)

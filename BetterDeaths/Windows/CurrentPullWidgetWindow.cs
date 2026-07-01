@@ -47,7 +47,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
     public override void Draw()
     {
         recapWindow.DrawCurrentPullWidgetContent();
-        DrawBottomLeftResizeGrip(BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme));
+        DrawBottomLeftResizeGrip(BetterDeathsThemeCatalog.GetTheme(plugin.Configuration));
     }
 
     public override void OnClose()
@@ -62,7 +62,7 @@ public sealed class CurrentPullWidgetWindow : Window, IDisposable
             return;
         }
 
-        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration.Theme);
+        var theme = BetterDeathsThemeCatalog.GetTheme(plugin.Configuration);
         ImGui.PushStyleColor(ImGuiCol.WindowBg, theme.WidgetWindowBackgroundColor);
         ImGui.PushStyleColor(ImGuiCol.TitleBg, theme.WidgetTitleBackgroundColor);
         ImGui.PushStyleColor(ImGuiCol.TitleBgActive, theme.WidgetTitleActiveBackgroundColor);

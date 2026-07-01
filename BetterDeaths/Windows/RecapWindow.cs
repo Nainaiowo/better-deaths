@@ -90,6 +90,8 @@ public sealed class RecapWindow : Window, IDisposable
     private static Vector4 ModernNavButtonSelectedColor => activeTheme.ModernNavButtonSelectedColor;
     private static Vector4 ModernNavButtonSelectedHoveredColor => activeTheme.ModernNavButtonSelectedHoveredColor;
     private static Vector4 ModernNavButtonActiveColor => activeTheme.ModernNavButtonActiveColor;
+    private static Vector4 ModernButtonTextColor => activeTheme.ModernButtonTextColor;
+    private static Vector4 ModernSelectedButtonTextColor => activeTheme.ModernSelectedButtonTextColor;
     private static Vector4 ModernPopupBgColor => activeTheme.ModernPopupBgColor;
     private static Vector4 ModernCheckMarkColor => activeTheme.ModernCheckMarkColor;
     private static Vector4 ModernSliderGrabColor => activeTheme.ModernSliderGrabColor;
@@ -105,7 +107,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.189";
+    private const string CurrentChangelogVersion = "0.1.0.190";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -123,6 +125,10 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayZoomOverlayHeight = 30.0f;
     private const float ReplayWheelScrollSinkHeight = 1.0f;
     private const float LeadUpTableRightPadding = 10.0f;
+    private const float FocusedLeadUpHpChangePercentThreshold = 5.0f;
+    private const float FocusedDataRowPaddingX = 8.0f;
+    private const float FocusedDataRowPaddingY = 5.0f;
+    private const float FocusedDataRowGap = 3.0f;
     private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground;
     private const int MaxReplayTrailPointsPerActor = 24;
     private const float PullBodyIndent = 8.0f;
@@ -488,7 +494,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void ApplyConfiguredTheme()
     {
-        activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
+        activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
     }
 
     private ImGuiWindowFlags OptionalScrollbarFlags => configuration.ShowScrollbars
@@ -715,7 +721,7 @@ public sealed class RecapWindow : Window, IDisposable
             : ModernNavButtonHoveredColor;
         var textColor = highlight
             ? LeadUpGoldColor
-            : selected ? GetModernNavSelectedTextColor() : ModernTextColor;
+            : GetButtonTextColor(buttonColor, selected);
 
         ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
@@ -1415,7 +1421,7 @@ public sealed class RecapWindow : Window, IDisposable
         ReviewSelectionState selection)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-        DrawTimelineSectionTitle(GetPullDeathTimelineTitle(pull), pull.Subtitle);
+        DrawTimelineSectionTitle(GetPullDeathTimelineTitle(pull), pull.Subtitle, idPrefix);
         if (pull.Deaths.Count == 0)
         {
             ImGui.TextDisabled("No deaths recorded for this pull.");
@@ -1621,7 +1627,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernAccentSoftColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, selected ? ModernAccentColor : ModernTextColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(buttonColor, selected));
         if (disabled)
         {
             ImGui.BeginDisabled();
@@ -1680,10 +1686,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static bool DrawSegmentedButton(string label, string id, bool selected, float width)
     {
-        ImGui.PushStyleColor(ImGuiCol.Button, selected ? ModernNavButtonSelectedColor : ModernNavButtonColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor);
+        var buttonColor = selected ? ModernNavButtonSelectedColor : ModernNavButtonColor;
+        var hoveredColor = selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor;
+        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, selected ? GetModernNavSelectedTextColor() : ModernTextColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(buttonColor, selected));
         var clicked = ImGui.Button($"{label}##{id}", new Vector2(width, 24.0f));
         ImGui.PopStyleColor(4);
         return clicked;
@@ -1699,7 +1707,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Button, ModernNavButtonSelectedColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ModernNavButtonSelectedHoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, GetModernNavSelectedTextColor());
+        ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(ModernNavButtonSelectedColor, selected: true));
         var clicked = ImGui.Button($"{label}##{id}", new Vector2(buttonWidth, buttonHeight));
         ImGui.PopStyleColor(4);
         return clicked;
@@ -1758,15 +1766,32 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static void DrawTimelineSectionTitle(string title, string? subtitle = null)
+    private void DrawTimelineSectionTitle(string title, string? subtitle, string idSuffix)
     {
         var startCursor = ImGui.GetCursorPos();
         var availableWidth = ImGui.GetContentRegionAvail().X;
+        var style = ImGui.GetStyle();
 
         ImGui.TextColored(LeadUpGoldColor, title);
         var afterTitleCursor = ImGui.GetCursorPos();
+        var titleWidth = ImGui.CalcTextSize(title).X;
+        var toggleWidth = GetReviewDisplayModeToggleWidth();
+        var helpMarkerWidth = 24.0f;
+        var toggleX = startCursor.X + MathF.Max(
+            0.0f,
+            availableWidth - SectionHelpMarkerRightInset - helpMarkerWidth - style.ItemSpacing.X - toggleWidth);
+        var toggleDrawn = false;
+        if (toggleX >= startCursor.X + titleWidth + style.ItemSpacing.X)
+        {
+            var restoreCursor = ImGui.GetCursorPos();
+            ImGui.SetCursorPos(new Vector2(toggleX, startCursor.Y - 2.0f));
+            DrawReviewDisplayModeToggle(idSuffix);
+            ImGui.SetCursorPos(restoreCursor);
+            toggleDrawn = true;
+        }
+
         DrawRightAlignedQuestionTooltipMarker(
-            $"ReviewLegendHelp{title}{subtitle}",
+            $"ReviewLegendHelp{idSuffix}",
             startCursor,
             availableWidth,
             DrawReviewLegendTooltip);
@@ -1776,6 +1801,49 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.TextDisabled(subtitle);
         }
+
+        if (!toggleDrawn)
+        {
+            DrawReviewDisplayModeToggle(idSuffix);
+        }
+    }
+
+    private void DrawReviewDisplayModeToggle(string idSuffix)
+    {
+        DrawReviewDisplayModeButton(ReviewDisplayMode.Focused, idSuffix);
+        ImGui.SameLine(0.0f, 4.0f);
+        DrawReviewDisplayModeButton(ReviewDisplayMode.Detailed, idSuffix);
+    }
+
+    private void DrawReviewDisplayModeButton(ReviewDisplayMode mode, string idSuffix)
+    {
+        var selected = configuration.ReviewDisplayMode == mode;
+        if (DrawSegmentedButton(GetReviewDisplayModeLabel(mode), $"ReviewDisplayMode{mode}{idSuffix}", selected, 74.0f) &&
+            !selected)
+        {
+            plugin.SetReviewDisplayMode(mode);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(mode == ReviewDisplayMode.Focused
+                ? "Shows a cleaner review view with less table detail."
+                : "Shows the full review details.");
+        }
+    }
+
+    private static float GetReviewDisplayModeToggleWidth()
+    {
+        return 74.0f + 4.0f + 74.0f;
+    }
+
+    private static string GetReviewDisplayModeLabel(ReviewDisplayMode mode)
+    {
+        return mode switch
+        {
+            ReviewDisplayMode.Focused => "Focused",
+            _ => "Detailed",
+        };
     }
 
     private static void DrawRightAlignedQuestionTooltipMarker(
@@ -3452,16 +3520,23 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawFatalEventRow(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
     {
         ImGui.Separator();
-        if (death.EnemyHpAtDeath.Count == 0)
+        var enemyHpAtDeath = GetEnemyHpAtDeathForDisplay(death);
+        if (enemyHpAtDeath.Count == 0)
         {
             DrawFatalEventHeaderAndDetails(causeEvents);
+            return;
+        }
+
+        if (IsFocusedReviewMode())
+        {
+            DrawFocusedFatalEventColumns(causeEvents, enemyHpAtDeath);
             return;
         }
 
         if (!ImGui.BeginTable($"##FatalEventHealthsAtDeath{death.MemberKey}{death.SeenAtUtc.Ticks}", 2, ImGuiTableFlags.SizingStretchProp))
         {
             DrawFatalEventHeaderAndDetails(causeEvents);
-            DrawEnemyHpAtDeathHeaderAndBullets(death);
+            DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
             return;
         }
 
@@ -3471,8 +3546,38 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableNextColumn();
         DrawFatalEventHeaderAndDetails(causeEvents);
         ImGui.TableNextColumn();
-        DrawEnemyHpAtDeathHeaderAndBullets(death);
+        DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
         ImGui.EndTable();
+    }
+
+    private void DrawFocusedFatalEventColumns(
+        IReadOnlyList<CombatEventRecord> causeEvents,
+        IReadOnlyList<EnemyHpSnapshot> enemyHpAtDeath)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var spacing = ImGui.GetStyle().ItemSpacing.X * 2.0f;
+        if (availableWidth < 420.0f)
+        {
+            DrawFatalEventHeaderAndDetails(causeEvents);
+            ImGui.Spacing();
+            DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
+            return;
+        }
+
+        var leftWidth = MathF.Max(160.0f, (availableWidth - spacing) * 0.58f);
+        var rightWidth = MathF.Max(140.0f, availableWidth - leftWidth - spacing);
+        ImGui.BeginGroup();
+        ImGui.PushTextWrapPos(ImGui.GetCursorScreenPos().X + leftWidth);
+        DrawFatalEventHeaderAndDetails(causeEvents);
+        ImGui.PopTextWrapPos();
+        ImGui.EndGroup();
+
+        ImGui.SameLine(0.0f, spacing);
+        ImGui.BeginGroup();
+        ImGui.PushTextWrapPos(ImGui.GetCursorScreenPos().X + rightWidth);
+        DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
+        ImGui.PopTextWrapPos();
+        ImGui.EndGroup();
     }
 
     private void DrawFatalEventHeaderAndDetails(IReadOnlyList<CombatEventRecord> causeEvents)
@@ -3816,7 +3921,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMitigationTotal(activeStatuses);
         ImGui.Separator();
 
-        DrawLeadUpLabel("Available mitigation");
+        DrawLeadUpLabelWithInlineMutedText("Available mitigation", "Shows all available abilities at the time.");
         DrawWhatIfChatControls(
             death,
             idSuffix,
@@ -4005,6 +4110,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawPossibleMitigationOptionsTable(IReadOnlyList<PossibleMitigationSnapshot> options, string idSuffix)
     {
+        var focused = IsFocusedReviewMode();
+        if (focused)
+        {
+            DrawFocusedPossibleMitigationOptionsList(options, idSuffix);
+            return;
+        }
+
         if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
@@ -4052,22 +4164,89 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
+    private void DrawFocusedPossibleMitigationOptionsList(
+        IReadOnlyList<PossibleMitigationSnapshot> options,
+        string idSuffix)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var checkboxColumnWidth = ImGui.GetFrameHeight() + 6.0f;
+        var innerWidth = MathF.Max(0.0f, availableWidth - (FocusedDataRowPaddingX * 2.0f));
+        var remainingWidth = MathF.Max(90.0f, innerWidth - checkboxColumnWidth - (spacing * 2.0f));
+        var abilityMinimumWidth = MathF.Min(48.0f, remainingWidth * 0.35f);
+        var sourceMaximumWidth = MathF.Max(32.0f, MathF.Min(320.0f, remainingWidth - abilityMinimumWidth));
+        var sourceMinimumWidth = MathF.Min(72.0f, sourceMaximumWidth);
+        var sourceColumnWidth = Math.Clamp(remainingWidth * 0.52f, sourceMinimumWidth, sourceMaximumWidth);
+        var abilityColumnWidth = MathF.Max(abilityMinimumWidth, remainingWidth - sourceColumnWidth);
+
+        DrawFocusedColumnLabels(
+            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing, "Source"),
+            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing + sourceColumnWidth + spacing, "Ability"));
+
+        for (var index = 0; index < options.Count; index++)
+        {
+            var option = options[index];
+            var selectionKey = BuildPossibleMitigationSelectionKey(idSuffix, option);
+            var selected = selectedPossibleMitigationKeys.Contains(selectionKey);
+            var sourceLabel = FormatPossibleMitigationSourceLabel(option);
+            var abilityLabel = option.ActionName;
+            var sourceHeight = GetIconTextWrappedHeight(sourceLabel, sourceColumnWidth, option.ClassJobId == 0 ? 0U : GetClassJobIconId(option.ClassJobId), iconSize);
+            var abilityHeight = GetIconTextWrappedHeight(abilityLabel, abilityColumnWidth, option.ActionIconId, iconSize);
+            var rowHeight = MathF.Max(ImGui.GetFrameHeight(), MathF.Max(sourceHeight, abilityHeight)) + (FocusedDataRowPaddingY * 2.0f);
+            var rowStart = ImGui.GetCursorScreenPos();
+            DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, index);
+
+            var contentY = rowStart.Y + FocusedDataRowPaddingY;
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX, contentY));
+            var checkboxValue = selected;
+            if (DrawThemedCheckbox($"##PossibleMitigation{selectionKey}", ref checkboxValue))
+            {
+                if (checkboxValue)
+                {
+                    selectedPossibleMitigationKeys.Add(selectionKey);
+                }
+                else
+                {
+                    selectedPossibleMitigationKeys.Remove(selectionKey);
+                }
+            }
+
+            ImGui.SetCursorScreenPos(new Vector2(
+                rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing,
+                contentY));
+            DrawIconTextWrapped(GetClassJobIconId(option.ClassJobId), iconSize, option.ClassJobName, sourceLabel, sourceColumnWidth);
+
+            ImGui.SetCursorScreenPos(new Vector2(
+                rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing + sourceColumnWidth + spacing,
+                contentY));
+            DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, abilityLabel, abilityColumnWidth);
+
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
+        }
+    }
+
     private static string FormatPossibleMitigationAvailability(string availability)
     {
         return availability.TrimEnd('.');
     }
 
-    private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option)
+    private string FormatPossibleMitigationSourceLabel(PossibleMitigationSnapshot option)
     {
-        var iconId = GetClassJobIconId(option.ClassJobId);
         var playerName = plugin.FormatPlayerDisplayName(
             option.MemberName,
             option.MemberKey,
             option.PartyIndex,
             option.ClassJobId,
             option.ClassJobName);
+        return $"{playerName} ({option.ClassJobName})";
+    }
+
+    private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option)
+    {
+        var iconId = GetClassJobIconId(option.ClassJobId);
+        var label = FormatPossibleMitigationSourceLabel(option);
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
-        var label = $"{playerName} ({option.ClassJobName})";
         if (iconId == 0)
         {
             DrawWrappedText(label);
@@ -4374,15 +4553,22 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawEnemyHpAtDeathHeaderAndBullets(PartyDeathRecord death)
+    private IReadOnlyList<EnemyHpSnapshot> GetEnemyHpAtDeathForDisplay(PartyDeathRecord death)
     {
-        if (death.EnemyHpAtDeath.Count == 0)
+        return IsFocusedReviewMode()
+            ? death.EnemyHpAtDeath.Where(enemy => enemy.IsTargetable).ToList()
+            : death.EnemyHpAtDeath;
+    }
+
+    private void DrawEnemyHpAtDeathHeaderAndBullets(IReadOnlyList<EnemyHpSnapshot> enemies)
+    {
+        if (enemies.Count == 0)
         {
             return;
         }
 
         ImGui.TextUnformatted("Enemy HP at death");
-        foreach (var enemy in death.EnemyHpAtDeath)
+        foreach (var enemy in enemies)
         {
             var enemyHpText = $"{enemy.Name}: {FormatEnemyHpPercent(enemy)}";
             if (enemy.IsTargetable)
@@ -6791,10 +6977,12 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawLeadUpTableViewButton(string label, LeadUpTableView view, string idSuffix)
     {
         var selected = selectedLeadUpTableView == view;
-        ImGui.PushStyleColor(ImGuiCol.Button, selected ? ModernNavButtonSelectedColor : ModernNavButtonColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor);
+        var buttonColor = selected ? ModernNavButtonSelectedColor : ModernNavButtonColor;
+        var hoveredColor = selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor;
+        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, selected ? GetModernNavSelectedTextColor() : ModernTextColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(buttonColor, selected));
         if (ImGui.Button($"{label}##LeadUpTableView{view}{idSuffix}", new Vector2(96.0f, 26.0f)))
         {
             selectedLeadUpTableView = view;
@@ -6808,7 +6996,9 @@ public sealed class RecapWindow : Window, IDisposable
         var death = resolved.Death;
         DrawLeadUpLabel("10 second HP history");
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
-        var rows = resolved.TimelineRows;
+        var rows = IsFocusedReviewMode()
+            ? GetFocusedLeadUpTimelineRows(resolved.TimelineRows)
+            : resolved.TimelineRows;
 
         if (rows.Count == 0)
         {
@@ -6871,6 +7061,67 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndTable();
+    }
+
+    private bool IsFocusedReviewMode()
+    {
+        return configuration.ReviewDisplayMode == ReviewDisplayMode.Focused;
+    }
+
+    private static IReadOnlyList<LeadUpTimelineRow> GetFocusedLeadUpTimelineRows(IReadOnlyList<LeadUpTimelineRow> rows)
+    {
+        if (rows.Count <= 2)
+        {
+            return rows;
+        }
+
+        var focusedRows = new List<LeadUpTimelineRow>();
+        LeadUpTimelineRow? previousKept = null;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            if (!ShouldKeepFocusedLeadUpTimelineRow(row, previousKept))
+            {
+                continue;
+            }
+
+            focusedRows.Add(row);
+            previousKept = row;
+        }
+
+        return focusedRows.Count == 0 ? rows : focusedRows;
+    }
+
+    private static bool ShouldKeepFocusedLeadUpTimelineRow(LeadUpTimelineRow row, LeadUpTimelineRow? previousKept)
+    {
+        if (row.Event is not null ||
+            row.HealChange is not null ||
+            row.DamageChange is not null ||
+            !string.IsNullOrWhiteSpace(row.HpTooltipDetail))
+        {
+            return true;
+        }
+
+        return previousKept is null ||
+            HasMeaningfulFocusedLeadUpHpChange(previousKept, row);
+    }
+
+    private static bool HasMeaningfulFocusedLeadUpHpChange(LeadUpTimelineRow previous, LeadUpTimelineRow row)
+    {
+        var maxHp = row.MaxHp > 0 ? row.MaxHp : previous.MaxHp;
+        if (maxHp == 0)
+        {
+            return previous.CurrentHp != row.CurrentHp ||
+                previous.ShieldHp != row.ShieldHp;
+        }
+
+        var previousHpPercent = previous.CurrentHp * 100.0f / maxHp;
+        var currentHpPercent = row.CurrentHp * 100.0f / maxHp;
+        var previousShieldPercent = previous.ShieldHp * 100.0f / maxHp;
+        var currentShieldPercent = row.ShieldHp * 100.0f / maxHp;
+        return MathF.Abs(currentHpPercent - previousHpPercent) >= FocusedLeadUpHpChangePercentThreshold ||
+            MathF.Abs(currentShieldPercent - previousShieldPercent) >= FocusedLeadUpHpChangePercentThreshold ||
+            (previous.ShieldHp == 0) != (row.ShieldHp == 0);
     }
 
     private void DrawLeadUpTimelineSourceCell(LeadUpTimelineRow row, bool sourceChanged)
@@ -7468,6 +7719,14 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        var focused = IsFocusedReviewMode();
+        if (focused)
+        {
+            DrawFocusedStatusSnapshotList(statuses);
+            DrawMitigationTotal(statuses);
+            return;
+        }
+
         if (!ImGui.BeginTable($"##DeathStatusSnapshot{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
@@ -7498,6 +7757,51 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.EndTable();
         DrawMitigationTotal(statuses);
+    }
+
+    private void DrawFocusedStatusSnapshotList(IReadOnlyList<StatusSnapshot> statuses)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        var innerWidth = MathF.Max(0.0f, availableWidth - (FocusedDataRowPaddingX * 2.0f));
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var iconColumnWidth = iconSize + 8.0f;
+        var remainingWidth = MathF.Max(80.0f, innerWidth - iconColumnWidth - (spacing * 2.0f));
+        var abilityMinimumWidth = MathF.Min(48.0f, remainingWidth * 0.55f);
+        var typeMaximumWidth = MathF.Max(28.0f, MathF.Min(170.0f, remainingWidth - abilityMinimumWidth));
+        var typeMinimumWidth = MathF.Min(62.0f, typeMaximumWidth);
+        var typeColumnWidth = Math.Clamp(remainingWidth * 0.34f, typeMinimumWidth, typeMaximumWidth);
+        var abilityColumnWidth = MathF.Max(abilityMinimumWidth, remainingWidth - typeColumnWidth);
+
+        DrawFocusedColumnLabels(
+            (FocusedDataRowPaddingX + iconColumnWidth + spacing, "Ability"),
+            (FocusedDataRowPaddingX + iconColumnWidth + spacing + abilityColumnWidth + spacing, "Type"));
+
+        var rowIndex = 0;
+        foreach (var status in statuses.OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var displayInfo = Plugin.GetMitigationDisplayInfo(status);
+            var abilityHeight = GetWrappedTextHeight(status.Name, abilityColumnWidth);
+            var typeHeight = GetMitigationTypeInlineHeight(displayInfo.Types, typeColumnWidth, iconSize);
+            var rowHeight = MathF.Max(iconSize, MathF.Max(abilityHeight, typeHeight)) + (FocusedDataRowPaddingY * 2.0f);
+            var rowStart = ImGui.GetCursorScreenPos();
+            DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, rowIndex);
+
+            var contentY = rowStart.Y + FocusedDataRowPaddingY;
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX, contentY));
+            DrawGameIcon(status.IconId, iconSize, status.Name);
+
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX + iconColumnWidth + spacing, contentY));
+            DrawWrappedTextLines(status.Name, abilityColumnWidth);
+
+            ImGui.SetCursorScreenPos(new Vector2(
+                rowStart.X + FocusedDataRowPaddingX + iconColumnWidth + spacing + abilityColumnWidth + spacing,
+                contentY));
+            DrawMitigationTypeInline(displayInfo.Types, typeColumnWidth, iconSize);
+
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
+            rowIndex++;
+        }
     }
 
     private void DrawMitigationTypeCell(IReadOnlyList<Plugin.MitigationTypeDisplay> types)
@@ -7535,6 +7839,35 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndGroup();
+    }
+
+    private void DrawMitigationTypeInline(IReadOnlyList<Plugin.MitigationTypeDisplay> types, float width, float iconSize)
+    {
+        if (types.Count == 0)
+        {
+            ImGui.TextColored(DisabledColor, "-");
+            return;
+        }
+
+        foreach (var type in types)
+        {
+            DrawIconTextWrapped(type.IconId, iconSize, type.Tooltip ?? type.Label, type.Label, width);
+        }
+    }
+
+    private static float GetMitigationTypeInlineHeight(
+        IReadOnlyList<Plugin.MitigationTypeDisplay> types,
+        float width,
+        float iconSize)
+    {
+        if (types.Count == 0)
+        {
+            return ImGui.GetTextLineHeight();
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var textWidth = MathF.Max(24.0f, width - iconSize - spacing);
+        return types.Sum(type => MathF.Max(iconSize, GetWrappedTextHeight(type.Label, textWidth)));
     }
 
     private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo)
@@ -7946,6 +8279,107 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawLeadUpLabel(string label)
     {
         ImGui.TextColored(LeadUpGoldColor, label);
+    }
+
+    private static void DrawLeadUpLabelWithInlineMutedText(string label, string mutedText)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var labelWidth = ImGui.CalcTextSize(label).X;
+        var mutedWidth = ImGui.CalcTextSize(mutedText).X;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        ImGui.TextColored(LeadUpGoldColor, label);
+        if (availableWidth - labelWidth - spacing >= mutedWidth)
+        {
+            ImGui.SameLine(0.0f, spacing);
+            ImGui.TextColored(ModernMutedTextColor, mutedText);
+        }
+        else
+        {
+            ImGui.TextColored(ModernMutedTextColor, mutedText);
+        }
+    }
+
+    private static void DrawFocusedColumnLabels(params (float OffsetX, string Label)[] labels)
+    {
+        var rowStart = ImGui.GetCursorScreenPos();
+        foreach (var (offsetX, label) in labels)
+        {
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + offsetX, rowStart.Y));
+            ImGui.TextColored(ModernMutedTextColor, label);
+        }
+
+        ImGui.SetCursorScreenPos(new Vector2(
+            rowStart.X,
+            rowStart.Y + ImGui.GetTextLineHeight() + (ImGui.GetStyle().ItemSpacing.Y * 0.4f)));
+    }
+
+    private static void DrawFocusedDataRowBackground(Vector2 rowStart, float width, float height, int rowIndex)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var baseColor = ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelColor, ModernPanelAltColor, rowIndex % 2 == 0 ? 0.40f : 0.62f) with { W = 0.42f }
+            : BlendColors(ModernPanelColor, ModernPanelAltColor, rowIndex % 2 == 0 ? 0.34f : 0.58f) with { W = 0.46f };
+        var accentColor = ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.22f) with { W = 0.82f }
+            : BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.32f) with { W = 0.74f };
+        var rowEnd = rowStart + new Vector2(width, height);
+        drawList.AddRectFilled(rowStart, rowEnd, ImGui.GetColorU32(baseColor), 4.0f);
+        drawList.AddRectFilled(
+            rowStart,
+            rowStart + new Vector2(2.0f, height),
+            ImGui.GetColorU32(accentColor),
+            4.0f);
+    }
+
+    private static float GetWrappedTextHeight(string text, float width)
+    {
+        return WrapTextForWidth(text, width).Count * ImGui.GetTextLineHeight();
+    }
+
+    private static void DrawWrappedTextLines(string text, float width, Vector4? color = null)
+    {
+        if (color is { } textColor)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+        }
+
+        foreach (var line in WrapTextForWidth(text, width))
+        {
+            ImGui.TextUnformatted(line);
+        }
+
+        if (color is not null)
+        {
+            ImGui.PopStyleColor();
+        }
+    }
+
+    private static float GetIconTextWrappedHeight(string text, float width, uint iconId, float iconSize)
+    {
+        if (iconId == 0)
+        {
+            return GetWrappedTextHeight(text, width);
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var textWidth = MathF.Max(24.0f, width - iconSize - spacing);
+        return MathF.Max(iconSize, GetWrappedTextHeight(text, textWidth));
+    }
+
+    private static void DrawIconTextWrapped(uint iconId, float iconSize, string tooltip, string text, float width)
+    {
+        if (iconId == 0)
+        {
+            DrawWrappedTextLines(text, width);
+            return;
+        }
+
+        var rowStart = ImGui.GetCursorScreenPos();
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var clampedIconSize = Math.Clamp(iconSize, 12.0f, 48.0f);
+        DrawGameIcon(iconId, clampedIconSize, tooltip);
+        ImGui.SetCursorScreenPos(new Vector2(rowStart.X + clampedIconSize + spacing, rowStart.Y));
+        DrawWrappedTextLines(text, MathF.Max(24.0f, width - clampedIconSize - spacing));
     }
 
     private static void DrawMutedWrappedText(string text)
@@ -9071,6 +9505,255 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSubtleSeparator();
         ImGui.Spacing();
         DrawThemeGroup("Light", "Light", lightThemes);
+        ImGui.Spacing();
+        DrawSubtleSeparator();
+        ImGui.Spacing();
+        DrawCustomThemeBuilder();
+    }
+
+    private void DrawCustomThemeBuilder()
+    {
+        ImGui.TextColored(LeadUpGoldColor, "Custom theme");
+        var customTheme = configuration.CustomTheme ??= new CustomThemeConfiguration();
+        var enabled = customTheme.Enabled;
+        if (DrawThemedCheckbox("Use custom theme", ref enabled))
+        {
+            if (enabled && !customTheme.Initialized)
+            {
+                configuration.CustomTheme = BetterDeathsThemeCatalog.CreateCustomThemeConfiguration(BetterDeathsThemeCatalog.GetTheme(configuration.Theme));
+                customTheme = configuration.CustomTheme;
+            }
+
+            customTheme.Enabled = enabled;
+            activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
+            plugin.SaveConfiguration();
+        }
+
+        var checkboxMax = ImGui.GetItemRectMax();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Starts from the selected theme, then applies the custom colors below.");
+        }
+
+        var resetLabel = "Reset from selected theme";
+        var resetWidth = GetThemedActionButtonWidth(resetLabel);
+        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        if (checkboxMax.X + ImGui.GetStyle().ItemSpacing.X + resetWidth <= contentRight)
+        {
+            ImGui.SameLine();
+        }
+        else
+        {
+            ImGui.Spacing();
+        }
+
+        ImGui.BeginDisabled(!customTheme.Initialized);
+        if (DrawThemedActionButton(resetLabel, "ResetCustomThemeFromSelectedTheme", MathF.Min(resetWidth, ImGui.GetContentRegionAvail().X)))
+        {
+            configuration.CustomTheme = BetterDeathsThemeCatalog.CreateCustomThemeConfiguration(BetterDeathsThemeCatalog.GetTheme(configuration.Theme));
+            configuration.CustomTheme.Enabled = enabled;
+            activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.EndDisabled();
+
+        if (!enabled)
+        {
+            DrawMutedWrappedText("Enable this to edit colors without replacing the built-in theme list.");
+            return;
+        }
+
+        if (!customTheme.Initialized)
+        {
+            configuration.CustomTheme = BetterDeathsThemeCatalog.CreateCustomThemeConfiguration(BetterDeathsThemeCatalog.GetTheme(configuration.Theme));
+            customTheme = configuration.CustomTheme;
+            activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.Spacing();
+        DrawCustomThemePreview(BetterDeathsThemeCatalog.GetTheme(configuration));
+        ImGui.Spacing();
+
+        DrawCustomThemeColorGroup(
+            "Text",
+            ("Regular text", customTheme.RegularText, "Normal readable text used through the window."),
+            ("Muted / label text", customTheme.MutedText, "Subtext, disabled text, and quiet labels."),
+            ("Gold / section text", customTheme.GoldText, "Section labels, highlights, shields, and gold callouts."));
+        DrawCustomThemeColorGroup(
+            "Combat",
+            ("Damage / overkill", customTheme.DamageText, "Damage numbers, overkill, and danger text."),
+            ("Healing", customTheme.HealText, "Healing text and positive result text."),
+            ("Warning", customTheme.WarningText, "Warnings and neutral caution text."));
+        DrawCustomThemeColorGroup(
+            "Surfaces",
+            ("Window background", customTheme.WindowBackground, "Main window and widget background color."),
+            ("Content background", customTheme.ContentBackground, "Main content areas and popup surfaces."),
+            ("Raised background", customTheme.RaisedBackground, "Rows, frames, and raised surfaces."),
+            ("Borders / dividers", customTheme.Border, "Borders, separators, resize grips, and table accents."));
+        DrawCustomThemeColorGroup(
+            "Buttons",
+            ("Button color", customTheme.ButtonColor, "Normal tab and segmented button fill."),
+            ("Selected button", customTheme.SelectedButtonColor, "Selected tabs and primary action buttons."),
+            ("Button text", customTheme.ButtonText, "Button label text. If it becomes unreadable, Better Deaths will use a safer contrast color."));
+    }
+
+    private void DrawCustomThemeColorGroup(
+        string label,
+        params (string Label, ThemeColorValue Color, string Tooltip)[] colors)
+    {
+        ImGui.TextColored(ModernMutedTextColor, label);
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var columnCount = availableWidth >= 560.0f ? 2 : 1;
+        if (!ImGui.BeginTable($"##CustomTheme{label}", columnCount, ImGuiTableFlags.SizingStretchSame))
+        {
+            return;
+        }
+
+        foreach (var color in colors)
+        {
+            ImGui.TableNextColumn();
+            DrawCustomThemeColorEdit(color.Label, color.Color, color.Tooltip);
+        }
+
+        ImGui.EndTable();
+        ImGui.Spacing();
+    }
+
+    private void DrawCustomThemeColorEdit(string label, ThemeColorValue color, string tooltip)
+    {
+        var vector = ToVector4(color);
+        ImGui.SetNextItemWidth(MathF.Min(150.0f, ImGui.GetContentRegionAvail().X * 0.55f));
+        if (ImGui.ColorEdit4($"##CustomThemeColor{label}", ref vector, ImGuiColorEditFlags.NoAlpha))
+        {
+            SetThemeColorValue(color, vector);
+            activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
+        }
+
+        var hovered = ImGui.IsItemHovered();
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.SameLine();
+        ImGui.TextWrapped(label);
+        hovered |= ImGui.IsItemHovered();
+        if (hovered)
+        {
+            SetThemedTooltip(tooltip);
+        }
+    }
+
+    private static Vector4 ToVector4(ThemeColorValue color)
+    {
+        return new Vector4(
+            Math.Clamp(color.R, 0.0f, 1.0f),
+            Math.Clamp(color.G, 0.0f, 1.0f),
+            Math.Clamp(color.B, 0.0f, 1.0f),
+            Math.Clamp(color.A <= 0.0f ? 1.0f : color.A, 0.0f, 1.0f));
+    }
+
+    private static void SetThemeColorValue(ThemeColorValue color, Vector4 value)
+    {
+        color.R = Math.Clamp(value.X, 0.0f, 1.0f);
+        color.G = Math.Clamp(value.Y, 0.0f, 1.0f);
+        color.B = Math.Clamp(value.Z, 0.0f, 1.0f);
+        color.A = Math.Clamp(color.A <= 0.0f ? 1.0f : color.A, 0.0f, 1.0f);
+    }
+
+    private void DrawCustomThemePreview(BetterDeathsUiTheme theme)
+    {
+        var previewSize = new Vector2(ImGui.GetContentRegionAvail().X, 168.0f);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, theme.ModernShellColor with { W = 0.96f });
+        ImGui.PushStyleColor(ImGuiCol.Border, theme.ModernPanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10.0f, 9.0f));
+        if (ImGui.BeginChild("##CustomThemePreview", previewSize, true, ImGuiWindowFlags.NoScrollbar))
+        {
+            ImGui.TextColored(theme.LeadUpGoldColor, "Rendered preview");
+            ImGui.TextColored(theme.ModernMutedTextColor, "Regular, combat, buttons, bars");
+            ImGui.Spacing();
+
+            ImGui.TextColored(theme.ModernTextColor, "Regular text");
+            ImGui.SameLine();
+            ImGui.TextColored(theme.ModernMutedTextColor, "Muted label");
+            ImGui.TextColored(theme.LeadUpGoldColor, "Gold label");
+            ImGui.SameLine();
+            ImGui.TextColored(theme.DamageColor, "-81,937");
+            ImGui.SameLine();
+            ImGui.TextColored(theme.HealColor, "+34,682");
+            ImGui.SameLine();
+            ImGui.TextColored(theme.WarningColor, "Warning");
+
+            DrawCustomThemePreviewButtons(theme);
+            DrawCustomThemePreviewRow(theme);
+            DrawCustomThemePreviewHpBar(theme);
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar(2);
+        ImGui.PopStyleColor(2);
+    }
+
+    private static void DrawCustomThemePreviewButtons(BetterDeathsUiTheme theme)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, theme.ModernNavButtonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, theme.ModernNavButtonHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, theme.ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernButtonTextColor);
+        ImGui.Button("Button", new Vector2(92.0f, 26.0f));
+        ImGui.PopStyleColor(4);
+        if (ImGui.GetContentRegionAvail().X >= 92.0f + ImGui.GetStyle().ItemSpacing.X)
+        {
+            ImGui.SameLine();
+        }
+
+        ImGui.PushStyleColor(ImGuiCol.Button, theme.ModernNavButtonSelectedColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, theme.ModernNavButtonSelectedHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, theme.ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.ModernSelectedButtonTextColor);
+        ImGui.Button("Selected", new Vector2(92.0f, 26.0f));
+        ImGui.PopStyleColor(4);
+    }
+
+    private static void DrawCustomThemePreviewRow(BetterDeathsUiTheme theme)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var start = ImGui.GetCursorScreenPos();
+        var width = ImGui.GetContentRegionAvail().X;
+        var narrow = width < 360.0f;
+        var height = narrow ? 44.0f : 28.0f;
+        drawList.AddRectFilled(start, start + new Vector2(width, height), ImGui.GetColorU32(theme.ModernPanelAltColor), 4.0f);
+        drawList.AddRect(start, start + new Vector2(width, height), ImGui.GetColorU32(theme.ModernPanelBorderColor), 4.0f);
+        drawList.AddText(start + new Vector2(9.0f, 6.0f), ImGui.GetColorU32(theme.ModernTextColor), "Focused row");
+        if (narrow)
+        {
+            drawList.AddText(start + new Vector2(9.0f, 24.0f), ImGui.GetColorU32(theme.LeadUpGoldColor), "Gold label");
+            drawList.AddText(start + new Vector2(width * 0.52f, 24.0f), ImGui.GetColorU32(theme.DamageColor), "Damage text");
+        }
+        else
+        {
+            drawList.AddText(start + new Vector2(width * 0.45f, 6.0f), ImGui.GetColorU32(theme.LeadUpGoldColor), "Gold label");
+            drawList.AddText(start + new Vector2(width * 0.70f, 6.0f), ImGui.GetColorU32(theme.DamageColor), "Damage text");
+        }
+
+        ImGui.Dummy(new Vector2(width, height + 4.0f));
+    }
+
+    private static void DrawCustomThemePreviewHpBar(BetterDeathsUiTheme theme)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var start = ImGui.GetCursorScreenPos();
+        var width = MathF.Min(260.0f, ImGui.GetContentRegionAvail().X);
+        var height = 18.0f;
+        drawList.AddRectFilled(start, start + new Vector2(width, height), ImGui.GetColorU32(theme.BarBackgroundColor), 4.0f);
+        drawList.AddRectFilled(start, start + new Vector2(width * 0.68f, height), ImGui.GetColorU32(theme.HpBarColor), 4.0f);
+        drawList.AddRectFilled(start + new Vector2(width * 0.68f, 0.0f), start + new Vector2(width * 0.84f, height), ImGui.GetColorU32(theme.ShieldBarColor), 4.0f);
+        drawList.AddRect(start, start + new Vector2(width, height), ImGui.GetColorU32(theme.BarBorderColor), 4.0f);
+        drawList.AddText(start + new Vector2(7.0f, 1.0f), ImGui.GetColorU32(theme.ModernTextColor), "HP + shields");
+        ImGui.Dummy(new Vector2(width, height));
     }
 
     private void DrawThemeGroup(string label, string id, IReadOnlyList<BetterDeathsUiTheme> themes)
@@ -9162,7 +9845,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             plugin.SetTheme(theme.Id);
             MarkNewThemeBadgeSeen(theme.Id);
-            activeTheme = theme;
+            activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
         }
 
         if (ShouldShowNewThemeBadge(theme.Id))
@@ -9292,7 +9975,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var previewHeight = MathF.Min(420.0f, MathF.Max(260.0f, ImGui.GetContentRegionAvail().Y));
         var opacity = GetCurrentPullWidgetBackgroundOpacity();
-        var theme = BetterDeathsThemeCatalog.GetTheme(configuration.Theme);
+        var theme = BetterDeathsThemeCatalog.GetTheme(configuration);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         if (ImGui.BeginChild("##CurrentPullWidgetPreview", new Vector2(0.0f, previewHeight), false, OptionalScrollbarFlags))
@@ -11070,9 +11753,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.189");
+        ImGui.TextUnformatted("v0.1.0.190");
         ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("DMU replay now captures Black Hole tethers and blasts.");
+        DrawBreathingGoldBullet("Added Focused and Detailed review modes, so death review can be cleaner without losing the full data view.");
+        DrawBreathingGoldBullet("Added a custom theme builder with grouped color controls and a rendered preview.");
+        DrawWrappedBullet("DMU replay now captures Black Hole tethers and blasts.");
+        DrawWrappedBullet("Focused mode cleans up Summary, Mitigation, and What-if views by hiding lower-value table noise.");
 
         ImGui.Separator();
 
@@ -11793,6 +12479,40 @@ public sealed class RecapWindow : Window, IDisposable
     private static Vector4 GetScrollbarGrabActiveColor()
     {
         return BlendColors(ModernAccentColor, ModernTextColor, ActiveThemeUsesLightPanels() ? 0.08f : 0.04f) with { W = 1.0f };
+    }
+
+    private static Vector4 GetButtonTextColor(Vector4 background, bool selected)
+    {
+        var desired = selected
+            ? ModernSelectedButtonTextColor
+            : ModernButtonTextColor;
+        return GetColorContrast(background, desired) >= 2.2f
+            ? desired
+            : GetReadableTextColorForBackground(background);
+    }
+
+    private static Vector4 GetReadableTextColorForBackground(Vector4 background)
+    {
+        var darkText = new Vector4(0.035f, 0.045f, 0.055f, 1.0f);
+        var lightText = new Vector4(0.98f, 0.98f, 0.96f, 1.0f);
+        var themeText = ModernTextColor with { W = 1.0f };
+
+        if (GetColorContrast(background, themeText) >= 3.0f)
+        {
+            return themeText;
+        }
+
+        return GetColorContrast(background, lightText) >= GetColorContrast(background, darkText)
+            ? lightText
+            : darkText;
+    }
+
+    private static float GetColorContrast(Vector4 first, Vector4 second)
+    {
+        var firstLuminance = GetColorLuminance(first);
+        var secondLuminance = GetColorLuminance(second);
+        return (MathF.Max(firstLuminance, secondLuminance) + 0.05f) /
+            (MathF.Min(firstLuminance, secondLuminance) + 0.05f);
     }
 
     private static float GetColorLuminance(Vector4 color)

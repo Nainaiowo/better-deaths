@@ -78,6 +78,10 @@ internal sealed class BetterDeathsUiTheme
 
     public required Vector4 ModernNavButtonActiveColor { get; init; }
 
+    public required Vector4 ModernButtonTextColor { get; init; }
+
+    public required Vector4 ModernSelectedButtonTextColor { get; init; }
+
     public required Vector4 ModernPopupBgColor { get; init; }
 
     public required Vector4 ModernCheckMarkColor { get; init; }
@@ -162,6 +166,8 @@ internal static class BetterDeathsThemeCatalog
         ModernNavButtonSelectedColor = new Vector4(0.10f, 0.34f, 0.31f, 0.95f),
         ModernNavButtonSelectedHoveredColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
         ModernNavButtonActiveColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
+        ModernButtonTextColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+        ModernSelectedButtonTextColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
         ModernPopupBgColor = new Vector4(0.085f, 0.092f, 0.104f, 0.98f),
         ModernCheckMarkColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
         ModernSliderGrabColor = new Vector4(0.36f, 0.92f, 0.82f, 0.72f),
@@ -758,6 +764,156 @@ internal static class BetterDeathsThemeCatalog
         return ClassicTheme;
     }
 
+    public static BetterDeathsUiTheme GetTheme(Configuration configuration)
+    {
+        var baseTheme = GetTheme(configuration.Theme);
+        return configuration.CustomTheme is { Enabled: true, Initialized: true } customTheme
+            ? ApplyCustomTheme(baseTheme, customTheme)
+            : baseTheme;
+    }
+
+    public static CustomThemeConfiguration CreateCustomThemeConfiguration(BetterDeathsUiTheme theme)
+    {
+        return new CustomThemeConfiguration
+        {
+            Enabled = true,
+            Initialized = true,
+            WindowBackground = ToThemeColorValue(theme.ModernShellColor),
+            ContentBackground = ToThemeColorValue(theme.ModernPanelColor),
+            RaisedBackground = ToThemeColorValue(theme.ModernPanelAltColor),
+            Border = ToThemeColorValue(theme.ModernPanelBorderColor),
+            RegularText = ToThemeColorValue(theme.ModernTextColor),
+            MutedText = ToThemeColorValue(theme.ModernMutedTextColor),
+            GoldText = ToThemeColorValue(theme.LeadUpGoldColor),
+            DamageText = ToThemeColorValue(theme.DamageColor),
+            HealText = ToThemeColorValue(theme.HealColor),
+            WarningText = ToThemeColorValue(theme.WarningColor),
+            ButtonColor = ToThemeColorValue(theme.ModernNavButtonColor),
+            SelectedButtonColor = ToThemeColorValue(theme.ModernNavButtonSelectedColor),
+            ButtonText = ToThemeColorValue(theme.ModernButtonTextColor),
+        };
+    }
+
+    private static BetterDeathsUiTheme ApplyCustomTheme(BetterDeathsUiTheme baseTheme, CustomThemeConfiguration customTheme)
+    {
+        var shell = ToVector4(customTheme.WindowBackground, baseTheme.ModernShellColor);
+        var panel = ToVector4(customTheme.ContentBackground, baseTheme.ModernPanelColor);
+        var panelAlt = ToVector4(customTheme.RaisedBackground, baseTheme.ModernPanelAltColor);
+        var border = ToVector4(customTheme.Border, baseTheme.ModernPanelBorderColor);
+        var text = ToVector4(customTheme.RegularText, baseTheme.ModernTextColor);
+        var muted = ToVector4(customTheme.MutedText, baseTheme.ModernMutedTextColor);
+        var gold = ToVector4(customTheme.GoldText, baseTheme.LeadUpGoldColor);
+        var damage = ToVector4(customTheme.DamageText, baseTheme.DamageColor);
+        var heal = ToVector4(customTheme.HealText, baseTheme.HealColor);
+        var warning = ToVector4(customTheme.WarningText, baseTheme.WarningColor);
+        var button = ToVector4(customTheme.ButtonColor, baseTheme.ModernNavButtonColor);
+        var selectedButton = ToVector4(customTheme.SelectedButtonColor, baseTheme.ModernNavButtonSelectedColor);
+        var buttonText = ToVector4(customTheme.ButtonText, baseTheme.ModernButtonTextColor);
+        var buttonHover = BlendColors(button, border, 0.35f) with { W = 1.0f };
+        var selectedButtonHover = BlendColors(selectedButton, gold, 0.16f) with { W = 1.0f };
+        var accent = gold;
+        var accentSoft = selectedButton;
+        var frame = BlendColors(panelAlt, button, 0.25f) with { W = MathF.Max(panelAlt.W, 0.92f) };
+        var frameHovered = BlendColors(frame, accent, 0.16f) with { W = 1.0f };
+        var popup = BlendColors(panel, shell, 0.22f) with { W = 0.99f };
+
+        return new BetterDeathsUiTheme
+        {
+            Id = baseTheme.Id,
+            Label = $"{baseTheme.Label} Custom",
+            DamageColor = damage,
+            HealColor = heal,
+            WarningColor = warning,
+            LeadUpGoldColor = gold,
+            SpamWarningColor = damage,
+            DisabledColor = BlendColors(muted, panel, 0.18f) with { W = 1.0f },
+            UpdateBannerBgColor = BlendColors(panel, heal, 0.22f) with { W = 0.95f },
+            UpdateBannerTextColor = heal,
+            NoticeBorderColor = border,
+            NoticeTextColor = text,
+            NoticeButtonColor = selectedButton,
+            NoticeButtonHoveredColor = selectedButtonHover,
+            HpBarColor = baseTheme.HpBarColor,
+            ShieldBarColor = gold,
+            BarBackgroundColor = BlendColors(panelAlt, shell, 0.25f) with { W = 1.0f },
+            BarBorderColor = border,
+            OverkillColor = damage,
+            ModernShellColor = shell,
+            ModernPanelColor = panel,
+            ModernPanelAltColor = panelAlt,
+            ModernPanelBorderColor = border,
+            ModernAccentColor = accent,
+            ModernAccentSoftColor = accentSoft,
+            ModernMutedTextColor = muted,
+            ModernTextColor = text,
+            ModernDividerColor = border with { W = Math.Clamp(border.W * 0.30f, 0.12f, 0.36f) },
+            ModernFrameColor = frame,
+            ModernFrameHoveredColor = frameHovered,
+            ModernButtonHoveredColor = buttonHover,
+            ModernNavButtonColor = button,
+            ModernNavButtonHoveredColor = buttonHover,
+            ModernNavButtonSelectedColor = selectedButton,
+            ModernNavButtonSelectedHoveredColor = selectedButtonHover,
+            ModernNavButtonActiveColor = selectedButtonHover,
+            ModernButtonTextColor = buttonText,
+            ModernSelectedButtonTextColor = buttonText,
+            ModernPopupBgColor = popup,
+            ModernCheckMarkColor = accent,
+            ModernSliderGrabColor = accent with { W = 0.72f },
+            ModernSliderGrabActiveColor = accent,
+            ModernHeaderColor = selectedButton with { W = 0.42f },
+            ModernHeaderHoveredColor = frameHovered,
+            ModernHeaderActiveColor = selectedButton with { W = 1.0f },
+            ModernFrameBorderSize = baseTheme.ModernFrameBorderSize,
+            TimelineSelectedRowColor = selectedButton with { W = 0.48f },
+            TimelinePressedRowColor = selectedButton with { W = 0.72f },
+            ChangelogTabColor = selectedButton with { W = 0.95f },
+            ChangelogTabHoveredColor = border with { W = 1.0f },
+            ChangelogTabActiveColor = selectedButton with { W = 1.0f },
+            WidgetWindowBackgroundColor = shell with { W = 1.0f },
+            WidgetTitleBackgroundColor = panel with { W = 1.0f },
+            WidgetTitleActiveBackgroundColor = panelAlt with { W = 1.0f },
+            WidgetBorderColor = border,
+            WidgetResizeGripColor = accent with { W = 0.30f },
+            WidgetResizeGripHoveredColor = accent with { W = 0.55f },
+            WidgetResizeGripActiveColor = accent with { W = 0.75f },
+        };
+    }
+
+    private static ThemeColorValue ToThemeColorValue(Vector4 color)
+    {
+        return new ThemeColorValue(color.X, color.Y, color.Z, color.W);
+    }
+
+    private static Vector4 ToVector4(ThemeColorValue? color, Vector4 fallback)
+    {
+        if (color is null)
+        {
+            return fallback;
+        }
+
+        return new Vector4(
+            Math.Clamp(color.R, 0.0f, 1.0f),
+            Math.Clamp(color.G, 0.0f, 1.0f),
+            Math.Clamp(color.B, 0.0f, 1.0f),
+            Math.Clamp(color.A <= 0.0f ? fallback.W : color.A, 0.0f, 1.0f));
+    }
+
+    private static float GetColorLuminance(Vector4 color)
+    {
+        return (color.X * 0.2126f) + (color.Y * 0.7152f) + (color.Z * 0.0722f);
+    }
+
+    private static Vector4 BlendColors(Vector4 first, Vector4 second, float amount)
+    {
+        var clampedAmount = Math.Clamp(amount, 0.0f, 1.0f);
+        return new Vector4(
+            first.X + ((second.X - first.X) * clampedAmount),
+            first.Y + ((second.Y - first.Y) * clampedAmount),
+            first.Z + ((second.Z - first.Z) * clampedAmount),
+            first.W + ((second.W - first.W) * clampedAmount));
+    }
+
     private static BetterDeathsUiTheme CreateTheme(
         BetterDeathsTheme id,
         string label,
@@ -795,6 +951,9 @@ internal static class BetterDeathsThemeCatalog
         var navButtonHoveredColor = navButtonHovered ?? border with { W = 1.0f };
         var navButtonSelectedColor = navButtonSelected ?? accentSoft with { W = 0.95f };
         var navButtonSelectedHoveredColor = navButtonSelectedHovered ?? accentSoft with { W = 1.0f };
+        var selectedButtonTextColor = GetColorLuminance(panel) >= 0.55f
+            ? textColor
+            : accent;
         return new BetterDeathsUiTheme
         {
             Id = id,
@@ -833,6 +992,8 @@ internal static class BetterDeathsThemeCatalog
             ModernNavButtonSelectedColor = navButtonSelectedColor,
             ModernNavButtonSelectedHoveredColor = navButtonSelectedHoveredColor,
             ModernNavButtonActiveColor = navButtonActive ?? navButtonSelectedHoveredColor,
+            ModernButtonTextColor = textColor,
+            ModernSelectedButtonTextColor = selectedButtonTextColor,
             ModernPopupBgColor = popupBgColor,
             ModernCheckMarkColor = accent,
             ModernSliderGrabColor = accent with { W = 0.72f },
