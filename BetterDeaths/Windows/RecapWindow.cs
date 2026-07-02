@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.195";
+    private const string CurrentChangelogVersion = "0.1.0.196";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -12390,16 +12390,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.195");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.196");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.");
         DrawBreathingGoldBullet("Added P4 Grand Cross Debuffs to Summary.");
         DrawWrappedBullet("Cleaned up focused mitigation layout.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.194");
-        ImGui.TextDisabled("Testing update.");
-        DrawBreathingGoldBullet("Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.");
 
         ImGui.Separator();
 

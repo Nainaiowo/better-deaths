@@ -5,7 +5,7 @@
   "DownloadCount": 950,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Added P4 Grand Cross Debuffs to Summary.\nCleaned up focused mitigation layout.",
+  "Changelog": "Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.\nAdded P4 Grand Cross Debuffs to Summary.\nCleaned up focused mitigation layout.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
