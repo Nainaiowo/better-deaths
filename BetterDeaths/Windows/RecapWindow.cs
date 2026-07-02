@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.192";
+    private const string CurrentChangelogVersion = "0.1.0.193";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -12070,8 +12070,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.192");
+        ImGui.TextUnformatted("v0.1.0.193");
         ImGui.TextDisabled("Stable update.");
+        DrawLargeHighlightedChangelogCallout("We are now on the Punish repo, no change or edits will be required on the user's end. The transition will be seamless.");
         DrawBreathingGoldBullet("Death Replay beta is available with positions, overhead markers, zooming, panning, and DMU replay improvements.");
         DrawBreathingGoldBullet("Added Focused and Detailed review modes, plus a custom theme builder.");
         DrawWrappedBullet("Death timeline width can now be resized.");
@@ -12632,6 +12633,44 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawBreathingGoldBullet(string text)
     {
         DrawHighlightedChangelogBullet(text);
+    }
+
+    private static void DrawLargeHighlightedChangelogCallout(string text)
+    {
+        var style = ImGui.GetStyle();
+        var start = ImGui.GetCursorScreenPos();
+        var width = MathF.Max(ImGui.GetContentRegionAvail().X, ImGui.GetFontSize() * 14.0f);
+        var markerWidth = 4.0f;
+        var paddingX = 10.0f;
+        var paddingY = MathF.Max(5.0f, style.ItemSpacing.Y * 0.75f);
+        var fontSize = ImGui.GetFontSize() * 2.0f;
+        var fontScale = fontSize / ImGui.GetFontSize();
+        var textOffsetX = markerWidth + paddingX;
+        var textWidth = MathF.Max(ImGui.GetFontSize() * 10.0f, width - textOffsetX - paddingX);
+        var lines = WrapTextForWidth(text, textWidth, fontScale);
+        var lineHeight = ImGui.GetTextLineHeight() * fontScale;
+        var height = MathF.Max(lineHeight + (paddingY * 2.0f), (lineHeight * lines.Count) + (paddingY * 2.0f));
+        var end = start + new Vector2(width, height);
+        var drawList = ImGui.GetWindowDrawList();
+
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(GetChangelogHighlightBackgroundColor()), 4.0f);
+        drawList.AddRectFilled(
+            start + new Vector2(0.0f, 3.0f),
+            new Vector2(start.X + markerWidth, end.Y - 3.0f),
+            ImGui.GetColorU32(GetChangelogHighlightAccentColor()),
+            2.0f);
+
+        var textColor = ImGui.GetColorU32(GetChangelogHighlightTextColor());
+        var textPosition = start + new Vector2(textOffsetX, paddingY);
+        var font = ImGui.GetFont();
+        foreach (var line in lines)
+        {
+            drawList.AddText(font, fontSize, textPosition, textColor, line);
+            textPosition.Y += lineHeight;
+        }
+
+        ImGui.Dummy(new Vector2(width, height));
+        ImGui.Spacing();
     }
 
     private static void DrawHighlightedChangelogBullet(string text)
@@ -13637,6 +13676,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static IReadOnlyList<string> WrapTextForWidth(string text, float maxWidth)
     {
+        return WrapTextForWidth(text, maxWidth, 1.0f);
+    }
+
+    private static IReadOnlyList<string> WrapTextForWidth(string text, float maxWidth, float fontScale)
+    {
         if (string.IsNullOrWhiteSpace(text) || maxWidth <= 0.0f)
         {
             return [text];
@@ -13648,7 +13692,7 @@ public sealed class RecapWindow : Window, IDisposable
         foreach (var word in words)
         {
             var candidate = string.IsNullOrEmpty(currentLine) ? word : $"{currentLine} {word}";
-            if (ImGui.CalcTextSize(candidate).X <= maxWidth || string.IsNullOrEmpty(currentLine))
+            if ((ImGui.CalcTextSize(candidate).X * fontScale) <= maxWidth || string.IsNullOrEmpty(currentLine))
             {
                 currentLine = candidate;
                 continue;
