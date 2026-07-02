@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.196";
+    private const string CurrentChangelogVersion = "0.1.0.197";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -3653,14 +3653,17 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 32.0f);
         var timerText = FormatStatusDuration(assignment.Status, true, true, "-");
-        var textWidth = ImGui.CalcTextSize(assignment.Status.Name).X;
-        if (!string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
-            !string.IsNullOrWhiteSpace(assignment.Resolution))
+        var timerWidth = ImGui.CalcTextSize(timerText).X;
+        var iconStackWidth = MathF.Max(iconSize, timerWidth);
+        var hasRealityText = !string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution);
+        if (!hasRealityText)
         {
-            textWidth = MathF.Max(textWidth, ImGui.CalcTextSize($"{assignment.RealityLabel}: {assignment.Resolution}").X);
+            return iconStackWidth;
         }
 
-        return iconSize + ImGui.GetStyle().ItemSpacing.X + MathF.Max(textWidth, ImGui.CalcTextSize(timerText).X);
+        var textWidth = ImGui.CalcTextSize($"{assignment.RealityLabel}: {assignment.Resolution}").X;
+        return iconStackWidth + ImGui.GetStyle().ItemSpacing.X + textWidth;
     }
 
     private void DrawDmuP4AssignmentDisplay(DmuP4AssignmentSummaryStatus assignment)
@@ -3673,6 +3676,8 @@ public sealed class RecapWindow : Window, IDisposable
             ? OverkillColor
             : ModernPanelBorderColor;
         var tooltip = FormatDmuP4AssignmentTooltip(assignment);
+        var hasRealityText = !string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution);
 
         ImGui.BeginGroup();
         var iconStackStartX = ImGui.GetCursorPosX();
@@ -3683,16 +3688,12 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SetCursorPosX(iconStackStartX + MathF.Max(0.0f, (iconStackWidth - timerWidth) * 0.5f));
         ImGui.TextDisabled(timerText);
 
-        ImGui.SameLine();
-        ImGui.BeginGroup();
-        ImGui.TextUnformatted(status.Name);
-        if (!string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
-            !string.IsNullOrWhiteSpace(assignment.Resolution))
+        if (hasRealityText)
         {
+            ImGui.SameLine();
             ImGui.TextColored(isFake ? OverkillColor : LeadUpGoldColor, $"{assignment.RealityLabel}: {assignment.Resolution}");
         }
 
-        ImGui.EndGroup();
         ImGui.EndGroup();
         if (ImGui.IsItemHovered())
         {
@@ -12390,6 +12391,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.197");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Cleaned up P4 Grand Cross Debuffs display.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.196");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.");
