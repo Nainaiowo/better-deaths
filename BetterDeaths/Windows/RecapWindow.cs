@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.197";
+    private const string CurrentChangelogVersion = "0.1.0.198";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -3654,16 +3654,10 @@ public sealed class RecapWindow : Window, IDisposable
         var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 32.0f);
         var timerText = FormatStatusDuration(assignment.Status, true, true, "-");
         var timerWidth = ImGui.CalcTextSize(timerText).X;
-        var iconStackWidth = MathF.Max(iconSize, timerWidth);
-        var hasRealityText = !string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
-            !string.IsNullOrWhiteSpace(assignment.Resolution);
-        if (!hasRealityText)
-        {
-            return iconStackWidth;
-        }
-
-        var textWidth = ImGui.CalcTextSize($"{assignment.RealityLabel}: {assignment.Resolution}").X;
-        return iconStackWidth + ImGui.GetStyle().ItemSpacing.X + textWidth;
+        var textWidth = GetDmuP4AssignmentRealityText(assignment) is { Length: > 0 } realityText
+            ? ImGui.CalcTextSize(realityText).X
+            : 0.0f;
+        return MathF.Max(MathF.Max(iconSize, timerWidth), textWidth);
     }
 
     private void DrawDmuP4AssignmentDisplay(DmuP4AssignmentSummaryStatus assignment)
@@ -3676,29 +3670,39 @@ public sealed class RecapWindow : Window, IDisposable
             ? OverkillColor
             : ModernPanelBorderColor;
         var tooltip = FormatDmuP4AssignmentTooltip(assignment);
-        var hasRealityText = !string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
-            !string.IsNullOrWhiteSpace(assignment.Resolution);
+        var realityText = GetDmuP4AssignmentRealityText(assignment);
 
         ImGui.BeginGroup();
-        var iconStackStartX = ImGui.GetCursorPosX();
+        var stackStartX = ImGui.GetCursorPosX();
         var timerWidth = ImGui.CalcTextSize(timerText).X;
-        var iconStackWidth = MathF.Max(iconSize, timerWidth);
-        ImGui.SetCursorPosX(iconStackStartX + MathF.Max(0.0f, (iconStackWidth - iconSize) * 0.5f));
-        DrawStatusIconWithBorder(status.IconId, iconSize, borderColor, tooltip);
-        ImGui.SetCursorPosX(iconStackStartX + MathF.Max(0.0f, (iconStackWidth - timerWidth) * 0.5f));
-        ImGui.TextDisabled(timerText);
-
-        if (hasRealityText)
+        var realityWidth = realityText.Length > 0
+            ? ImGui.CalcTextSize(realityText).X
+            : 0.0f;
+        var stackWidth = MathF.Max(MathF.Max(iconSize, timerWidth), realityWidth);
+        if (realityText.Length > 0)
         {
-            ImGui.SameLine();
-            ImGui.TextColored(isFake ? OverkillColor : LeadUpGoldColor, $"{assignment.RealityLabel}: {assignment.Resolution}");
+            ImGui.SetCursorPosX(stackStartX + MathF.Max(0.0f, (stackWidth - realityWidth) * 0.5f));
+            ImGui.TextColored(isFake ? OverkillColor : LeadUpGoldColor, realityText);
         }
+
+        ImGui.SetCursorPosX(stackStartX + MathF.Max(0.0f, (stackWidth - iconSize) * 0.5f));
+        DrawStatusIconWithBorder(status.IconId, iconSize, borderColor, tooltip);
+        ImGui.SetCursorPosX(stackStartX + MathF.Max(0.0f, (stackWidth - timerWidth) * 0.5f));
+        ImGui.TextDisabled(timerText);
 
         ImGui.EndGroup();
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip(tooltip);
         }
+    }
+
+    private static string GetDmuP4AssignmentRealityText(DmuP4AssignmentSummaryStatus assignment)
+    {
+        return !string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution)
+            ? $"{assignment.RealityLabel}: {assignment.Resolution}"
+            : string.Empty;
     }
 
     private static string FormatDmuP4AssignmentTooltip(DmuP4AssignmentSummaryStatus assignment)
@@ -12391,6 +12395,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.198");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Cleaned up P4 Grand Cross Debuffs layout.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.197");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Cleaned up P4 Grand Cross Debuffs display.");
