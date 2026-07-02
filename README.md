@@ -80,7 +80,7 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 Add this custom plugin repository URL in Dalamud:
 
 ```text
-https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json
+https://puni.sh/api/repository/nainai
 ```
 
 Then install `Better Deaths` from Dalamud's plugin installer.
