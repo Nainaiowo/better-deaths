@@ -4496,7 +4496,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureReplayOverheadStatus(RawActorControlPacket packet, PartyMemberSnapshot member, StatusSnapshot status)
     {
-        if (packet.Category != ActorControlGainEffectCategory ||
+        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlUpdateEffectCategory ||
             !ReplayEncounterModules.IsReplayOverheadStatus(currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId, status.Id))
         {
             return;
@@ -4513,7 +4513,10 @@ public sealed partial class Plugin : IDalamudPlugin
             member.ClassJobId,
             member.ClassJobName,
             status.Id,
-            status.Id));
+            status.Id)
+        {
+            RemainingTime = status.RemainingTime,
+        });
     }
 
     private bool TryCreateActorControlStatusSnapshot(

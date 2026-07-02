@@ -109,7 +109,10 @@ public sealed record ReplayMarkerSnapshot(
     uint ClassJobId,
     string ClassJobName,
     uint MarkerId,
-    uint RawMarkerId);
+    uint RawMarkerId)
+{
+    public float RemainingTime { get; init; }
+}
 
 public sealed record ReplayMechanicSnapshot(
     DateTime SeenAtUtc,
