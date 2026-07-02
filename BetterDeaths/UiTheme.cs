@@ -86,6 +86,14 @@ internal sealed class BetterDeathsUiTheme
 
     public required Vector4 ModernCheckMarkColor { get; init; }
 
+    public required Vector4 CheckboxFrameColor { get; init; }
+
+    public required Vector4 CheckboxFrameHoveredColor { get; init; }
+
+    public required Vector4 CheckboxFrameActiveColor { get; init; }
+
+    public required Vector4 CheckboxBorderColor { get; init; }
+
     public required Vector4 ModernSliderGrabColor { get; init; }
 
     public required Vector4 ModernSliderGrabActiveColor { get; init; }
@@ -96,11 +104,25 @@ internal sealed class BetterDeathsUiTheme
 
     public required Vector4 ModernHeaderActiveColor { get; init; }
 
+    public required Vector4 TableRowAltColor { get; init; }
+
+    public required Vector4 FocusedRowColor { get; init; }
+
+    public required Vector4 FocusedRowAccentColor { get; init; }
+
     public required float ModernFrameBorderSize { get; init; }
 
     public required Vector4 TimelineSelectedRowColor { get; init; }
 
     public required Vector4 TimelinePressedRowColor { get; init; }
+
+    public required Vector4 ScrollbarBackgroundColor { get; init; }
+
+    public required Vector4 ScrollbarGrabColor { get; init; }
+
+    public required Vector4 ScrollbarGrabHoveredColor { get; init; }
+
+    public required Vector4 ScrollbarGrabActiveColor { get; init; }
 
     public required Vector4 ChangelogTabColor { get; init; }
 
@@ -170,14 +192,25 @@ internal static class BetterDeathsThemeCatalog
         ModernSelectedButtonTextColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
         ModernPopupBgColor = new Vector4(0.085f, 0.092f, 0.104f, 0.98f),
         ModernCheckMarkColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
+        CheckboxFrameColor = BlendColors(new Vector4(0.11f, 0.118f, 0.132f, 0.90f), new Vector4(0.22f, 0.25f, 0.28f, 0.95f), 0.42f) with { W = 0.96f },
+        CheckboxFrameHoveredColor = BlendColors(new Vector4(0.16f, 0.18f, 0.20f, 1.0f), new Vector4(0.10f, 0.34f, 0.31f, 0.92f), 0.28f) with { W = 1.0f },
+        CheckboxFrameActiveColor = new Vector4(0.10f, 0.34f, 0.31f, 1.0f),
+        CheckboxBorderColor = BlendColors(new Vector4(0.22f, 0.25f, 0.28f, 0.95f), new Vector4(0.36f, 0.92f, 0.82f, 1.0f), 0.18f) with { W = 1.0f },
         ModernSliderGrabColor = new Vector4(0.36f, 0.92f, 0.82f, 0.72f),
         ModernSliderGrabActiveColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
         ModernHeaderColor = new Vector4(0.10f, 0.34f, 0.31f, 0.42f),
         ModernHeaderHoveredColor = new Vector4(0.16f, 0.18f, 0.20f, 1.0f),
         ModernHeaderActiveColor = new Vector4(0.10f, 0.34f, 0.31f, 0.92f),
+        TableRowAltColor = BlendColors(new Vector4(0.085f, 0.092f, 0.104f, 0.88f), new Vector4(0.11f, 0.118f, 0.132f, 0.90f), 0.58f) with { W = 0.46f },
+        FocusedRowColor = BlendColors(new Vector4(0.085f, 0.092f, 0.104f, 0.88f), new Vector4(0.11f, 0.118f, 0.132f, 0.90f), 0.58f) with { W = 0.46f },
+        FocusedRowAccentColor = BlendColors(new Vector4(0.22f, 0.25f, 0.28f, 0.95f), new Vector4(0.36f, 0.92f, 0.82f, 1.0f), 0.32f) with { W = 0.74f },
         ModernFrameBorderSize = 0.0f,
         TimelineSelectedRowColor = new Vector4(0.28f, 0.22f, 0.10f, 0.55f),
         TimelinePressedRowColor = new Vector4(0.42f, 0.33f, 0.13f, 0.78f),
+        ScrollbarBackgroundColor = BlendColors(new Vector4(0.055f, 0.06f, 0.068f, 0.84f), new Vector4(0.085f, 0.092f, 0.104f, 0.88f), 0.58f) with { W = 0.70f },
+        ScrollbarGrabColor = BlendColors(new Vector4(0.22f, 0.25f, 0.28f, 0.95f), new Vector4(0.36f, 0.92f, 0.82f, 1.0f), 0.40f) with { W = 0.78f },
+        ScrollbarGrabHoveredColor = BlendColors(BlendColors(new Vector4(0.22f, 0.25f, 0.28f, 0.95f), new Vector4(0.36f, 0.92f, 0.82f, 1.0f), 0.40f), new Vector4(0.36f, 0.92f, 0.82f, 1.0f), 0.34f) with { W = 0.94f },
+        ScrollbarGrabActiveColor = BlendColors(new Vector4(0.36f, 0.92f, 0.82f, 1.0f), new Vector4(1.0f, 1.0f, 1.0f, 1.0f), 0.04f) with { W = 1.0f },
         ChangelogTabColor = new Vector4(0.34f, 0.24f, 0.07f, 0.95f),
         ChangelogTabHoveredColor = new Vector4(0.66f, 0.45f, 0.12f, 1.0f),
         ChangelogTabActiveColor = new Vector4(0.50f, 0.35f, 0.10f, 1.0f),
@@ -776,21 +809,74 @@ internal static class BetterDeathsThemeCatalog
     {
         return new CustomThemeConfiguration
         {
+            SchemaVersion = CustomThemeConfiguration.CurrentSchemaVersion,
             Enabled = true,
             Initialized = true,
             WindowBackground = ToThemeColorValue(theme.ModernShellColor),
             ContentBackground = ToThemeColorValue(theme.ModernPanelColor),
             RaisedBackground = ToThemeColorValue(theme.ModernPanelAltColor),
             Border = ToThemeColorValue(theme.ModernPanelBorderColor),
+            Divider = ToThemeColorValue(theme.ModernDividerColor),
+            Accent = ToThemeColorValue(theme.ModernAccentColor),
+            AccentSoft = ToThemeColorValue(theme.ModernAccentSoftColor),
             RegularText = ToThemeColorValue(theme.ModernTextColor),
             MutedText = ToThemeColorValue(theme.ModernMutedTextColor),
             GoldText = ToThemeColorValue(theme.LeadUpGoldColor),
+            DisabledText = ToThemeColorValue(theme.DisabledColor),
             DamageText = ToThemeColorValue(theme.DamageColor),
             HealText = ToThemeColorValue(theme.HealColor),
             WarningText = ToThemeColorValue(theme.WarningColor),
+            SpamWarningText = ToThemeColorValue(theme.SpamWarningColor),
+            OverkillText = ToThemeColorValue(theme.OverkillColor),
+            FrameBackground = ToThemeColorValue(theme.ModernFrameColor),
+            FrameHoverBackground = ToThemeColorValue(theme.ModernFrameHoveredColor),
+            PopupBackground = ToThemeColorValue(theme.ModernPopupBgColor),
             ButtonColor = ToThemeColorValue(theme.ModernNavButtonColor),
+            ButtonHoverColor = ToThemeColorValue(theme.ModernNavButtonHoveredColor),
             SelectedButtonColor = ToThemeColorValue(theme.ModernNavButtonSelectedColor),
+            SelectedButtonHoverColor = ToThemeColorValue(theme.ModernNavButtonSelectedHoveredColor),
+            ButtonActiveColor = ToThemeColorValue(theme.ModernNavButtonActiveColor),
             ButtonText = ToThemeColorValue(theme.ModernButtonTextColor),
+            SelectedButtonText = ToThemeColorValue(theme.ModernSelectedButtonTextColor),
+            CheckboxBackground = ToThemeColorValue(theme.CheckboxFrameColor),
+            CheckboxHoverBackground = ToThemeColorValue(theme.CheckboxFrameHoveredColor),
+            CheckboxActiveBackground = ToThemeColorValue(theme.CheckboxFrameActiveColor),
+            CheckboxCheckMark = ToThemeColorValue(theme.ModernCheckMarkColor),
+            CheckboxBorder = ToThemeColorValue(theme.CheckboxBorderColor),
+            SliderGrab = ToThemeColorValue(theme.ModernSliderGrabColor),
+            SliderGrabActive = ToThemeColorValue(theme.ModernSliderGrabActiveColor),
+            HeaderBackground = ToThemeColorValue(theme.ModernHeaderColor),
+            HeaderHoverBackground = ToThemeColorValue(theme.ModernHeaderHoveredColor),
+            HeaderActiveBackground = ToThemeColorValue(theme.ModernHeaderActiveColor),
+            TableRowAlt = ToThemeColorValue(theme.TableRowAltColor),
+            FocusedRow = ToThemeColorValue(theme.FocusedRowColor),
+            FocusedRowAccent = ToThemeColorValue(theme.FocusedRowAccentColor),
+            TimelineSelectedRow = ToThemeColorValue(theme.TimelineSelectedRowColor),
+            TimelinePressedRow = ToThemeColorValue(theme.TimelinePressedRowColor),
+            ScrollbarBackground = ToThemeColorValue(theme.ScrollbarBackgroundColor),
+            ScrollbarGrab = ToThemeColorValue(theme.ScrollbarGrabColor),
+            ScrollbarGrabHover = ToThemeColorValue(theme.ScrollbarGrabHoveredColor),
+            ScrollbarGrabActive = ToThemeColorValue(theme.ScrollbarGrabActiveColor),
+            ChangelogTab = ToThemeColorValue(theme.ChangelogTabColor),
+            ChangelogTabHover = ToThemeColorValue(theme.ChangelogTabHoveredColor),
+            ChangelogTabActive = ToThemeColorValue(theme.ChangelogTabActiveColor),
+            HpBar = ToThemeColorValue(theme.HpBarColor),
+            ShieldBar = ToThemeColorValue(theme.ShieldBarColor),
+            BarBackground = ToThemeColorValue(theme.BarBackgroundColor),
+            BarBorder = ToThemeColorValue(theme.BarBorderColor),
+            WidgetWindowBackground = ToThemeColorValue(theme.WidgetWindowBackgroundColor),
+            WidgetTitleBackground = ToThemeColorValue(theme.WidgetTitleBackgroundColor),
+            WidgetTitleActiveBackground = ToThemeColorValue(theme.WidgetTitleActiveBackgroundColor),
+            WidgetBorder = ToThemeColorValue(theme.WidgetBorderColor),
+            WidgetResizeGrip = ToThemeColorValue(theme.WidgetResizeGripColor),
+            WidgetResizeGripHover = ToThemeColorValue(theme.WidgetResizeGripHoveredColor),
+            WidgetResizeGripActive = ToThemeColorValue(theme.WidgetResizeGripActiveColor),
+            UpdateBannerBackground = ToThemeColorValue(theme.UpdateBannerBgColor),
+            UpdateBannerText = ToThemeColorValue(theme.UpdateBannerTextColor),
+            NoticeBorder = ToThemeColorValue(theme.NoticeBorderColor),
+            NoticeText = ToThemeColorValue(theme.NoticeTextColor),
+            NoticeButton = ToThemeColorValue(theme.NoticeButtonColor),
+            NoticeButtonHover = ToThemeColorValue(theme.NoticeButtonHoveredColor),
         };
     }
 
@@ -800,22 +886,67 @@ internal static class BetterDeathsThemeCatalog
         var panel = ToVector4(customTheme.ContentBackground, baseTheme.ModernPanelColor);
         var panelAlt = ToVector4(customTheme.RaisedBackground, baseTheme.ModernPanelAltColor);
         var border = ToVector4(customTheme.Border, baseTheme.ModernPanelBorderColor);
+        var divider = ToVector4(customTheme.Divider, baseTheme.ModernDividerColor);
+        var accent = ToVector4(customTheme.Accent, baseTheme.ModernAccentColor);
+        var accentSoft = ToVector4(customTheme.AccentSoft, baseTheme.ModernAccentSoftColor);
         var text = ToVector4(customTheme.RegularText, baseTheme.ModernTextColor);
         var muted = ToVector4(customTheme.MutedText, baseTheme.ModernMutedTextColor);
         var gold = ToVector4(customTheme.GoldText, baseTheme.LeadUpGoldColor);
+        var disabled = ToVector4(customTheme.DisabledText, baseTheme.DisabledColor);
         var damage = ToVector4(customTheme.DamageText, baseTheme.DamageColor);
         var heal = ToVector4(customTheme.HealText, baseTheme.HealColor);
         var warning = ToVector4(customTheme.WarningText, baseTheme.WarningColor);
+        var spamWarning = ToVector4(customTheme.SpamWarningText, baseTheme.SpamWarningColor);
+        var overkill = ToVector4(customTheme.OverkillText, baseTheme.OverkillColor);
+        var frame = ToVector4(customTheme.FrameBackground, baseTheme.ModernFrameColor);
+        var frameHovered = ToVector4(customTheme.FrameHoverBackground, baseTheme.ModernFrameHoveredColor);
+        var popup = ToVector4(customTheme.PopupBackground, baseTheme.ModernPopupBgColor);
         var button = ToVector4(customTheme.ButtonColor, baseTheme.ModernNavButtonColor);
+        var buttonHover = ToVector4(customTheme.ButtonHoverColor, baseTheme.ModernNavButtonHoveredColor);
         var selectedButton = ToVector4(customTheme.SelectedButtonColor, baseTheme.ModernNavButtonSelectedColor);
+        var selectedButtonHover = ToVector4(customTheme.SelectedButtonHoverColor, baseTheme.ModernNavButtonSelectedHoveredColor);
+        var buttonActive = ToVector4(customTheme.ButtonActiveColor, baseTheme.ModernNavButtonActiveColor);
         var buttonText = ToVector4(customTheme.ButtonText, baseTheme.ModernButtonTextColor);
-        var buttonHover = BlendColors(button, border, 0.35f) with { W = 1.0f };
-        var selectedButtonHover = BlendColors(selectedButton, gold, 0.16f) with { W = 1.0f };
-        var accent = gold;
-        var accentSoft = selectedButton;
-        var frame = BlendColors(panelAlt, button, 0.25f) with { W = MathF.Max(panelAlt.W, 0.92f) };
-        var frameHovered = BlendColors(frame, accent, 0.16f) with { W = 1.0f };
-        var popup = BlendColors(panel, shell, 0.22f) with { W = 0.99f };
+        var selectedButtonText = ToVector4(customTheme.SelectedButtonText, baseTheme.ModernSelectedButtonTextColor);
+        var checkboxFrame = ToVector4(customTheme.CheckboxBackground, baseTheme.CheckboxFrameColor);
+        var checkboxFrameHovered = ToVector4(customTheme.CheckboxHoverBackground, baseTheme.CheckboxFrameHoveredColor);
+        var checkboxFrameActive = ToVector4(customTheme.CheckboxActiveBackground, baseTheme.CheckboxFrameActiveColor);
+        var checkboxCheckMark = ToVector4(customTheme.CheckboxCheckMark, baseTheme.ModernCheckMarkColor);
+        var checkboxBorder = ToVector4(customTheme.CheckboxBorder, baseTheme.CheckboxBorderColor);
+        var sliderGrab = ToVector4(customTheme.SliderGrab, baseTheme.ModernSliderGrabColor);
+        var sliderGrabActive = ToVector4(customTheme.SliderGrabActive, baseTheme.ModernSliderGrabActiveColor);
+        var header = ToVector4(customTheme.HeaderBackground, baseTheme.ModernHeaderColor);
+        var headerHover = ToVector4(customTheme.HeaderHoverBackground, baseTheme.ModernHeaderHoveredColor);
+        var headerActive = ToVector4(customTheme.HeaderActiveBackground, baseTheme.ModernHeaderActiveColor);
+        var tableRowAlt = ToVector4(customTheme.TableRowAlt, baseTheme.TableRowAltColor);
+        var focusedRow = ToVector4(customTheme.FocusedRow, baseTheme.FocusedRowColor);
+        var focusedRowAccent = ToVector4(customTheme.FocusedRowAccent, baseTheme.FocusedRowAccentColor);
+        var timelineSelected = ToVector4(customTheme.TimelineSelectedRow, baseTheme.TimelineSelectedRowColor);
+        var timelinePressed = ToVector4(customTheme.TimelinePressedRow, baseTheme.TimelinePressedRowColor);
+        var scrollbarBackground = ToVector4(customTheme.ScrollbarBackground, baseTheme.ScrollbarBackgroundColor);
+        var scrollbarGrab = ToVector4(customTheme.ScrollbarGrab, baseTheme.ScrollbarGrabColor);
+        var scrollbarGrabHover = ToVector4(customTheme.ScrollbarGrabHover, baseTheme.ScrollbarGrabHoveredColor);
+        var scrollbarGrabActive = ToVector4(customTheme.ScrollbarGrabActive, baseTheme.ScrollbarGrabActiveColor);
+        var changelogTab = ToVector4(customTheme.ChangelogTab, baseTheme.ChangelogTabColor);
+        var changelogTabHover = ToVector4(customTheme.ChangelogTabHover, baseTheme.ChangelogTabHoveredColor);
+        var changelogTabActive = ToVector4(customTheme.ChangelogTabActive, baseTheme.ChangelogTabActiveColor);
+        var hpBar = ToVector4(customTheme.HpBar, baseTheme.HpBarColor);
+        var shieldBar = ToVector4(customTheme.ShieldBar, baseTheme.ShieldBarColor);
+        var barBackground = ToVector4(customTheme.BarBackground, baseTheme.BarBackgroundColor);
+        var barBorder = ToVector4(customTheme.BarBorder, baseTheme.BarBorderColor);
+        var widgetWindow = ToVector4(customTheme.WidgetWindowBackground, baseTheme.WidgetWindowBackgroundColor);
+        var widgetTitle = ToVector4(customTheme.WidgetTitleBackground, baseTheme.WidgetTitleBackgroundColor);
+        var widgetTitleActive = ToVector4(customTheme.WidgetTitleActiveBackground, baseTheme.WidgetTitleActiveBackgroundColor);
+        var widgetBorder = ToVector4(customTheme.WidgetBorder, baseTheme.WidgetBorderColor);
+        var widgetResizeGrip = ToVector4(customTheme.WidgetResizeGrip, baseTheme.WidgetResizeGripColor);
+        var widgetResizeGripHover = ToVector4(customTheme.WidgetResizeGripHover, baseTheme.WidgetResizeGripHoveredColor);
+        var widgetResizeGripActive = ToVector4(customTheme.WidgetResizeGripActive, baseTheme.WidgetResizeGripActiveColor);
+        var updateBannerBg = ToVector4(customTheme.UpdateBannerBackground, baseTheme.UpdateBannerBgColor);
+        var updateBannerText = ToVector4(customTheme.UpdateBannerText, baseTheme.UpdateBannerTextColor);
+        var noticeBorder = ToVector4(customTheme.NoticeBorder, baseTheme.NoticeBorderColor);
+        var noticeText = ToVector4(customTheme.NoticeText, baseTheme.NoticeTextColor);
+        var noticeButton = ToVector4(customTheme.NoticeButton, baseTheme.NoticeButtonColor);
+        var noticeButtonHover = ToVector4(customTheme.NoticeButtonHover, baseTheme.NoticeButtonHoveredColor);
 
         return new BetterDeathsUiTheme
         {
@@ -825,19 +956,19 @@ internal static class BetterDeathsThemeCatalog
             HealColor = heal,
             WarningColor = warning,
             LeadUpGoldColor = gold,
-            SpamWarningColor = damage,
-            DisabledColor = BlendColors(muted, panel, 0.18f) with { W = 1.0f },
-            UpdateBannerBgColor = BlendColors(panel, heal, 0.22f) with { W = 0.95f },
-            UpdateBannerTextColor = heal,
-            NoticeBorderColor = border,
-            NoticeTextColor = text,
-            NoticeButtonColor = selectedButton,
-            NoticeButtonHoveredColor = selectedButtonHover,
-            HpBarColor = baseTheme.HpBarColor,
-            ShieldBarColor = gold,
-            BarBackgroundColor = BlendColors(panelAlt, shell, 0.25f) with { W = 1.0f },
-            BarBorderColor = border,
-            OverkillColor = damage,
+            SpamWarningColor = spamWarning,
+            DisabledColor = disabled,
+            UpdateBannerBgColor = updateBannerBg,
+            UpdateBannerTextColor = updateBannerText,
+            NoticeBorderColor = noticeBorder,
+            NoticeTextColor = noticeText,
+            NoticeButtonColor = noticeButton,
+            NoticeButtonHoveredColor = noticeButtonHover,
+            HpBarColor = hpBar,
+            ShieldBarColor = shieldBar,
+            BarBackgroundColor = barBackground,
+            BarBorderColor = barBorder,
+            OverkillColor = overkill,
             ModernShellColor = shell,
             ModernPanelColor = panel,
             ModernPanelAltColor = panelAlt,
@@ -846,7 +977,7 @@ internal static class BetterDeathsThemeCatalog
             ModernAccentSoftColor = accentSoft,
             ModernMutedTextColor = muted,
             ModernTextColor = text,
-            ModernDividerColor = border with { W = Math.Clamp(border.W * 0.30f, 0.12f, 0.36f) },
+            ModernDividerColor = divider,
             ModernFrameColor = frame,
             ModernFrameHoveredColor = frameHovered,
             ModernButtonHoveredColor = buttonHover,
@@ -854,29 +985,40 @@ internal static class BetterDeathsThemeCatalog
             ModernNavButtonHoveredColor = buttonHover,
             ModernNavButtonSelectedColor = selectedButton,
             ModernNavButtonSelectedHoveredColor = selectedButtonHover,
-            ModernNavButtonActiveColor = selectedButtonHover,
+            ModernNavButtonActiveColor = buttonActive,
             ModernButtonTextColor = buttonText,
-            ModernSelectedButtonTextColor = buttonText,
+            ModernSelectedButtonTextColor = selectedButtonText,
             ModernPopupBgColor = popup,
-            ModernCheckMarkColor = accent,
-            ModernSliderGrabColor = accent with { W = 0.72f },
-            ModernSliderGrabActiveColor = accent,
-            ModernHeaderColor = selectedButton with { W = 0.42f },
-            ModernHeaderHoveredColor = frameHovered,
-            ModernHeaderActiveColor = selectedButton with { W = 1.0f },
+            ModernCheckMarkColor = checkboxCheckMark,
+            CheckboxFrameColor = checkboxFrame,
+            CheckboxFrameHoveredColor = checkboxFrameHovered,
+            CheckboxFrameActiveColor = checkboxFrameActive,
+            CheckboxBorderColor = checkboxBorder,
+            ModernSliderGrabColor = sliderGrab,
+            ModernSliderGrabActiveColor = sliderGrabActive,
+            ModernHeaderColor = header,
+            ModernHeaderHoveredColor = headerHover,
+            ModernHeaderActiveColor = headerActive,
+            TableRowAltColor = tableRowAlt,
+            FocusedRowColor = focusedRow,
+            FocusedRowAccentColor = focusedRowAccent,
             ModernFrameBorderSize = baseTheme.ModernFrameBorderSize,
-            TimelineSelectedRowColor = selectedButton with { W = 0.48f },
-            TimelinePressedRowColor = selectedButton with { W = 0.72f },
-            ChangelogTabColor = selectedButton with { W = 0.95f },
-            ChangelogTabHoveredColor = border with { W = 1.0f },
-            ChangelogTabActiveColor = selectedButton with { W = 1.0f },
-            WidgetWindowBackgroundColor = shell with { W = 1.0f },
-            WidgetTitleBackgroundColor = panel with { W = 1.0f },
-            WidgetTitleActiveBackgroundColor = panelAlt with { W = 1.0f },
-            WidgetBorderColor = border,
-            WidgetResizeGripColor = accent with { W = 0.30f },
-            WidgetResizeGripHoveredColor = accent with { W = 0.55f },
-            WidgetResizeGripActiveColor = accent with { W = 0.75f },
+            TimelineSelectedRowColor = timelineSelected,
+            TimelinePressedRowColor = timelinePressed,
+            ScrollbarBackgroundColor = scrollbarBackground,
+            ScrollbarGrabColor = scrollbarGrab,
+            ScrollbarGrabHoveredColor = scrollbarGrabHover,
+            ScrollbarGrabActiveColor = scrollbarGrabActive,
+            ChangelogTabColor = changelogTab,
+            ChangelogTabHoveredColor = changelogTabHover,
+            ChangelogTabActiveColor = changelogTabActive,
+            WidgetWindowBackgroundColor = widgetWindow,
+            WidgetTitleBackgroundColor = widgetTitle,
+            WidgetTitleActiveBackgroundColor = widgetTitleActive,
+            WidgetBorderColor = widgetBorder,
+            WidgetResizeGripColor = widgetResizeGrip,
+            WidgetResizeGripHoveredColor = widgetResizeGripHover,
+            WidgetResizeGripActiveColor = widgetResizeGripActive,
         };
     }
 
@@ -896,7 +1038,7 @@ internal static class BetterDeathsThemeCatalog
             Math.Clamp(color.R, 0.0f, 1.0f),
             Math.Clamp(color.G, 0.0f, 1.0f),
             Math.Clamp(color.B, 0.0f, 1.0f),
-            Math.Clamp(color.A <= 0.0f ? fallback.W : color.A, 0.0f, 1.0f));
+            Math.Clamp(color.A, 0.0f, 1.0f));
     }
 
     private static float GetColorLuminance(Vector4 color)
@@ -951,9 +1093,37 @@ internal static class BetterDeathsThemeCatalog
         var navButtonHoveredColor = navButtonHovered ?? border with { W = 1.0f };
         var navButtonSelectedColor = navButtonSelected ?? accentSoft with { W = 0.95f };
         var navButtonSelectedHoveredColor = navButtonSelectedHovered ?? accentSoft with { W = 1.0f };
-        var selectedButtonTextColor = GetColorLuminance(panel) >= 0.55f
+        var lightPanels = GetColorLuminance(panel) >= 0.55f;
+        var selectedButtonTextColor = lightPanels
             ? textColor
             : accent;
+        var checkboxFrameColor = lightPanels
+            ? BlendColors(frameColor, border, 0.35f) with { W = 1.0f }
+            : BlendColors(frameColor, border, 0.42f) with { W = 0.96f };
+        var checkboxFrameHoveredColor = lightPanels
+            ? BlendColors(frameHoveredColor, border, 0.25f) with { W = 1.0f }
+            : BlendColors(frameHoveredColor, accentSoft, 0.28f) with { W = 1.0f };
+        var checkboxFrameActiveColor = lightPanels
+            ? BlendColors(accentSoft, border, 0.28f) with { W = 1.0f }
+            : accentSoft with { W = 1.0f };
+        var checkboxBorderColor = lightPanels
+            ? BlendColors(border, textColor, 0.14f) with { W = 1.0f }
+            : BlendColors(border, accent, 0.18f) with { W = 1.0f };
+        var tableRowAltColor = BlendColors(panel, panelAlt, 0.58f) with { W = 0.46f };
+        var focusedRowColor = lightPanels
+            ? BlendColors(panel, panelAlt, 0.62f) with { W = 0.42f }
+            : BlendColors(panel, panelAlt, 0.58f) with { W = 0.46f };
+        var focusedRowAccentColor = lightPanels
+            ? BlendColors(border, accent, 0.22f) with { W = 0.82f }
+            : BlendColors(border, accent, 0.32f) with { W = 0.74f };
+        var scrollbarBackgroundColor = lightPanels
+            ? BlendColors(panel, border, 0.16f) with { W = 0.76f }
+            : BlendColors(shell, panel, 0.58f) with { W = 0.70f };
+        var scrollbarGrabColor = lightPanels
+            ? BlendColors(border, accent, 0.30f) with { W = 0.84f }
+            : BlendColors(border, accent, 0.40f) with { W = 0.78f };
+        var scrollbarGrabHoveredColor = BlendColors(scrollbarGrabColor, accent, 0.34f) with { W = 0.94f };
+        var scrollbarGrabActiveColor = BlendColors(accent, textColor, lightPanels ? 0.08f : 0.04f) with { W = 1.0f };
         return new BetterDeathsUiTheme
         {
             Id = id,
@@ -996,14 +1166,25 @@ internal static class BetterDeathsThemeCatalog
             ModernSelectedButtonTextColor = selectedButtonTextColor,
             ModernPopupBgColor = popupBgColor,
             ModernCheckMarkColor = accent,
+            CheckboxFrameColor = checkboxFrameColor,
+            CheckboxFrameHoveredColor = checkboxFrameHoveredColor,
+            CheckboxFrameActiveColor = checkboxFrameActiveColor,
+            CheckboxBorderColor = checkboxBorderColor,
             ModernSliderGrabColor = accent with { W = 0.72f },
             ModernSliderGrabActiveColor = accent,
             ModernHeaderColor = accentSoft with { W = 0.42f },
             ModernHeaderHoveredColor = frameHoveredColor,
             ModernHeaderActiveColor = accentSoft with { W = 1.0f },
+            TableRowAltColor = tableRowAltColor,
+            FocusedRowColor = focusedRowColor,
+            FocusedRowAccentColor = focusedRowAccentColor,
             ModernFrameBorderSize = frameBorderSize,
             TimelineSelectedRowColor = accentSoft with { W = 0.48f },
             TimelinePressedRowColor = accentSoft with { W = 0.72f },
+            ScrollbarBackgroundColor = scrollbarBackgroundColor,
+            ScrollbarGrabColor = scrollbarGrabColor,
+            ScrollbarGrabHoveredColor = scrollbarGrabHoveredColor,
+            ScrollbarGrabActiveColor = scrollbarGrabActiveColor,
             ChangelogTabColor = accentSoft with { W = 0.95f },
             ChangelogTabHoveredColor = border with { W = 1.0f },
             ChangelogTabActiveColor = accentSoft with { W = 1.0f },

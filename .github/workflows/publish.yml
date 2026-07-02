@@ -1,0 +1,45 @@
+name: Build & Publish to Dynamis
+
+on:
+  push:
+    branches:
+      - main
+      - testing
+  workflow_dispatch:
+    inputs:
+      testing:
+        description: Testing release
+        required: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: xanunderscore/DynamisPublishAction/.github/workflows/dynamis.yml@master
+    with:
+      plugin_id: 160
+      internal_name: BetterDeaths
+      project_file: BetterDeaths/BetterDeaths.csproj
+      dotnet_version: 10.0.x
+      dalamud_version: 15
+      testing: ${{ github.ref == 'refs/heads/testing' || inputs.testing == 'true' }}
+    secrets:
+      publisher_key: ${{ secrets.PUBLISHER_KEY }}
+
+  make_release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: needs.build.outputs.completed == 'true'
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: latest_zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ needs.build.outputs.version }}
+          tag_name: ${{ needs.build.outputs.release_type == 'testing' && 't' || 'v' }}${{ needs.build.outputs.version }}
+          prerelease: ${{ needs.build.outputs.release_type == 'testing' }}
+          files: latest.zip

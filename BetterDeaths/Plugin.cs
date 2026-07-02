@@ -23,11 +23,14 @@ using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -44,6 +47,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string ShortCommandName = "/bd";
     private const string WidgetCommandName = "/betterdeathswidget";
     private const string ShortWidgetCommandName = "/bdwidget";
+    private const string BetterDeathsInternalName = "BetterDeaths";
+    private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
+    private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
     private const string ThankYouNoticeId = "ui-polish-thank-you-2026-06";
     private const string SharedRecapPrefix = "Recap:";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
@@ -78,6 +84,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int DeathReplayMarkerCarryInSeconds = 30;
     private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
     private const uint DmuBlackHoleTetherId = 84;
+    private const uint DmuGravenImageTetherId = 45;
+    private const uint DmuGravenImageBaseId = 19505;
     private const uint DmuBlackHoleNothingnessActionId = 47868;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -183,6 +191,15 @@ public sealed partial class Plugin : IDalamudPlugin
         new(DeathChatChannel.CrossWorldLinkshell7, "Cross-world Linkshell 7", "/cwl7"),
         new(DeathChatChannel.CrossWorldLinkshell8, "Cross-world Linkshell 8", "/cwl8"),
     ];
+
+    private enum RepositoryMigrationResult
+    {
+        NotFound,
+        DevPlugin,
+        UnexpectedSource,
+        AlreadyMigrated,
+        Migrated,
+    }
 
     private sealed record RecordedPullHistoryFile(int SchemaVersion, List<PullDeathSnapshot> Pulls);
 
@@ -781,6 +798,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw += windowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenMainUi;
+        _ = MigrateToPuniRepositoryAsync();
     }
 
     public void Dispose()
@@ -956,6 +974,323 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         Configuration.ShowDeathRecapPopup = enabled;
         SaveConfiguration();
+    }
+
+    private async Task MigrateToPuniRepositoryAsync()
+    {
+        if (Configuration.PuniRepositoryMigrationComplete)
+        {
+            return;
+        }
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            using var response = await httpClient.GetAsync(PuniDalamudRepositoryUrl).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                Log.Debug(
+                    "Better Deaths Puni repository migration skipped because {RepositoryUrl} returned {StatusCode}.",
+                    PuniDalamudRepositoryUrl,
+                    response.StatusCode);
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!PuniRepositoryContainsInstallableBetterDeaths(json))
+            {
+                Log.Debug("Better Deaths Puni repository migration skipped because the Puni feed does not contain an installable BetterDeaths release yet.");
+                return;
+            }
+
+            TryAddDalamudRepository(PuniDalamudRepositoryUrl);
+            var migrationResult = TryMigrateInstalledPluginRepository();
+            if (migrationResult is RepositoryMigrationResult.Migrated or RepositoryMigrationResult.AlreadyMigrated)
+            {
+                Configuration.PuniRepositoryMigrationComplete = true;
+                SaveConfiguration();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Better Deaths Puni repository migration failed.");
+        }
+    }
+
+    private static bool PuniRepositoryContainsInstallableBetterDeaths(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var plugin in document.RootElement.EnumerateArray())
+            {
+                if (!TryGetJsonString(plugin, "InternalName", out var internalName) ||
+                    !string.Equals(internalName, BetterDeathsInternalName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return TryGetJsonString(plugin, "AssemblyVersion", out var assemblyVersion) &&
+                    !string.IsNullOrWhiteSpace(assemblyVersion) &&
+                    TryGetJsonString(plugin, "DownloadLinkInstall", out var installLink) &&
+                    !string.IsNullOrWhiteSpace(installLink) &&
+                    TryGetJsonString(plugin, "DownloadLinkUpdate", out var updateLink) &&
+                    !string.IsNullOrWhiteSpace(updateLink);
+            }
+        }
+        catch (JsonException ex)
+        {
+            Log.Debug(ex, "Better Deaths Puni repository migration could not parse the Puni feed.");
+        }
+
+        return false;
+    }
+
+    private static bool TryGetJsonString(JsonElement element, string propertyName, out string value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase) &&
+                property.Value.ValueKind == JsonValueKind.String)
+            {
+                value = property.Value.GetString() ?? string.Empty;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static void TryAddDalamudRepository(string repositoryUrl)
+    {
+        try
+        {
+            var assembly = typeof(IDalamudPlugin).Assembly;
+            var config = GetDalamudService(assembly, "Dalamud.Configuration.Internal.DalamudConfiguration");
+            if (config is null)
+            {
+                Log.Debug("Better Deaths Puni repository migration could not find DalamudConfiguration.");
+                return;
+            }
+
+            var repoList = GetPropertyValue(config, "ThirdRepoList") as IList;
+            if (repoList is null)
+            {
+                Log.Debug("Better Deaths Puni repository migration could not find ThirdRepoList.");
+                return;
+            }
+
+            var changed = false;
+            foreach (var repo in repoList)
+            {
+                var existingUrl = GetStringProperty(repo, "Url");
+                if (!string.Equals(existingUrl, repositoryUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                changed |= SetBoolProperty(repo, "IsEnabled", true);
+                SaveDalamudRepositoryConfiguration(assembly, config, changed);
+                return;
+            }
+
+            var repoType = assembly.GetType("Dalamud.Configuration.ThirdPartyRepoSettings", throwOnError: false);
+            if (repoType is null)
+            {
+                Log.Debug("Better Deaths Puni repository migration could not find ThirdPartyRepoSettings.");
+                return;
+            }
+
+            var newRepo = Activator.CreateInstance(repoType);
+            if (newRepo is null)
+            {
+                Log.Debug("Better Deaths Puni repository migration could not create ThirdPartyRepoSettings.");
+                return;
+            }
+
+            SetStringProperty(newRepo, "Url", repositoryUrl);
+            SetBoolProperty(newRepo, "IsEnabled", true);
+            repoList.Add(newRepo);
+            SaveDalamudRepositoryConfiguration(assembly, config, changed: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Better Deaths Puni repository migration could not add the Puni repository.");
+        }
+    }
+
+    private static RepositoryMigrationResult TryMigrateInstalledPluginRepository()
+    {
+        try
+        {
+            var assembly = typeof(IDalamudPlugin).Assembly;
+            var manager = GetDalamudService(assembly, "Dalamud.Plugin.Internal.PluginManager");
+            var plugins = GetPropertyValue(manager, "InstalledPlugins") as IEnumerable;
+            if (plugins is null)
+            {
+                Log.Debug("Better Deaths Puni repository migration could not find InstalledPlugins.");
+                return RepositoryMigrationResult.NotFound;
+            }
+
+            foreach (var plugin in plugins)
+            {
+                if (!string.Equals(GetStringProperty(plugin, "InternalName"), BetterDeathsInternalName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (GetBoolProperty(plugin, "IsDev") == true)
+                {
+                    return RepositoryMigrationResult.DevPlugin;
+                }
+
+                var manifest = GetFieldValue(plugin, "manifest") ?? GetPropertyValue(plugin, "Manifest");
+                if (manifest is null)
+                {
+                    Log.Debug("Better Deaths Puni repository migration found BetterDeaths but could not read its manifest.");
+                    return RepositoryMigrationResult.NotFound;
+                }
+
+                var installedFromUrl = GetStringProperty(manifest, "InstalledFromUrl");
+                if (string.Equals(installedFromUrl, PuniDalamudRepositoryUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    return RepositoryMigrationResult.AlreadyMigrated;
+                }
+
+                if (string.IsNullOrWhiteSpace(installedFromUrl) ||
+                    (!installedFromUrl.Contains("IMakeSillyThings", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals(installedFromUrl, LegacyDalamudRepositoryUrl, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Log.Debug(
+                        "Better Deaths Puni repository migration did not rewrite unexpected install URL: {InstalledFromUrl}",
+                        installedFromUrl ?? string.Empty);
+                    return RepositoryMigrationResult.UnexpectedSource;
+                }
+
+                SetStringProperty(manifest, "InstalledFromUrl", PuniDalamudRepositoryUrl);
+                InvokeMethod(plugin, "SaveManifest", "Migrated to Puni.sh repository");
+                Log.Information("Better Deaths migrated installed repository URL to Puni.sh.");
+                return RepositoryMigrationResult.Migrated;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Better Deaths Puni repository migration could not rewrite the installed plugin source.");
+        }
+
+        return RepositoryMigrationResult.NotFound;
+    }
+
+    private static object? GetDalamudService(Assembly assembly, string serviceTypeName)
+    {
+        var serviceType = assembly.GetType("Dalamud.Service`1", throwOnError: false);
+        var requestedType = assembly.GetType(serviceTypeName, throwOnError: false);
+        if (serviceType is null || requestedType is null)
+        {
+            return null;
+        }
+
+        return serviceType
+            .MakeGenericType(requestedType)
+            .GetMethod("Get", BindingFlags.Public | BindingFlags.Static)
+            ?.Invoke(null, null);
+    }
+
+    private static void SaveDalamudRepositoryConfiguration(Assembly assembly, object config, bool changed)
+    {
+        if (!changed)
+        {
+            return;
+        }
+
+        InvokeMethod(config, "QueueSave");
+        var manager = GetDalamudService(assembly, "Dalamud.Plugin.Internal.PluginManager");
+        InvokeMethod(manager, "SetPluginReposFromConfigAsync", true);
+    }
+
+    private static object? GetPropertyValue(object? instance, string propertyName)
+    {
+        return instance?.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.GetValue(instance);
+    }
+
+    private static object? GetFieldValue(object? instance, string fieldName)
+    {
+        return instance?.GetType()
+            .GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.GetValue(instance);
+    }
+
+    private static string? GetStringProperty(object? instance, string propertyName)
+    {
+        return GetPropertyValue(instance, propertyName) as string;
+    }
+
+    private static bool? GetBoolProperty(object? instance, string propertyName)
+    {
+        return GetPropertyValue(instance, propertyName) as bool?;
+    }
+
+    private static bool SetStringProperty(object? instance, string propertyName, string value)
+    {
+        var property = instance?.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (property?.SetMethod is null)
+        {
+            return false;
+        }
+
+        var previous = property.GetValue(instance) as string;
+        if (string.Equals(previous, value, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        property.SetValue(instance, value);
+        return true;
+    }
+
+    private static bool SetBoolProperty(object? instance, string propertyName, bool value)
+    {
+        var property = instance?.GetType()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (property?.SetMethod is null || property.PropertyType != typeof(bool))
+        {
+            return false;
+        }
+
+        var previous = property.GetValue(instance) as bool?;
+        if (previous == value)
+        {
+            return false;
+        }
+
+        property.SetValue(instance, value);
+        return true;
+    }
+
+    private static void InvokeMethod(object? instance, string methodName, params object[] parameters)
+    {
+        if (instance is null)
+        {
+            return;
+        }
+
+        instance.GetType()
+            .GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.Invoke(instance, parameters);
     }
 
     public void SetCapturePartyDeaths(bool enabled)
@@ -1876,6 +2211,14 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (float.IsNaN(Configuration.ReviewTimelineWidth) ||
+            float.IsInfinity(Configuration.ReviewTimelineWidth) ||
+            Configuration.ReviewTimelineWidth < 0.0f)
+        {
+            Configuration.ReviewTimelineWidth = 0.0f;
+            changed = true;
+        }
+
         if (loadedConfigurationVersion < 2)
         {
             Configuration.PullBrowserCollapsed = true;
@@ -1930,7 +2273,7 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
-        if (NormalizeCustomTheme(Configuration.CustomTheme))
+        if (NormalizeCustomTheme(Configuration.CustomTheme, Configuration.Theme))
         {
             changed = true;
         }
@@ -2578,86 +2921,145 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
-    private static bool NormalizeCustomTheme(CustomThemeConfiguration customTheme)
+    private static bool NormalizeCustomTheme(CustomThemeConfiguration customTheme, BetterDeathsTheme selectedTheme)
     {
         var changed = false;
-        if (customTheme.WindowBackground is null)
+        var defaults = BetterDeathsThemeCatalog.CreateCustomThemeConfiguration(BetterDeathsThemeCatalog.GetTheme(selectedTheme));
+
+        if (customTheme.SchemaVersion < CustomThemeConfiguration.CurrentSchemaVersion)
         {
-            customTheme.WindowBackground = new ThemeColorValue();
+            customTheme.Divider = defaults.Divider;
+            customTheme.Accent = defaults.Accent;
+            customTheme.AccentSoft = defaults.AccentSoft;
+            customTheme.DisabledText = defaults.DisabledText;
+            customTheme.SpamWarningText = defaults.SpamWarningText;
+            customTheme.OverkillText = defaults.OverkillText;
+            customTheme.FrameBackground = defaults.FrameBackground;
+            customTheme.FrameHoverBackground = defaults.FrameHoverBackground;
+            customTheme.PopupBackground = defaults.PopupBackground;
+            customTheme.ButtonHoverColor = defaults.ButtonHoverColor;
+            customTheme.SelectedButtonHoverColor = defaults.SelectedButtonHoverColor;
+            customTheme.ButtonActiveColor = defaults.ButtonActiveColor;
+            customTheme.SelectedButtonText = defaults.SelectedButtonText;
+            customTheme.CheckboxBackground = defaults.CheckboxBackground;
+            customTheme.CheckboxHoverBackground = defaults.CheckboxHoverBackground;
+            customTheme.CheckboxActiveBackground = defaults.CheckboxActiveBackground;
+            customTheme.CheckboxCheckMark = defaults.CheckboxCheckMark;
+            customTheme.CheckboxBorder = defaults.CheckboxBorder;
+            customTheme.SliderGrab = defaults.SliderGrab;
+            customTheme.SliderGrabActive = defaults.SliderGrabActive;
+            customTheme.HeaderBackground = defaults.HeaderBackground;
+            customTheme.HeaderHoverBackground = defaults.HeaderHoverBackground;
+            customTheme.HeaderActiveBackground = defaults.HeaderActiveBackground;
+            customTheme.TableRowAlt = defaults.TableRowAlt;
+            customTheme.FocusedRow = defaults.FocusedRow;
+            customTheme.FocusedRowAccent = defaults.FocusedRowAccent;
+            customTheme.TimelineSelectedRow = defaults.TimelineSelectedRow;
+            customTheme.TimelinePressedRow = defaults.TimelinePressedRow;
+            customTheme.ScrollbarBackground = defaults.ScrollbarBackground;
+            customTheme.ScrollbarGrab = defaults.ScrollbarGrab;
+            customTheme.ScrollbarGrabHover = defaults.ScrollbarGrabHover;
+            customTheme.ScrollbarGrabActive = defaults.ScrollbarGrabActive;
+            customTheme.ChangelogTab = defaults.ChangelogTab;
+            customTheme.ChangelogTabHover = defaults.ChangelogTabHover;
+            customTheme.ChangelogTabActive = defaults.ChangelogTabActive;
+            customTheme.HpBar = defaults.HpBar;
+            customTheme.ShieldBar = defaults.ShieldBar;
+            customTheme.BarBackground = defaults.BarBackground;
+            customTheme.BarBorder = defaults.BarBorder;
+            customTheme.WidgetWindowBackground = defaults.WidgetWindowBackground;
+            customTheme.WidgetTitleBackground = defaults.WidgetTitleBackground;
+            customTheme.WidgetTitleActiveBackground = defaults.WidgetTitleActiveBackground;
+            customTheme.WidgetBorder = defaults.WidgetBorder;
+            customTheme.WidgetResizeGrip = defaults.WidgetResizeGrip;
+            customTheme.WidgetResizeGripHover = defaults.WidgetResizeGripHover;
+            customTheme.WidgetResizeGripActive = defaults.WidgetResizeGripActive;
+            customTheme.UpdateBannerBackground = defaults.UpdateBannerBackground;
+            customTheme.UpdateBannerText = defaults.UpdateBannerText;
+            customTheme.NoticeBorder = defaults.NoticeBorder;
+            customTheme.NoticeText = defaults.NoticeText;
+            customTheme.NoticeButton = defaults.NoticeButton;
+            customTheme.NoticeButtonHover = defaults.NoticeButtonHover;
+            customTheme.SchemaVersion = CustomThemeConfiguration.CurrentSchemaVersion;
             changed = true;
         }
 
-        if (customTheme.ContentBackground is null)
+        bool EnsureColor(ThemeColorValue? color, Action<ThemeColorValue> setColor)
         {
-            customTheme.ContentBackground = new ThemeColorValue();
-            changed = true;
+            if (color is not null)
+            {
+                return false;
+            }
+
+            setColor(new ThemeColorValue());
+            return true;
         }
 
-        if (customTheme.RaisedBackground is null)
-        {
-            customTheme.RaisedBackground = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.Border is null)
-        {
-            customTheme.Border = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.RegularText is null)
-        {
-            customTheme.RegularText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.MutedText is null)
-        {
-            customTheme.MutedText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.GoldText is null)
-        {
-            customTheme.GoldText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.DamageText is null)
-        {
-            customTheme.DamageText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.HealText is null)
-        {
-            customTheme.HealText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.WarningText is null)
-        {
-            customTheme.WarningText = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.ButtonColor is null)
-        {
-            customTheme.ButtonColor = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.SelectedButtonColor is null)
-        {
-            customTheme.SelectedButtonColor = new ThemeColorValue();
-            changed = true;
-        }
-
-        if (customTheme.ButtonText is null)
-        {
-            customTheme.ButtonText = new ThemeColorValue();
-            changed = true;
-        }
+        changed |= EnsureColor(customTheme.WindowBackground, value => customTheme.WindowBackground = value);
+        changed |= EnsureColor(customTheme.ContentBackground, value => customTheme.ContentBackground = value);
+        changed |= EnsureColor(customTheme.RaisedBackground, value => customTheme.RaisedBackground = value);
+        changed |= EnsureColor(customTheme.Border, value => customTheme.Border = value);
+        changed |= EnsureColor(customTheme.Divider, value => customTheme.Divider = value);
+        changed |= EnsureColor(customTheme.Accent, value => customTheme.Accent = value);
+        changed |= EnsureColor(customTheme.AccentSoft, value => customTheme.AccentSoft = value);
+        changed |= EnsureColor(customTheme.RegularText, value => customTheme.RegularText = value);
+        changed |= EnsureColor(customTheme.MutedText, value => customTheme.MutedText = value);
+        changed |= EnsureColor(customTheme.GoldText, value => customTheme.GoldText = value);
+        changed |= EnsureColor(customTheme.DisabledText, value => customTheme.DisabledText = value);
+        changed |= EnsureColor(customTheme.DamageText, value => customTheme.DamageText = value);
+        changed |= EnsureColor(customTheme.HealText, value => customTheme.HealText = value);
+        changed |= EnsureColor(customTheme.WarningText, value => customTheme.WarningText = value);
+        changed |= EnsureColor(customTheme.SpamWarningText, value => customTheme.SpamWarningText = value);
+        changed |= EnsureColor(customTheme.OverkillText, value => customTheme.OverkillText = value);
+        changed |= EnsureColor(customTheme.FrameBackground, value => customTheme.FrameBackground = value);
+        changed |= EnsureColor(customTheme.FrameHoverBackground, value => customTheme.FrameHoverBackground = value);
+        changed |= EnsureColor(customTheme.PopupBackground, value => customTheme.PopupBackground = value);
+        changed |= EnsureColor(customTheme.ButtonColor, value => customTheme.ButtonColor = value);
+        changed |= EnsureColor(customTheme.ButtonHoverColor, value => customTheme.ButtonHoverColor = value);
+        changed |= EnsureColor(customTheme.SelectedButtonColor, value => customTheme.SelectedButtonColor = value);
+        changed |= EnsureColor(customTheme.SelectedButtonHoverColor, value => customTheme.SelectedButtonHoverColor = value);
+        changed |= EnsureColor(customTheme.ButtonActiveColor, value => customTheme.ButtonActiveColor = value);
+        changed |= EnsureColor(customTheme.ButtonText, value => customTheme.ButtonText = value);
+        changed |= EnsureColor(customTheme.SelectedButtonText, value => customTheme.SelectedButtonText = value);
+        changed |= EnsureColor(customTheme.CheckboxBackground, value => customTheme.CheckboxBackground = value);
+        changed |= EnsureColor(customTheme.CheckboxHoverBackground, value => customTheme.CheckboxHoverBackground = value);
+        changed |= EnsureColor(customTheme.CheckboxActiveBackground, value => customTheme.CheckboxActiveBackground = value);
+        changed |= EnsureColor(customTheme.CheckboxCheckMark, value => customTheme.CheckboxCheckMark = value);
+        changed |= EnsureColor(customTheme.CheckboxBorder, value => customTheme.CheckboxBorder = value);
+        changed |= EnsureColor(customTheme.SliderGrab, value => customTheme.SliderGrab = value);
+        changed |= EnsureColor(customTheme.SliderGrabActive, value => customTheme.SliderGrabActive = value);
+        changed |= EnsureColor(customTheme.HeaderBackground, value => customTheme.HeaderBackground = value);
+        changed |= EnsureColor(customTheme.HeaderHoverBackground, value => customTheme.HeaderHoverBackground = value);
+        changed |= EnsureColor(customTheme.HeaderActiveBackground, value => customTheme.HeaderActiveBackground = value);
+        changed |= EnsureColor(customTheme.TableRowAlt, value => customTheme.TableRowAlt = value);
+        changed |= EnsureColor(customTheme.FocusedRow, value => customTheme.FocusedRow = value);
+        changed |= EnsureColor(customTheme.FocusedRowAccent, value => customTheme.FocusedRowAccent = value);
+        changed |= EnsureColor(customTheme.TimelineSelectedRow, value => customTheme.TimelineSelectedRow = value);
+        changed |= EnsureColor(customTheme.TimelinePressedRow, value => customTheme.TimelinePressedRow = value);
+        changed |= EnsureColor(customTheme.ScrollbarBackground, value => customTheme.ScrollbarBackground = value);
+        changed |= EnsureColor(customTheme.ScrollbarGrab, value => customTheme.ScrollbarGrab = value);
+        changed |= EnsureColor(customTheme.ScrollbarGrabHover, value => customTheme.ScrollbarGrabHover = value);
+        changed |= EnsureColor(customTheme.ScrollbarGrabActive, value => customTheme.ScrollbarGrabActive = value);
+        changed |= EnsureColor(customTheme.ChangelogTab, value => customTheme.ChangelogTab = value);
+        changed |= EnsureColor(customTheme.ChangelogTabHover, value => customTheme.ChangelogTabHover = value);
+        changed |= EnsureColor(customTheme.ChangelogTabActive, value => customTheme.ChangelogTabActive = value);
+        changed |= EnsureColor(customTheme.HpBar, value => customTheme.HpBar = value);
+        changed |= EnsureColor(customTheme.ShieldBar, value => customTheme.ShieldBar = value);
+        changed |= EnsureColor(customTheme.BarBackground, value => customTheme.BarBackground = value);
+        changed |= EnsureColor(customTheme.BarBorder, value => customTheme.BarBorder = value);
+        changed |= EnsureColor(customTheme.WidgetWindowBackground, value => customTheme.WidgetWindowBackground = value);
+        changed |= EnsureColor(customTheme.WidgetTitleBackground, value => customTheme.WidgetTitleBackground = value);
+        changed |= EnsureColor(customTheme.WidgetTitleActiveBackground, value => customTheme.WidgetTitleActiveBackground = value);
+        changed |= EnsureColor(customTheme.WidgetBorder, value => customTheme.WidgetBorder = value);
+        changed |= EnsureColor(customTheme.WidgetResizeGrip, value => customTheme.WidgetResizeGrip = value);
+        changed |= EnsureColor(customTheme.WidgetResizeGripHover, value => customTheme.WidgetResizeGripHover = value);
+        changed |= EnsureColor(customTheme.WidgetResizeGripActive, value => customTheme.WidgetResizeGripActive = value);
+        changed |= EnsureColor(customTheme.UpdateBannerBackground, value => customTheme.UpdateBannerBackground = value);
+        changed |= EnsureColor(customTheme.UpdateBannerText, value => customTheme.UpdateBannerText = value);
+        changed |= EnsureColor(customTheme.NoticeBorder, value => customTheme.NoticeBorder = value);
+        changed |= EnsureColor(customTheme.NoticeText, value => customTheme.NoticeText = value);
+        changed |= EnsureColor(customTheme.NoticeButton, value => customTheme.NoticeButton = value);
+        changed |= EnsureColor(customTheme.NoticeButtonHover, value => customTheme.NoticeButtonHover = value);
 
         return changed;
     }
@@ -5011,6 +5413,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 battleNpc.IsTargetable));
         }
 
+        CaptureReplayDmuTethersFromPlayers(seenAtUtc, mechanicSnapshots);
+
         return (
             enemySnapshots
                 .OrderByDescending(snapshot => snapshot.IsTargetable)
@@ -5052,50 +5456,146 @@ public sealed partial class Plugin : IDalamudPlugin
                     continue;
                 }
 
-                var source = battleNpc.Position;
-                var target = targetMember.Position;
-                if (!float.IsFinite(source.X) ||
-                    !float.IsFinite(source.Z) ||
-                    !float.IsFinite(target.X) ||
-                    !float.IsFinite(target.Z))
-                {
-                    continue;
-                }
-
-                var dx = target.X - source.X;
-                var dz = target.Z - source.Z;
-                var distance = MathF.Sqrt((dx * dx) + (dz * dz));
-                if (distance <= 0.05f)
-                {
-                    continue;
-                }
-
-                mechanicSnapshots.Add(new ReplayMechanicSnapshot(
+                AddReplayDmuTetherSnapshot(
                     seenAtUtc,
-                    CalculatePullElapsed(seenAtUtc),
-                    (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
-                    $"black-hole-tether:{battleNpc.EntityId:X8}",
-                    $"Black Hole -> {targetMember.MemberName}",
-                    ReplayMechanicShape.Tether,
-                    source.X + (dx * 0.5f),
-                    (source.Y + target.Y) * 0.5f,
-                    source.Z + (dz * 0.5f),
-                    MathF.Atan2(dz, dx),
-                    0.0f,
-                    distance,
-                    0.35f,
-                    0.0f,
-                    "Tether",
+                    battleNpc.EntityId,
+                    battleNpc.Name.TextValue,
+                    battleNpc.Position,
+                    targetMember,
                     "black-hole-tether",
-                    tether.Id,
-                    targetMember.EntityId,
-                    true));
+                    DmuBlackHoleTetherId,
+                    "Tether",
+                    mechanicSnapshots);
             }
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not capture Better Deaths Black Hole replay tether for {EntityId:X8}.", battleNpc.EntityId);
         }
+    }
+
+    private unsafe void CaptureReplayDmuTethersFromPlayers(
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        foreach (var member in currentMembers)
+        {
+            if (member.EntityId == 0 ||
+                ObjectTable.SearchByEntityId(member.EntityId) is not Dalamud.Game.ClientState.Objects.Types.ICharacter character ||
+                character.Address == nint.Zero)
+            {
+                continue;
+            }
+
+            try
+            {
+                var characterStruct = (Character*)character.Address;
+                var tethers = characterStruct->Vfx.Tethers;
+                for (var index = 0; index < tethers.Length; index++)
+                {
+                    var tether = tethers[index];
+                    if (tether.TargetId.ObjectId == 0 ||
+                        ObjectTable.SearchByEntityId(tether.TargetId.ObjectId) is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc tetherSource)
+                    {
+                        continue;
+                    }
+
+                    if (tether.Id == DmuBlackHoleTetherId &&
+                        IsReplayBlackHoleObject(tetherSource.EntityId, tetherSource.Name.TextValue))
+                    {
+                        AddReplayDmuTetherSnapshot(
+                            seenAtUtc,
+                            tetherSource.EntityId,
+                            tetherSource.Name.TextValue,
+                            tetherSource.Position,
+                            member,
+                            "black-hole-tether",
+                            DmuBlackHoleTetherId,
+                            "Tether",
+                            mechanicSnapshots);
+                        continue;
+                    }
+
+                    if (tether.Id == DmuGravenImageTetherId &&
+                        IsReplayGravenImageObject(tetherSource.EntityId, tetherSource.Name.TextValue))
+                    {
+                        AddReplayDmuTetherSnapshot(
+                            seenAtUtc,
+                            tetherSource.EntityId,
+                            tetherSource.Name.TextValue,
+                            tetherSource.Position,
+                            member,
+                            "graven-image-tether",
+                            DmuGravenImageTetherId,
+                            "Tether",
+                            mechanicSnapshots);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not capture Better Deaths player-side replay tether for {EntityId:X8}.", member.EntityId);
+            }
+        }
+    }
+
+    private void AddReplayDmuTetherSnapshot(
+        DateTime seenAtUtc,
+        uint sourceEntityId,
+        string sourceName,
+        Vector3 sourcePosition,
+        PartyMemberSnapshot targetMember,
+        string rawEventKind,
+        uint rawEventId,
+        string label,
+        List<ReplayMechanicSnapshot> mechanicSnapshots)
+    {
+        var source = sourcePosition;
+        var target = targetMember.Position;
+        if (!float.IsFinite(source.X) ||
+            !float.IsFinite(source.Z) ||
+            !float.IsFinite(target.X) ||
+            !float.IsFinite(target.Z))
+        {
+            return;
+        }
+
+        var dx = target.X - source.X;
+        var dz = target.Z - source.Z;
+        var distance = MathF.Sqrt((dx * dx) + (dz * dz));
+        if (distance <= 0.05f)
+        {
+            return;
+        }
+
+        var capturedSourceName = string.IsNullOrWhiteSpace(sourceName)
+            ? "Tether source"
+            : sourceName;
+        mechanicSnapshots.Add(new ReplayMechanicSnapshot(
+            seenAtUtc,
+            CalculatePullElapsed(seenAtUtc),
+            (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
+            $"{rawEventKind}:{sourceEntityId:X8}:{targetMember.EntityId:X8}",
+            $"{capturedSourceName} -> {targetMember.MemberName}",
+            ReplayMechanicShape.Tether,
+            source.X + (dx * 0.5f),
+            (source.Y + target.Y) * 0.5f,
+            source.Z + (dz * 0.5f),
+            MathF.Atan2(dz, dx),
+            0.0f,
+            distance,
+            0.35f,
+            0.0f,
+            label,
+            rawEventKind,
+            rawEventId,
+            targetMember.EntityId,
+            true));
     }
 
     private bool IsDmuReplayCaptureContext()
@@ -5126,6 +5626,31 @@ public sealed partial class Plugin : IDalamudPlugin
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not inspect Better Deaths replay object {EntityId:X8}.", entityId);
+            return false;
+        }
+    }
+
+    private bool IsReplayGravenImageObject(uint entityId, string capturedName)
+    {
+        if (string.Equals(capturedName, "Graven Image", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (entityId == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return ObjectTable.SearchByEntityId(entityId) is Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc &&
+                (battleNpc.BaseId == DmuGravenImageBaseId ||
+                    string.Equals(battleNpc.Name.TextValue, "Graven Image", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not inspect Better Deaths Graven Image replay object {EntityId:X8}.", entityId);
             return false;
         }
     }
@@ -5186,7 +5711,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static bool IsReplaySingleActiveSourceMechanic(ReplayMechanicSnapshot snapshot)
     {
-        return string.Equals(snapshot.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(snapshot.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(snapshot.RawEventKind, "graven-image-tether", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool ShouldSkipIntermediateEffectResultHpHistorySnapshot(
