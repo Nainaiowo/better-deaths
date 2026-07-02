@@ -45,14 +45,7 @@ jobs:
           if [[ "${http_status}" =~ ^2 ]]; then
             byte_count="$(wc -c < "${response_file}" | tr -d ' ')"
             echo "Presigned upload URL received (${byte_count} bytes). URL is intentionally not printed."
-            node - "${response_file}" <<'NODE'
-          const fs = require('fs');
-          const value = fs.readFileSync(process.argv[2], 'utf8').trim();
-          const url = new URL(value);
-          console.log(`Upload host: ${url.hostname}`);
-          console.log(`Upload path file: ${url.pathname.split('/').pop()}`);
-          console.log(`Upload query parameters: ${Array.from(url.searchParams.keys()).length}`);
-NODE
+            node -e 'const fs = require("fs"); const value = fs.readFileSync(process.argv[1], "utf8").trim(); const url = new URL(value); console.log(`Upload host: ${url.hostname}`); console.log(`Upload path file: ${url.pathname.split("/").pop()}`); console.log(`Upload query parameters: ${Array.from(url.searchParams.keys()).length}`);' "${response_file}"
             exit 0
           fi
 
