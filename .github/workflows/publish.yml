@@ -1,4 +1,4 @@
-name: Build & Publish to Dynamis
+name: Build and Publish to Dynamis
 
 "on":
   workflow_dispatch:
@@ -13,6 +13,7 @@ name: Build & Publish to Dynamis
           - latest
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
