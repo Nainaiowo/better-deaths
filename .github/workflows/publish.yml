@@ -1,10 +1,6 @@
 name: Build & Publish to Dynamis
 
 on:
-  push:
-    branches:
-      - main
-      - testing
   workflow_dispatch:
     inputs:
       testing:
