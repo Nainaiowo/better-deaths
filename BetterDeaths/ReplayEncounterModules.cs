@@ -70,6 +70,13 @@ internal interface IReplayEncounterModule
 
 internal static class ReplayEncounterModules
 {
+    private const uint DmuP4RealityTellStatusId = 2056;
+    private const uint DmuP4CursedShriekStatusId = 5543;
+    private const uint DmuP4ForkedLightningStatusId = 5544;
+    private const uint DmuP4CompressedWaterStatusId = 5545;
+    private const uint DmuP4AccelerationBombStatusId = 5546;
+    private const uint DmuP4EntropyStatusId = 5547;
+    private const uint DmuP4DynamicFluidStatusId = 5548;
     private static readonly IReplayEncounterModule FallbackModule = new GenericReplayEncounterModule();
     private static readonly IReadOnlyList<IReplayEncounterModule> Modules =
     [
@@ -89,6 +96,57 @@ internal static class ReplayEncounterModules
     public static bool IsDancingMadUltimate(uint territoryId)
     {
         return territoryId == DmuReplayEncounterModule.TerritoryDancingMadUltimate;
+    }
+
+    public static bool IsDmuP4RealityTellMarker(uint markerId)
+    {
+        return markerId == DmuP4RealityTellStatusId;
+    }
+
+    public static bool IsDmuP4AssignmentMarker(uint markerId)
+    {
+        return markerId is DmuP4CursedShriekStatusId or
+            DmuP4ForkedLightningStatusId or
+            DmuP4CompressedWaterStatusId or
+            DmuP4AccelerationBombStatusId or
+            DmuP4EntropyStatusId or
+            DmuP4DynamicFluidStatusId;
+    }
+
+    public static bool TryGetDmuP4RealityTell(uint rawMarkerId, out string label, out bool isReal)
+    {
+        switch (rawMarkerId)
+        {
+            case 1119:
+            case 1121:
+                label = "Fake";
+                isReal = false;
+                return true;
+            case 1120:
+            case 1122:
+                label = "Real";
+                isReal = true;
+                return true;
+            default:
+                label = string.Empty;
+                isReal = false;
+                return false;
+        }
+    }
+
+    public static bool TryGetDmuP4StatusResolution(uint statusId, bool isReal, out string resolution)
+    {
+        resolution = statusId switch
+        {
+            DmuP4CompressedWaterStatusId => isReal ? "Stack" : "Spread",
+            DmuP4ForkedLightningStatusId => isReal ? "Spread" : "Stack",
+            DmuP4CursedShriekStatusId => isReal ? "Look away" : "Look toward",
+            DmuP4AccelerationBombStatusId => isReal ? "Stop" : "Move",
+            DmuP4DynamicFluidStatusId => isReal ? "Donut" : "Point-blank",
+            DmuP4EntropyStatusId => isReal ? "Point-blank" : "Donut",
+            _ => string.Empty,
+        };
+        return !string.IsNullOrEmpty(resolution);
     }
 
     private sealed class GenericReplayEncounterModule : IReplayEncounterModule
@@ -168,7 +226,13 @@ internal static class ReplayEncounterModules
         public bool IsReplayOverheadStatus(uint statusId)
         {
             return statusId is 3004 or 3005 or 3006 or
-                5084 or 5085 or 5086;
+                5084 or 5085 or 5086 or
+                DmuP4CursedShriekStatusId or
+                DmuP4ForkedLightningStatusId or
+                DmuP4CompressedWaterStatusId or
+                DmuP4AccelerationBombStatusId or
+                DmuP4EntropyStatusId or
+                DmuP4DynamicFluidStatusId;
         }
 
         public bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
@@ -187,6 +251,13 @@ internal static class ReplayEncounterModules
                 5084 => new ReplayMarkerInfo("Stack", "Head stack", ReplayMechanicShape.Stack, Radius: 5.0f),
                 5085 => new ReplayMarkerInfo("Circle", "Circle", ReplayMechanicShape.Circle, Radius: 5.0f),
                 5086 => new ReplayMarkerInfo("Fan", "Fan", ReplayMechanicShape.Cone, Radius: 18.0f, Length: 18.0f, AngleDegrees: 70.0f, ConeBaitsClosestPlayer: true),
+                DmuP4RealityTellStatusId => new ReplayMarkerInfo("Tell", "P4 real/fake tell"),
+                DmuP4CursedShriekStatusId => new ReplayMarkerInfo("Shriek", "Cursed Shriek"),
+                DmuP4ForkedLightningStatusId => new ReplayMarkerInfo("Lightning", "Forked Lightning"),
+                DmuP4CompressedWaterStatusId => new ReplayMarkerInfo("Water", "Compressed Water"),
+                DmuP4AccelerationBombStatusId => new ReplayMarkerInfo("Bomb", "Acceleration Bomb"),
+                DmuP4EntropyStatusId => new ReplayMarkerInfo("Entropy", "Entropy"),
+                DmuP4DynamicFluidStatusId => new ReplayMarkerInfo("Fluid", "Dynamic Fluid"),
                 _ => default,
             };
             return !string.IsNullOrEmpty(info.ShortLabel) ||

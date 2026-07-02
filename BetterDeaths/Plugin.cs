@@ -87,6 +87,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const uint DmuGravenImageTetherId = 45;
     private const uint DmuGravenImageBaseId = 19505;
     private const uint DmuBlackHoleNothingnessActionId = 47868;
+    private const uint DmuP4RealityTellStatusId = 2056;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int CombatLogEventRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -4193,7 +4194,7 @@ public sealed partial class Plugin : IDalamudPlugin
         return null;
     }
 
-    private void AddRecentReplayMarkerSnapshot(ReplayMarkerSnapshot snapshot)
+    private void AddRecentReplayMarkerSnapshot(ReplayMarkerSnapshot snapshot, TimeSpan? duplicateWindow = null)
     {
         if (!recentReplayMarkersByActor.TryGetValue(snapshot.ActorKey, out var history))
         {
@@ -4201,10 +4202,12 @@ public sealed partial class Plugin : IDalamudPlugin
             recentReplayMarkersByActor[snapshot.ActorKey] = history;
         }
 
+        var suppressWindow = duplicateWindow ?? TimeSpan.FromMilliseconds(50);
         var last = history.Count == 0 ? null : history[^1];
         if (last is not null &&
             last.MarkerId == snapshot.MarkerId &&
-            Duration(last.SeenAtUtc, snapshot.SeenAtUtc) <= TimeSpan.FromMilliseconds(50))
+            last.RawMarkerId == snapshot.RawMarkerId &&
+            Duration(last.SeenAtUtc, snapshot.SeenAtUtc) <= suppressWindow)
         {
             return;
         }
@@ -5361,6 +5364,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
+            CaptureReplayDmuP4RealityTellMarker(battleNpc, name, seenAtUtc);
+
             if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
             {
                 mechanicSnapshots.Add(new ReplayMechanicSnapshot(
@@ -5423,6 +5428,48 @@ public sealed partial class Plugin : IDalamudPlugin
                 .Take(MaxReplayEnemyActors)
                 .ToList(),
             mechanicSnapshots);
+    }
+
+    private void CaptureReplayDmuP4RealityTellMarker(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            !IsDmuP4RealityTellBoss(name))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var status in battleNpc.StatusList)
+            {
+                if (status.StatusId != DmuP4RealityTellStatusId)
+                {
+                    continue;
+                }
+
+                AddRecentReplayMarkerSnapshot(new ReplayMarkerSnapshot(
+                    seenAtUtc,
+                    CalculatePullElapsed(seenAtUtc),
+                    $"enemy:{battleNpc.EntityId:X8}",
+                    name,
+                    ReplayActorKind.Enemy,
+                    2000 + battleNpc.ObjectIndex,
+                    battleNpc.EntityId,
+                    0,
+                    string.Empty,
+                    DmuP4RealityTellStatusId,
+                    status.Param),
+                    TimeSpan.FromSeconds(10));
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths DMU P4 reality tell for {EntityId:X8}.", battleNpc.EntityId);
+        }
     }
 
     private unsafe void CaptureReplayBlackHoleTethers(
@@ -5604,6 +5651,13 @@ public sealed partial class Plugin : IDalamudPlugin
             ? currentTerritoryId
             : currentPullTerritoryId;
         return ReplayEncounterModules.IsDancingMadUltimate(territoryId);
+    }
+
+    private static bool IsDmuP4RealityTellBoss(string name)
+    {
+        return string.Equals(name, "Neo Exdeath", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "Exdeath", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "Chaos", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsReplayBlackHoleObject(uint entityId, string capturedName)

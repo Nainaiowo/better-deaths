@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.193";
+    private const string CurrentChangelogVersion = "0.1.0.194";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -5762,10 +5762,10 @@ public sealed class RecapWindow : Window, IDisposable
         IReplayEncounterModule replayModule)
     {
         ImGui.Spacing();
-        DrawLeadUpLabel("Detected overhead mechanics");
+        DrawLeadUpLabel("Detected replay mechanics");
         if (markers.Count == 0)
         {
-            ImGui.TextDisabled("No overhead mechanics detected.");
+            ImGui.TextDisabled("No replay mechanics detected.");
             return;
         }
 
@@ -5779,11 +5779,11 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SameLine(0.0f, 6.0f);
             ImGui.TextUnformatted($"{FormatReplayMarkerActorLabel(marker)}:");
             ImGui.SameLine(0.0f, 4.0f);
-            ImGui.TextColored(LeadUpGoldColor, FormatReplayMarkerSummaryLabel(marker, replayModule));
+            ImGui.TextColored(LeadUpGoldColor, FormatReplayMarkerSummaryLabel(marker, markers, replayModule));
 
             if (ImGui.IsItemHovered())
             {
-                SetThemedTooltip($"Raw ID: {marker.RawMarkerId}\nCaptured at pull {FormatCombatTimer(marker.PullElapsedSeconds)}");
+                SetThemedTooltip($"{FormatReplayMarkerTooltipLabel(marker, markers, replayModule)}\nRaw ID: {marker.RawMarkerId}\nCaptured at pull {FormatCombatTimer(marker.PullElapsedSeconds)}");
             }
         }
     }
@@ -7090,6 +7090,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatReplayMarkerBadgeText(ReplayMarkerSnapshot marker, IReplayEncounterModule replayModule)
     {
+        if (ReplayEncounterModules.IsDmuP4RealityTellMarker(marker.MarkerId) &&
+            ReplayEncounterModules.TryGetDmuP4RealityTell(marker.RawMarkerId, out var realityLabel, out _))
+        {
+            return realityLabel;
+        }
+
         if (replayModule.TryGetMarkerInfo(marker.MarkerId, out var info))
         {
             return info.ShortLabel;
@@ -7106,12 +7112,100 @@ public sealed class RecapWindow : Window, IDisposable
             : idText;
     }
 
+    private static string FormatReplayMarkerSummaryLabel(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        IReplayEncounterModule replayModule)
+    {
+        var idText = FormatReplayMarkerIdText(marker);
+        if (ReplayEncounterModules.IsDmuP4RealityTellMarker(marker.MarkerId) &&
+            ReplayEncounterModules.TryGetDmuP4RealityTell(marker.RawMarkerId, out var realityLabel, out _))
+        {
+            return $"{realityLabel} P4 tell ({idText})";
+        }
+
+        if (TryFormatDmuP4AssignmentMarker(marker, markers, replayModule, out var assignmentText))
+        {
+            return assignmentText;
+        }
+
+        return FormatReplayMarkerSummaryLabel(marker, replayModule);
+    }
+
     private static string FormatReplayMarkerTooltipLabel(ReplayMarkerSnapshot marker, IReplayEncounterModule replayModule)
     {
         var idText = FormatReplayMarkerIdText(marker);
         return replayModule.TryGetMarkerInfo(marker.MarkerId, out var info)
             ? $"{info.Description} ({idText})"
             : $"Marker {idText}";
+    }
+
+    private static string FormatReplayMarkerTooltipLabel(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        IReplayEncounterModule replayModule)
+    {
+        if (ReplayEncounterModules.IsDmuP4RealityTellMarker(marker.MarkerId) &&
+            ReplayEncounterModules.TryGetDmuP4RealityTell(marker.RawMarkerId, out var realityLabel, out _))
+        {
+            return $"{realityLabel} P4 real/fake boss tell ({FormatReplayMarkerIdText(marker)})";
+        }
+
+        if (TryFormatDmuP4AssignmentMarker(marker, markers, replayModule, out var assignmentText))
+        {
+            return assignmentText;
+        }
+
+        return FormatReplayMarkerTooltipLabel(marker, replayModule);
+    }
+
+    private static bool TryFormatDmuP4AssignmentMarker(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        IReplayEncounterModule replayModule,
+        out string text)
+    {
+        if (!ReplayEncounterModules.IsDmuP4AssignmentMarker(marker.MarkerId) ||
+            !replayModule.TryGetMarkerInfo(marker.MarkerId, out var info))
+        {
+            text = string.Empty;
+            return false;
+        }
+
+        if (TryFindNearestDmuP4RealityTell(marker, markers, out var realityLabel, out var isReal) &&
+            ReplayEncounterModules.TryGetDmuP4StatusResolution(marker.MarkerId, isReal, out var resolution))
+        {
+            text = $"{info.Description} - {realityLabel}: {resolution} ({FormatReplayMarkerIdText(marker)})";
+            return true;
+        }
+
+        text = $"{info.Description} ({FormatReplayMarkerIdText(marker)})";
+        return true;
+    }
+
+    private static bool TryFindNearestDmuP4RealityTell(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        out string realityLabel,
+        out bool isReal)
+    {
+        var tell = markers
+            .Where(candidate => candidate.ActorKind == ReplayActorKind.Enemy &&
+                ReplayEncounterModules.IsDmuP4RealityTellMarker(candidate.MarkerId) &&
+                candidate.SeenAtUtc >= marker.SeenAtUtc.AddSeconds(-8.0) &&
+                candidate.SeenAtUtc <= marker.SeenAtUtc.AddSeconds(25.0) &&
+                ReplayEncounterModules.TryGetDmuP4RealityTell(candidate.RawMarkerId, out _, out _))
+            .OrderBy(candidate => Math.Abs((candidate.SeenAtUtc - marker.SeenAtUtc).TotalSeconds))
+            .FirstOrDefault();
+        if (tell is not null &&
+            ReplayEncounterModules.TryGetDmuP4RealityTell(tell.RawMarkerId, out realityLabel, out isReal))
+        {
+            return true;
+        }
+
+        realityLabel = string.Empty;
+        isReal = false;
+        return false;
     }
 
     private static string FormatReplayMarkerIdText(ReplayMarkerSnapshot marker)
@@ -12070,6 +12164,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.194");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.193");
         ImGui.TextDisabled("Stable update.");
         DrawLargeHighlightedChangelogCallout("We are now on the Punish repo, no change or edits will be required on the user's end. The transition will be seamless.");
