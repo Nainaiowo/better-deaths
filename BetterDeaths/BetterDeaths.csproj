@@ -12,6 +12,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <Target Name="ValidateDalamudPackageManifest" AfterTargets="Build" DependsOnTargets="DefaultDalamudPackagerDebug;DefaultDalamudPackagerRelease">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; '$(MSBuildProjectDirectory)\..\scripts\validate-package-manifest.ps1' -ProjectDir '$(MSBuildProjectDirectory)' -OutputPath '$(OutputPath)' -AssemblyName '$(AssemblyName)'&quot;" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; '$(MSBuildProjectDirectory)/../scripts/validate-package-manifest.ps1' -ProjectDir '$(MSBuildProjectDirectory)' -OutputPath '$(OutputPath)' -AssemblyName '$(AssemblyName)'&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="pwsh -NoProfile -Command &quot;&amp; '$(MSBuildProjectDirectory)/../scripts/validate-package-manifest.ps1' -ProjectDir '$(MSBuildProjectDirectory)' -OutputPath '$(OutputPath)' -AssemblyName '$(AssemblyName)'&quot;" />
   </Target>
 </Project>
