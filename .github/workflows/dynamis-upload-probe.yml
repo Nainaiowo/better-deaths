@@ -1,6 +1,6 @@
 name: Dynamis Upload URL Probe
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       release_type:
