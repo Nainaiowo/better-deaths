@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.194";
+    private const string CurrentChangelogVersion = "0.1.0.195";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -247,6 +247,12 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMarkerSnapshot> MarkerStates,
         IReadOnlyList<ReplayMechanicSnapshot> MechanicStates,
         IReadOnlyList<ResolvedReplayMarkerState> ResolvedMarkerStates);
+
+    private sealed record DmuP4AssignmentSummaryStatus(
+        StatusSnapshot Status,
+        string? RealityLabel,
+        bool? IsReal,
+        string? Resolution);
 
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
@@ -3525,6 +3531,8 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TextColored(WarningColor, "No fatal hit was captured inside the configured event window.");
         }
 
+        DrawDmuP4AssignmentSummary(resolved);
+
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
         DrawDeathChatChannelCombo(buttonId);
         ImGui.SameLine();
@@ -3535,6 +3543,222 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawFatalEventRow(death, causeEvents);
         DrawFatalSequenceSummary(death, resolved.Selection.AnchorSeenAtUtc);
+    }
+
+    private void DrawDmuP4AssignmentSummary(ResolvedDeathDisplay resolved)
+    {
+        var assignments = GetDmuP4AssignmentSummaryStatuses(resolved);
+        if (assignments.Count == 0)
+        {
+            return;
+        }
+
+        ImGui.Spacing();
+        DrawLeadUpLabel("P4 Grand Cross Debuffs");
+
+        var availableWidth = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var rowWidth = 0.0f;
+        foreach (var assignment in assignments)
+        {
+            var itemWidth = GetDmuP4AssignmentDisplayWidth(assignment);
+            if (rowWidth > 0.0f && rowWidth + spacing + itemWidth > availableWidth)
+            {
+                rowWidth = 0.0f;
+            }
+            else if (rowWidth > 0.0f)
+            {
+                ImGui.SameLine(0.0f, spacing);
+                rowWidth += spacing;
+            }
+
+            DrawDmuP4AssignmentDisplay(assignment);
+            rowWidth += itemWidth;
+        }
+    }
+
+    private IReadOnlyList<DmuP4AssignmentSummaryStatus> GetDmuP4AssignmentSummaryStatuses(ResolvedDeathDisplay resolved)
+    {
+        var death = resolved.Death;
+        var statusCandidates = resolved.Death.StatusesAtDeath
+            .Concat(resolved.Selection.Snapshot?.Statuses ?? [])
+            .Concat(resolved.SummaryRow?.HpSnapshot.Statuses ?? [])
+            .Concat(resolved.CauseEvents.SelectMany(combatEvent => combatEvent.Statuses))
+            .Where(status => ReplayEncounterModules.IsDmuP4AssignmentMarker(status.Id))
+            .GroupBy(status => status.Id)
+            .Select(group => group
+                .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
+                .ThenBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+                .First())
+            .OrderBy(GetDmuP4AssignmentSortKey)
+            .ThenBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (statusCandidates.Count == 0)
+        {
+            return [];
+        }
+
+        var assignmentMarkers = death.ReplayMarkers
+            .Where(marker => marker.ActorKind == ReplayActorKind.Player &&
+                ReplayEncounterModules.IsDmuP4AssignmentMarker(marker.MarkerId) &&
+                ReplayMarkerMatchesDeathPlayer(death, marker))
+            .ToList();
+        return statusCandidates
+            .Select(status => CreateDmuP4AssignmentSummaryStatus(death, status, assignmentMarkers, death.ReplayMarkers))
+            .ToList();
+    }
+
+    private static DmuP4AssignmentSummaryStatus CreateDmuP4AssignmentSummaryStatus(
+        PartyDeathRecord death,
+        StatusSnapshot status,
+        IReadOnlyList<ReplayMarkerSnapshot> assignmentMarkers,
+        IReadOnlyList<ReplayMarkerSnapshot> allMarkers)
+    {
+        var marker = assignmentMarkers
+            .Where(candidate => candidate.MarkerId == status.Id)
+            .OrderBy(candidate => Math.Abs((candidate.SeenAtUtc - death.SeenAtUtc).TotalSeconds))
+            .FirstOrDefault();
+        if (marker is not null &&
+            TryFindNearestDmuP4RealityTell(marker, allMarkers, out var realityLabel, out var isReal) &&
+            ReplayEncounterModules.TryGetDmuP4StatusResolution(status.Id, isReal, out var resolution))
+        {
+            return new DmuP4AssignmentSummaryStatus(status, realityLabel, isReal, resolution);
+        }
+
+        return new DmuP4AssignmentSummaryStatus(status, null, null, null);
+    }
+
+    private static bool ReplayMarkerMatchesDeathPlayer(PartyDeathRecord death, ReplayMarkerSnapshot marker)
+    {
+        return string.Equals(marker.ActorKey, $"player:{death.MemberKey}", StringComparison.Ordinal) ||
+            marker.PartyIndex == death.PartyIndex &&
+            string.Equals(marker.ActorName, death.MemberName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetDmuP4AssignmentSortKey(StatusSnapshot status)
+    {
+        return status.Id switch
+        {
+            5545 => 0,
+            5544 => 1,
+            5543 => 2,
+            5546 => 3,
+            5547 => 4,
+            5548 => 5,
+            _ => 99,
+        };
+    }
+
+    private float GetDmuP4AssignmentDisplayWidth(DmuP4AssignmentSummaryStatus assignment)
+    {
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 32.0f);
+        var timerText = FormatStatusDuration(assignment.Status, true, true, "-");
+        var textWidth = ImGui.CalcTextSize(assignment.Status.Name).X;
+        if (!string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution))
+        {
+            textWidth = MathF.Max(textWidth, ImGui.CalcTextSize($"{assignment.RealityLabel}: {assignment.Resolution}").X);
+        }
+
+        return iconSize + ImGui.GetStyle().ItemSpacing.X + MathF.Max(textWidth, ImGui.CalcTextSize(timerText).X);
+    }
+
+    private void DrawDmuP4AssignmentDisplay(DmuP4AssignmentSummaryStatus assignment)
+    {
+        var status = assignment.Status;
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 12.0f, 32.0f);
+        var timerText = FormatStatusDuration(status, true, true, "-");
+        var isFake = assignment.IsReal == false;
+        var borderColor = isFake
+            ? OverkillColor
+            : ModernPanelBorderColor;
+        var tooltip = FormatDmuP4AssignmentTooltip(assignment);
+
+        ImGui.BeginGroup();
+        var iconStackStartX = ImGui.GetCursorPosX();
+        var timerWidth = ImGui.CalcTextSize(timerText).X;
+        var iconStackWidth = MathF.Max(iconSize, timerWidth);
+        ImGui.SetCursorPosX(iconStackStartX + MathF.Max(0.0f, (iconStackWidth - iconSize) * 0.5f));
+        DrawStatusIconWithBorder(status.IconId, iconSize, borderColor, tooltip);
+        ImGui.SetCursorPosX(iconStackStartX + MathF.Max(0.0f, (iconStackWidth - timerWidth) * 0.5f));
+        ImGui.TextDisabled(timerText);
+
+        ImGui.SameLine();
+        ImGui.BeginGroup();
+        ImGui.TextUnformatted(status.Name);
+        if (!string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution))
+        {
+            ImGui.TextColored(isFake ? OverkillColor : LeadUpGoldColor, $"{assignment.RealityLabel}: {assignment.Resolution}");
+        }
+
+        ImGui.EndGroup();
+        ImGui.EndGroup();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(tooltip);
+        }
+    }
+
+    private static string FormatDmuP4AssignmentTooltip(DmuP4AssignmentSummaryStatus assignment)
+    {
+        var status = assignment.Status;
+        var timerText = FormatStatusDuration(status, true, true, "-");
+        if (!string.IsNullOrWhiteSpace(assignment.RealityLabel) &&
+            !string.IsNullOrWhiteSpace(assignment.Resolution))
+        {
+            return $"{status.Name}\nTimer: {timerText}\n{assignment.RealityLabel}: {assignment.Resolution}";
+        }
+
+        return $"{status.Name}\nTimer: {timerText}\nTell not captured.";
+    }
+
+    private static void DrawStatusIconWithBorder(uint iconId, float iconSize, Vector4 borderColor, string tooltip)
+    {
+        var size = new Vector2(Math.Clamp(iconSize, 12.0f, 48.0f));
+        var start = ImGui.GetCursorScreenPos();
+        var hovered = false;
+        if (iconId == 0)
+        {
+            ImGui.Dummy(size);
+            hovered = ImGui.IsItemHovered();
+        }
+        else
+        {
+            try
+            {
+                var texture = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(iconId));
+                var wrap = texture.GetWrapOrDefault();
+                if (wrap is null)
+                {
+                    ImGui.Dummy(size);
+                }
+                else
+                {
+                    ImGui.Image(wrap.Handle, size);
+                }
+            }
+            catch
+            {
+                ImGui.Dummy(size);
+            }
+
+            hovered = ImGui.IsItemHovered();
+        }
+
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRect(
+            start - new Vector2(1.0f),
+            start + size + new Vector2(1.0f),
+            ImGui.GetColorU32(borderColor),
+            3.0f,
+            ImDrawFlags.None,
+            1.8f);
+
+        if (hovered)
+        {
+            SetThemedTooltip(tooltip);
+        }
     }
 
     private void DrawDeathChatChannelCombo(string id, float width = 185.0f)
@@ -8045,10 +8269,10 @@ public sealed class RecapWindow : Window, IDisposable
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var iconColumnWidth = iconSize + 8.0f;
         var remainingWidth = MathF.Max(80.0f, innerWidth - iconColumnWidth - (spacing * 2.0f));
-        var abilityMinimumWidth = MathF.Min(48.0f, remainingWidth * 0.55f);
-        var typeMaximumWidth = MathF.Max(28.0f, MathF.Min(170.0f, remainingWidth - abilityMinimumWidth));
-        var typeMinimumWidth = MathF.Min(62.0f, typeMaximumWidth);
-        var typeColumnWidth = Math.Clamp(remainingWidth * 0.34f, typeMinimumWidth, typeMaximumWidth);
+        var abilityMinimumWidth = MathF.Min(44.0f, remainingWidth * 0.42f);
+        var typeMaximumWidth = MathF.Max(48.0f, MathF.Min(210.0f, remainingWidth - abilityMinimumWidth));
+        var typeMinimumWidth = MathF.Min(104.0f, typeMaximumWidth);
+        var typeColumnWidth = Math.Clamp(remainingWidth * 0.46f, typeMinimumWidth, typeMaximumWidth);
         var abilityColumnWidth = MathF.Max(abilityMinimumWidth, remainingWidth - typeColumnWidth);
 
         DrawFocusedColumnLabels(
@@ -8145,7 +8369,9 @@ public sealed class RecapWindow : Window, IDisposable
 
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var textWidth = MathF.Max(24.0f, width - iconSize - spacing);
-        return types.Sum(type => MathF.Max(iconSize, GetWrappedTextHeight(type.Label, textWidth)));
+        var lineGap = ImGui.GetStyle().ItemSpacing.Y * 0.35f;
+        return types.Sum(type => MathF.Max(iconSize, GetWrappedTextHeight(type.Label, textWidth))) +
+            MathF.Max(0, types.Count - 1) * lineGap;
     }
 
     private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo)
@@ -12164,6 +12390,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.195");
+        ImGui.TextDisabled("Testing update.");
+        DrawBreathingGoldBullet("Added P4 Grand Cross Debuffs to Summary.");
+        DrawWrappedBullet("Cleaned up focused mitigation layout.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.194");
         ImGui.TextDisabled("Testing update.");
         DrawBreathingGoldBullet("Death Replay beta now captures DMU P4 real/fake boss tells and labels related assignments.");
