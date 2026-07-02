@@ -1,6 +1,6 @@
 name: Build & Publish to Dynamis
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       release_type:
