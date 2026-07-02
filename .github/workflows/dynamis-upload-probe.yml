@@ -26,19 +26,19 @@ jobs:
       - name: Probe presigned upload URL
         shell: bash
         env:
-          AUTH_KEY: ${{ secrets.AUTH_KEY }}
+          PUBLISHER_KEY: ${{ secrets.PUBLISHER_KEY }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           VERSION_NUM: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
-          if [ -z "${AUTH_KEY:-}" ]; then
-            echo "AUTH_KEY secret is missing."
+          if [ -z "${PUBLISHER_KEY:-}" ]; then
+            echo "PUBLISHER_KEY secret is missing."
             exit 1
           fi
 
           response_file="$(mktemp)"
-          endpoint="https://puni.sh/api/plugins/download/160/BetterDeaths/versions/${RELEASE_TYPE}?versionNum=${VERSION_NUM}&publisherKey=${AUTH_KEY}"
+          endpoint="https://puni.sh/api/plugins/download/160/BetterDeaths/versions/${RELEASE_TYPE}?versionNum=${VERSION_NUM}&publisherKey=${PUBLISHER_KEY}"
           http_status="$(curl -sS -X PUT -o "${response_file}" -w "%{http_code}" "${endpoint}")"
 
           echo "Dynamis endpoint HTTP status: ${http_status}"
@@ -51,6 +51,6 @@ jobs:
 
           echo "No presigned upload URL was returned."
           echo "Response body, redacted:"
-          sed "s/${AUTH_KEY}/***/g" "${response_file}" | head -c 1200
+          sed "s/${PUBLISHER_KEY}/***/g" "${response_file}" | head -c 1200
           echo
           exit 1
