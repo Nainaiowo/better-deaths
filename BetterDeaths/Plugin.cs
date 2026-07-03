@@ -32,6 +32,7 @@ using System.Numerics;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -52,11 +53,20 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
     private const string ThankYouNoticeId = "ui-polish-thank-you-2026-06";
     private const string SharedRecapPrefix = "Recap:";
+    private const string LocalIdentityGateSalt = "BetterDeaths.LocalIdentityGate.v1";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
     private const int RecentStatusHistorySeconds = 20;
     private const float StatusDeathRemainingWindowSeconds = 5.0f;
     private const int OwnSharedRecapSuppressionSeconds = 5;
     private const int QueuedChatDelayMs = 200;
+    private static readonly HashSet<string> LocalIdentityGateHashes = new(StringComparer.Ordinal)
+    {
+        "A3B987A2DC6B065DF5D711BCC72B021ADE48D689625441B6CAD60DDDEE638F16",
+        "03279123989CE567AE1A1F11B75E3740B834CC9D52965BE00FB92EBDDD607F57",
+        "A3E31FE814ABEC74AF42CD1F8833107ED9E9E13F2BAE1EFF028089D58D14B827",
+        "A87D19CE705C445BA8B0739BC6B1E9F87093F308BC774D9E61D80EE5ADA12E0B",
+        "C439DBC0D6D6543C696EDED75AC8CD900E7D71366BAE3530508CE084F58D1444",
+    };
     private const int DetectedSharedRecapLinkDelayMs = 800;
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
@@ -455,6 +465,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly DeathRecapPopupWindow deathRecapPopupWindow;
     private readonly List<PartyMemberSnapshot> currentMembers = [];
     private readonly List<PartyDeathRecord> currentDeaths = [];
+    private readonly HashSet<string> excludedPlayerNameHashLookup = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool> excludedPlayerNameMatchCache = new(StringComparer.Ordinal);
     private readonly List<RecordedPullState> recordedPulls = [];
     private readonly object recordedPullLock = new();
     private IReadOnlyList<RecordedPullSummary> recordedPullSummaries = [];
@@ -602,6 +614,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private uint currentPullTerritoryId;
     private string currentPullTerritoryName = "Unknown territory";
     private bool disposing;
+    private string lastLocalIdentityGateName = string.Empty;
+    private bool localIdentityGateClosed;
 
     public Configuration Configuration { get; }
 
@@ -796,7 +810,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         Framework.Update += OnFrameworkUpdate;
-        PluginInterface.UiBuilder.Draw += windowSystem.Draw;
+        PluginInterface.UiBuilder.Draw += DrawUi;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenMainUi;
         _ = MigrateToPuniRepositoryAsync();
@@ -821,7 +835,7 @@ public sealed partial class Plugin : IDalamudPlugin
         recordedPullHistoryLoadCts?.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= OpenMainUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
-        PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
+        PluginInterface.UiBuilder.Draw -= DrawUi;
         Framework.Update -= OnFrameworkUpdate;
         UnregisterAddonInspectorLifecycleListeners();
         ChatGui.LogMessage -= OnLogMessage;
@@ -838,6 +852,17 @@ public sealed partial class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler(ShortCommandName);
         CommandManager.RemoveHandler(MainCommandName);
         windowSystem.RemoveAllWindows();
+    }
+
+    private void DrawUi()
+    {
+        if (IsLocalIdentityGateClosed())
+        {
+            CloseRuntimeWindows();
+            return;
+        }
+
+        windowSystem.Draw();
     }
 
     public void SetShowWindowByDefault(bool open)
@@ -971,10 +996,74 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public IReadOnlyList<string> ExcludedPlayerNameHashes => Configuration.ExcludedPlayerNameHashes;
+
+    public bool TryAddExcludedPlayerName(string playerName, out string message)
+    {
+        var normalizedName = NormalizeExcludedPlayerName(playerName);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            message = "Enter a player name first.";
+            return false;
+        }
+
+        if (normalizedName.Length > 64)
+        {
+            message = "That name is too long.";
+            return false;
+        }
+
+        var hash = HashExcludedPlayerName(normalizedName, EnsureExcludedPlayerNameSalt());
+        if (excludedPlayerNameHashLookup.Contains(hash))
+        {
+            message = "That player is already excluded.";
+            return false;
+        }
+
+        Configuration.ExcludedPlayerNameHashes.Add(hash);
+        Configuration.ExcludedPlayerNameHashes.Sort(StringComparer.Ordinal);
+        RefreshExcludedPlayerNameHashLookup();
+        SaveConfiguration();
+        message = "Player exclusion saved.";
+        return true;
+    }
+
+    public bool RemoveExcludedPlayerNameHash(string hash)
+    {
+        if (string.IsNullOrWhiteSpace(hash))
+        {
+            return false;
+        }
+
+        var removed = Configuration.ExcludedPlayerNameHashes.RemoveAll(saved =>
+            string.Equals(saved, hash, StringComparison.Ordinal)) > 0;
+        if (!removed)
+        {
+            return false;
+        }
+
+        RefreshExcludedPlayerNameHashLookup();
+        SaveConfiguration();
+        return true;
+    }
+
     public void SetShowDeathRecapPopup(bool enabled)
     {
         Configuration.ShowDeathRecapPopup = enabled;
         SaveConfiguration();
+    }
+
+    public bool IsDeathRecapPopupTestActive => deathRecapPopupWindow.IsTestPopupActive;
+
+    public void SetDeathRecapPopupTestActive(bool enabled)
+    {
+        if (enabled)
+        {
+            deathRecapPopupWindow.DisplayTest();
+            return;
+        }
+
+        deathRecapPopupWindow.CloseTest();
     }
 
     private async Task MigrateToPuniRepositoryAsync()
@@ -2137,6 +2226,142 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration.Save();
     }
 
+    private bool IsLocalIdentityGateClosed()
+    {
+        var normalizedName = NormalizeExcludedPlayerName(ObjectTable.LocalPlayer?.Name.TextValue ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            lastLocalIdentityGateName = string.Empty;
+            localIdentityGateClosed = false;
+            return false;
+        }
+
+        if (string.Equals(lastLocalIdentityGateName, normalizedName, StringComparison.Ordinal))
+        {
+            return localIdentityGateClosed;
+        }
+
+        lastLocalIdentityGateName = normalizedName;
+        localIdentityGateClosed = LocalIdentityGateHashes.Contains(HashLocalIdentityGateName(normalizedName));
+        if (localIdentityGateClosed)
+        {
+            CloseRuntimeWindows();
+        }
+
+        return localIdentityGateClosed;
+    }
+
+    private void CloseRuntimeWindows()
+    {
+        recapWindow.IsOpen = false;
+        currentPullWidgetWindow.IsOpen = false;
+        deathRecapPopupWindow.IsOpen = false;
+        currentMembers.Clear();
+        currentDeaths.Clear();
+        pendingDeathRecapLinks.Clear();
+        pendingDeathRecapLinksDueAtUtc = null;
+        queuedChatMessages.Clear();
+    }
+
+    private void RefreshExcludedPlayerNameHashLookup()
+    {
+        excludedPlayerNameHashLookup.Clear();
+        foreach (var hash in Configuration.ExcludedPlayerNameHashes)
+        {
+            if (!string.IsNullOrWhiteSpace(hash))
+            {
+                excludedPlayerNameHashLookup.Add(hash);
+            }
+        }
+
+        excludedPlayerNameMatchCache.Clear();
+    }
+
+    private string EnsureExcludedPlayerNameSalt()
+    {
+        if (!string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
+        {
+            return Configuration.ExcludedPlayerNameSalt;
+        }
+
+        Configuration.ExcludedPlayerNameSalt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        return Configuration.ExcludedPlayerNameSalt;
+    }
+
+    private bool IsPlayerNameExcluded(string? playerName)
+    {
+        if (excludedPlayerNameHashLookup.Count == 0 ||
+            string.IsNullOrWhiteSpace(playerName) ||
+            string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
+        {
+            return false;
+        }
+
+        var normalizedName = NormalizeExcludedPlayerName(playerName);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return false;
+        }
+
+        if (excludedPlayerNameMatchCache.TryGetValue(normalizedName, out var cachedResult))
+        {
+            return cachedResult;
+        }
+
+        var hash = HashExcludedPlayerName(normalizedName, Configuration.ExcludedPlayerNameSalt);
+        var result = excludedPlayerNameHashLookup.Contains(hash);
+        excludedPlayerNameMatchCache[normalizedName] = result;
+        return result;
+    }
+
+    private bool IsEntityIdExcludedPlayer(uint entityId)
+    {
+        entityId = NormalizeActorEntityId(entityId);
+        if (entityId == 0 || excludedPlayerNameHashLookup.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return ObjectTable.SearchByEntityId(entityId) is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
+                IsPlayerNameExcluded(player.Name.TextValue);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string NormalizeExcludedPlayerName(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return string.Empty;
+        }
+
+        var words = playerName
+            .Replace(",", string.Empty, StringComparison.Ordinal)
+            .Replace(".", string.Empty, StringComparison.Ordinal)
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words).ToUpperInvariant();
+    }
+
+    private static string HashLocalIdentityGateName(string normalizedPlayerName)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"{LocalIdentityGateSalt}\n{normalizedPlayerName}");
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(bytes));
+    }
+
+    private static string HashExcludedPlayerName(string normalizedPlayerName, string salt)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"{salt}\n{normalizedPlayerName}");
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(bytes));
+    }
+
     private void NormalizeUserConfiguration()
     {
         var changed = false;
@@ -2291,6 +2516,33 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (Configuration.ExcludedPlayerNameHashes is null)
+        {
+            Configuration.ExcludedPlayerNameHashes = [];
+            changed = true;
+        }
+
+        var normalizedExcludedPlayerNameHashes = Configuration.ExcludedPlayerNameHashes
+            .Where(hash => !string.IsNullOrWhiteSpace(hash))
+            .Select(hash => hash.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(hash => hash, StringComparer.Ordinal)
+            .ToList();
+        if (!Configuration.ExcludedPlayerNameHashes.SequenceEqual(normalizedExcludedPlayerNameHashes, StringComparer.Ordinal))
+        {
+            Configuration.ExcludedPlayerNameHashes = normalizedExcludedPlayerNameHashes;
+            changed = true;
+        }
+
+        if (Configuration.ExcludedPlayerNameHashes.Count > 0 &&
+            string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
+        {
+            Configuration.ExcludedPlayerNameHashes.Clear();
+            changed = true;
+        }
+
+        RefreshExcludedPlayerNameHashLookup();
+
         if (Configuration.Version != CurrentConfigurationVersion)
         {
             Configuration.Version = CurrentConfigurationVersion;
@@ -2305,21 +2557,41 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         recapWindow.IsOpen = !recapWindow.IsOpen;
     }
 
     private void OnWidgetCommand(string command, string args)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         SetShowCurrentPullWidget(!Configuration.ShowCurrentPullWidget);
     }
 
     private void OpenMainUi()
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         recapWindow.IsOpen = true;
     }
 
     private void OnDeathChatLinkClick(uint commandId, SeString message)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         foreach (var rawPayload in message.Payloads.OfType<RawPayload>())
         {
             if (DeathChatLinkPayload.Decode(rawPayload) is not { } payload)
@@ -2338,6 +2610,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnChatMessage(IHandleableChatMessage message)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         try
         {
             if (!TryParseSharedDeathPost(message.OriginalMessage.ExtractText(), out var post) &&
@@ -2375,6 +2652,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnLogMessage(ILogMessage message)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         try
         {
             CaptureCombatLogMessage(message);
@@ -2432,6 +2714,11 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
+            if (IsLocalIdentityGateClosed())
+            {
+                return;
+            }
+
             var now = DateTime.UtcNow;
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);
@@ -2700,6 +2987,12 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
+            if (IsPlayerNameExcluded(memberName))
+            {
+                partyIndex++;
+                continue;
+            }
+
             var memberKey = member.ContentId != 0
                 ? member.ContentId.ToString("X16")
                 : member.EntityId != 0
@@ -2754,6 +3047,11 @@ public sealed partial class Plugin : IDalamudPlugin
                     continue;
                 }
 
+                if (IsPlayerNameExcluded(memberName))
+                {
+                    continue;
+                }
+
                 var statusSnapshots = BuildCharacterStatusSnapshots(player, []);
                 var classJobId = player.ClassJob.RowId;
                 members.Add(new PartyMemberSnapshot(
@@ -2799,7 +3097,8 @@ public sealed partial class Plugin : IDalamudPlugin
         var memberName = localPlayer.Name.TextValue;
         if (string.IsNullOrWhiteSpace(memberName) ||
             trackedEntityIds.Contains(localPlayer.EntityId) ||
-            trackedNames.Contains(memberName))
+            trackedNames.Contains(memberName) ||
+            IsPlayerNameExcluded(memberName))
         {
             return;
         }
@@ -2884,6 +3183,12 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             var gameObject = ObjectTable.SearchByEntityId(entityId);
             if (playerOnly && gameObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter)
+            {
+                return null;
+            }
+
+            if (gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
+                IsPlayerNameExcluded(player.Name.TextValue))
             {
                 return null;
             }
@@ -3521,6 +3826,7 @@ public sealed partial class Plugin : IDalamudPlugin
         uint? actionIconId = null;
         string? sourceName = null;
         IReadOnlyList<StatusSnapshot>? sourceStatuses = null;
+        bool? packetSourceIsExcluded = null;
         var foundRelevantEffect = false;
         var trackedSourceStatuses = false;
 
@@ -3573,10 +3879,14 @@ public sealed partial class Plugin : IDalamudPlugin
                 EnsurePullStarted(packet.SeenAtUtc);
                 var resolvedActionName = actionName ??= GetActionName(packet.ActionId);
                 var resolvedActionIconId = actionIconId ??= GetActionIconId(packet.ActionId);
-                var resolvedSourceName = sourceName ??= string.IsNullOrWhiteSpace(packet.CasterName)
-                    ? GetEntityDisplayName(packet.CasterEntityId)
-                    : packet.CasterName;
-                var shouldTrackSourceStatuses = kind.Value != DeathEventKind.Heal;
+                packetSourceIsExcluded ??= IsEntityIdExcludedPlayer(packet.CasterEntityId);
+                var sourceIsExcluded = packetSourceIsExcluded.Value;
+                var resolvedSourceName = sourceName ??= sourceIsExcluded
+                    ? "Excluded player"
+                    : string.IsNullOrWhiteSpace(packet.CasterName)
+                        ? GetEntityDisplayName(packet.CasterEntityId)
+                        : packet.CasterName;
+                var shouldTrackSourceStatuses = !sourceIsExcluded && kind.Value != DeathEventKind.Heal;
                 var resolvedSourceStatuses = shouldTrackSourceStatuses
                     ? sourceStatuses ??= GetBossMitigationStatuses(packet.SourceSnapshot is null
                         ? BuildSourceStatusSnapshots(packet.CasterEntityId)
@@ -3731,6 +4041,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
     {
         var member = FindCurrentMemberByEffectResultPacket(packet);
+        if (member is null &&
+            (IsEntityIdExcludedPlayer(packet.TargetId) || IsEntityIdExcludedPlayer(packet.ActorId)))
+        {
+            return;
+        }
+
         var shouldRecordDebug = Configuration.DebugLogEnabled &&
             !debugCaptureFrozen &&
             (member is not null || Configuration.CaptureOtherDeaths);
@@ -4002,6 +4318,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
         var member = FindCurrentMemberByEntityId(packet.EntityId);
+        if (member is null && IsEntityIdExcludedPlayer(packet.EntityId))
+        {
+            return;
+        }
+
         if (packet.Category == ActorControlTargetIconCategory)
         {
             CaptureActorControlTargetIcon(packet, member);
@@ -4078,17 +4399,27 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
     {
-        return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member));
+        return currentMembers.FirstOrDefault(member =>
+            !IsPlayerNameExcluded(member.MemberName) &&
+            TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(RawTargetId targetId)
     {
-        return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member));
+        return currentMembers.FirstOrDefault(member =>
+            !IsPlayerNameExcluded(member.MemberName) &&
+            TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByName(string memberName)
     {
+        if (IsPlayerNameExcluded(memberName))
+        {
+            return null;
+        }
+
         return currentMembers.FirstOrDefault(member =>
+            !IsPlayerNameExcluded(member.MemberName) &&
             string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -4096,12 +4427,16 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         return entityId == 0
             ? null
-            : currentMembers.FirstOrDefault(member => member.EntityId != 0 && member.EntityId == entityId);
+            : currentMembers.FirstOrDefault(member =>
+                !IsPlayerNameExcluded(member.MemberName) &&
+                member.EntityId != 0 &&
+                member.EntityId == entityId);
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByEffectResultPacket(RawEffectResultPacket packet)
     {
         return currentMembers.FirstOrDefault(member =>
+            !IsPlayerNameExcluded(member.MemberName) &&
             member.EntityId != 0 &&
             (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
     }
@@ -4136,6 +4471,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (member is not null)
         {
+            if (IsPlayerNameExcluded(member.MemberName))
+            {
+                return null;
+            }
+
             return new ReplayMarkerSnapshot(
                 packet.SeenAtUtc,
                 CalculatePullElapsed(packet.SeenAtUtc),
@@ -4155,6 +4495,11 @@ public sealed partial class Plugin : IDalamudPlugin
             var gameObject = ObjectTable.SearchByEntityId(entityId);
             if (gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player)
             {
+                if (IsPlayerNameExcluded(player.Name.TextValue))
+                {
+                    return null;
+                }
+
                 var classJobId = player.ClassJob.RowId;
                 return new ReplayMarkerSnapshot(
                     packet.SeenAtUtc,
@@ -4315,6 +4660,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlHotEvent(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
+        if (IsPlayerNameExcluded(member.MemberName))
+        {
+            return;
+        }
+
         if (packet.Category != ActorControlHotCategory ||
             packet.Param2 == 0)
         {
@@ -4340,9 +4690,12 @@ public sealed partial class Plugin : IDalamudPlugin
             sourceEntityId = 0;
         }
 
-        var sourceName = sourceEntityId == 0
-            ? "Healing over time"
-            : GetEntityDisplayName(sourceEntityId);
+        var sourceIsExcluded = sourceEntityId != 0 && IsEntityIdExcludedPlayer(sourceEntityId);
+        var sourceName = sourceIsExcluded
+            ? "Excluded player"
+            : sourceEntityId == 0
+                ? "Healing over time"
+                : GetEntityDisplayName(sourceEntityId);
         var actionId = packet.Param1 != 0 ? packet.Param1 : ActorControlHotCategory;
         var actionName = packet.Param1 != 0
             ? GetStatusName(packet.Param1)
@@ -4390,6 +4743,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlDotEvent(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
+        if (IsPlayerNameExcluded(member.MemberName))
+        {
+            return;
+        }
+
         if (packet.Category != ActorControlDotCategory ||
             packet.Param2 == 0)
         {
@@ -4408,10 +4766,13 @@ public sealed partial class Plugin : IDalamudPlugin
             sourceEntityId = 0;
         }
 
-        var sourceName = sourceEntityId == 0
-            ? "Damage over time"
-            : GetEntityDisplayName(sourceEntityId);
-        var sourceStatuses = sourceEntityId == 0
+        var sourceIsExcluded = sourceEntityId != 0 && IsEntityIdExcludedPlayer(sourceEntityId);
+        var sourceName = sourceIsExcluded
+            ? "Excluded player"
+            : sourceEntityId == 0
+                ? "Damage over time"
+                : GetEntityDisplayName(sourceEntityId);
+        var sourceStatuses = sourceEntityId == 0 || sourceIsExcluded
             ? []
             : GetBossMitigationStatuses(packet.SourceSnapshot is null
                 ? BuildSourceStatusSnapshots(sourceEntityId)
@@ -4459,6 +4820,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlStatusChange(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
+        if (IsPlayerNameExcluded(member.MemberName))
+        {
+            return;
+        }
+
         var statusLookup = packet.TargetSnapshot is null
             ? member.Statuses
             : BuildStatusSnapshots(packet.TargetSnapshot);
@@ -4750,6 +5116,16 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private bool TryCaptureDeath(PartyMemberSnapshot member, DateTime deathSeenAtUtc, string signalSource)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return false;
+        }
+
+        if (IsPlayerNameExcluded(member.MemberName))
+        {
+            return false;
+        }
+
         if (pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
         {
             return false;
@@ -5135,6 +5511,11 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         foreach (var member in members)
         {
+            if (IsPlayerNameExcluded(member.MemberName))
+            {
+                continue;
+            }
+
             TrackRecentStatusObservations(
                 member.MemberKey,
                 now,
@@ -5149,7 +5530,9 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         foreach (var member in members)
         {
-            if (member.IsDead || member.MaxHp == 0)
+            if (member.IsDead ||
+                member.MaxHp == 0 ||
+                IsPlayerNameExcluded(member.MemberName))
             {
                 continue;
             }
@@ -5178,6 +5561,11 @@ public sealed partial class Plugin : IDalamudPlugin
         uint shieldHp,
         IReadOnlyList<StatusSnapshot> mergedStatuses)
     {
+        if (IsPlayerNameExcluded(member.MemberName))
+        {
+            return;
+        }
+
         if (packet.MaxHp == 0 ||
             pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
         {
@@ -5308,6 +5696,11 @@ public sealed partial class Plugin : IDalamudPlugin
         lastReplayPositionSampleAtUtc = now;
         foreach (var member in members)
         {
+            if (IsPlayerNameExcluded(member.MemberName))
+            {
+                continue;
+            }
+
             AddRecentReplayPositionSnapshot(CreatePlayerReplayPositionSnapshot(member, now));
         }
 
@@ -6068,6 +6461,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
         foreach (var member in members)
         {
+            if (IsPlayerNameExcluded(member.MemberName))
+            {
+                continue;
+            }
+
             var statuses = member.Statuses.ToList();
             if (debugStatusSnapshotsByMember.TryGetValue(member.MemberKey, out var existing))
             {
@@ -6532,6 +6930,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnDutyReset(IDutyStateEventArgs args)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         if (IsPvPCaptureBlocked())
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
@@ -6548,6 +6951,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnDutyStarted(IDutyStateEventArgs args)
     {
+        if (IsLocalIdentityGateClosed())
+        {
+            return;
+        }
+
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
     }

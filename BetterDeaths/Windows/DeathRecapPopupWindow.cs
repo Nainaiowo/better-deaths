@@ -10,13 +10,18 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 {
     private static readonly TimeSpan PopupLifetime = TimeSpan.FromSeconds(30);
     private static readonly Vector2 DefaultSize = new(240.0f, 82.0f);
+    private const float ButtonDragThreshold = 3.0f;
     private const float PopupBackgroundOpacity = 0.85f;
     private readonly Plugin plugin;
     private readonly RecapWindow recapWindow;
     private PendingDeath? pendingDeath;
+    private DateTime? testStartedAtUtc;
     private Vector2? lastKnownPosition;
     private bool applySavedPositionOnNextDraw;
+    private bool buttonDragged;
     private bool stylePushed;
+
+    public bool IsTestPopupActive => testStartedAtUtc is not null && IsOpen;
 
     public DeathRecapPopupWindow(Plugin plugin, RecapWindow recapWindow)
         : base(
@@ -45,6 +50,8 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 
     public void DisplayDeath(PartyDeathRecord death)
     {
+        testStartedAtUtc = null;
+        buttonDragged = false;
         pendingDeath = new PendingDeath(
             death.SeenAtUtc,
             death.SeenAtUtc.Ticks,
@@ -53,6 +60,31 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             death.ClassJobName);
         applySavedPositionOnNextDraw = true;
         IsOpen = true;
+    }
+
+    public bool DisplayTest()
+    {
+        if (pendingDeath is not null && IsOpen)
+        {
+            return false;
+        }
+
+        pendingDeath = null;
+        testStartedAtUtc = DateTime.UtcNow;
+        buttonDragged = false;
+        applySavedPositionOnNextDraw = true;
+        IsOpen = true;
+        return true;
+    }
+
+    public void CloseTest()
+    {
+        if (testStartedAtUtc is null)
+        {
+            return;
+        }
+
+        ClosePopup();
     }
 
     public override void PreDraw()
@@ -71,6 +103,18 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     {
         lastKnownPosition = ImGui.GetWindowPos();
 
+        if (testStartedAtUtc is { } startedAtUtc)
+        {
+            if (DateTime.UtcNow - startedAtUtc >= PopupLifetime)
+            {
+                ClosePopup();
+                return;
+            }
+
+            _ = DrawDraggableButton("Test###BetterDeathsDeathRecapPopupButton");
+            return;
+        }
+
         if (pendingDeath is not { } death ||
             recapWindow.IsOpen ||
             DateTime.UtcNow - death.SeenAtUtc >= PopupLifetime)
@@ -80,8 +124,8 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
 
         var remainingSeconds = Math.Max(0, (int)Math.Ceiling((PopupLifetime - (DateTime.UtcNow - death.SeenAtUtc)).TotalSeconds));
-        var label = $"Open death recap ({remainingSeconds}s)";
-        if (ImGui.Button(label, new Vector2(-1.0f, -1.0f)))
+        var label = $"Open death recap ({remainingSeconds}s)###BetterDeathsDeathRecapPopupButton";
+        if (DrawDraggableButton(label))
         {
             if (!recapWindow.FocusDeath(death.DeathSeenAtTicks, death.MemberKeyHash))
             {
@@ -97,10 +141,43 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
     }
 
+    private bool DrawDraggableButton(string label)
+    {
+        var clicked = ImGui.Button(label, new Vector2(-1.0f, -1.0f));
+        if (ImGui.IsItemActivated())
+        {
+            buttonDragged = false;
+        }
+
+        if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left, ButtonDragThreshold))
+        {
+            var mouseDelta = ImGui.GetIO().MouseDelta;
+            if (mouseDelta.LengthSquared() > 0.0f)
+            {
+                var position = ImGui.GetWindowPos() + mouseDelta;
+                ImGui.SetWindowPos(position);
+                lastKnownPosition = position;
+            }
+
+            buttonDragged = true;
+        }
+
+        if (!ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+        {
+            return clicked && !buttonDragged;
+        }
+
+        var shouldClick = clicked && !buttonDragged;
+        buttonDragged = false;
+        return shouldClick;
+    }
+
     private void ClosePopup()
     {
         SaveLastKnownPosition();
         pendingDeath = null;
+        testStartedAtUtc = null;
+        buttonDragged = false;
         IsOpen = false;
     }
 

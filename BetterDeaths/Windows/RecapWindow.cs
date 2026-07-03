@@ -30,6 +30,9 @@ public sealed class RecapWindow : Window, IDisposable
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
     private string addonInspectorEventFilter = string.Empty;
+    private string excludedPlayerNameInput = string.Empty;
+    private string excludedPlayerNameFeedback = string.Empty;
+    private bool excludedPlayerNameFeedbackIsError;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -109,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.199";
+    private const string CurrentChangelogVersion = "0.1.0.200";
     private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
     private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -10016,6 +10019,111 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
+    private void DrawExcludedPlayerSettings()
+    {
+        ImGui.Spacing();
+        ImGui.TextColored(LeadUpGoldColor, "Excluded players");
+        DrawMutedWrappedText("Saved as salted hashes. Future captures skip matching player names; old saved pulls are not changed.");
+
+        var style = ImGui.GetStyle();
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var addButtonWidth = MathF.Min(GetThemedActionButtonWidth("Add"), MathF.Max(54.0f, availableWidth * 0.28f));
+        var canFitInline = availableWidth >= 220.0f;
+        var inputWidth = canFitInline
+            ? MathF.Max(96.0f, availableWidth - addButtonWidth - style.ItemSpacing.X)
+            : availableWidth;
+
+        ImGui.SetNextItemWidth(inputWidth);
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+        var addRequested = ImGui.InputTextWithHint(
+            "##ExcludedPlayerNameInput",
+            "First Last",
+            ref excludedPlayerNameInput,
+            64,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        ImGui.PopStyleColor(4);
+
+        if (canFitInline)
+        {
+            ImGui.SameLine();
+        }
+
+        if (DrawThemedActionButton("Add", "AddExcludedPlayerName", canFitInline ? addButtonWidth : MathF.Min(addButtonWidth, availableWidth)))
+        {
+            addRequested = true;
+        }
+
+        if (addRequested)
+        {
+            if (plugin.TryAddExcludedPlayerName(excludedPlayerNameInput, out var message))
+            {
+                excludedPlayerNameInput = string.Empty;
+                excludedPlayerNameFeedbackIsError = false;
+            }
+            else
+            {
+                excludedPlayerNameFeedbackIsError = true;
+            }
+
+            excludedPlayerNameFeedback = message;
+        }
+
+        if (!string.IsNullOrWhiteSpace(excludedPlayerNameFeedback))
+        {
+            ImGui.TextColored(
+                excludedPlayerNameFeedbackIsError ? WarningColor : HealColor,
+                excludedPlayerNameFeedback);
+        }
+
+        var savedHashes = plugin.ExcludedPlayerNameHashes;
+        if (savedHashes.Count == 0)
+        {
+            ImGui.TextColored(ModernMutedTextColor, "No excluded players saved.");
+            return;
+        }
+
+        ImGui.TextColored(ModernMutedTextColor, $"{savedHashes.Count:N0} saved hashed {(savedHashes.Count == 1 ? "entry" : "entries")}");
+        if (ImGui.BeginTable("##ExcludedPlayerHashes", 2, ImGuiTableFlags.SizingStretchProp))
+        {
+            ImGui.TableSetupColumn("Hash", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableSetupColumn("Remove", ImGuiTableColumnFlags.WidthFixed, GetThemedActionButtonWidth("Remove"));
+            foreach (var hash in savedHashes.ToList())
+            {
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextColored(ModernMutedTextColor, FormatExcludedPlayerHashLabel(hash));
+                if (ImGui.IsItemHovered())
+                {
+                    SetThemedTooltip("Only the salted hash is saved locally. The original name is not stored here.");
+                }
+
+                ImGui.TableNextColumn();
+                if (DrawThemedActionButton("Remove", $"RemoveExcludedPlayerName{hash}", GetThemedActionButtonWidth("Remove")) &&
+                    plugin.RemoveExcludedPlayerNameHash(hash))
+                {
+                    excludedPlayerNameFeedback = "Player exclusion removed.";
+                    excludedPlayerNameFeedbackIsError = false;
+                }
+            }
+
+            ImGui.EndTable();
+        }
+    }
+
+    private static string FormatExcludedPlayerHashLabel(string hash)
+    {
+        if (string.IsNullOrWhiteSpace(hash))
+        {
+            return "Saved hash";
+        }
+
+        var prefixLength = Math.Min(hash.Length, 12);
+        return $"Hash {hash[..prefixLength]}...";
+    }
+
     private void DrawSettingsTab()
     {
         var showWindow = configuration.ShowWindow;
@@ -10054,6 +10162,14 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
+
+        var testDeathRecapPopup = plugin.IsDeathRecapPopupTestActive;
+        if (DrawThemedCheckbox("Test recap popup", ref testDeathRecapPopup))
+        {
+            plugin.SetDeathRecapPopupTestActive(testDeathRecapPopup);
+        }
+
+        DrawSettingsTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
 
         var postDeathRecapLinksOnDeath = configuration.PostDeathRecapLinksOnDeath;
         var postDeathRecapLinksChanged = DrawThemedCheckbox("##PostDeathRecapLinksOnDeath", ref postDeathRecapLinksOnDeath);
@@ -10095,6 +10211,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("A way to show information to others without doxxing your party");
 
+        DrawExcludedPlayerSettings();
 
         var removeChatBranding = configuration.RemoveChatBranding;
         if (DrawThemedCheckbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
@@ -11192,14 +11309,16 @@ public sealed class RecapWindow : Window, IDisposable
             $"Capture state: Duty {FormatDebugBool(plugin.DebugIsDutyCaptureActive)} | Combat {FormatDebugBool(plugin.DebugIsInCombat)} | Live capture {FormatDebugBool(plugin.DebugShouldCaptureLiveCombat)} | EffectResult hook {FormatDebugBool(plugin.DebugEffectResultHookEnabled)} | ActorControl hook {FormatDebugBool(plugin.DebugActorControlHookEnabled)} | PvP blocked {FormatDebugBool(plugin.DebugIsPvPCaptureBlocked)} | Tracked {plugin.CurrentMembers.Count:N0}");
 
         ImGui.Separator();
-        DrawAddonInspector();
+        DrawDebugCaptureTab();
+    }
 
+    private void DrawDebugCaptureTab()
+    {
+        DrawAddonInspector();
         ImGui.Separator();
         DrawDebugStatusSnapshots();
-
         ImGui.Separator();
         DrawDebugEffectResultSnapshots();
-
         ImGui.Separator();
         DrawDebugActorControlEvents();
 
@@ -12377,6 +12496,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Recorded pulls are saved locally so you can review pulls after wipes, resets, reloads, or plugin updates.");
         DrawWrappedBullet("Saved pull data can include player names, jobs, duty names, death timing, player and enemy HP, shields, damage events, actions, statuses, and mitigation context.");
         DrawWrappedBullet("Name Redaction helps with screenshots and shared display, but local saved pull files may still contain the original captured names.");
+        DrawWrappedBullet("Excluded player names are saved as salted hashes so the original names are not stored in the setting.");
         DrawWrappedBullet("Debug capture is local and optional. It can contain raw troubleshooting data, so leave it off unless you are testing or debugging.");
 
         ImGui.Spacing();
@@ -12574,6 +12694,17 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.200");
+        ImGui.TextDisabled("Stable update.");
+        DrawBreathingGoldBullet("Added a private code-side blocklist for users with a history of targeted harassment or abusive behavior.");
+        DrawBreathingGoldBullet("Recap popup buttons can now be dragged directly to move the popup.");
+        DrawWrappedBullet("Added a Test recap popup preview so you can place the popup without needing to die.");
+        DrawWrappedBullet("P4 replay labels now follow the next resolving debuff and can show paired debuffs.");
+        DrawWrappedBullet("Fatal sequence now starts collapsed.");
+        DrawWrappedBullet("Cleaned up focused Summary spacing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.199");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("P4 replay labels now follow the next resolving debuff and can show paired debuffs.");

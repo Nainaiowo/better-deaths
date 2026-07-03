@@ -275,6 +275,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool RedactPlayerNames { get; set; }
 
+    public string ExcludedPlayerNameSalt { get; set; } = string.Empty;
+
+    public List<string> ExcludedPlayerNameHashes { get; set; } = [];
+
     public bool ShowDeathRecapPopup { get; set; } = true;
 
     // Legacy setting name kept so older configs can migrate the saved value to MainWindowBackgroundOpacity.
