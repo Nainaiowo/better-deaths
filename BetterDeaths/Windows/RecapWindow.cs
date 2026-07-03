@@ -8632,10 +8632,17 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        var columnStart = ImGui.GetCursorScreenPos();
+        var currentY = columnStart.Y;
+        var lineGap = ImGui.GetStyle().ItemSpacing.Y * 0.35f;
         foreach (var type in types)
         {
+            ImGui.SetCursorScreenPos(new Vector2(columnStart.X, currentY));
             DrawIconTextWrapped(type.IconId, iconSize, type.Tooltip ?? type.Label, type.Label, width);
+            currentY += GetIconTextWrappedHeight(type.Label, width, type.IconId, iconSize) + lineGap;
         }
+
+        ImGui.SetCursorScreenPos(new Vector2(columnStart.X, currentY - lineGap));
     }
 
     private static float GetMitigationTypeInlineHeight(
@@ -8648,10 +8655,8 @@ public sealed class RecapWindow : Window, IDisposable
             return ImGui.GetTextLineHeight();
         }
 
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var textWidth = MathF.Max(24.0f, width - iconSize - spacing);
         var lineGap = ImGui.GetStyle().ItemSpacing.Y * 0.35f;
-        return types.Sum(type => MathF.Max(iconSize, GetWrappedTextHeight(type.Label, textWidth))) +
+        return types.Sum(type => GetIconTextWrappedHeight(type.Label, width, type.IconId, iconSize)) +
             MathF.Max(0, types.Count - 1) * lineGap;
     }
 
