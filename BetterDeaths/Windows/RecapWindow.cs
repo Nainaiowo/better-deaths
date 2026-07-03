@@ -112,9 +112,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.200";
-    private const string FeedbackFormUrl = "https://forms.gle/1mSs7hW7qzwn21ja9";
-    private const string FeedbackConfirmPopupId = "Open anonymous feedback form?##BetterDeathsFeedbackConfirm";
+    private const string CurrentChangelogVersion = "0.1.0.201";
+    private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
+    private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
     private const string KofiConfirmPopupId = "Open Ko-fi?##BetterDeathsKofiConfirm";
     private const string ReplayBetaBadgeText = "beta";
@@ -6004,6 +6004,11 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
         IReplayEncounterModule replayModule)
     {
+        if (IsReplayTetherMechanic(mechanic))
+        {
+            return ProjectReplayTetherMechanicToActorState(mechanic, actorStates);
+        }
+
         if (!IsReplayMarkerMechanic(mechanic) ||
             !replayModule.TryGetMarkerInfo(mechanic.RawEventId, out var markerInfo) ||
             !markerInfo.AnchorsToActor ||
@@ -6027,6 +6032,95 @@ public sealed class RecapWindow : Window, IDisposable
             Z = sourceActor.Z,
             Rotation = rotation,
         };
+    }
+
+    private static ReplayMechanicSnapshot ProjectReplayTetherMechanicToActorState(
+        ReplayMechanicSnapshot mechanic,
+        IReadOnlyList<ReplayPositionSnapshot> actorStates)
+    {
+        if (!TryGetReplayTetherEntityIds(mechanic, out var sourceEntityId, out var targetEntityId))
+        {
+            return mechanic;
+        }
+
+        var capturedSource = GetReplayTetherStart(mechanic);
+        var source = actorStates.FirstOrDefault(actor => actor.EntityId == sourceEntityId) is { } sourceActor
+            ? new Vector3(sourceActor.X, sourceActor.Y, sourceActor.Z)
+            : capturedSource;
+        var target = actorStates.FirstOrDefault(actor => actor.EntityId == targetEntityId) is { } targetActor
+            ? new Vector3(targetActor.X, targetActor.Y, targetActor.Z)
+            : GetReplayTetherEnd(mechanic);
+        if (!float.IsFinite(source.X) ||
+            !float.IsFinite(source.Z) ||
+            !float.IsFinite(target.X) ||
+            !float.IsFinite(target.Z))
+        {
+            return mechanic;
+        }
+
+        var dx = target.X - source.X;
+        var dz = target.Z - source.Z;
+        var distance = MathF.Sqrt((dx * dx) + (dz * dz));
+        if (distance <= 0.05f)
+        {
+            return mechanic;
+        }
+
+        return mechanic with
+        {
+            X = source.X + (dx * 0.5f),
+            Y = (source.Y + target.Y) * 0.5f,
+            Z = source.Z + (dz * 0.5f),
+            Rotation = MathF.Atan2(dz, dx),
+            Length = distance,
+        };
+    }
+
+    private static bool TryGetReplayTetherEntityIds(
+        ReplayMechanicSnapshot mechanic,
+        out uint sourceEntityId,
+        out uint targetEntityId)
+    {
+        sourceEntityId = 0;
+        targetEntityId = mechanic.RawState;
+        var parts = mechanic.SourceKey.Split(':');
+        if (parts.Length >= 2 &&
+            uint.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsedSourceEntityId))
+        {
+            sourceEntityId = parsedSourceEntityId;
+        }
+
+        if (targetEntityId == 0 &&
+            parts.Length >= 3 &&
+            uint.TryParse(parts[2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsedTargetEntityId))
+        {
+            targetEntityId = parsedTargetEntityId;
+        }
+
+        return sourceEntityId != 0 || targetEntityId != 0;
+    }
+
+    private static Vector3 GetReplayTetherStart(ReplayMechanicSnapshot mechanic)
+    {
+        var halfLength = Math.Max(0.1f, mechanic.Length) * 0.5f;
+        return new Vector3(
+            mechanic.X - (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.Y,
+            mechanic.Z - (MathF.Sin(mechanic.Rotation) * halfLength));
+    }
+
+    private static Vector3 GetReplayTetherEnd(ReplayMechanicSnapshot mechanic)
+    {
+        var halfLength = Math.Max(0.1f, mechanic.Length) * 0.5f;
+        return new Vector3(
+            mechanic.X + (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.Y,
+            mechanic.Z + (MathF.Sin(mechanic.Rotation) * halfLength));
+    }
+
+    private static bool IsReplayTetherMechanic(ReplayMechanicSnapshot mechanic)
+    {
+        return mechanic.Shape == ReplayMechanicShape.Tether;
     }
 
     private static bool IsReplayMarkerMechanic(ReplayMechanicSnapshot mechanic)
@@ -12516,20 +12610,21 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Sharing");
         DrawWrappedBullet("Chat posting is opt-in. If you post recap information to chat, that information is shared through the selected in-game chat channel.");
         DrawWrappedBullet("Recap links are not web links and do not send data to a Better Deaths server. They are local Dalamud chat payloads used to find a matching recap.");
-        DrawWrappedBullet("The Feedback tab only opens a Google Forms link in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
+        DrawWrappedBullet("The Feedback tab only opens the Punish Discord invite in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
     }
 
     private void DrawFeedbackPage()
     {
         ImGui.TextColored(LeadUpGoldColor, "Feedback");
-        ImGui.TextWrapped("Use this if you want to send feedback, bug reports, or ideas through the Better Deaths feedback form.");
-        ImGui.TextWrapped("The button opens an anonymous Google Forms link in your browser after you confirm.");
+        ImGui.TextWrapped("Feedback is now taken on the Punish Discord server.");
+        ImGui.TextWrapped("The button opens the Punish Discord invite in your browser after you confirm.");
 
         ImGui.Spacing();
-        DrawDataStat("URL", FeedbackFormUrl);
+        DrawDataStat("URL", FeedbackDiscordUrl);
 
         ImGui.Spacing();
-        if (DrawThemedActionButton("Open feedback form", "OpenBetterDeathsFeedbackForm"))
+        var discordButtonLabel = $"{FontAwesomeIcon.Comments.ToIconString()} Open Punish Discord";
+        if (DrawThemedActionButton(discordButtonLabel, "OpenBetterDeathsFeedbackDiscord"))
         {
             ImGui.OpenPopup(FeedbackConfirmPopupId);
         }
@@ -12551,19 +12646,19 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TextColored(LeadUpGoldColor, "Open feedback form?");
-        ImGui.TextWrapped("This will open an anonymous Google Forms link in your browser.");
-        ImGui.TextWrapped(FeedbackFormUrl);
+        ImGui.TextColored(LeadUpGoldColor, "Open Punish Discord?");
+        ImGui.TextWrapped("This will open the Punish Discord invite in your browser.");
+        ImGui.TextWrapped(FeedbackDiscordUrl);
         ImGui.Separator();
 
-        if (DrawThemedActionButton("OK", "ConfirmOpenBetterDeathsFeedbackForm", 92.0f))
+        if (DrawThemedActionButton("OK", "ConfirmOpenBetterDeathsFeedbackDiscord", 92.0f))
         {
-            OpenFeedbackFormUrl();
+            OpenFeedbackDiscordUrl();
             ImGui.CloseCurrentPopup();
         }
 
         ImGui.SameLine();
-        if (DrawThemedActionButton("Cancel", "CancelOpenBetterDeathsFeedbackForm", 92.0f))
+        if (DrawThemedActionButton("Cancel", "CancelOpenBetterDeathsFeedbackDiscord", 92.0f))
         {
             ImGui.CloseCurrentPopup();
         }
@@ -12609,20 +12704,20 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleVar(2);
     }
 
-    private static void OpenFeedbackFormUrl()
+    private static void OpenFeedbackDiscordUrl()
     {
         try
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = FeedbackFormUrl,
+                FileName = FeedbackDiscordUrl,
                 UseShellExecute = true,
             });
         }
         catch (Exception ex)
         {
-            Plugin.Log.Warning(ex, "Could not open Better Deaths feedback form.");
-            Plugin.ChatGui.Print($"[Better Deaths] Could not open the feedback form. URL: {FeedbackFormUrl}");
+            Plugin.Log.Warning(ex, "Could not open Better Deaths feedback Discord invite.");
+            Plugin.ChatGui.Print($"[Better Deaths] Could not open the Punish Discord invite. URL: {FeedbackDiscordUrl}");
         }
     }
 
@@ -12694,6 +12789,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.201");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Fixed tether jumping in replays.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.200");
         ImGui.TextDisabled("Stable update.");
         DrawBreathingGoldBullet("Added a private code-side blocklist for users with a history of targeted harassment or abusive behavior.");
@@ -12745,7 +12846,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TextUnformatted("v0.1.0.173");
         ImGui.TextDisabled("Stable update.");
-        DrawBreathingGoldBullet("Added a Feedback tab with a confirmation before opening the Google Forms link.");
+        DrawBreathingGoldBullet("Added a Feedback tab with a confirmation before opening the feedback link.");
         DrawWrappedBullet("Replay now stays visible as a disabled Coming soon tab while replay work continues.");
 
         ImGui.Separator();

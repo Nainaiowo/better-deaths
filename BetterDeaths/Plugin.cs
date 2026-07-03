@@ -147,6 +147,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ReplayTetherPositionSampleInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan ReplayTetherActiveGrace = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan EffectResultHpHistoryPreResultWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan EffectResultHpHistoryPostResultWindow = TimeSpan.FromMilliseconds(5);
@@ -5688,7 +5690,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void TrackRecentReplayPositions(IReadOnlyList<PartyMemberSnapshot> members, DateTime now)
     {
-        if (Duration(now, lastReplayPositionSampleAtUtc) < ReplayPositionSampleInterval)
+        var sampleInterval = GetReplayPositionSampleInterval(now);
+        if (Duration(now, lastReplayPositionSampleAtUtc) < sampleInterval)
         {
             return;
         }
@@ -5714,6 +5717,68 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             AddRecentReplayMechanicSnapshot(mechanic);
         }
+    }
+
+    private TimeSpan GetReplayPositionSampleInterval(DateTime now)
+    {
+        return ShouldUseFastReplayPositionSampling(now)
+            ? ReplayTetherPositionSampleInterval
+            : ReplayPositionSampleInterval;
+    }
+
+    private bool ShouldUseFastReplayPositionSampling(DateTime now)
+    {
+        return HasActiveReplayTether(now) ||
+            (IsDmuReplayCaptureContext() && HasVisibleDmuReplayTetherSource());
+    }
+
+    private bool HasActiveReplayTether(DateTime now)
+    {
+        foreach (var history in recentReplayMechanicsBySource.Values)
+        {
+            if (history.Count == 0)
+            {
+                continue;
+            }
+
+            var latest = history[^1];
+            if (latest.Shape != ReplayMechanicShape.Tether)
+            {
+                continue;
+            }
+
+            var activeUntil = latest.SeenAtUtc
+                .AddSeconds(Math.Max(0.05f, latest.DurationSeconds))
+                .Add(ReplayTetherActiveGrace);
+            if (now <= activeUntil)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool HasVisibleDmuReplayTetherSource()
+    {
+        foreach (var gameObject in ObjectTable)
+        {
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                battleNpc.EntityId == 0 ||
+                battleNpc.EntityId == InvalidActorEntityId)
+            {
+                continue;
+            }
+
+            var name = battleNpc.Name.TextValue;
+            if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "Graven Image", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private ReplayPositionSnapshot CreatePlayerReplayPositionSnapshot(PartyMemberSnapshot member, DateTime seenAtUtc)
@@ -6161,8 +6226,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static bool IsReplaySingleActiveSourceMechanic(ReplayMechanicSnapshot snapshot)
     {
-        return string.Equals(snapshot.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(snapshot.RawEventKind, "graven-image-tether", StringComparison.OrdinalIgnoreCase);
+        return snapshot.Shape == ReplayMechanicShape.Tether;
     }
 
     private bool ShouldSkipIntermediateEffectResultHpHistorySnapshot(
