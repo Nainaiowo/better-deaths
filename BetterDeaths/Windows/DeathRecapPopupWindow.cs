@@ -38,9 +38,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         SizeCondition = ImGuiCond.FirstUseEver;
         PositionCondition = ImGuiCond.FirstUseEver;
 
-        ref var viewportPosition = ref ImGui.GetMainViewport().WorkPos;
-        ref var viewportSize = ref ImGui.GetMainViewport().WorkSize;
-        Position = viewportPosition + ((viewportSize - (DefaultSize * ImGuiHelpers.GlobalScale)) * 0.5f);
+        Position = GetDefaultPopupPosition();
     }
 
     public void Dispose()
@@ -101,7 +99,14 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 
     public override void Draw()
     {
-        lastKnownPosition = ImGui.GetWindowPos();
+        var currentPosition = ImGui.GetWindowPos();
+        var clampedPosition = ClampPopupPosition(currentPosition, ImGui.GetWindowSize());
+        if (clampedPosition != currentPosition)
+        {
+            ImGui.SetWindowPos(clampedPosition);
+        }
+
+        lastKnownPosition = clampedPosition;
 
         if (testStartedAtUtc is { } startedAtUtc)
         {
@@ -154,7 +159,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             var mouseDelta = ImGui.GetIO().MouseDelta;
             if (mouseDelta.LengthSquared() > 0.0f)
             {
-                var position = ImGui.GetWindowPos() + mouseDelta;
+                var position = ClampPopupPosition(ImGui.GetWindowPos() + mouseDelta, ImGui.GetWindowSize());
                 ImGui.SetWindowPos(position);
                 lastKnownPosition = position;
             }
@@ -189,21 +194,14 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
 
         applySavedPositionOnNextDraw = false;
-        if (plugin.Configuration.HasDeathRecapPopupPosition)
-        {
-            ImGui.SetNextWindowPos(
-                new Vector2(
-                    plugin.Configuration.DeathRecapPopupPositionX,
-                    plugin.Configuration.DeathRecapPopupPositionY),
-                ImGuiCond.Always);
-            return;
-        }
-
-        ref var viewportPosition = ref ImGui.GetMainViewport().WorkPos;
-        ref var viewportSize = ref ImGui.GetMainViewport().WorkSize;
-        ImGui.SetNextWindowPos(
-            viewportPosition + ((viewportSize - (DefaultSize * ImGuiHelpers.GlobalScale)) * 0.5f),
-            ImGuiCond.Always);
+        var requestedPosition = plugin.Configuration.HasDeathRecapPopupPosition
+            ? new Vector2(
+                plugin.Configuration.DeathRecapPopupPositionX,
+                plugin.Configuration.DeathRecapPopupPositionY)
+            : GetDefaultPopupPosition();
+        var position = ClampPopupPosition(requestedPosition, GetScaledDefaultSize());
+        lastKnownPosition = position;
+        ImGui.SetNextWindowPos(position, ImGuiCond.Always);
     }
 
     private void SaveLastKnownPosition()
@@ -254,6 +252,41 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     private static Vector4 WithAlpha(Vector4 color, float alpha)
     {
         return color with { W = alpha };
+    }
+
+    private static Vector2 GetDefaultPopupPosition()
+    {
+        ref var viewportPosition = ref ImGui.GetMainViewport().WorkPos;
+        ref var viewportSize = ref ImGui.GetMainViewport().WorkSize;
+        return viewportPosition + ((viewportSize - GetScaledDefaultSize()) * 0.5f);
+    }
+
+    private static Vector2 GetScaledDefaultSize()
+    {
+        return DefaultSize * ImGuiHelpers.GlobalScale;
+    }
+
+    private static Vector2 ClampPopupPosition(Vector2 position, Vector2 size)
+    {
+        if (!float.IsFinite(position.X) || !float.IsFinite(position.Y))
+        {
+            position = GetDefaultPopupPosition();
+        }
+
+        if (!float.IsFinite(size.X) || size.X <= 0.0f ||
+            !float.IsFinite(size.Y) || size.Y <= 0.0f)
+        {
+            size = GetScaledDefaultSize();
+        }
+
+        ref var viewportPosition = ref ImGui.GetMainViewport().WorkPos;
+        ref var viewportSize = ref ImGui.GetMainViewport().WorkSize;
+        var maxX = viewportPosition.X + MathF.Max(0.0f, viewportSize.X - size.X);
+        var maxY = viewportPosition.Y + MathF.Max(0.0f, viewportSize.Y - size.Y);
+
+        return new Vector2(
+            Math.Clamp(position.X, viewportPosition.X, maxX),
+            Math.Clamp(position.Y, viewportPosition.Y, maxY));
     }
 
     private sealed record PendingDeath(

@@ -3,6 +3,7 @@ namespace BetterDeaths;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 internal enum ReplayMarkerResolveGroup
 {
@@ -71,6 +72,16 @@ internal interface IReplayEncounterModule
 internal static class ReplayEncounterModules
 {
     private const uint DmuP4RealityTellStatusId = 2056;
+    private const uint DmuP3EntropyStatusId = 1600;
+    private const uint DmuP3DynamicFluidStatusId = 1601;
+    private const uint DmuP3HeadwindStatusId = 1602;
+    private const uint DmuP3TailwindStatusId = 1603;
+    private const uint DmuP3AccretionStatusId = 1604;
+    private const uint DmuP3EpicHeroStatusId = 4192;
+    private const uint DmuP3FatedHeroStatusId = 4194;
+    private const uint DmuP3UnbecomingStatusId = 5452;
+    private const uint DmuP3MeanestExistenceStatusId = 5453;
+    private const uint DmuP3PrimordialCrustStatusId = 5454;
     private const uint DmuP4CursedShriekStatusId = 5543;
     private const uint DmuP4ForkedLightningStatusId = 5544;
     private const uint DmuP4CompressedWaterStatusId = 5545;
@@ -212,6 +223,8 @@ internal static class ReplayEncounterModules
             ReplayMarkerResolveGroup.GroupB,
             ReplayMarkerResolveGroup.GroupA,
         ];
+        private static readonly ConditionalWeakTable<IReadOnlyList<ReplayMarkerSnapshot>, ForsakenReplayCache> ForsakenReplayCaches = new();
+        private static readonly object ForsakenReplayCacheLock = new();
 
         public string Name => "Dancing Mad Ultimate";
 
@@ -226,6 +239,16 @@ internal static class ReplayEncounterModules
         public bool IsReplayOverheadStatus(uint statusId)
         {
             return statusId is 3004 or 3005 or 3006 or
+                DmuP3EntropyStatusId or
+                DmuP3DynamicFluidStatusId or
+                DmuP3HeadwindStatusId or
+                DmuP3TailwindStatusId or
+                DmuP3AccretionStatusId or
+                DmuP3EpicHeroStatusId or
+                DmuP3FatedHeroStatusId or
+                DmuP3UnbecomingStatusId or
+                DmuP3MeanestExistenceStatusId or
+                DmuP3PrimordialCrustStatusId or
                 5084 or 5085 or 5086 or
                 DmuP4CursedShriekStatusId or
                 DmuP4ForkedLightningStatusId or
@@ -245,6 +268,16 @@ internal static class ReplayEncounterModules
                 715 => new ReplayMarkerInfo("Stack", "Forsaken stack", ReplayMechanicShape.Stack, Radius: 5.0f),
                 716 => new ReplayMarkerInfo("Spread", "Forsaken spread", ReplayMechanicShape.Spread, Radius: 5.0f),
                 717 => new ReplayMarkerInfo("Cone", "Forsaken cone", ReplayMechanicShape.Cone, Radius: 18.0f, Length: 18.0f, AngleDegrees: 60.0f, ConeBaitsClosestPlayer: true),
+                DmuP3EntropyStatusId => new ReplayMarkerInfo("Entropy", "Entropy", ReplayMechanicShape.Circle, Radius: 5.0f),
+                DmuP3DynamicFluidStatusId => new ReplayMarkerInfo("Fluid", "Dynamic Fluid", ReplayMechanicShape.Donut, Radius: 10.0f, Width: 4.0f),
+                DmuP3HeadwindStatusId => new ReplayMarkerInfo("Headwind", "Headwind"),
+                DmuP3TailwindStatusId => new ReplayMarkerInfo("Tailwind", "Tailwind"),
+                DmuP3AccretionStatusId => new ReplayMarkerInfo("Accretion", "Accretion"),
+                DmuP3EpicHeroStatusId => new ReplayMarkerInfo("Epic", "Epic Hero"),
+                DmuP3FatedHeroStatusId => new ReplayMarkerInfo("Fated", "Fated Hero"),
+                DmuP3UnbecomingStatusId => new ReplayMarkerInfo("Unbecoming", "Unbecoming"),
+                DmuP3MeanestExistenceStatusId => new ReplayMarkerInfo("Meanest", "Meanest Existence"),
+                DmuP3PrimordialCrustStatusId => new ReplayMarkerInfo("Crust", "Primordial Crust"),
                 3004 => new ReplayMarkerInfo("1st", "First in line"),
                 3005 => new ReplayMarkerInfo("2nd", "Second in line"),
                 3006 => new ReplayMarkerInfo("3rd", "Third in line"),
@@ -300,37 +333,34 @@ internal static class ReplayEncounterModules
                 return true;
             }
 
-            var markerGroup = GetForsakenResolveGroup(marker, markers, positions);
-            var activeGroup = GetActiveForsakenResolveGroup(markers, positions, selectedAtUtc);
+            var cache = GetForsakenReplayCache(markers, positions);
+            var markerGroup = cache.ActorGroups.TryGetValue(marker.ActorKey, out var group)
+                ? group
+                : ReplayMarkerResolveGroup.Unknown;
+            var activeGroup = GetActiveForsakenResolveGroup(cache, selectedAtUtc);
             return markerGroup == ReplayMarkerResolveGroup.Unknown ||
                 activeGroup == ReplayMarkerResolveGroup.Unknown ||
                 markerGroup == activeGroup;
         }
 
-        private static ReplayMarkerResolveGroup GetActiveForsakenResolveGroup(
-            IReadOnlyList<ReplayMarkerSnapshot> markers,
-            IReadOnlyList<ReplayPositionSnapshot> positions,
-            DateTime selectedAtUtc)
+        private static ReplayMarkerResolveGroup GetActiveForsakenResolveGroup(ForsakenReplayCache cache, DateTime selectedAtUtc)
         {
-            var relevantMarkers = GetForsakenTowerMarkers(markers);
-            if (relevantMarkers.Count == 0)
-            {
-                return ReplayMarkerResolveGroup.Unknown;
-            }
-
-            var initialBatchEnd = relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
-            var updateBatches = BuildForsakenMarkerUpdateBatches(relevantMarkers, initialBatchEnd);
-            var actorGroups = BuildForsakenActorGroups(markers, positions);
-            if (actorGroups.Count == 0)
+            if (cache.RelevantMarkers.Count == 0 ||
+                cache.ActorGroups.Count == 0)
             {
                 return ReplayMarkerResolveGroup.Unknown;
             }
 
             var sequenceIndex = 0;
-            foreach (var batch in updateBatches.Where(batch => batch[0].SeenAtUtc <= selectedAtUtc))
+            foreach (var batch in cache.UpdateBatches)
             {
+                if (batch[0].SeenAtUtc > selectedAtUtc)
+                {
+                    break;
+                }
+
                 var activeGroup = ForsakenTowerResolveSequence[Math.Clamp(sequenceIndex, 0, ForsakenTowerResolveSequence.Length - 1)];
-                if (batch.Any(marker => actorGroups.TryGetValue(marker.ActorKey, out var markerGroup) && markerGroup == activeGroup))
+                if (batch.Any(marker => cache.ActorGroups.TryGetValue(marker.ActorKey, out var markerGroup) && markerGroup == activeGroup))
                 {
                     sequenceIndex = Math.Min(sequenceIndex + 1, ForsakenTowerResolveSequence.Length - 1);
                 }
@@ -339,15 +369,59 @@ internal static class ReplayEncounterModules
             return ForsakenTowerResolveSequence[sequenceIndex];
         }
 
-        private static ReplayMarkerResolveGroup GetForsakenResolveGroup(
-            ReplayMarkerSnapshot marker,
+        private static ForsakenReplayCache GetForsakenReplayCache(
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions)
         {
-            var actorGroups = BuildForsakenActorGroups(markers, positions);
-            return actorGroups.TryGetValue(marker.ActorKey, out var group)
-                ? group
-                : ReplayMarkerResolveGroup.Unknown;
+            lock (ForsakenReplayCacheLock)
+            {
+                if (ForsakenReplayCaches.TryGetValue(markers, out var cached) &&
+                    cached.Matches(markers, positions))
+                {
+                    return cached;
+                }
+
+                ForsakenReplayCaches.Remove(markers);
+                var cache = BuildForsakenReplayCache(markers, positions);
+                ForsakenReplayCaches.Add(markers, cache);
+                return cache;
+            }
+        }
+
+        private static ForsakenReplayCache BuildForsakenReplayCache(
+            IReadOnlyList<ReplayMarkerSnapshot> markers,
+            IReadOnlyList<ReplayPositionSnapshot> positions)
+        {
+            var relevantMarkers = GetForsakenTowerMarkers(markers);
+            var initialBatchEnd = relevantMarkers.Count == 0
+                ? DateTime.MinValue
+                : relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
+            var updateBatches = relevantMarkers.Count == 0
+                ? []
+                : BuildForsakenMarkerUpdateBatches(relevantMarkers, initialBatchEnd);
+
+            return new ForsakenReplayCache(
+                markers,
+                positions,
+                CreateMarkerListSignature(markers),
+                CreatePositionListSignature(positions),
+                relevantMarkers,
+                updateBatches,
+                BuildForsakenActorGroups(markers, positions));
+        }
+
+        private static ReplayListSignature CreateMarkerListSignature(IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            return markers.Count == 0
+                ? new ReplayListSignature(0, 0L, 0L)
+                : new ReplayListSignature(markers.Count, markers[0].SeenAtUtc.Ticks, markers[^1].SeenAtUtc.Ticks);
+        }
+
+        private static ReplayListSignature CreatePositionListSignature(IReadOnlyList<ReplayPositionSnapshot> positions)
+        {
+            return positions.Count == 0
+                ? new ReplayListSignature(0, 0L, 0L)
+                : new ReplayListSignature(positions.Count, positions[0].SeenAtUtc.Ticks, positions[^1].SeenAtUtc.Ticks);
         }
 
         private static IReadOnlyList<IReadOnlyList<ReplayMarkerSnapshot>> BuildForsakenMarkerUpdateBatches(
@@ -702,6 +776,28 @@ internal static class ReplayEncounterModules
         }
 
         private sealed record ForsakenActor(string ActorKey, int PartyIndex, string ClassJobName);
+
+        private readonly record struct ReplayListSignature(int Count, long FirstSeenAtTicks, long LastSeenAtTicks);
+
+        private sealed record ForsakenReplayCache(
+            IReadOnlyList<ReplayMarkerSnapshot> Markers,
+            IReadOnlyList<ReplayPositionSnapshot> Positions,
+            ReplayListSignature MarkerSignature,
+            ReplayListSignature PositionSignature,
+            IReadOnlyList<ReplayMarkerSnapshot> RelevantMarkers,
+            IReadOnlyList<IReadOnlyList<ReplayMarkerSnapshot>> UpdateBatches,
+            IReadOnlyDictionary<string, ReplayMarkerResolveGroup> ActorGroups)
+        {
+            public bool Matches(
+                IReadOnlyList<ReplayMarkerSnapshot> markers,
+                IReadOnlyList<ReplayPositionSnapshot> positions)
+            {
+                return ReferenceEquals(Markers, markers) &&
+                    ReferenceEquals(Positions, positions) &&
+                    MarkerSignature == CreateMarkerListSignature(markers) &&
+                    PositionSignature == CreatePositionListSignature(positions);
+            }
+        }
     }
 
     private static bool TryGetNumber(uint markerId, out int number)

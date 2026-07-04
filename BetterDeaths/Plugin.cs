@@ -89,7 +89,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const ushort ChatGreenColorKey = 45;
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
-    private const int DeathReplayLeadUpSeconds = 20;
+    private const int DeathReplayLeadUpSeconds = 30;
     private const int DeathReplayPostDeathSeconds = 10;
     private const int DeathReplayMarkerCarryInSeconds = 30;
     private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
@@ -97,6 +97,56 @@ public sealed partial class Plugin : IDalamudPlugin
     private const uint DmuGravenImageTetherId = 45;
     private const uint DmuGravenImageBaseId = 19505;
     private const uint DmuBlackHoleNothingnessActionId = 47868;
+    private const uint DmuP2PathOfLightActionId = 47806;
+    private const uint DmuP2SpelldriverActionId = 47808;
+    private const uint DmuP2SpellscatterActionId = 47809;
+    private const uint DmuP2SpellwaveActionId = 47810;
+    private const uint DmuP2FuturesEndBossActionId = 47830;
+    private const uint DmuP2PastsEndBossActionId = 47831;
+    private const uint DmuP2FuturesEndCloneActionId = 47832;
+    private const uint DmuP2PastsEndCloneActionId = 47833;
+    private const uint DmuP2AllThingsEndingFirstActionId = 47836;
+    private const uint DmuP2AllThingsEndingSecondActionId = 47837;
+    private const uint DmuP2PathOfLightMapEffectState = 0x00020001;
+    private const uint DmuP3AeroIIIAssaultActionId = 50167;
+    private const uint DmuP3ThunderIIICircleActionId = 47890;
+    private const uint DmuP3StrayFlamesActionId = 47859;
+    private const uint DmuP3InfernoActionId = 47860;
+    private const uint DmuP3TsunamiActionId = 47861;
+    private const uint DmuP3StraySprayActionId = 47862;
+    private const uint DmuP3CycloneActionId = 47864;
+    private const uint DmuP3ThunderIIIBusterActionId = 47884;
+    private const uint DmuP3LongitudinalImplosionCastActionId = 47869;
+    private const uint DmuP3LatitudinalImplosionCastActionId = 47870;
+    private const uint DmuP3LatLongShockwaveActionId = 47871;
+    private const uint DmuP3UmbraSmashActionId = 47872;
+    private const uint DmuP3UltimaBlasterChargeActionId = 47844;
+    private const uint DmuP3SlapHappyRightHandCastActionId = 47846;
+    private const uint DmuP3SlapHappyLeftHandCastActionId = 47847;
+    private const uint DmuP3SlapHappyBigActionId = 47848;
+    private const uint DmuP3SlapHappySmallActionId = 47849;
+    private const uint DmuP3SlapHappyShockingImpactActionId = 47850;
+    private const uint DmuP3SlapHappyShockwaveActionId = 47851;
+    private const uint DmuP3DamningEdictActionId = 47873;
+    private const uint DmuP3LookUponMeAndDespairCastFirstActionId = 47852;
+    private const uint DmuP3LookUponMeAndDespairCastSecondActionId = 47853;
+    private const uint DmuP3LookUponMeAndDespairActionId = 47854;
+    private const uint DmuP3BlizzardIIIActionId = 47885;
+    private const uint DmuP3KnockDownActionId = 47875;
+    private const uint DmuP3StompAMoleVisualActionId = 47855;
+    private const uint DmuP3StompAMoleActionId = 47856;
+    private const uint DmuP3BigBangActionId = 47878;
+    private const float DmuReplayActiveMechanicMinDurationSeconds = 0.05f;
+    private const float DmuReplayPredictionFallbackGraceSeconds = 0.75f;
+    private const float DmuReplaySlapHappyPredictionExtraSeconds = 4.2f;
+    private const float DmuReplayStompAMolePredictionExtraSeconds = 3.8f;
+    private const float DmuArenaCenterX = 100.0f;
+    private const float DmuArenaCenterZ = 100.0f;
+    private const float DmuP2PathOfLightTowerDistance = 8.0f;
+    private const float DmuP2PathOfLightTowerRadius = 4.0f;
+    private const float DmuP2PathOfLightTowerFallbackDurationSeconds = 10.4f;
+    private const float DmuP2PathOfLightTowerMaxMatchSeconds = 14.0f;
+    private const float DmuP2PathOfLightTowerResolveMatchDistance = 7.0f;
     private const uint DmuP4RealityTellStatusId = 2056;
     private const int HpHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
     private const int SourceMitigationHistoryRetentionSeconds = BetterDeathsLeadUpCaptureSeconds + 5;
@@ -107,6 +157,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxRawCombatLogMessages = 256;
     private const int MaxRawEffectResultPackets = 256;
     private const int MaxRawActorControlPackets = 256;
+    private const int MaxRawMapEffectPackets = 256;
     private const int MaxDebugEffectResultEvents = 1000;
     private const int MaxDebugActorControlEvents = 1000;
     private const int MaxAddonInspectorEvents = 500;
@@ -133,6 +184,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const uint InvalidActorEntityId = 0xE0000000;
     private const string ActorControlSignature = "E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64";
     private const string EffectResultSignature = "48 8B C4 44 88 40 18 89 48 08";
+    private const string MapEffectSignature = "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 8B FA 41 0F B7 E8";
     public const float CurrentPullWidgetMinBackgroundOpacity = 0.35f;
     public const float CurrentPullWidgetMaxBackgroundOpacity = 1.0f;
     public const float MainWindowMinBackgroundOpacity = 0.20f;
@@ -314,6 +366,11 @@ public sealed partial class Plugin : IDalamudPlugin
         uint CasterEntityId,
         string CasterName,
         uint ActionId,
+        bool HasCasterPose,
+        Vector3 CasterPosition,
+        float CasterRotation,
+        bool HasTargetPosition,
+        Vector3 TargetPosition,
         RawCombatSnapshot? SourceSnapshot,
         IReadOnlyList<RawActionEffectTarget> Targets);
 
@@ -396,6 +453,31 @@ public sealed partial class Plugin : IDalamudPlugin
         RawCombatSnapshot? TargetSnapshot,
         RawCombatSnapshot? SourceSnapshot);
 
+    private sealed record RawMapEffectPacket(
+        long Sequence,
+        DateTime SeenAtUtc,
+        uint Index,
+        ushort StateLow,
+        ushort StateHigh);
+
+    private sealed record ActiveDmuP2PathOfLightTower(
+        uint Index,
+        string SourceKey,
+        DateTime SeenAtUtc,
+        Vector3 Position);
+
+    private sealed record ActiveReplayMechanic(
+        string ActiveKey,
+        string SourceKey,
+        uint SourceEntityId,
+        uint CastActionId,
+        uint ResolveActionId,
+        DateTime CastStartedAtUtc,
+        DateTime StartedAtUtc,
+        DateTime FallbackEndAtUtc,
+        bool EndsWhenSourceMissing,
+        bool EndsWhenSourceStopsCasting);
+
     private sealed record PendingEffectResult(
         RawEffectResultPacket Packet,
         uint ShieldHp,
@@ -430,6 +512,8 @@ public sealed partial class Plugin : IDalamudPlugin
     }
 
     private delegate void ProcessPacketEffectResultDelegate(uint targetId, IntPtr actionIntegrityData, byte isReplay);
+
+    private delegate long ProcessMapEffectDelegate(long a1, uint index, ushort stateLow, ushort stateHigh);
 
     private delegate void ProcessPacketActorControlDelegate(
         uint entityId,
@@ -513,10 +597,14 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Queue<RawCombatLogMessage> rawCombatLogMessages = [];
     private readonly Queue<RawEffectResultPacket> rawEffectResultPackets = [];
     private readonly Queue<RawActorControlPacket> rawActorControlPackets = [];
+    private readonly Queue<RawMapEffectPacket> rawMapEffectPackets = [];
+    private readonly Dictionary<uint, ActiveDmuP2PathOfLightTower> activeDmuP2PathOfLightTowersByIndex = [];
+    private readonly Dictionary<string, ActiveReplayMechanic> activeReplayMechanicsByKey = new(StringComparer.Ordinal);
     private long nextRawActionEffectSequence = 1;
     private long nextRawCombatLogSequence = 1;
     private long nextRawEffectResultSequence = 1;
     private long nextRawActorControlSequence = 1;
+    private long nextRawMapEffectSequence = 1;
     private long nextResolvedCombatEventOrdinal = 1;
     private DateTime? pendingDeathRecapLinksDueAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
@@ -537,6 +625,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool updateCheckInProgress;
     private bool effectResultHookEnabled;
     private bool actorControlHookEnabled;
+    private bool mapEffectHookEnabled;
     private bool debugFreezeOnDeathEnabled;
     private bool debugCaptureFrozen;
     private bool addonInspectorLifecycleRegistered;
@@ -602,6 +691,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private Hook<ActionEffectHandler.Delegates.Receive>? actionEffectHook;
     private Hook<ProcessPacketEffectResultDelegate>? effectResultHook;
     private Hook<ProcessPacketActorControlDelegate>? actorControlHook;
+    private Hook<ProcessMapEffectDelegate>? mapEffectHook;
     private DateTime? pullStartedAtUtc;
     private DateTime? lastInCombatAtUtc;
     private float lastKnownPullElapsedSeconds;
@@ -671,6 +761,8 @@ public sealed partial class Plugin : IDalamudPlugin
     public bool DebugEffectResultHookEnabled => effectResultHookEnabled;
 
     public bool DebugActorControlHookEnabled => actorControlHookEnabled;
+
+    public bool DebugMapEffectHookEnabled => mapEffectHookEnabled;
 
     public bool DebugFreezeOnDeathEnabled => debugFreezeOnDeathEnabled;
 
@@ -801,6 +893,21 @@ public sealed partial class Plugin : IDalamudPlugin
             Log.Warning(ex, "Better Deaths EffectResult debug hook could not be enabled.");
         }
 
+        try
+        {
+            mapEffectHook = GameInteropProvider.HookFromSignature<ProcessMapEffectDelegate>(
+                MapEffectSignature,
+                OnProcessMapEffect);
+            mapEffectHook.Enable();
+            mapEffectHookEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            mapEffectHookEnabled = false;
+            mapEffectHook = null;
+            Log.Warning(ex, "Better Deaths MapEffect replay hook could not be enabled.");
+        }
+
         DutyState.DutyStarted += OnDutyStarted;
         DutyState.DutyWiped += OnDutyReset;
         DutyState.DutyRecommenced += OnDutyReset;
@@ -845,6 +952,7 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyRecommenced -= OnDutyReset;
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyStarted;
+        mapEffectHook?.Dispose();
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
@@ -3404,7 +3512,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            EnqueueRawActionEffects(casterEntityId, header, effects, targetEntityIds);
+            EnqueueRawActionEffects(casterEntityId, targetPos, header, effects, targetEntityIds);
         }
         catch (Exception ex)
         {
@@ -3426,6 +3534,22 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             Log.Debug(ex, "Could not process Better Deaths EffectResult packet.");
         }
+    }
+
+    private long OnProcessMapEffect(long a1, uint index, ushort stateLow, ushort stateHigh)
+    {
+        var result = mapEffectHook?.Original(a1, index, stateLow, stateHigh) ?? 0;
+
+        try
+        {
+            EnqueueRawMapEffect(index, stateLow, stateHigh);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not process Better Deaths MapEffect packet.");
+        }
+
+        return result;
     }
 
     private void OnProcessPacketActorControl(
@@ -3548,8 +3672,25 @@ public sealed partial class Plugin : IDalamudPlugin
             statuses));
     }
 
+    private void EnqueueRawMapEffect(uint index, ushort stateLow, ushort stateHigh)
+    {
+        var now = DateTime.UtcNow;
+        if (!ShouldAcceptRawCombatCapture(now))
+        {
+            return;
+        }
+
+        EnqueueRawMapEffectPacket(new RawMapEffectPacket(
+            GetNextRawMapEffectSequence(),
+            now,
+            index,
+            stateLow,
+            stateHigh));
+    }
+
     private unsafe void EnqueueRawActionEffects(
         uint casterEntityId,
+        Vector3* targetPos,
         ActionEffectHandler.Header* header,
         ActionEffectHandler.TargetEffects* effects,
         GameObjectId* targetEntityIds)
@@ -3606,6 +3747,20 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        var capturedTargetPosition = targetPos is null ? Vector3.Zero : *targetPos;
+        var hasTargetPosition = targetPos is not null && IsUsableReplayPosition(capturedTargetPosition);
+        var hasCasterPose = false;
+        var casterPosition = Vector3.Zero;
+        var casterRotation = 0.0f;
+        if (IsDmuReplayCaptureContext() &&
+            IsDmuCasterPoseReplayAction(header->ActionId) &&
+            TryGetReplayObjectPose(casterEntityId, out var capturedCasterPosition, out var capturedCasterRotation, out _))
+        {
+            hasCasterPose = true;
+            casterPosition = capturedCasterPosition;
+            casterRotation = capturedCasterRotation;
+        }
+
         EnqueueRawActionEffectPacket(new RawActionEffectPacket(
             GetNextRawActionEffectSequence(),
             now,
@@ -3613,6 +3768,11 @@ public sealed partial class Plugin : IDalamudPlugin
             casterEntityId,
             GetEntityDisplayName(casterEntityId),
             header->ActionId,
+            hasCasterPose,
+            casterPosition,
+            casterRotation,
+            hasTargetPosition,
+            capturedTargetPosition,
             sourceSnapshot,
             targets));
     }
@@ -3646,6 +3806,14 @@ public sealed partial class Plugin : IDalamudPlugin
         lock (rawCombatQueueLock)
         {
             return nextRawActorControlSequence++;
+        }
+    }
+
+    private long GetNextRawMapEffectSequence()
+    {
+        lock (rawCombatQueueLock)
+        {
+            return nextRawMapEffectSequence++;
         }
     }
 
@@ -3704,8 +3872,27 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private void EnqueueRawMapEffectPacket(RawMapEffectPacket packet)
+    {
+        lock (rawCombatQueueLock)
+        {
+            rawMapEffectPackets.Enqueue(packet);
+            while (rawMapEffectPackets.Count > MaxRawMapEffectPackets)
+            {
+                rawMapEffectPackets.Dequeue();
+            }
+        }
+    }
+
     private void ResolveRawCombatQueues(DateTime now)
     {
+        var mapEffectPackets = DrainRawMapEffectPackets(now);
+        mapEffectPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
+        foreach (var packet in mapEffectPackets)
+        {
+            ResolveRawMapEffectPacket(packet);
+        }
+
         var actionPackets = DrainRawActionEffectPackets(now);
         actionPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in actionPackets)
@@ -3819,10 +4006,39 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 
+    private List<RawMapEffectPacket> DrainRawMapEffectPackets(DateTime now)
+    {
+        lock (rawCombatQueueLock)
+        {
+            var cutoff = now - TimeSpan.FromSeconds(RawCombatLogRetentionSeconds);
+            while (rawMapEffectPackets.Count > 0 && rawMapEffectPackets.Peek().SeenAtUtc < cutoff)
+            {
+                rawMapEffectPackets.Dequeue();
+            }
+
+            if (rawMapEffectPackets.Count == 0)
+            {
+                return [];
+            }
+
+            var packets = rawMapEffectPackets.ToList();
+            rawMapEffectPackets.Clear();
+            return packets;
+        }
+    }
+
+    private void ResolveRawMapEffectPacket(RawMapEffectPacket packet)
+    {
+        CaptureReplayDmuP2PathOfLightMapEffect(packet);
+    }
+
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
         TrackPossibleMitigationActionUse(packet);
         CaptureReplayBlackHoleBlast(packet);
+        ResolveActiveReplayMechanicsForAction(packet);
+        CaptureReplayDmuP2ForsakenAction(packet);
+        CaptureReplayDmuP3Action(packet);
 
         string? actionName = null;
         uint? actionIconId = null;
@@ -3999,6 +4215,1281 @@ public sealed partial class Plugin : IDalamudPlugin
                 break;
             }
         }
+    }
+
+    private void CaptureReplayDmuP2PathOfLightMapEffect(RawMapEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        var rawState = packet.StateLow | ((uint)packet.StateHigh << 16);
+        if (packet.Index is < 1 or > 8 ||
+            rawState != DmuP2PathOfLightMapEffectState)
+        {
+            return;
+        }
+
+        var angleDegrees = 180.0f - ((packet.Index - 1) * 45.0f);
+        var angleRadians = angleDegrees * MathF.PI / 180.0f;
+        var x = DmuArenaCenterX + MathF.Cos(angleRadians) * DmuP2PathOfLightTowerDistance;
+        var z = DmuArenaCenterZ + MathF.Sin(angleRadians) * DmuP2PathOfLightTowerDistance;
+        var position = new Vector3(x, 0.0f, z);
+        var sourceKey = $"dmu-p2-path-of-light:{packet.Index}:{packet.Sequence}";
+        PruneActiveDmuP2PathOfLightTowers(packet.SeenAtUtc);
+
+        AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            DmuP2PathOfLightTowerFallbackDurationSeconds,
+            sourceKey,
+            $"Path of Light {packet.Index}",
+            ReplayMechanicShape.Tower,
+            position.X,
+            position.Y,
+            position.Z,
+            0.0f,
+            DmuP2PathOfLightTowerRadius,
+            0.0f,
+            0.0f,
+            0.0f,
+            "Path of Light",
+            "dmu-p2-path-of-light",
+            DmuP2PathOfLightActionId,
+            rawState,
+            true));
+        activeDmuP2PathOfLightTowersByIndex[packet.Index] = new ActiveDmuP2PathOfLightTower(
+            packet.Index,
+            sourceKey,
+            packet.SeenAtUtc,
+            position);
+    }
+
+    private void CaptureReplayDmuP2ForsakenAction(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        switch (packet.ActionId)
+        {
+            case DmuP2PathOfLightActionId:
+                EndReplayDmuP2PathOfLightTower(packet);
+                break;
+            case DmuP2SpelldriverActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    5.0f,
+                    "Spelldriver",
+                    "dmu-p2-spelldriver",
+                    2.0f);
+                break;
+            case DmuP2SpellscatterActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    5.0f,
+                    "Spellscatter",
+                    "dmu-p2-spellscatter",
+                    2.0f);
+                break;
+            case DmuP2SpellwaveActionId:
+                CaptureReplayDmuSourceCone(
+                    packet,
+                    40.0f,
+                    90.0f,
+                    "Spellwave",
+                    "dmu-p2-spellwave",
+                    2.0f);
+                break;
+            case DmuP2FuturesEndBossActionId:
+            case DmuP2FuturesEndCloneActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    5.0f,
+                    "Future's End",
+                    "dmu-p2-futures-end",
+                    2.4f);
+                break;
+            case DmuP2PastsEndBossActionId:
+            case DmuP2PastsEndCloneActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    5.0f,
+                    "Past's End",
+                    "dmu-p2-pasts-end",
+                    2.4f);
+                break;
+            case DmuP2AllThingsEndingFirstActionId:
+            case DmuP2AllThingsEndingSecondActionId:
+                CaptureReplayDmuSourceCone(
+                    packet,
+                    100.0f,
+                    180.0f,
+                    "All Things Ending",
+                    "dmu-p2-all-things-ending",
+                    2.0f);
+                break;
+        }
+    }
+
+    private void CaptureReplayDmuP3Action(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        switch (packet.ActionId)
+        {
+            case DmuP3AeroIIIAssaultActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    40.0f,
+                    "Aero III",
+                    "dmu-p3-aero-iii-assault",
+                    2.0f);
+                break;
+            case DmuP3ThunderIIICircleActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    14.8f,
+                    "Thunder III",
+                    "dmu-p3-thunder-iii-circle",
+                    2.0f);
+                break;
+            case DmuP3StrayFlamesActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    5.0f,
+                    "Entropy",
+                    "dmu-p3-stray-flames",
+                    2.0f);
+                break;
+            case DmuP3InfernoActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Donut,
+                    10.0f,
+                    "Inferno",
+                    "dmu-p3-inferno",
+                    2.0f,
+                    width: 4.0f);
+                break;
+            case DmuP3TsunamiActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    5.0f,
+                    "Tsunami",
+                    "dmu-p3-tsunami",
+                    2.0f);
+                break;
+            case DmuP3StraySprayActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Donut,
+                    10.0f,
+                    "Fluid",
+                    "dmu-p3-stray-spray",
+                    2.0f,
+                    width: 4.0f);
+                break;
+            case DmuP3CycloneActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    6.0f,
+                    "Cyclone",
+                    "dmu-p3-cyclone",
+                    2.0f);
+                break;
+            case DmuP3ThunderIIIBusterActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    5.0f,
+                    "Buster",
+                    "dmu-p3-thunder-iii-buster",
+                    2.0f);
+                break;
+            case DmuP3LatLongShockwaveActionId:
+                CaptureReplayDmuSourceCone(
+                    packet,
+                    40.0f,
+                    90.0f,
+                    "Shockwave",
+                    "dmu-p3-latlong-shockwave",
+                    2.0f);
+                break;
+            case DmuP3UmbraSmashActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    20.0f,
+                    "Umbra Smash",
+                    "dmu-p3-umbra-smash",
+                    2.5f);
+                break;
+            case DmuP3UltimaBlasterChargeActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    100.0f,
+                    6.0f,
+                    "Charge",
+                    "dmu-p3-ultima-blaster-charge",
+                    2.0f);
+                break;
+            case DmuP3SlapHappyBigActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    13.0f,
+                    "Slam",
+                    "dmu-p3-slap-happy-big",
+                    2.0f);
+                break;
+            case DmuP3SlapHappySmallActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    6.0f,
+                    "Center",
+                    "dmu-p3-slap-happy-small",
+                    2.0f);
+                break;
+            case DmuP3SlapHappyShockingImpactActionId:
+                CaptureReplayDmuSourceCone(
+                    packet,
+                    100.0f,
+                    60.0f,
+                    "Shocking Impact",
+                    "dmu-p3-slap-happy-shocking-impact",
+                    2.0f);
+                break;
+            case DmuP3SlapHappyShockwaveActionId:
+                CaptureReplayDmuSourceCone(
+                    packet,
+                    100.0f,
+                    45.0f,
+                    "Protean",
+                    "dmu-p3-slap-happy-shockwave",
+                    2.0f);
+                break;
+            case DmuBlackHoleNothingnessActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    125.0f,
+                    6.0f,
+                    "Nothingness",
+                    "dmu-p3-nothingness",
+                    2.0f);
+                break;
+            case DmuP3DamningEdictActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    60.0f,
+                    80.0f,
+                    "Damning Edict",
+                    "dmu-p3-damning-edict",
+                    2.0f);
+                break;
+            case DmuP3LookUponMeAndDespairActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    100.0f,
+                    16.0f,
+                    "Despair",
+                    "dmu-p3-look-upon-me-and-despair",
+                    2.0f);
+                break;
+            case DmuP3BlizzardIIIActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    6.0f,
+                    "Blizzard III",
+                    "dmu-p3-blizzard-iii",
+                    2.0f);
+                break;
+            case DmuP3KnockDownActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    6.0f,
+                    "Knock Down",
+                    "dmu-p3-knock-down",
+                    2.0f);
+                break;
+            case DmuP3StompAMoleActionId:
+                CaptureReplayDmuSourceTower(
+                    packet,
+                    5.0f,
+                    "Stomp",
+                    "dmu-p3-stomp-a-mole",
+                    2.0f);
+                break;
+            case DmuP3BigBangActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    6.0f,
+                    "Big Bang",
+                    "dmu-p3-big-bang",
+                    2.0f);
+                break;
+        }
+    }
+
+    private void CaptureReplayDmuP3CastPrediction(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            battleNpc is not Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara ||
+            !battleChara.IsCasting ||
+            battleChara.CastActionId == 0)
+        {
+            return;
+        }
+
+        var castActionId = battleChara.CastActionId;
+        var remainingCastSeconds = GetRemainingReplayCastSeconds(battleChara);
+        var castStartedAtUtc = GetReplayCastStartedAtUtc(seenAtUtc, battleChara);
+        switch (castActionId)
+        {
+            case DmuP3ThunderIIICircleActionId:
+                RegisterActiveReplayMechanicSnapshot(
+                    mechanicSnapshots,
+                    CreateDmuSourcePredictionSnapshot(
+                        seenAtUtc,
+                        battleNpc,
+                        name,
+                        ReplayMechanicShape.Circle,
+                        battleNpc.Position,
+                        battleNpc.Rotation,
+                        14.8f,
+                        0.0f,
+                        0.0f,
+                        0.0f,
+                        "Thunder III",
+                        "dmu-p3-thunder-iii-predicted",
+                        castActionId,
+                        "main",
+                        remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds),
+                    BuildActiveReplayMechanicKey("dmu-p3-thunder-iii-predicted", battleNpc.EntityId, castActionId, "main"),
+                    battleNpc.EntityId,
+                    castActionId,
+                    DmuP3ThunderIIICircleActionId,
+                    true,
+                    true,
+                    castStartedAtUtc);
+                break;
+            case DmuP3LongitudinalImplosionCastActionId:
+                CaptureReplayDmuP3LatLongPrediction(
+                    battleNpc,
+                    name,
+                    seenAtUtc,
+                    mechanicSnapshots,
+                    castActionId,
+                    [battleNpc.Rotation, battleNpc.Rotation + MathF.PI],
+                    remainingCastSeconds,
+                    castStartedAtUtc);
+                break;
+            case DmuP3LatitudinalImplosionCastActionId:
+                CaptureReplayDmuP3LatLongPrediction(
+                    battleNpc,
+                    name,
+                    seenAtUtc,
+                    mechanicSnapshots,
+                    castActionId,
+                    [battleNpc.Rotation + (MathF.PI * 0.5f), battleNpc.Rotation - (MathF.PI * 0.5f)],
+                    remainingCastSeconds,
+                    castStartedAtUtc);
+                break;
+            case DmuP3SlapHappyLeftHandCastActionId:
+                CaptureReplayDmuP3SlapHappyPrediction(
+                    battleNpc,
+                    name,
+                    seenAtUtc,
+                    mechanicSnapshots,
+                    castActionId,
+                    useLeftHand: true,
+                    remainingCastSeconds,
+                    castStartedAtUtc);
+                break;
+            case DmuP3SlapHappyRightHandCastActionId:
+                CaptureReplayDmuP3SlapHappyPrediction(
+                    battleNpc,
+                    name,
+                    seenAtUtc,
+                    mechanicSnapshots,
+                    castActionId,
+                    useLeftHand: false,
+                    remainingCastSeconds,
+                    castStartedAtUtc);
+                break;
+            case DmuP3DamningEdictActionId:
+                RegisterActiveReplayMechanicSnapshot(
+                    mechanicSnapshots,
+                    CreateDmuForwardLinePredictionSnapshot(
+                        seenAtUtc,
+                        battleNpc,
+                        name,
+                        60.0f,
+                        80.0f,
+                        "Damning Edict",
+                        "dmu-p3-damning-edict-predicted",
+                        castActionId,
+                        "main",
+                        remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds),
+                    BuildActiveReplayMechanicKey("dmu-p3-damning-edict-predicted", battleNpc.EntityId, castActionId, "main"),
+                    battleNpc.EntityId,
+                    castActionId,
+                    DmuP3DamningEdictActionId,
+                    true,
+                    true,
+                    castStartedAtUtc);
+                break;
+            case DmuP3LookUponMeAndDespairActionId:
+                RegisterActiveReplayMechanicSnapshot(
+                    mechanicSnapshots,
+                    CreateDmuForwardLinePredictionSnapshot(
+                        seenAtUtc,
+                        battleNpc,
+                        name,
+                        100.0f,
+                        16.0f,
+                        "Despair",
+                        "dmu-p3-despair-predicted",
+                        castActionId,
+                        "main",
+                        remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds),
+                    BuildActiveReplayMechanicKey("dmu-p3-despair-predicted", battleNpc.EntityId, castActionId, "main"),
+                    battleNpc.EntityId,
+                    castActionId,
+                    DmuP3LookUponMeAndDespairActionId,
+                    true,
+                    true,
+                    castStartedAtUtc);
+                break;
+            case DmuP3BlizzardIIIActionId:
+                RegisterActiveReplayMechanicSnapshot(
+                    mechanicSnapshots,
+                    CreateDmuSourcePredictionSnapshot(
+                        seenAtUtc,
+                        battleNpc,
+                        name,
+                        ReplayMechanicShape.Circle,
+                        battleNpc.Position,
+                        battleNpc.Rotation,
+                        6.0f,
+                        0.0f,
+                        0.0f,
+                        0.0f,
+                        "Blizzard III",
+                        "dmu-p3-blizzard-iii-predicted",
+                        castActionId,
+                        "main",
+                        remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds),
+                    BuildActiveReplayMechanicKey("dmu-p3-blizzard-iii-predicted", battleNpc.EntityId, castActionId, "main"),
+                    battleNpc.EntityId,
+                    castActionId,
+                    DmuP3BlizzardIIIActionId,
+                    true,
+                    true,
+                    castStartedAtUtc);
+                break;
+            case DmuP3StompAMoleVisualActionId:
+                CaptureReplayDmuP3StompAMolePrediction(
+                    battleNpc,
+                    name,
+                    seenAtUtc,
+                    mechanicSnapshots,
+                    castActionId,
+                    remainingCastSeconds,
+                    castStartedAtUtc);
+                break;
+        }
+    }
+
+    private void CaptureReplayDmuP3LatLongPrediction(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        uint castActionId,
+        IReadOnlyList<float> rotations,
+        float remainingCastSeconds,
+        DateTime castStartedAtUtc)
+    {
+        for (var index = 0; index < rotations.Count; index++)
+        {
+            var variant = index.ToString(CultureInfo.InvariantCulture);
+            RegisterActiveReplayMechanicSnapshot(
+                mechanicSnapshots,
+                CreateDmuSourcePredictionSnapshot(
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Cone,
+                    battleNpc.Position,
+                    rotations[index],
+                    40.0f,
+                    40.0f,
+                    0.0f,
+                    90.0f,
+                    "Shockwave",
+                    "dmu-p3-latlong-shockwave-predicted",
+                    castActionId,
+                    variant,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds + 2.5f),
+                BuildActiveReplayMechanicKey("dmu-p3-latlong-shockwave-predicted", battleNpc.EntityId, castActionId, variant),
+                battleNpc.EntityId,
+                castActionId,
+                DmuP3LatLongShockwaveActionId,
+                true,
+                false,
+                castStartedAtUtc);
+        }
+    }
+
+    private void CaptureReplayDmuP3SlapHappyPrediction(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        uint castActionId,
+        bool useLeftHand,
+        float remainingCastSeconds,
+        DateTime castStartedAtUtc)
+    {
+        var forward = new Vector2(MathF.Cos(battleNpc.Rotation), MathF.Sin(battleNpc.Rotation));
+        var side = useLeftHand
+            ? RotateReplayVectorLeft(forward)
+            : RotateReplayVectorRight(forward);
+        var baseOffset = side * 10.0f;
+        var sideLeft = RotateReplayVectorLeft(baseOffset);
+        var sideRight = RotateReplayVectorRight(baseOffset);
+        var arenaCenter = new Vector3(DmuArenaCenterX, battleNpc.Position.Y, DmuArenaCenterZ);
+        var positions = useLeftHand
+            ? new[]
+            {
+                OffsetReplayPosition(arenaCenter, baseOffset + sideLeft),
+                OffsetReplayPosition(arenaCenter, baseOffset),
+                OffsetReplayPosition(arenaCenter, baseOffset + sideRight),
+                arenaCenter,
+            }
+            : new[]
+            {
+                OffsetReplayPosition(arenaCenter, baseOffset + sideRight),
+                OffsetReplayPosition(arenaCenter, baseOffset),
+                OffsetReplayPosition(arenaCenter, baseOffset + sideLeft),
+                arenaCenter,
+            };
+        var radii = new[] { 13.0f, 13.0f, 13.0f, 6.0f };
+        var labels = new[] { "Slam 1", "Slam 2", "Slam 3", "Center" };
+        var durationSeconds = remainingCastSeconds + DmuReplaySlapHappyPredictionExtraSeconds;
+        for (var index = 0; index < positions.Length; index++)
+        {
+            var variant = index.ToString(CultureInfo.InvariantCulture);
+            RegisterActiveReplayMechanicSnapshot(
+                mechanicSnapshots,
+                CreateDmuSourcePredictionSnapshot(
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    positions[index],
+                    0.0f,
+                    radii[index],
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    labels[index],
+                    "dmu-p3-slap-happy-predicted",
+                    castActionId,
+                    variant,
+                    durationSeconds),
+                BuildActiveReplayMechanicKey("dmu-p3-slap-happy-predicted", battleNpc.EntityId, castActionId, variant),
+                battleNpc.EntityId,
+                castActionId,
+                0,
+                true,
+                false,
+                castStartedAtUtc);
+        }
+    }
+
+    private void CaptureReplayDmuP3StompAMolePrediction(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        uint castActionId,
+        float remainingCastSeconds,
+        DateTime castStartedAtUtc)
+    {
+        var forward = new Vector2(MathF.Cos(battleNpc.Rotation), MathF.Sin(battleNpc.Rotation));
+        var offsets = new[]
+        {
+            RotateReplayVectorRight(forward) * 10.0f,
+            RotateReplayVectorLeft(forward) * 10.0f,
+        };
+        var durationSeconds = remainingCastSeconds + DmuReplayStompAMolePredictionExtraSeconds;
+        for (var index = 0; index < offsets.Length; index++)
+        {
+            var variant = index.ToString(CultureInfo.InvariantCulture);
+            RegisterActiveReplayMechanicSnapshot(
+                mechanicSnapshots,
+                CreateDmuSourcePredictionSnapshot(
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Tower,
+                    OffsetReplayPosition(battleNpc.Position, offsets[index]),
+                    0.0f,
+                    5.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    $"Stomp {index + 1}",
+                    "dmu-p3-stomp-a-mole-predicted",
+                    castActionId,
+                    variant,
+                    durationSeconds),
+                BuildActiveReplayMechanicKey("dmu-p3-stomp-a-mole-predicted", battleNpc.EntityId, castActionId, variant),
+                battleNpc.EntityId,
+                castActionId,
+                0,
+                true,
+                false,
+                castStartedAtUtc);
+        }
+    }
+
+    private ReplayMechanicSnapshot CreateDmuForwardLinePredictionSnapshot(
+        DateTime seenAtUtc,
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string sourceName,
+        float length,
+        float width,
+        string label,
+        string rawEventKind,
+        uint castActionId,
+        string variant,
+        float durationSeconds)
+    {
+        var center = new Vector3(
+            battleNpc.Position.X + (MathF.Cos(battleNpc.Rotation) * length * 0.5f),
+            battleNpc.Position.Y,
+            battleNpc.Position.Z + (MathF.Sin(battleNpc.Rotation) * length * 0.5f));
+        return CreateDmuSourcePredictionSnapshot(
+            seenAtUtc,
+            battleNpc,
+            sourceName,
+            ReplayMechanicShape.Line,
+            center,
+            battleNpc.Rotation,
+            0.0f,
+            length,
+            width,
+            0.0f,
+            label,
+            rawEventKind,
+            castActionId,
+            variant,
+            durationSeconds);
+    }
+
+    private ReplayMechanicSnapshot CreateDmuSourcePredictionSnapshot(
+        DateTime seenAtUtc,
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string sourceName,
+        ReplayMechanicShape shape,
+        Vector3 position,
+        float rotation,
+        float radius,
+        float length,
+        float width,
+        float angleDegrees,
+        string label,
+        string rawEventKind,
+        uint castActionId,
+        string variant,
+        float durationSeconds)
+    {
+        var safeDurationSeconds = Math.Max(DmuReplayActiveMechanicMinDurationSeconds, durationSeconds);
+        return new ReplayMechanicSnapshot(
+            seenAtUtc,
+            CalculatePullElapsed(seenAtUtc),
+            safeDurationSeconds,
+            $"{rawEventKind}:cast:{battleNpc.EntityId:X8}:{castActionId}:{variant}:{seenAtUtc.Ticks}",
+            string.IsNullOrWhiteSpace(sourceName) ? GetEntityDisplayName(battleNpc.EntityId) : sourceName,
+            shape,
+            position.X,
+            position.Y,
+            position.Z,
+            rotation,
+            radius,
+            length,
+            width,
+            angleDegrees,
+            label,
+            rawEventKind,
+            castActionId,
+            battleNpc.EntityId,
+            true);
+    }
+
+    private void CaptureReplayDmuPacketCenteredMechanic(
+        RawActionEffectPacket packet,
+        ReplayMechanicShape shape,
+        float radius,
+        string label,
+        string rawEventKind,
+        float durationSeconds,
+        float length = 0.0f,
+        float width = 0.0f,
+        float angleDegrees = 0.0f)
+    {
+        if (!TryGetReplayPacketMechanicCenter(packet, out var center))
+        {
+            return;
+        }
+
+        var sourceName = string.IsNullOrWhiteSpace(packet.CasterName)
+            ? GetEntityDisplayName(packet.CasterEntityId)
+            : packet.CasterName;
+
+        AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            durationSeconds,
+            $"{rawEventKind}:{packet.ActionId}:{packet.Sequence}",
+            sourceName,
+            shape,
+            center.X,
+            center.Y,
+            center.Z,
+            0.0f,
+            radius,
+            length,
+            width,
+            angleDegrees,
+            label,
+            rawEventKind,
+            packet.ActionId,
+            packet.ActionSequence,
+            true));
+    }
+
+    private void CaptureReplayDmuSourceCone(
+        RawActionEffectPacket packet,
+        float length,
+        float angleDegrees,
+        string label,
+        string rawEventKind,
+        float durationSeconds)
+    {
+        if (!TryGetReplayActionSourcePose(packet, out var position, out var rotation, out var sourceName))
+        {
+            return;
+        }
+
+        AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            durationSeconds,
+            $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.Sequence}",
+            sourceName,
+            ReplayMechanicShape.Cone,
+            position.X,
+            position.Y,
+            position.Z,
+            rotation,
+            length,
+            length,
+            0.0f,
+            angleDegrees,
+            label,
+            rawEventKind,
+            packet.ActionId,
+            packet.CasterEntityId,
+            true));
+    }
+
+    private void CaptureReplayDmuSourceCircle(
+        RawActionEffectPacket packet,
+        float radius,
+        string label,
+        string rawEventKind,
+        float durationSeconds)
+    {
+        CaptureReplayDmuSourceAnchoredMechanic(
+            packet,
+            ReplayMechanicShape.Circle,
+            radius,
+            0.0f,
+            0.0f,
+            0.0f,
+            label,
+            rawEventKind,
+            durationSeconds);
+    }
+
+    private void CaptureReplayDmuSourceTower(
+        RawActionEffectPacket packet,
+        float radius,
+        string label,
+        string rawEventKind,
+        float durationSeconds)
+    {
+        CaptureReplayDmuSourceAnchoredMechanic(
+            packet,
+            ReplayMechanicShape.Tower,
+            radius,
+            0.0f,
+            0.0f,
+            0.0f,
+            label,
+            rawEventKind,
+            durationSeconds);
+    }
+
+    private void CaptureReplayDmuSourceLine(
+        RawActionEffectPacket packet,
+        float length,
+        float width,
+        string label,
+        string rawEventKind,
+        float durationSeconds)
+    {
+        if (!TryGetReplayActionSourcePose(packet, out var position, out var rotation, out var sourceName))
+        {
+            return;
+        }
+
+        var center = new Vector3(
+            position.X + (MathF.Cos(rotation) * length * 0.5f),
+            position.Y,
+            position.Z + (MathF.Sin(rotation) * length * 0.5f));
+
+        AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            durationSeconds,
+            $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.Sequence}",
+            sourceName,
+            ReplayMechanicShape.Line,
+            center.X,
+            center.Y,
+            center.Z,
+            rotation,
+            0.0f,
+            length,
+            width,
+            0.0f,
+            label,
+            rawEventKind,
+            packet.ActionId,
+            packet.CasterEntityId,
+            true));
+    }
+
+    private void CaptureReplayDmuSourceAnchoredMechanic(
+        RawActionEffectPacket packet,
+        ReplayMechanicShape shape,
+        float radius,
+        float length,
+        float width,
+        float angleDegrees,
+        string label,
+        string rawEventKind,
+        float durationSeconds)
+    {
+        if (!TryGetReplayActionSourcePose(packet, out var position, out var rotation, out var sourceName))
+        {
+            return;
+        }
+
+        AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            durationSeconds,
+            $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.Sequence}",
+            sourceName,
+            shape,
+            position.X,
+            position.Y,
+            position.Z,
+            rotation,
+            radius,
+            length,
+            width,
+            angleDegrees,
+            label,
+            rawEventKind,
+            packet.ActionId,
+            packet.CasterEntityId,
+            true));
+    }
+
+    private bool TryGetReplayActionSourcePose(RawActionEffectPacket packet, out Vector3 position, out float rotation, out string sourceName)
+    {
+        position = packet.CasterPosition;
+        rotation = packet.CasterRotation;
+        sourceName = string.IsNullOrWhiteSpace(packet.CasterName)
+            ? GetEntityDisplayName(packet.CasterEntityId)
+            : packet.CasterName;
+
+        if (packet.HasCasterPose && IsUsableReplayPosition(position))
+        {
+            return true;
+        }
+
+        return TryGetReplayObjectPose(packet.CasterEntityId, out position, out rotation, out sourceName);
+    }
+
+    private void RegisterActiveReplayMechanicSnapshot(
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        ReplayMechanicSnapshot snapshot,
+        string activeKey,
+        uint sourceEntityId,
+        uint castActionId,
+        uint resolveActionId,
+        bool endsWhenSourceMissing,
+        bool endsWhenSourceStopsCasting,
+        DateTime? castStartedAtUtc = null)
+    {
+        var activeCastStartedAtUtc = castStartedAtUtc ?? snapshot.SeenAtUtc;
+        var currentStillWithinFallback = false;
+        if (activeReplayMechanicsByKey.TryGetValue(activeKey, out var current) &&
+            snapshot.SeenAtUtc <= current.FallbackEndAtUtc)
+        {
+            currentStillWithinFallback = true;
+            if (castStartedAtUtc is null ||
+                Duration(current.CastStartedAtUtc, activeCastStartedAtUtc) <= ReplayPositionSampleInterval)
+            {
+                return;
+            }
+        }
+
+        if (current is not null)
+        {
+            ClampRecentReplayMechanicEnd(current.SourceKey, currentStillWithinFallback ? snapshot.SeenAtUtc : current.FallbackEndAtUtc);
+        }
+
+        var fallbackEndAtUtc = snapshot.SeenAtUtc.AddSeconds(Math.Max(DmuReplayActiveMechanicMinDurationSeconds, snapshot.DurationSeconds));
+        activeReplayMechanicsByKey[activeKey] = new ActiveReplayMechanic(
+            activeKey,
+            snapshot.SourceKey,
+            sourceEntityId,
+            castActionId,
+            resolveActionId,
+            activeCastStartedAtUtc,
+            snapshot.SeenAtUtc,
+            fallbackEndAtUtc,
+            endsWhenSourceMissing,
+            endsWhenSourceStopsCasting);
+        mechanicSnapshots.Add(snapshot);
+    }
+
+    private void ResolveActiveReplayMechanicsForAction(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            activeReplayMechanicsByKey.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in activeReplayMechanicsByKey.Values
+            .Where(active => active.ResolveActionId != 0 && active.ResolveActionId == packet.ActionId)
+            .ToList())
+        {
+            ClampRecentReplayMechanicEnd(entry.SourceKey, packet.SeenAtUtc);
+            activeReplayMechanicsByKey.Remove(entry.ActiveKey);
+        }
+    }
+
+    private void UpdateActiveReplayMechanicLifetimes(
+        DateTime seenAtUtc,
+        IReadOnlySet<uint> seenEntityIds,
+        IReadOnlyDictionary<uint, uint> castingActionByEntityId)
+    {
+        if (activeReplayMechanicsByKey.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var active in activeReplayMechanicsByKey.Values.ToList())
+        {
+            if (seenAtUtc >= active.FallbackEndAtUtc)
+            {
+                ClampRecentReplayMechanicEnd(active.SourceKey, active.FallbackEndAtUtc);
+                activeReplayMechanicsByKey.Remove(active.ActiveKey);
+                continue;
+            }
+
+            if (active.EndsWhenSourceMissing &&
+                !seenEntityIds.Contains(active.SourceEntityId))
+            {
+                ClampRecentReplayMechanicEnd(active.SourceKey, seenAtUtc);
+                activeReplayMechanicsByKey.Remove(active.ActiveKey);
+                continue;
+            }
+
+            if (active.EndsWhenSourceStopsCasting &&
+                (!castingActionByEntityId.TryGetValue(active.SourceEntityId, out var castActionId) ||
+                    castActionId != active.CastActionId))
+            {
+                ClampRecentReplayMechanicEnd(active.SourceKey, seenAtUtc);
+                activeReplayMechanicsByKey.Remove(active.ActiveKey);
+            }
+        }
+    }
+
+    private static string BuildActiveReplayMechanicKey(string rawEventKind, uint sourceEntityId, uint castActionId, string variant)
+    {
+        return $"{rawEventKind}:{sourceEntityId:X8}:{castActionId}:{variant}";
+    }
+
+    private static float GetRemainingReplayCastSeconds(Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara)
+    {
+        var total = MathF.Max(0.0f, battleChara.TotalCastTime);
+        var current = Math.Clamp(battleChara.CurrentCastTime, 0.0f, MathF.Max(total, battleChara.CurrentCastTime));
+        return Math.Max(0.25f, total - current);
+    }
+
+    private static DateTime GetReplayCastStartedAtUtc(DateTime seenAtUtc, Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara)
+    {
+        return seenAtUtc.AddSeconds(-MathF.Max(0.0f, battleChara.CurrentCastTime));
+    }
+
+    private static Vector2 RotateReplayVectorLeft(Vector2 vector)
+    {
+        return new Vector2(-vector.Y, vector.X);
+    }
+
+    private static Vector2 RotateReplayVectorRight(Vector2 vector)
+    {
+        return new Vector2(vector.Y, -vector.X);
+    }
+
+    private static Vector3 OffsetReplayPosition(Vector3 position, Vector2 offset)
+    {
+        return new Vector3(position.X + offset.X, position.Y, position.Z + offset.Y);
+    }
+
+    private void EndReplayDmuP2PathOfLightTower(RawActionEffectPacket packet)
+    {
+        if (!TryFindActiveDmuP2PathOfLightTower(packet, out var tower))
+        {
+            return;
+        }
+
+        ClampRecentReplayMechanicEnd(tower.SourceKey, packet.SeenAtUtc);
+        activeDmuP2PathOfLightTowersByIndex.Remove(tower.Index);
+    }
+
+    private bool TryFindActiveDmuP2PathOfLightTower(
+        RawActionEffectPacket packet,
+        out ActiveDmuP2PathOfLightTower tower)
+    {
+        PruneActiveDmuP2PathOfLightTowers(packet.SeenAtUtc);
+        if (activeDmuP2PathOfLightTowersByIndex.Count == 0)
+        {
+            tower = default!;
+            return false;
+        }
+
+        if (TryGetReplayPathOfLightResolvePosition(packet, out var resolvePosition))
+        {
+            var nearest = activeDmuP2PathOfLightTowersByIndex.Values
+                .OrderBy(candidate => DistanceXZ(candidate.Position, resolvePosition))
+                .First();
+            if (DistanceXZ(nearest.Position, resolvePosition) <= DmuP2PathOfLightTowerResolveMatchDistance)
+            {
+                tower = nearest;
+                return true;
+            }
+        }
+
+        if (activeDmuP2PathOfLightTowersByIndex.Count == 1)
+        {
+            tower = activeDmuP2PathOfLightTowersByIndex.Values.First();
+            return true;
+        }
+
+        tower = default!;
+        return false;
+    }
+
+    private void PruneActiveDmuP2PathOfLightTowers(DateTime now)
+    {
+        var staleIndexes = activeDmuP2PathOfLightTowersByIndex
+            .Where(entry => (now - entry.Value.SeenAtUtc).TotalSeconds > DmuP2PathOfLightTowerMaxMatchSeconds)
+            .Select(entry => entry.Key)
+            .ToList();
+        foreach (var index in staleIndexes)
+        {
+            activeDmuP2PathOfLightTowersByIndex.Remove(index);
+        }
+    }
+
+    private bool TryGetReplayPathOfLightResolvePosition(RawActionEffectPacket packet, out Vector3 position)
+    {
+        if (packet.HasCasterPose && IsUsableReplayPosition(packet.CasterPosition))
+        {
+            position = packet.CasterPosition;
+            return true;
+        }
+
+        if (packet.HasTargetPosition && IsUsableReplayPosition(packet.TargetPosition))
+        {
+            position = packet.TargetPosition;
+            return true;
+        }
+
+        foreach (var target in packet.Targets)
+        {
+            var member = FindCurrentMemberByTargetId(target.TargetId);
+            if (member is null)
+            {
+                continue;
+            }
+
+            position = member.Position;
+            return true;
+        }
+
+        position = default;
+        return false;
+    }
+
+    private void ClampRecentReplayMechanicEnd(string sourceKey, DateTime endAtUtc)
+    {
+        if (!recentReplayMechanicsBySource.TryGetValue(sourceKey, out var history) ||
+            history.Count == 0)
+        {
+            return;
+        }
+
+        var last = history[^1];
+        if (endAtUtc < last.SeenAtUtc)
+        {
+            return;
+        }
+
+        var durationSeconds = Math.Max(0.05f, (float)(endAtUtc - last.SeenAtUtc).TotalSeconds);
+        if (durationSeconds < last.DurationSeconds)
+        {
+            history[^1] = last with
+            {
+                DurationSeconds = durationSeconds,
+            };
+        }
+    }
+
+    private static bool IsDmuCasterPoseReplayAction(uint actionId)
+    {
+        return actionId is DmuP2PathOfLightActionId or
+            DmuP2SpellwaveActionId or
+            DmuP2AllThingsEndingFirstActionId or
+            DmuP2AllThingsEndingSecondActionId or
+            DmuBlackHoleNothingnessActionId or
+            DmuP3AeroIIIAssaultActionId or
+            DmuP3ThunderIIICircleActionId or
+            DmuP3LatLongShockwaveActionId or
+            DmuP3UltimaBlasterChargeActionId or
+            DmuP3SlapHappyBigActionId or
+            DmuP3SlapHappySmallActionId or
+            DmuP3SlapHappyShockingImpactActionId or
+            DmuP3SlapHappyShockwaveActionId or
+            DmuP3DamningEdictActionId or
+            DmuP3LookUponMeAndDespairActionId or
+            DmuP3BlizzardIIIActionId or
+            DmuP3StompAMoleActionId or
+            DmuP3BigBangActionId;
+    }
+
+    private bool TryGetReplayPacketMechanicCenter(RawActionEffectPacket packet, out Vector3 center)
+    {
+        if (packet.HasTargetPosition && IsUsableReplayPosition(packet.TargetPosition))
+        {
+            center = packet.TargetPosition;
+            return true;
+        }
+
+        foreach (var target in packet.Targets)
+        {
+            var member = FindCurrentMemberByTargetId(target.TargetId);
+            if (member is null)
+            {
+                continue;
+            }
+
+            center = member.Position;
+            return true;
+        }
+
+        center = default;
+        return false;
+    }
+
+    private bool TryGetReplayObjectPose(uint entityId, out Vector3 position, out float rotation, out string name)
+    {
+        position = default;
+        rotation = 0.0f;
+        name = string.Empty;
+
+        entityId = NormalizeActorEntityId(entityId);
+        if (entityId == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var gameObject = ObjectTable.SearchByEntityId(entityId);
+            if (gameObject is null ||
+                !IsUsableReplayPosition(gameObject.Position))
+            {
+                return false;
+            }
+
+            position = gameObject.Position;
+            rotation = gameObject.Rotation;
+            name = string.IsNullOrWhiteSpace(gameObject.Name.TextValue)
+                ? $"Entity {entityId:X8}"
+                : gameObject.Name.TextValue;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture Better Deaths replay pose for {EntityId:X8}.", entityId);
+            return false;
+        }
+    }
+
+    private static bool IsUsableReplayPosition(Vector3 position)
+    {
+        return float.IsFinite(position.X) &&
+            float.IsFinite(position.Y) &&
+            float.IsFinite(position.Z) &&
+            (MathF.Abs(position.X) > 0.001f || MathF.Abs(position.Z) > 0.001f);
+    }
+
+    private static float DistanceXZ(Vector3 left, Vector3 right)
+    {
+        var dx = left.X - right.X;
+        var dz = left.Z - right.Z;
+        return MathF.Sqrt((dx * dx) + (dz * dz));
     }
 
     private static uint CalculateRawActionEffectAmount(RawActionEffectSlot effect)
@@ -5729,7 +7220,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool ShouldUseFastReplayPositionSampling(DateTime now)
     {
         return HasActiveReplayTether(now) ||
-            (IsDmuReplayCaptureContext() && HasVisibleDmuReplayTetherSource());
+            HasLiveReplayTether();
     }
 
     private bool HasActiveReplayTether(DateTime now)
@@ -5759,22 +7250,44 @@ public sealed partial class Plugin : IDalamudPlugin
         return false;
     }
 
-    private bool HasVisibleDmuReplayTetherSource()
+    private unsafe bool HasLiveReplayTether()
     {
-        foreach (var gameObject in ObjectTable)
+        if (currentMembers.Count == 0)
         {
-            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
-                battleNpc.EntityId == 0 ||
-                battleNpc.EntityId == InvalidActorEntityId)
+            return false;
+        }
+
+        foreach (var member in currentMembers)
+        {
+            if (member.EntityId == 0)
             {
                 continue;
             }
 
-            var name = battleNpc.Name.TextValue;
-            if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(name, "Graven Image", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return true;
+                if (ObjectTable.SearchByEntityId(member.EntityId) is not Dalamud.Game.ClientState.Objects.Types.ICharacter character ||
+                    character.Address == nint.Zero)
+                {
+                    continue;
+                }
+
+                var characterStruct = (Character*)character.Address;
+                var tethers = characterStruct->Vfx.Tethers;
+                for (var index = 0; index < tethers.Length; index++)
+                {
+                    var tether = tethers[index];
+                    if (tether.Id != 0 &&
+                        tether.TargetId.ObjectId != 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // This path is checked every frame before replay sampling. Avoid log spam if the
+                // object table changes while the client is updating actors.
             }
         }
 
@@ -5809,6 +7322,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var enemySnapshots = new List<ReplayPositionSnapshot>();
         var mechanicSnapshots = new List<ReplayMechanicSnapshot>();
         var seenEntityIds = new HashSet<uint>();
+        var castingActionByEntityId = new Dictionary<uint, uint>();
         foreach (var gameObject in ObjectTable)
         {
             if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
@@ -5819,6 +7333,13 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
+            if (battleNpc is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara &&
+                battleChara.IsCasting &&
+                battleChara.CastActionId != 0)
+            {
+                castingActionByEntityId[battleNpc.EntityId] = battleChara.CastActionId;
+            }
+
             var name = battleNpc.Name.TextValue;
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -5826,6 +7347,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             CaptureReplayDmuP4RealityTellMarker(battleNpc, name, seenAtUtc);
+            CaptureReplayDmuP3CastPrediction(battleNpc, name, seenAtUtc, mechanicSnapshots);
 
             if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
             {
@@ -5879,6 +7401,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 battleNpc.IsTargetable));
         }
 
+        UpdateActiveReplayMechanicLifetimes(seenAtUtc, seenEntityIds, castingActionByEntityId);
         CaptureReplayDmuTethersFromPlayers(seenAtUtc, mechanicSnapshots);
 
         return (
@@ -7125,6 +8648,8 @@ public sealed partial class Plugin : IDalamudPlugin
         recentReplayPositionsByActor.Clear();
         recentReplayMarkersByActor.Clear();
         recentReplayMechanicsBySource.Clear();
+        activeDmuP2PathOfLightTowersByIndex.Clear();
+        activeReplayMechanicsByKey.Clear();
         recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
         possibleMitigationUsesByMember.Clear();
@@ -7137,6 +8662,7 @@ public sealed partial class Plugin : IDalamudPlugin
             rawCombatLogMessages.Clear();
             rawEffectResultPackets.Clear();
             rawActorControlPackets.Clear();
+            rawMapEffectPackets.Clear();
         }
 
         currentMemberKeyScratch.Clear();

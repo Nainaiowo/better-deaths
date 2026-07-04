@@ -44,6 +44,7 @@ public enum ReplayActorKind
 public enum ReplayMechanicShape
 {
     Circle,
+    Donut,
     Cone,
     Line,
     Tower,
