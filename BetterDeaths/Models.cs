@@ -136,6 +136,20 @@ public sealed record ReplayMechanicSnapshot(
     uint RawState,
     bool IsKnown);
 
+public enum EnvironmentalDeathKind
+{
+    PossibleEnvironmental,
+    LikelyFall,
+    LikelyDeathWall,
+    PossibleDeathWall,
+}
+
+public sealed record EnvironmentalDeathAssessment(
+    EnvironmentalDeathKind Kind,
+    float Confidence,
+    string Summary,
+    IReadOnlyList<string> Evidence);
+
 public sealed record CombatEventRecord(
     DateTime SeenAtUtc,
     float PullElapsedSeconds,
@@ -271,6 +285,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<EnemyHpSnapshot> EnemyHpAtDeath { get; init; } = [];
 
     public IReadOnlyList<PossibleMitigationSnapshot> PossibleMitigations { get; init; } = [];
+
+    public EnvironmentalDeathAssessment? EnvironmentalAssessment { get; init; }
 
     public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
 

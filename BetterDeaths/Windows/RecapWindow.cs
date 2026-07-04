@@ -32,6 +32,7 @@ public sealed class RecapWindow : Window, IDisposable
     private string addonInspectorEventFilter = string.Empty;
     private string excludedPlayerNameInput = string.Empty;
     private string excludedPlayerNameFeedback = string.Empty;
+    private string pullBrowserPlayerSearch = string.Empty;
     private bool excludedPlayerNameFeedbackIsError;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
@@ -112,7 +113,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.206";
+    private const string CurrentChangelogVersion = "0.1.0.207";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1383,9 +1384,16 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        var visiblePulls = GetPullBrowserVisiblePulls(pulls);
+        if (visiblePulls.Count == 0)
+        {
+            ImGui.TextDisabled("No pulls match that player name.");
+            return;
+        }
+
         if (ImGui.BeginChild($"##{idPrefix}PullRows", Vector2.Zero, false, OptionalScrollbarFlags))
         {
-            foreach (var pull in pulls)
+            foreach (var pull in visiblePulls)
             {
                 var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
                 var rowId = $"PullRow{idPrefix}{pull.Key}";
@@ -1443,7 +1451,85 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor();
 
         ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
-        ImGui.TextDisabled("Choose a pull to review.");
+        DrawPullBrowserSearchInput(idPrefix);
+    }
+
+    private void DrawPullBrowserSearchInput(string idPrefix)
+    {
+        ImGui.SetNextItemWidth(MathF.Max(1.0f, ImGui.GetContentRegionAvail().X));
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+        ImGui.InputTextWithHint(
+            $"##PullBrowserPlayerSearch{idPrefix}",
+            "Search Player name",
+            ref pullBrowserPlayerSearch,
+            64);
+        ImGui.PopStyleColor(4);
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Filters pulls by captured death player name.");
+        }
+    }
+
+    private IReadOnlyList<ReviewPull> GetPullBrowserVisiblePulls(IReadOnlyList<ReviewPull> pulls)
+    {
+        var search = NormalizePullBrowserPlayerSearch(pullBrowserPlayerSearch);
+        if (search.Length == 0)
+        {
+            return pulls;
+        }
+
+        var matches = new List<ReviewPull>();
+        foreach (var pull in pulls)
+        {
+            if (TryGetPullBrowserSearchMatch(pull, search) is { } match)
+            {
+                matches.Add(match);
+            }
+        }
+
+        return matches;
+    }
+
+    private ReviewPull? TryGetPullBrowserSearchMatch(ReviewPull pull, string search)
+    {
+        var deaths = pull.Deaths;
+        var hydratedDetails = false;
+        if (deaths.Count == 0 &&
+            pull.RecordedPull is not null &&
+            pull.DeathCount > 0 &&
+            plugin.GetRecordedPullDetails(pull.RecordedPull) is { } detail)
+        {
+            deaths = detail.Deaths;
+            hydratedDetails = true;
+        }
+
+        if (!deaths.Any(death => PullDeathMatchesPlayerSearch(death, search)))
+        {
+            return null;
+        }
+
+        return hydratedDetails
+            ? pull with
+            {
+                Deaths = deaths,
+                DeathCount = deaths.Count,
+            }
+            : pull;
+    }
+
+    private static bool PullDeathMatchesPlayerSearch(PartyDeathRecord death, string search)
+    {
+        return !string.IsNullOrWhiteSpace(death.MemberName) &&
+            death.MemberName.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePullBrowserPlayerSearch(string search)
+    {
+        return string.Join(' ', search.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private bool DrawWidePullListItem(ReviewPull pull, string id, bool selected)
@@ -2046,13 +2132,9 @@ public sealed class RecapWindow : Window, IDisposable
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var fullWidth = (items.Count * DeathDetailButtonWidth) + (Math.Max(0, items.Count - 1) * spacing);
-        var wraps = fullWidth > availableWidth;
         var rowWidth = 0.0f;
         foreach (var item in items)
         {
-            var label = wraps && item.BadgeText is not null
-                ? $"{item.Label} ({item.BadgeText})"
-                : item.Label;
             var buttonWidth = DeathDetailButtonWidth;
             var nextWidth = rowWidth <= 0.0f
                 ? buttonWidth
@@ -2067,10 +2149,10 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             DrawDeathDetailButton(
-                label,
+                item.Label,
                 item.Page,
                 deathId,
-                badgeText: wraps ? null : item.BadgeText,
+                badgeText: item.BadgeText,
                 width: buttonWidth);
             rowWidth = rowWidth <= 0.0f
                 ? buttonWidth
@@ -2473,7 +2555,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReviewLegendTooltipLine("KO state", "A captured character has transitioned into death.");
         DrawReviewLegendTooltipLine("Fatal event", "The fatal hit group, fatal status, or selected event around the HP transition into KO.");
         DrawReviewLegendTooltipLine("Fatal sequence", "A compact set of captured hits and combat-log confirmations around the HP transition into KO.");
-        DrawReviewLegendTooltipLine("Non-hit KO", "Kept in the death timeline, but no player detail panel is shown because no fatal hit or KO status context was captured.");
+        DrawReviewLegendTooltipLine("Non-hit KO", "Kept in the death timeline. A detail panel is shown only when Better Deaths captured fatal sequence, status, or environmental context.");
         DrawReviewLegendTooltipLine("Recorded pulls", "Created on duty reset, wipe, recommence, and territory changes when the pull had at least one death.");
         DrawReviewLegendTooltipLine("Recorded pull order", "Recorded pulls are grouped by duty, with the duty containing the newest pull shown first.");
         DrawReviewLegendTooltipLine("Duty dropdown", "All duties shows everything, while a selected duty only shows pulls from that duty.");
@@ -3917,7 +3999,8 @@ public sealed class RecapWindow : Window, IDisposable
     {
         return DeathDisplaySelector.Select(death).Events.Count > 0 ||
             death.FatalSequence is { Events.Count: > 0 } ||
-            death.FatalSequence is { LogEvents.Count: > 0 };
+            death.FatalSequence is { LogEvents.Count: > 0 } ||
+            death.EnvironmentalAssessment is { Confidence: > 0.0f };
     }
 
     private static IReadOnlyList<PartyDeathRecord> GetDeathsInTimelineOrder(IReadOnlyList<PartyDeathRecord> deaths)
@@ -3993,6 +4076,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawDmuP4AssignmentSummary(resolved);
+        DrawEnvironmentalDeathContext(death);
 
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
         DrawDeathChatChannelCombo(buttonId);
@@ -4004,6 +4088,43 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawFatalEventRow(death, causeEvents);
         DrawFatalSequenceSummary(death, resolved.Selection.AnchorSeenAtUtc);
+    }
+
+    private void DrawEnvironmentalDeathContext(PartyDeathRecord death)
+    {
+        if (death.EnvironmentalAssessment is not { Confidence: > 0.0f } assessment)
+        {
+            return;
+        }
+
+        ImGui.Spacing();
+        DrawLeadUpLabel("Environmental context");
+        ImGui.TextColored(
+            GetEnvironmentalDeathContextColor(assessment.Confidence),
+            $"{assessment.Summary} - {FormatEnvironmentalConfidence(assessment.Confidence)}");
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Confidence-based only. Better Deaths does not have exact arena bounds for every fight.");
+        }
+
+        foreach (var evidence in assessment.Evidence.Take(3))
+        {
+            DrawMutedWrappedText($"- {evidence}");
+        }
+    }
+
+    private static Vector4 GetEnvironmentalDeathContextColor(float confidence)
+    {
+        return confidence >= 0.75f
+            ? WarningColor
+            : confidence >= 0.55f
+                ? LeadUpGoldColor
+                : ModernMutedTextColor;
+    }
+
+    private static string FormatEnvironmentalConfidence(float confidence)
+    {
+        return $"{(Math.Clamp(confidence, 0.0f, 1.0f) * 100.0f).ToString("0", CultureInfo.InvariantCulture)}%";
     }
 
     private void DrawDmuP4AssignmentSummary(ResolvedDeathDisplay resolved)
@@ -13537,6 +13658,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.207");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added environmental death context to help identify likely falls, death walls, and out-of-bounds KOs.");
+        DrawHighlightedChangelogBullet("Added DMU arena-boundary detection so deaths near or outside the known arena edge can be flagged as likely death walls when no lethal event was captured.");
+        DrawHighlightedChangelogBullet("Added a Pulls search bar so recorded pulls can be filtered by player name.");
+        DrawWrappedBullet("Updated Review legend wording so non-hit KOs with environmental context are described correctly.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.206");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Fixed death recap popups opening off-screen on smaller or lower-resolution displays.");
@@ -13573,7 +13703,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TextUnformatted("v0.1.0.200");
         ImGui.TextDisabled("Stable update.");
-        DrawBreathingGoldBullet("Added a private code-side blocklist for users with a history of targeted harassment or abusive behavior.");
         DrawBreathingGoldBullet("Recap popup buttons can now be dragged directly to move the popup.");
         DrawWrappedBullet("Added a Test recap popup preview so you can place the popup without needing to die.");
         DrawWrappedBullet("P4 replay labels now follow the next resolving debuff and can show paired debuffs.");

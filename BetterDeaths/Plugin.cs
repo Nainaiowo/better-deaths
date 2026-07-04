@@ -53,20 +53,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
     private const string ThankYouNoticeId = "ui-polish-thank-you-2026-06";
     private const string SharedRecapPrefix = "Recap:";
-    private const string LocalIdentityGateSalt = "BetterDeaths.LocalIdentityGate.v1";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
     private const int RecentStatusHistorySeconds = 20;
     private const float StatusDeathRemainingWindowSeconds = 5.0f;
     private const int OwnSharedRecapSuppressionSeconds = 5;
     private const int QueuedChatDelayMs = 200;
-    private static readonly HashSet<string> LocalIdentityGateHashes = new(StringComparer.Ordinal)
-    {
-        "A3B987A2DC6B065DF5D711BCC72B021ADE48D689625441B6CAD60DDDEE638F16",
-        "03279123989CE567AE1A1F11B75E3740B834CC9D52965BE00FB92EBDDD607F57",
-        "A3E31FE814ABEC74AF42CD1F8833107ED9E9E13F2BAE1EFF028089D58D14B827",
-        "A87D19CE705C445BA8B0739BC6B1E9F87093F308BC774D9E61D80EE5ADA12E0B",
-        "C439DBC0D6D6543C696EDED75AC8CD900E7D71366BAE3530508CE084F58D1444",
-    };
     private const int DetectedSharedRecapLinkDelayMs = 800;
     private const int DeathRecapLinkBatchDelaySeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
@@ -93,11 +84,20 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int DeathReplayPostDeathSeconds = 10;
     private const int DeathReplayMarkerCarryInSeconds = 30;
     private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
+    private const float EnvironmentalDeathMinimumConfidence = 0.35f;
+    private const float EnvironmentalFallYDropThreshold = 2.5f;
+    private const float EnvironmentalStrongFallYDropThreshold = 5.0f;
+    private const float EnvironmentalKnownArenaEdgeTolerance = 1.25f;
+    private const float EnvironmentalOutlierMinimumDistance = 18.0f;
+    private const float EnvironmentalOutlierMinimumMargin = 6.0f;
+    private const float EnvironmentalOutlierRadiusMultiplier = 1.35f;
     private const uint DmuBlackHoleTetherId = 84;
     private const uint DmuGravenImageTetherId = 45;
     private const uint DmuGravenImageBaseId = 19505;
     private const uint DmuBlackHoleNothingnessActionId = 47868;
     private const uint DmuP2PathOfLightActionId = 47806;
+    private static readonly TimeSpan EnvironmentalDeathMotionWindow = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan EnvironmentalDeathPartyReferenceWindow = TimeSpan.FromSeconds(2.5);
     private const uint DmuP2SpelldriverActionId = 47808;
     private const uint DmuP2SpellscatterActionId = 47809;
     private const uint DmuP2SpellwaveActionId = 47810;
@@ -483,6 +483,12 @@ public sealed partial class Plugin : IDalamudPlugin
         uint ShieldHp,
         IReadOnlyList<StatusSnapshot> ResultStatuses);
 
+    private readonly record struct EnvironmentalPositionSample(
+        DateTime SeenAtUtc,
+        float X,
+        float Y,
+        float Z);
+
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     private unsafe struct EffectResultPacket
     {
@@ -706,8 +712,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private uint currentPullTerritoryId;
     private string currentPullTerritoryName = "Unknown territory";
     private bool disposing;
-    private string lastLocalIdentityGateName = string.Empty;
-    private bool localIdentityGateClosed;
 
     public Configuration Configuration { get; }
 
@@ -966,12 +970,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void DrawUi()
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            CloseRuntimeWindows();
-            return;
-        }
-
         windowSystem.Draw();
     }
 
@@ -2336,43 +2334,6 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration.Save();
     }
 
-    private bool IsLocalIdentityGateClosed()
-    {
-        var normalizedName = NormalizeExcludedPlayerName(ObjectTable.LocalPlayer?.Name.TextValue ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalizedName))
-        {
-            lastLocalIdentityGateName = string.Empty;
-            localIdentityGateClosed = false;
-            return false;
-        }
-
-        if (string.Equals(lastLocalIdentityGateName, normalizedName, StringComparison.Ordinal))
-        {
-            return localIdentityGateClosed;
-        }
-
-        lastLocalIdentityGateName = normalizedName;
-        localIdentityGateClosed = LocalIdentityGateHashes.Contains(HashLocalIdentityGateName(normalizedName));
-        if (localIdentityGateClosed)
-        {
-            CloseRuntimeWindows();
-        }
-
-        return localIdentityGateClosed;
-    }
-
-    private void CloseRuntimeWindows()
-    {
-        recapWindow.IsOpen = false;
-        currentPullWidgetWindow.IsOpen = false;
-        deathRecapPopupWindow.IsOpen = false;
-        currentMembers.Clear();
-        currentDeaths.Clear();
-        pendingDeathRecapLinks.Clear();
-        pendingDeathRecapLinksDueAtUtc = null;
-        queuedChatMessages.Clear();
-    }
-
     private void RefreshExcludedPlayerNameHashLookup()
     {
         excludedPlayerNameHashLookup.Clear();
@@ -2456,13 +2417,6 @@ public sealed partial class Plugin : IDalamudPlugin
             .Trim()
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return string.Join(' ', words).ToUpperInvariant();
-    }
-
-    private static string HashLocalIdentityGateName(string normalizedPlayerName)
-    {
-        var bytes = Encoding.UTF8.GetBytes($"{LocalIdentityGateSalt}\n{normalizedPlayerName}");
-        using var sha256 = SHA256.Create();
-        return Convert.ToHexString(sha256.ComputeHash(bytes));
     }
 
     private static string HashExcludedPlayerName(string normalizedPlayerName, string salt)
@@ -2667,41 +2621,21 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         recapWindow.IsOpen = !recapWindow.IsOpen;
     }
 
     private void OnWidgetCommand(string command, string args)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         SetShowCurrentPullWidget(!Configuration.ShowCurrentPullWidget);
     }
 
     private void OpenMainUi()
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         recapWindow.IsOpen = true;
     }
 
     private void OnDeathChatLinkClick(uint commandId, SeString message)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         foreach (var rawPayload in message.Payloads.OfType<RawPayload>())
         {
             if (DeathChatLinkPayload.Decode(rawPayload) is not { } payload)
@@ -2720,11 +2654,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnChatMessage(IHandleableChatMessage message)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         try
         {
             if (!TryParseSharedDeathPost(message.OriginalMessage.ExtractText(), out var post) &&
@@ -2762,11 +2691,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnLogMessage(ILogMessage message)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         try
         {
             CaptureCombatLogMessage(message);
@@ -2824,11 +2748,6 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            if (IsLocalIdentityGateClosed())
-            {
-                return;
-            }
-
             var now = DateTime.UtcNow;
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);
@@ -6609,11 +6528,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private bool TryCaptureDeath(PartyMemberSnapshot member, DateTime deathSeenAtUtc, string signalSource)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return false;
-        }
-
         if (IsPlayerNameExcluded(member.MemberName))
         {
             return false;
@@ -6681,6 +6595,19 @@ public sealed partial class Plugin : IDalamudPlugin
         var cause = ShouldPreferStatusCause(statusCause, eventCause)
             ? statusCause
             : eventCause ?? statusCause;
+        var replayPositions = GetRecentReplayPositions(
+            deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
+            deathSeenAtUtc);
+        var territoryId = currentPullTerritoryId != 0
+            ? currentPullTerritoryId
+            : ClientState.TerritoryType;
+        var environmentalAssessment = CreateEnvironmentalDeathAssessment(
+            member,
+            deathSeenAtUtc,
+            territoryId,
+            cause,
+            fatalSequence,
+            replayPositions);
 
         return new PartyDeathRecord(
             deathSeenAtUtc,
@@ -6702,13 +6629,267 @@ public sealed partial class Plugin : IDalamudPlugin
             SourceMitigationHistory = sourceMitigationHistory,
             EnemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc),
             PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
-            ReplayPositions = GetRecentReplayPositions(
-                deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
-                deathSeenAtUtc),
+            EnvironmentalAssessment = environmentalAssessment,
+            ReplayPositions = replayPositions,
             ReplayMarkers = GetReplayMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
             ReplayMechanics = GetRecentReplayMechanics(
                 deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
                 deathSeenAtUtc),
+        };
+    }
+
+    private static EnvironmentalDeathAssessment? CreateEnvironmentalDeathAssessment(
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        uint territoryId,
+        CombatEventRecord? cause,
+        FatalSequenceRecord? fatalSequence,
+        IReadOnlyList<ReplayPositionSnapshot> replayPositions)
+    {
+        var targetSamples = GetEnvironmentalDeathTargetSamples(member, deathSeenAtUtc, replayPositions);
+        if (targetSamples.Count < 2)
+        {
+            return null;
+        }
+
+        var evidence = new List<string>();
+        var score = 0.0f;
+        var lastSample = targetSamples[^1];
+        var recentSamples = targetSamples
+            .Where(sample => sample.SeenAtUtc >= lastSample.SeenAtUtc - EnvironmentalDeathMotionWindow)
+            .ToList();
+        var highestSample = recentSamples
+            .OrderByDescending(sample => sample.Y)
+            .First();
+        var verticalDrop = highestSample.Y - lastSample.Y;
+        var hasFallEvidence = verticalDrop >= EnvironmentalFallYDropThreshold;
+        var hasPositionOutlierEvidence = false;
+        var hasKnownArenaEdgeEvidence = false;
+        if (hasFallEvidence)
+        {
+            var dropSeconds = Math.Max(0.0, (lastSample.SeenAtUtc - highestSample.SeenAtUtc).TotalSeconds);
+            score += verticalDrop >= EnvironmentalStrongFallYDropThreshold ? 0.65f : 0.48f;
+            evidence.Add($"Recent position trail dropped {verticalDrop:0.0} yalms over {dropSeconds:0.0}s before KO.");
+        }
+
+        var noCapturedFatalEvent = cause is null &&
+            fatalSequence is not { Events.Count: > 0 } &&
+            fatalSequence is not { LogEvents.Count: > 0 };
+        var replayModule = ReplayEncounterModules.Get(territoryId);
+        if (replayModule.TryGetReplayArena(out var arena) &&
+            TryGetEnvironmentalArenaEdgeDistance(arena, lastSample, out var edgeDistance, out var edgeReferenceDistance) &&
+            edgeDistance <= EnvironmentalKnownArenaEdgeTolerance)
+        {
+            hasKnownArenaEdgeEvidence = true;
+            if (noCapturedFatalEvent)
+            {
+                score += edgeDistance <= 0.0f ? 0.60f : 0.48f;
+                evidence.Add(FormatKnownArenaEdgeEvidence(replayModule.Name, arena, edgeDistance, edgeReferenceDistance));
+            }
+        }
+
+        if (TryGetEnvironmentalPartyReferenceBand(
+                replayPositions,
+                member,
+                deathSeenAtUtc,
+                out var partyCenter,
+                out var partyRadius,
+                out var referenceCount))
+        {
+            var targetDistance = DistanceXZ(new Vector3(lastSample.X, 0.0f, lastSample.Z), partyCenter);
+            var outlierDistance = MathF.Max(
+                EnvironmentalOutlierMinimumDistance,
+                MathF.Max(
+                    partyRadius + EnvironmentalOutlierMinimumMargin,
+                    partyRadius * EnvironmentalOutlierRadiusMultiplier));
+            if (targetDistance >= outlierDistance)
+            {
+                hasPositionOutlierEvidence = true;
+                var excessDistance = MathF.Max(0.0f, targetDistance - partyRadius);
+                var outlierScore = Math.Clamp(excessDistance / 28.0f, 0.18f, 0.35f);
+                score += outlierScore;
+                evidence.Add(
+                    $"Last position was {targetDistance:0.0} yalms from the inferred party center; recent party band was about {partyRadius:0.0} yalms from {referenceCount} players.");
+            }
+        }
+
+        if (noCapturedFatalEvent && score > 0.0f)
+        {
+            score += 0.15f;
+            evidence.Add("No captured fatal damage, status, or combat-log event. This supports environmental detection but is not proof.");
+        }
+
+        if (!hasFallEvidence &&
+            (!(hasKnownArenaEdgeEvidence || hasPositionOutlierEvidence) || !noCapturedFatalEvent))
+        {
+            return null;
+        }
+
+        score = Math.Clamp(score, 0.0f, 0.95f);
+        if (score < EnvironmentalDeathMinimumConfidence || evidence.Count == 0)
+        {
+            return null;
+        }
+
+        var kind = hasFallEvidence
+            ? EnvironmentalDeathKind.LikelyFall
+            : hasKnownArenaEdgeEvidence
+                ? EnvironmentalDeathKind.LikelyDeathWall
+                : noCapturedFatalEvent
+                    ? EnvironmentalDeathKind.PossibleDeathWall
+                    : EnvironmentalDeathKind.PossibleEnvironmental;
+        return new EnvironmentalDeathAssessment(
+            kind,
+            score,
+            CreateEnvironmentalDeathSummary(kind, score),
+            evidence);
+    }
+
+    private static List<EnvironmentalPositionSample> GetEnvironmentalDeathTargetSamples(
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        IReadOnlyList<ReplayPositionSnapshot> replayPositions)
+    {
+        var startAtUtc = deathSeenAtUtc - EnvironmentalDeathMotionWindow;
+        var actorKey = $"player:{member.MemberKey}";
+        var samples = replayPositions
+            .Where(snapshot => snapshot.ActorKind == ReplayActorKind.Player)
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= deathSeenAtUtc)
+            .Where(snapshot => EnvironmentalReplayPositionMatchesMember(snapshot, member, actorKey))
+            .Where(snapshot => IsUsableReplayPosition(new Vector3(snapshot.X, snapshot.Y, snapshot.Z)))
+            .Select(snapshot => new EnvironmentalPositionSample(
+                snapshot.SeenAtUtc,
+                snapshot.X,
+                snapshot.Y,
+                snapshot.Z))
+            .ToList();
+        samples.Sort((left, right) => left.SeenAtUtc.CompareTo(right.SeenAtUtc));
+
+        if (IsUsableReplayPosition(member.Position) &&
+            (samples.Count == 0 || Duration(samples[^1].SeenAtUtc, deathSeenAtUtc) > TimeSpan.FromMilliseconds(50)))
+        {
+            samples.Add(new EnvironmentalPositionSample(
+                deathSeenAtUtc,
+                member.Position.X,
+                member.Position.Y,
+                member.Position.Z));
+        }
+
+        samples.Sort((left, right) => left.SeenAtUtc.CompareTo(right.SeenAtUtc));
+        return samples;
+    }
+
+    private static bool TryGetEnvironmentalPartyReferenceBand(
+        IReadOnlyList<ReplayPositionSnapshot> replayPositions,
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        out Vector3 partyCenter,
+        out float partyRadius,
+        out int referenceCount)
+    {
+        partyCenter = Vector3.Zero;
+        partyRadius = 0.0f;
+        referenceCount = 0;
+
+        var startAtUtc = deathSeenAtUtc - EnvironmentalDeathPartyReferenceWindow;
+        var targetActorKey = $"player:{member.MemberKey}";
+        var references = replayPositions
+            .Where(snapshot => snapshot.ActorKind == ReplayActorKind.Player)
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= deathSeenAtUtc)
+            .Where(snapshot => !snapshot.IsDead)
+            .Where(snapshot => !EnvironmentalReplayPositionMatchesMember(snapshot, member, targetActorKey))
+            .Where(snapshot => IsUsableReplayPosition(new Vector3(snapshot.X, snapshot.Y, snapshot.Z)))
+            .GroupBy(snapshot => snapshot.ActorKey, StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(snapshot => snapshot.SeenAtUtc).First())
+            .ToList();
+        if (references.Count < 3)
+        {
+            return false;
+        }
+
+        referenceCount = references.Count;
+        var center = new Vector3(
+            (float)references.Average(snapshot => snapshot.X),
+            0.0f,
+            (float)references.Average(snapshot => snapshot.Z));
+        partyCenter = center;
+        partyRadius = references
+            .Select(snapshot => DistanceXZ(new Vector3(snapshot.X, 0.0f, snapshot.Z), center))
+            .DefaultIfEmpty(0.0f)
+            .Max();
+        return true;
+    }
+
+    private static bool EnvironmentalReplayPositionMatchesMember(
+        ReplayPositionSnapshot snapshot,
+        PartyMemberSnapshot member,
+        string actorKey)
+    {
+        return string.Equals(snapshot.ActorKey, actorKey, StringComparison.Ordinal) ||
+            (member.EntityId != 0 && snapshot.EntityId == member.EntityId) ||
+            (snapshot.PartyIndex == member.PartyIndex &&
+                string.Equals(snapshot.ActorName, member.MemberName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryGetEnvironmentalArenaEdgeDistance(
+        ReplayArenaInfo arena,
+        EnvironmentalPositionSample sample,
+        out float edgeDistance,
+        out float edgeReferenceDistance)
+    {
+        edgeDistance = 0.0f;
+        edgeReferenceDistance = 0.0f;
+        if (!float.IsFinite(arena.CenterX) ||
+            !float.IsFinite(arena.CenterZ) ||
+            !float.IsFinite(arena.Radius) ||
+            arena.Radius <= 0.1f)
+        {
+            return false;
+        }
+
+        var offsetX = sample.X - arena.CenterX;
+        var offsetZ = sample.Z - arena.CenterZ;
+        edgeReferenceDistance = arena.Shape switch
+        {
+            ReplayArenaShape.Circle => MathF.Sqrt((offsetX * offsetX) + (offsetZ * offsetZ)),
+            ReplayArenaShape.Square => MathF.Max(MathF.Abs(offsetX), MathF.Abs(offsetZ)),
+            _ => 0.0f,
+        };
+        edgeDistance = arena.Radius - edgeReferenceDistance;
+        return true;
+    }
+
+    private static string FormatKnownArenaEdgeEvidence(
+        string moduleName,
+        ReplayArenaInfo arena,
+        float edgeDistance,
+        float edgeReferenceDistance)
+    {
+        var shape = arena.Shape switch
+        {
+            ReplayArenaShape.Circle => "circular",
+            ReplayArenaShape.Square => "square",
+            _ => "known",
+        };
+        var boundaryText = edgeDistance <= 0.0f
+            ? $"{MathF.Abs(edgeDistance):0.0} yalms outside"
+            : $"{edgeDistance:0.0} yalms inside";
+        return $"Last position was {boundaryText} the known {moduleName} {shape} arena boundary ({edgeReferenceDistance:0.0}/{arena.Radius:0.0} yalms from center/edge reference).";
+    }
+
+    private static string CreateEnvironmentalDeathSummary(EnvironmentalDeathKind kind, float confidence)
+    {
+        var confidenceLabel = confidence >= 0.75f
+            ? "high confidence"
+            : confidence >= 0.55f
+                ? "medium confidence"
+                : "low confidence";
+        return kind switch
+        {
+            EnvironmentalDeathKind.LikelyFall => $"Likely fall ({confidenceLabel})",
+            EnvironmentalDeathKind.LikelyDeathWall => $"Likely death wall ({confidenceLabel})",
+            EnvironmentalDeathKind.PossibleDeathWall => $"Possible death wall or out-of-bounds KO ({confidenceLabel})",
+            _ => $"Possible environmental KO ({confidenceLabel})",
         };
     }
 
@@ -8517,11 +8698,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnDutyReset(IDutyStateEventArgs args)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         if (IsPvPCaptureBlocked())
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
@@ -8538,11 +8714,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnDutyStarted(IDutyStateEventArgs args)
     {
-        if (IsLocalIdentityGateClosed())
-        {
-            return;
-        }
-
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
     }
@@ -10667,7 +10838,8 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         return GetDisplayCauseEvents(death).Count > 0 ||
             death.FatalSequence is { Events.Count: > 0 } ||
-            death.FatalSequence is { LogEvents.Count: > 0 };
+            death.FatalSequence is { LogEvents.Count: > 0 } ||
+            death.EnvironmentalAssessment is { Confidence: > 0.0f };
     }
 
     private void FlushPendingDeathRecapLinks(DateTime now)
