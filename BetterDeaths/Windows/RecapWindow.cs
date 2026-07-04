@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.203";
+    private const string CurrentChangelogVersion = "0.1.0.204";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1157,9 +1157,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 DrawCollapsedPullBrowserDivider(
                     $"{idPrefix}PullBrowserDivider",
-                    available.Y,
-                    pulls,
-                    selection);
+                    available.Y);
             }
             else
             {
@@ -1220,7 +1218,8 @@ public sealed class RecapWindow : Window, IDisposable
                             () => DrawPullBrowser(
                                 pulls,
                                 idPrefix,
-                                selection));
+                                selection,
+                                useVerticalDrawerControls: true));
                     }
 
                     DrawHorizontalReviewDivider(innerAvailable.X);
@@ -1365,10 +1364,11 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawPullBrowser(
         IReadOnlyList<ReviewPull> pulls,
         string idPrefix,
-        ReviewSelectionState selection)
+        ReviewSelectionState selection,
+        bool useVerticalDrawerControls = false)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-        DrawPullBrowserHeader(idPrefix);
+        DrawPullBrowserHeader(idPrefix, useVerticalDrawerControls);
         DrawRecordedPullControls();
         ImGui.Separator();
 
@@ -1401,7 +1401,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    private void DrawPullBrowserHeader(string idPrefix)
+    private void DrawPullBrowserHeader(string idPrefix, bool useVerticalDrawerControls)
     {
         var startCursor = ImGui.GetCursorPos();
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
@@ -1415,7 +1415,10 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
         DrawClearRecordedPullsButton($"ClearRecordedPullsModern{idPrefix}", clearSelection: true);
         ImGui.SameLine(0.0f, style.ItemSpacing.X);
-        if (DrawTransparentIconButton($"CollapsePullBrowser{idPrefix}", FontAwesomeIcon.ChevronUp))
+        var collapseIcon = useVerticalDrawerControls
+            ? FontAwesomeIcon.ChevronUp
+            : FontAwesomeIcon.ChevronLeft;
+        if (DrawTransparentIconButton($"CollapsePullBrowser{idPrefix}", collapseIcon))
         {
             plugin.SetPullBrowserCollapsed(true);
         }
@@ -1569,9 +1572,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCollapsedPullBrowserDivider(
         string id,
-        float height,
-        IReadOnlyList<ReviewPull> pulls,
-        ReviewSelectionState selection)
+        float height)
     {
         var position = ImGui.GetCursorScreenPos();
         var size = new Vector2(PullBrowserCollapsedWidth, height);
@@ -1582,7 +1583,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SetCursorPosY(4.0f);
 
             ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
-            if (DrawCenteredTransparentIconButton($"ExpandPullBrowser{id}", FontAwesomeIcon.ChevronDown))
+            if (DrawCenteredTransparentIconButton($"ExpandPullBrowser{id}", FontAwesomeIcon.ChevronRight))
             {
                 plugin.SetPullBrowserCollapsed(false);
             }
@@ -1597,29 +1598,10 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.Separator();
             ImGui.Spacing();
 
-            var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
-            {
-                foreach (var pull in pulls)
-                {
-                    var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
-                    var label = GetCollapsedPullLabel(pull);
-                    if (DrawCollapsedPullButton(label, $"CollapsedPull{id}{pull.Key}", selected))
-                    {
-                        selection.PullKey = pull.Key;
-                        SelectDefaultDeathForPull(pull, selection);
-                    }
-
-                    if (ImGui.IsItemHovered())
-                    {
-                        SetThemedTooltip(FormatCollapsedPullTooltip(pull));
-                    }
-                }
-            }
-
-            ImGui.EndChild();
-            ImGui.PopStyleVar();
+            var label = "Pulls";
+            var labelWidth = ImGui.CalcTextSize(label).X;
+            ImGui.SetCursorPosX(MathF.Max(0.0f, (PullBrowserCollapsedWidth - labelWidth) * 0.5f));
+            ImGui.TextDisabled(label);
         }
 
         ImGui.EndChild();
@@ -4964,11 +4946,11 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
+        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.65f);
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 2.05f);
-        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.35f);
         ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.0f);
         ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.95f);
-        DrawCenteredTableHeader("Source", "Ability", "Mit%", "Availability");
+        DrawCenteredTableHeader("Ability", "Source", "Mit%", "Availability");
 
         foreach (var option in options)
         {
@@ -4991,10 +4973,10 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.SameLine(0.0f, MathF.Max(2.0f, ImGui.GetStyle().ItemInnerSpacing.X * 0.5f));
-            DrawPossibleMitigationSource(option);
+            DrawPossibleMitigationAbility(option, ImGui.GetContentRegionAvail().X);
 
             ImGui.TableNextColumn();
-            DrawPossibleMitigationAbility(option);
+            DrawPossibleMitigationSource(option, ImGui.GetContentRegionAvail().X);
 
             ImGui.TableNextColumn();
             DrawPossibleMitigationPercentCell(option.Statuses);
@@ -5016,15 +4998,15 @@ public sealed class RecapWindow : Window, IDisposable
         var checkboxColumnWidth = ImGui.GetFrameHeight() + 6.0f;
         var innerWidth = MathF.Max(0.0f, availableWidth - (FocusedDataRowPaddingX * 2.0f));
         var remainingWidth = MathF.Max(90.0f, innerWidth - checkboxColumnWidth - (spacing * 2.0f));
-        var abilityMinimumWidth = MathF.Min(48.0f, remainingWidth * 0.35f);
-        var sourceMaximumWidth = MathF.Max(32.0f, MathF.Min(320.0f, remainingWidth - abilityMinimumWidth));
-        var sourceMinimumWidth = MathF.Min(72.0f, sourceMaximumWidth);
-        var sourceColumnWidth = Math.Clamp(remainingWidth * 0.52f, sourceMinimumWidth, sourceMaximumWidth);
-        var abilityColumnWidth = MathF.Max(abilityMinimumWidth, remainingWidth - sourceColumnWidth);
+        var abilityMinimumWidth = MathF.Min(84.0f, remainingWidth * 0.45f);
+        var sourceMinimumWidth = MathF.Min(72.0f, MathF.Max(0.0f, remainingWidth - abilityMinimumWidth));
+        var abilityMaximumWidth = MathF.Max(abilityMinimumWidth, remainingWidth - sourceMinimumWidth);
+        var abilityColumnWidth = Math.Clamp(remainingWidth * 0.44f, abilityMinimumWidth, abilityMaximumWidth);
+        var sourceColumnWidth = MathF.Max(24.0f, remainingWidth - abilityColumnWidth);
 
         DrawFocusedColumnLabels(
-            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing, "Source"),
-            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing + sourceColumnWidth + spacing, "Ability"));
+            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing, "Ability"),
+            (FocusedDataRowPaddingX + checkboxColumnWidth + spacing + abilityColumnWidth + spacing, "Source"));
 
         for (var index = 0; index < options.Count; index++)
         {
@@ -5033,8 +5015,8 @@ public sealed class RecapWindow : Window, IDisposable
             var selected = selectedPossibleMitigationKeys.Contains(selectionKey);
             var sourceLabel = FormatPossibleMitigationSourceLabel(option);
             var abilityLabel = option.ActionName;
-            var sourceHeight = GetIconTextWrappedHeight(sourceLabel, sourceColumnWidth, option.ClassJobId == 0 ? 0U : GetClassJobIconId(option.ClassJobId), iconSize);
             var abilityHeight = GetIconTextWrappedHeight(abilityLabel, abilityColumnWidth, option.ActionIconId, iconSize);
+            var sourceHeight = GetIconTextWrappedHeight(sourceLabel, sourceColumnWidth, option.ClassJobId == 0 ? 0U : GetClassJobIconId(option.ClassJobId), iconSize);
             var rowHeight = MathF.Max(ImGui.GetFrameHeight(), MathF.Max(sourceHeight, abilityHeight)) + (FocusedDataRowPaddingY * 2.0f);
             var rowStart = ImGui.GetCursorScreenPos();
             DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, index);
@@ -5057,12 +5039,12 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.SetCursorScreenPos(new Vector2(
                 rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing,
                 contentY));
-            DrawIconTextWrapped(GetClassJobIconId(option.ClassJobId), iconSize, option.ClassJobName, sourceLabel, sourceColumnWidth);
+            DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, abilityLabel, abilityColumnWidth);
 
             ImGui.SetCursorScreenPos(new Vector2(
-                rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing + sourceColumnWidth + spacing,
+                rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing + abilityColumnWidth + spacing,
                 contentY));
-            DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, abilityLabel, abilityColumnWidth);
+            DrawIconTextWrapped(GetClassJobIconId(option.ClassJobId), iconSize, option.ClassJobName, sourceLabel, sourceColumnWidth);
 
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
         }
@@ -5084,40 +5066,18 @@ public sealed class RecapWindow : Window, IDisposable
         return $"{playerName} ({option.ClassJobName})";
     }
 
-    private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option)
+    private void DrawPossibleMitigationSource(PossibleMitigationSnapshot option, float width)
     {
         var iconId = GetClassJobIconId(option.ClassJobId);
         var label = FormatPossibleMitigationSourceLabel(option);
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
-        if (iconId == 0)
-        {
-            DrawWrappedText(label);
-            return;
-        }
-
-        ImGui.BeginGroup();
-        DrawGameIcon(iconId, iconSize, option.ClassJobName);
-        ImGui.SameLine();
-        ImGui.TextUnformatted(label);
-        ImGui.EndGroup();
+        DrawIconTextWrapped(iconId, iconSize, option.ClassJobName, label, MathF.Max(24.0f, width));
     }
 
-    private void DrawPossibleMitigationAbility(PossibleMitigationSnapshot option)
+    private void DrawPossibleMitigationAbility(PossibleMitigationSnapshot option, float width)
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var label = option.ActionName;
-        var groupWidth = (option.ActionIconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(label).X;
-        CenterNextItem(groupWidth);
-        ImGui.BeginGroup();
-        if (option.ActionIconId != 0)
-        {
-            DrawGameIcon(option.ActionIconId, iconSize, option.ActionName);
-            ImGui.SameLine();
-        }
-
-        ImGui.TextUnformatted(label);
-        ImGui.EndGroup();
+        DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, option.ActionName, MathF.Max(24.0f, width));
     }
 
     private static void DrawPossibleMitigationPercentCell(IReadOnlyList<StatusSnapshot> statuses)
@@ -13479,6 +13439,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.204");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Reordered the What-if mitigation view to show ability names first, making the list more compact and easier to scan.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.203");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Fixed death recap popups opening off-screen on smaller or lower-resolution displays.");

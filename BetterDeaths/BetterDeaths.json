@@ -5,7 +5,7 @@
   "DownloadCount": 964,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved Death Replay with 30s lead-up, DMU P2/P3 draw coverage, marker timing, popup placement, and responsive Review/Pulls layout.",
+  "Changelog": "Reordered the What-if mitigation view to show ability names first, making the list more compact and easier to scan.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
