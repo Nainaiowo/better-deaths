@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.204";
+    private const string CurrentChangelogVersion = "0.1.0.205";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1157,7 +1157,9 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 DrawCollapsedPullBrowserDivider(
                     $"{idPrefix}PullBrowserDivider",
-                    available.Y);
+                    available.Y,
+                    pulls,
+                    selection);
             }
             else
             {
@@ -1572,7 +1574,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawCollapsedPullBrowserDivider(
         string id,
-        float height)
+        float height,
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewSelectionState selection)
     {
         var position = ImGui.GetCursorScreenPos();
         var size = new Vector2(PullBrowserCollapsedWidth, height);
@@ -1598,10 +1602,29 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.Separator();
             ImGui.Spacing();
 
-            var label = "Pulls";
-            var labelWidth = ImGui.CalcTextSize(label).X;
-            ImGui.SetCursorPosX(MathF.Max(0.0f, (PullBrowserCollapsedWidth - labelWidth) * 0.5f));
-            ImGui.TextDisabled(label);
+            var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
+            {
+                foreach (var pull in pulls)
+                {
+                    var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
+                    var pullLabel = GetCollapsedPullLabel(pull);
+                    if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedPullRail{id}{pull.Key}", selected))
+                    {
+                        selection.PullKey = pull.Key;
+                        SelectDefaultDeathForPull(pull, selection);
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        SetThemedTooltip(FormatCollapsedPullTooltip(pull));
+                    }
+                }
+            }
+
+            ImGui.EndChild();
+            ImGui.PopStyleVar();
         }
 
         ImGui.EndChild();
@@ -1646,6 +1669,44 @@ public sealed class RecapWindow : Window, IDisposable
         drawList.AddText(
             textPosition,
             selected ? ImGui.GetColorU32(LeadUpGoldColor) : ImGui.GetColorU32(ModernTextColor),
+            label);
+
+        return clicked;
+    }
+
+    private static bool DrawCollapsedPullRailItem(string label, string id, bool selected)
+    {
+        var start = ImGui.GetCursorScreenPos();
+        var width = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var height = CollapsedPullCellHeight;
+        var clicked = ImGui.InvisibleButton($"##{id}", new Vector2(width, height));
+        var hovered = ImGui.IsItemHovered();
+        var end = start + new Vector2(width, height);
+        var drawList = ImGui.GetWindowDrawList();
+        var accent = selected
+            ? LeadUpGoldColor
+            : hovered
+                ? ModernMutedTextColor
+                : ModernDividerColor;
+        if (selected || hovered)
+        {
+            var lineX = start.X + 5.0f;
+            drawList.AddLine(
+                new Vector2(lineX, start.Y + 5.0f),
+                new Vector2(lineX, end.Y - 5.0f),
+                ImGui.GetColorU32(accent),
+                selected ? 2.0f : 1.0f);
+        }
+
+        var textSize = ImGui.CalcTextSize(label);
+        var textPosition = new Vector2(
+            start.X + MathF.Max(0.0f, (width - textSize.X) * 0.5f),
+            start.Y + MathF.Max(0.0f, (height - textSize.Y) * 0.5f));
+        drawList.AddText(
+            textPosition,
+            selected
+                ? ImGui.GetColorU32(LeadUpGoldColor)
+                : ImGui.GetColorU32(hovered ? ModernTextColor : ModernMutedTextColor),
             label);
 
         return clicked;
@@ -13439,13 +13500,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.204");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Reordered the What-if mitigation view to show ability names first, making the list more compact and easier to scan.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.203");
+        ImGui.TextUnformatted("v0.1.0.205");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Fixed death recap popups opening off-screen on smaller or lower-resolution displays.");
         DrawHighlightedChangelogBullet("Extended replay lead-up time from 20 seconds to 30 seconds before death.");
@@ -13455,7 +13510,8 @@ public sealed class RecapWindow : Window, IDisposable
         DrawHighlightedChangelogBullet("Improved replay marker labels so known mechanics use their real mechanic names and colors, while unknown markers still fall back to generic labels.");
         DrawHighlightedChangelogBullet("Improved replay marker timeline behavior so the replay shows the marker state that was active at the selected timestamp instead of only the newest marker.");
         DrawHighlightedChangelogBullet("Reworked Review window tabs so the main tabs and selected-death tabs wrap or compact cleanly instead of running off-screen.");
-        DrawHighlightedChangelogBullet("Redesigned the Pulls display with cleaner pull cells, compact collapsed number cells, up/down drawer controls, and better trash-button placement.");
+        DrawHighlightedChangelogBullet("Redesigned the Pulls display with cleaner pull cells, small-window number cells, drawer controls, and better trash-button placement.");
+        DrawWrappedBullet("Reordered the What-if mitigation view to show ability names first, making the list more compact and easier to scan.");
         DrawWrappedBullet("Made both the real recap popup and test recap popup movable by dragging from the popup button, while keeping normal click behavior intact.");
         DrawWrappedBullet("Improved replay movement trails so they show captured breadcrumb points and avoid misleading long straight-line jumps across missing samples.");
         DrawWrappedBullet("Improved Forsaken replay handling so marker visibility follows the active resolve timing more reliably and uses cached data for better performance.");
