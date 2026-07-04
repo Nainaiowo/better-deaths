@@ -51,7 +51,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
-    private const string ThankYouNoticeId = "ui-polish-thank-you-2026-06";
     private const string SharedRecapPrefix = "Recap:";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
     private const int RecentStatusHistorySeconds = 20;
@@ -1067,22 +1066,6 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration.HasDeathRecapPopupPosition = true;
         Configuration.DeathRecapPopupPositionX = position.X;
         Configuration.DeathRecapPopupPositionY = position.Y;
-        SaveConfiguration();
-    }
-
-    public bool ShouldShowThankYouNotice()
-    {
-        return !string.Equals(Configuration.LastAcknowledgedNoticeId, ThankYouNoticeId, StringComparison.Ordinal);
-    }
-
-    public void MarkThankYouNoticeAcknowledged()
-    {
-        if (string.Equals(Configuration.LastAcknowledgedNoticeId, ThankYouNoticeId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        Configuration.LastAcknowledgedNoticeId = ThankYouNoticeId;
         SaveConfiguration();
     }
 

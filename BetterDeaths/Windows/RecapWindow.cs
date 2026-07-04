@@ -24,7 +24,6 @@ public sealed class RecapWindow : Window, IDisposable
     private bool clearPendingDeathSelection;
     private bool collapseRecordedPullsRequested;
     private bool showDebugTab;
-    private bool showThankYouNoticeOnDemand;
     private bool windowStylePushed;
     private bool reviewTimelineSplitterDragging;
     private string debugTextFilter = string.Empty;
@@ -113,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.207";
+    private const string CurrentChangelogVersion = "0.1.0.208";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -569,12 +568,6 @@ public sealed class RecapWindow : Window, IDisposable
     public override void Draw()
     {
         DrawPluginUpdateBanner();
-
-        if (showThankYouNoticeOnDemand || plugin.ShouldShowThankYouNotice())
-        {
-            DrawOneTimeThankYouNotice(showThankYouNoticeOnDemand);
-            return;
-        }
 
         ApplyPendingSelectionPage();
         DrawModernShell();
@@ -12087,60 +12080,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawOneTimeThankYouNotice(bool onDemand)
-    {
-        ImGui.PushStyleColor(ImGuiCol.Border, NoticeBorderColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, NoticeTextColor);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneContentIndent, 6.0f));
-
-        if (ImGui.BeginChild("##BetterDeathsThankYouNotice", Vector2.Zero, true))
-        {
-            DrawWrappedText("Hiya! NaiLa here again!");
-            ImGui.Spacing();
-            DrawWrappedText("The second and final major push is here: UI POLISH");
-            ImGui.Spacing();
-            DrawWrappedText("We've completely revamped the look and flow as we get ready for v1.0. I'm so proud of how far we've come, and I'm genuinely grateful for all the effort everyone has put into testing and giving me feedback.");
-            ImGui.Spacing();
-            DrawWrappedText("Seeing this grow from a little idea into something people actually use and care about means more to me than I can really put into words.. Every bit of feedback, every bug report, and every tiny detail you all helped me chase down has made this feel less like something I've been building alone \u2665");
-            ImGui.Spacing();
-            DrawWrappedText("I'm happy to say that this project is likely nearing the end. Once we're all set and ready, Better Deaths should move more into maintenance as we go through future patches and expansions.");
-            ImGui.Spacing();
-            DrawWrappedText("Currently on the docket, we have some remaining items that I want to add before I'm comfortable with a release.");
-            DrawWrappedBullet("The first being themes so you aren't stuck with the current color scheme. I'll try my best to add a variety, but no promises on deliverables.");
-            DrawWrappedBullet("Second, I want to go through and fix a lot of hard-coded values. Currently, we have some hard-coded values that we can change to be dynamically grabbed or resolved.");
-            DrawWrappedText("There's still a lot of work to be done, but I hope this UI refinement makes you all happy. It definitely is making me happy! Thank you all again so much for your hard work and for allowing me to do this for you \u2665", NoticeBorderColor);
-            ImGui.Spacing();
-            DrawWrappedText("This will be the final message that I send here. I appreciate every single one of you very much!", NoticeBorderColor);
-            ImGui.Spacing();
-            DrawWrappedText("Signing off with love and deep appreciation, NaiLa", NoticeBorderColor);
-            ImGui.Spacing();
-            ImGui.Separator();
-            ImGui.Spacing();
-
-            ImGui.PushStyleColor(ImGuiCol.Button, NoticeButtonColor);
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, NoticeButtonHoveredColor);
-            if (ImGui.Button("Continue to Better Deaths"))
-            {
-                if (onDemand)
-                {
-                    showThankYouNoticeOnDemand = false;
-                }
-                else
-                {
-                    plugin.MarkThankYouNoticeAcknowledged();
-                }
-            }
-
-            ImGui.PopStyleColor();
-            ImGui.PopStyleColor();
-        }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleColor();
-    }
-
     private static bool ShouldDrawPluginUpdateBanner(PluginUpdateStatus status)
     {
         return status.State is PluginUpdateCheckState.UpdateAvailable or PluginUpdateCheckState.VersionMismatch;
@@ -13443,7 +13382,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextWrapped("The goal is to make wipe review fast: see who died, see why, see what was active, and keep the pull context intact between attempts.");
         ImGui.Separator();
         DrawCreatorNote();
-        DrawAcknowledgementNoticeButton();
     }
 
     private void DrawDataPage()
@@ -13658,6 +13596,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.208");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Updated the Updates creator note.");
+        DrawWrappedBullet("Removed the old acknowledgement popup and its reopen button.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.207");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added environmental death context to help identify likely falls, death walls, and out-of-bounds KOs.");
@@ -13868,15 +13813,8 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
 
-        ImGui.TextUnformatted("v0.1.0.119");
-        ImGui.TextDisabled("Acknowledgement fix.");
-        DrawWrappedBullet("Acknowledgement text now wraps correctly.");
-
-        ImGui.Separator();
-
         ImGui.TextUnformatted("v0.1.0.118");
         ImGui.TextDisabled("Testing polish.");
-        DrawBreathingGoldBullet("Added the final UI polish acknowledgement message.");
         DrawWrappedBullet("Widget Mits/Debuffs icons now fit the available space before showing +x.");
 
         ImGui.Separator();
@@ -13996,7 +13934,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted("v0.1.0.101");
         ImGui.TextDisabled("Testing layout and settings refinements.");
         DrawBreathingGoldBullet("Added a Clock Display setting for 24-hour or 12-hour local pull times.");
-        DrawBreathingGoldBullet("Added a star button under Developer tools to reopen the acknowledgement message on demand.");
         DrawWrappedBullet("Recorded pull subtitles now avoid repeating duty name and timer, showing only the reset/capture time.");
         DrawWrappedBullet("Timeline number cells and selected death details have cleaner indentation away from separators.");
         DrawWrappedBullet("Moved the debug button onto the Developer tools row to reduce settings clutter.");
@@ -14552,26 +14489,14 @@ public sealed class RecapWindow : Window, IDisposable
         var textColor = GetCreatorNoteTextColor();
 
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        ImGui.TextWrapped("Hi! NaiLa here~ I really appreciate you using Better Deaths. I made this as a personal passion project because I always needed and wanted a little more from the tools available..");
-        ImGui.TextWrapped("It's not perfect, and it is definitely still growing and getting better every day, but I can promise I am putting a lot of love and care into it every day until it's perfect!");
-        ImGui.TextWrapped("Thank you for trying it out, and I hope it helps your prog even a little <3");
-        ImGui.PopStyleColor();
-    }
-
-    private void DrawAcknowledgementNoticeButton()
-    {
+        ImGui.TextWrapped("Hiya Nai here!");
         ImGui.Spacing();
-        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
-        if (DrawTransparentIconButton("ShowAcknowledgementNotice", FontAwesomeIcon.Star))
-        {
-            showThankYouNoticeOnDemand = true;
-        }
-
+        ImGui.TextWrapped("Seeing this grow from a little idea into something people actually use and care about means more to me than I can really put into words.. Every bit of feedback, every bug report, and every tiny detail you all helped me chase down has made this feel less like something I've been building alone.");
+        ImGui.Spacing();
+        ImGui.TextWrapped("I'm happy to say that the project is nearing the end and will be moving more into maintenance mode for Replays; I hope it can remain a plugin worthy of your prog!");
+        ImGui.Spacing();
+        ImGui.TextWrapped("I appreciate every single one of you lovely individuals.");
         ImGui.PopStyleColor();
-        if (ImGui.IsItemHovered())
-        {
-            SetThemedTooltip("Show the Better Deaths acknowledgement message again.");
-        }
     }
 
     private sealed record ExamplePlayer(

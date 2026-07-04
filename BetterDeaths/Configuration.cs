@@ -314,8 +314,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public string LastSeenChangelogVersion { get; set; } = string.Empty;
 
-    public string LastAcknowledgedNoticeId { get; set; } = string.Empty;
-
     public bool PuniRepositoryMigrationComplete { get; set; }
 
     public DeathChatChannel DeathChatChannel { get; set; } = DeathChatChannel.Party;
