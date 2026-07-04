@@ -20,7 +20,12 @@ public sealed partial class Plugin
         PossibleMitigationScope Scope,
         float CooldownSeconds,
         float DurationSeconds,
-        IReadOnlyList<PossibleMitigationStatusTemplate> Statuses);
+        IReadOnlyList<PossibleMitigationStatusTemplate> Statuses,
+        IReadOnlyList<PossibleMitigationActionTemplate>? AlternateActions = null);
+
+    private sealed record PossibleMitigationActionTemplate(
+        uint ActionId,
+        string Name);
 
     private sealed record PossibleMitigationStatusTemplate(
         uint StatusId,
@@ -49,7 +54,7 @@ public sealed partial class Plugin
         new("camouflage", "Camouflage", 16140, [37], PossibleMitigationScope.Personal, 90.0f, 20.0f, [new(1832, "Camouflage")]),
         new("great-nebula", "Great Nebula", 36935, [37], PossibleMitigationScope.Personal, 120.0f, 15.0f, [new(3838, "Great Nebula")]),
         new("riddle-of-earth", "Riddle of Earth", 7394, [20], PossibleMitigationScope.Personal, 120.0f, 10.0f, [new(1179, "Riddle of Earth")]),
-        new("third-eye", "Third Eye", 7498, [34], PossibleMitigationScope.Personal, 15.0f, 4.0f, [new(1232, "Third Eye")]),
+        new("third-eye", "Third Eye / Tengentsu", 36962, [34], PossibleMitigationScope.Personal, 15.0f, 4.0f, [new(3853, "Third Eye")], [new(7498, "Third Eye")]),
 
         new("bloodwhetting", "Bloodwhetting", 25751, [21], PossibleMitigationScope.Personal, 25.0f, 8.0f, [new(2678, "Bloodwhetting")]),
         new("nascent-flash", "Nascent Flash", 16464, [21], PossibleMitigationScope.Targeted, 25.0f, 8.0f, [new(1857, "Nascent Glint")]),
@@ -63,8 +68,8 @@ public sealed partial class Plugin
         new("heart-of-light", "Heart of Light", 16160, [37], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(0, "Heart of Light")]),
         new("temperance", "Temperance", 16536, [24], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Temperance")]),
         new("sacred-soil", "Sacred Soil", 188, [28], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(299, "Sacred Soil")]),
-        new("expedient", "Expedient", 25868, [28], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Expedient")]),
-        new("collective-unconscious", "Collective Unconscious", 3613, [33], PossibleMitigationScope.Party, 60.0f, 18.0f, [new(0, "Collective Unconscious")]),
+        new("expedient", "Expedient", 25868, [28], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(2711, "Desperate Measures")]),
+        new("collective-unconscious", "Collective Unconscious", 3613, [33], PossibleMitigationScope.Party, 60.0f, 18.0f, [new(1206, "Wheel of Fortune")]),
         new("kerachole", "Kerachole", 24298, [40], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(0, "Kerachole")]),
         new("holos", "Holos", 24310, [40], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Holos")]),
         new("troubadour", "Troubadour", 7405, [23], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(1934, "Troubadour")]),
@@ -222,8 +227,14 @@ public sealed partial class Plugin
 
     private static bool DefinitionMatchesAction(PossibleMitigationDefinition definition, uint actionId, string actionName)
     {
-        return definition.ActionId != 0 && definition.ActionId == actionId ||
-            string.Equals(definition.ActionName, actionName, StringComparison.OrdinalIgnoreCase);
+        return ActionMatches(definition.ActionId, definition.ActionName, actionId, actionName) ||
+            definition.AlternateActions?.Any(action => ActionMatches(action.ActionId, action.Name, actionId, actionName)) == true;
+    }
+
+    private static bool ActionMatches(uint definitionActionId, string definitionActionName, uint actionId, string actionName)
+    {
+        return definitionActionId != 0 && definitionActionId == actionId ||
+            string.Equals(definitionActionName, actionName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DefinitionMatchesJob(PossibleMitigationDefinition definition, uint classJobId)

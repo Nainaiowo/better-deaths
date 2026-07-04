@@ -981,6 +981,12 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetHideExampleTab(bool hide)
+    {
+        Configuration.HideExampleTab = hide;
+        SaveConfiguration();
+    }
+
     public void SetShowCurrentPullWidget(bool open)
     {
         Configuration.ShowCurrentPullWidget = open;
@@ -10036,7 +10042,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static bool IsDefensiveStatus(StatusSnapshot status)
     {
-        return DefensiveStatusNames.Contains(status.Name);
+        return TryGetDefensiveStatusDefinition(status, out _);
     }
 
     private static bool IsPlayerDebuffStatus(StatusSnapshot status)

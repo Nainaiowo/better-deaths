@@ -36,13 +36,12 @@ public sealed class RecapWindow : Window, IDisposable
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
-    private LeadUpTableView selectedLeadUpTableView = LeadUpTableView.Timeline;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
     private DataPageSnapshot dataPageSnapshot = DataPageSnapshot.Empty;
     private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
     private readonly HashSet<string> expandedTimelineCauseRows = new(StringComparer.Ordinal);
-    private readonly HashSet<string> expandedFatalSequenceRows = new(StringComparer.Ordinal);
     private readonly HashSet<string> selectedPossibleMitigationKeys = new(StringComparer.Ordinal);
+    private string? collapsedSelectedTimelineLeadUpRowId;
     private readonly Dictionary<string, float> replayScrubSecondsByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> replayPlayingByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, float> replaySpeedByDeathId = new(StringComparer.Ordinal);
@@ -112,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.209";
+    private const string CurrentChangelogVersion = "0.1.0.210";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -390,12 +389,6 @@ public sealed class RecapWindow : Window, IDisposable
         public uint? DeathMemberKeyHash { get; set; }
     }
 
-    private enum LeadUpTableView
-    {
-        Timeline,
-        Events,
-    }
-
     private readonly struct ModernStyleScope : IDisposable
     {
         public ModernStyleScope(float backgroundOpacity)
@@ -590,7 +583,7 @@ public sealed class RecapWindow : Window, IDisposable
         EnsureDeathSelectionTargetVisible(target);
         pendingDeathSelection = target;
         currentMainPage = target.Source == DeathSelectionSource.Example
-            ? MainPage.Example
+            ? GetExampleSelectionPage()
             : MainPage.Review;
         clearPendingDeathSelection = false;
         IsOpen = true;
@@ -605,8 +598,15 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         currentMainPage = target.Source == DeathSelectionSource.Example
-            ? MainPage.Example
+            ? GetExampleSelectionPage()
             : MainPage.Review;
+    }
+
+    private MainPage GetExampleSelectionPage()
+    {
+        return configuration.HideExampleTab
+            ? MainPage.Review
+            : MainPage.Example;
     }
 
     private void DrawModernShell()
@@ -659,15 +659,24 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernNavigation()
     {
+        if (configuration.HideExampleTab && currentMainPage == MainPage.Example)
+        {
+            currentMainPage = MainPage.Review;
+        }
+
         var items = new List<MainNavigationItem>
         {
             new("Review", MainPage.Review),
-            new("Example", MainPage.Example),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
             new("Feedback", MainPage.Feedback),
             new("Updates", MainPage.Updates, ShouldHighlightChangelogTab()),
         };
+        if (!configuration.HideExampleTab)
+        {
+            items.Insert(1, new MainNavigationItem("Example", MainPage.Example));
+        }
+
         if (showDebugTab)
         {
             items.Add(new MainNavigationItem("Debug", MainPage.Debug));
@@ -1044,6 +1053,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             using var emptyStateIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
             ImGui.TextDisabled("No pull data is available yet.");
+            DrawReviewPaneBottomPadding();
             return;
         }
 
@@ -1374,6 +1384,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (pulls.Count == 0)
         {
             ImGui.TextDisabled("No pull data available.");
+            DrawReviewPaneBottomPadding();
             return;
         }
 
@@ -1381,6 +1392,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (visiblePulls.Count == 0)
         {
             ImGui.TextDisabled("No pulls match that player name.");
+            DrawReviewPaneBottomPadding();
             return;
         }
 
@@ -1409,6 +1421,8 @@ public sealed class RecapWindow : Window, IDisposable
                     ImGui.Dummy(new Vector2(1.0f, 6.0f));
                 }
             }
+
+            DrawReviewPaneBottomPadding();
         }
 
         ImGui.EndChild();
@@ -1649,6 +1663,8 @@ public sealed class RecapWindow : Window, IDisposable
                 : rowWidth + spacing + width;
         }
 
+        DrawReviewPaneBottomPadding();
+
         ImGui.EndChild();
         ImGui.PopStyleVar();
     }
@@ -1729,6 +1745,8 @@ public sealed class RecapWindow : Window, IDisposable
                         SetThemedTooltip(FormatCollapsedPullTooltip(pull));
                     }
                 }
+
+                DrawReviewPaneBottomPadding();
             }
 
             ImGui.EndChild();
@@ -1920,12 +1938,15 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TextDisabled("No deaths recorded for this pull.");
             DrawTimelineKofiLink(idPrefix);
             DrawKofiConfirmationPopup();
+            DrawReviewPaneBottomPadding();
             return;
         }
 
+        DrawTimelineLeadUpControls($"{idPrefix}{pull.Key}");
         DrawSelectableDeathTimeline(pull, idPrefix, selection);
         DrawTimelineKofiLink(idPrefix);
         DrawKofiConfirmationPopup();
+        DrawReviewPaneBottomPadding();
     }
 
     private static string GetPullDeathTimelineTitle(ReviewPull pull)
@@ -1948,22 +1969,9 @@ public sealed class RecapWindow : Window, IDisposable
         string idPrefix,
         ReviewSelectionState selection)
     {
-        if (!ImGui.BeginTable(
-            $"##ModernDeathTimeline{idPrefix}{pull.Key}",
-            5,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV,
-            GetRightPaddedTableSize(LeadUpTableRightPadding)))
-        {
-            return;
-        }
-
-        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.32f);
-        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.62f);
-        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.72f);
-        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.4f);
-        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Fatal event");
-
+        var itemSpacing = ImGui.GetStyle().ItemSpacing;
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 0.0f));
+        DrawSelectableDeathTimelineHeader($"{idPrefix}{pull.Key}");
         var orderedDeaths = GetDeathsInTimelineOrder(pull.Deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
         {
@@ -1971,11 +1979,23 @@ public sealed class RecapWindow : Window, IDisposable
             var rowSelected = IsSelectedReviewDeath(death, selection);
             var causeEvents = GetTimelineCauseEvents(death);
             var causeId = $"ModernCause{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+            var leadUpId = $"ModernLeadUp{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+            var leadUpExpanded = IsTimelineLeadUpExpanded(leadUpId, rowSelected);
             var rowHeight = GetTimelineRowHeight(causeEvents, causeId);
             var previousPullKey = selection.PullKey;
             var previousDeathSeenAtTicks = selection.DeathSeenAtTicks;
             var previousDeathMemberKeyHash = selection.DeathMemberKeyHash;
             var rowPressed = false;
+            if (!ImGui.BeginTable(
+                $"##ModernDeathTimelineRow{leadUpId}",
+                5,
+                ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV,
+                GetRightPaddedTableSize(LeadUpTableRightPadding)))
+            {
+                continue;
+            }
+
+            SetupDeathTimelineColumns();
             ImGui.TableNextRow(ImGuiTableRowFlags.None, rowHeight);
             if (rowSelected)
             {
@@ -1983,7 +2003,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             ImGui.TableNextColumn();
-            if (DrawCenteredRowSelectable(
+            if (DrawTimelineIndexCell(
                 (i + 1).ToString(),
                 $"SelectDeath{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}",
                 rowSelected,
@@ -1991,7 +2011,15 @@ public sealed class RecapWindow : Window, IDisposable
                 out var rowSelectablePressed))
             {
                 rowPressed = true;
-                SelectDeath(death, selection);
+                if (rowSelected)
+                {
+                    ToggleSelectedTimelineLeadUp(leadUpId, ref leadUpExpanded);
+                }
+                else
+                {
+                    SelectTimelineDeathAndOpenLeadUp(death, selection);
+                    leadUpExpanded = true;
+                }
             }
             else if (rowSelectablePressed)
             {
@@ -2012,7 +2040,15 @@ public sealed class RecapWindow : Window, IDisposable
                     () =>
                     {
                         rowPressed = true;
-                        SelectDeath(death, selection);
+                        if (rowSelected)
+                        {
+                            ToggleSelectedTimelineLeadUp(leadUpId, ref leadUpExpanded);
+                        }
+                        else
+                        {
+                            SelectTimelineDeathAndOpenLeadUp(death, selection);
+                            leadUpExpanded = true;
+                        }
                     },
                     () => rowPressed = true))
             {
@@ -2026,57 +2062,85 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(TimelinePressedRowColor));
             }
+
+            ImGui.EndTable();
+            if (leadUpExpanded)
+            {
+                DrawTimelineLeadUpDropdown(death, pull.TerritoryId, leadUpId);
+            }
         }
 
-        ImGui.EndTable();
+        ImGui.PopStyleVar();
     }
 
-    private void DrawSelectedDeathPanel(ReviewPull pull, PartyDeathRecord? death, string idPrefix)
+    private bool IsTimelineLeadUpExpanded(string leadUpId, bool rowSelected)
     {
-        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-        DrawSelectedDeathSectionTitle(pull.Title);
-        if (death is null)
+        return rowSelected && !string.Equals(collapsedSelectedTimelineLeadUpRowId, leadUpId, StringComparison.Ordinal);
+    }
+
+    private void SelectTimelineDeathAndOpenLeadUp(PartyDeathRecord death, ReviewSelectionState selection)
+    {
+        collapsedSelectedTimelineLeadUpRowId = null;
+        SelectDeath(death, selection);
+    }
+
+    private void ToggleSelectedTimelineLeadUp(string leadUpId, ref bool leadUpExpanded)
+    {
+        if (leadUpExpanded)
         {
-            ImGui.TextDisabled(pull.Deaths.Count == 0
-                ? "This pull has no recorded deaths."
-                : "Select a death from the timeline to inspect details.");
+            collapsedSelectedTimelineLeadUpRowId = leadUpId;
+            leadUpExpanded = false;
             return;
         }
 
-        DrawSelectedDeathHeader(pull, death);
-        var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
-        var resolved = ResolveDeathDisplay(death, pull.TerritoryId);
-        DrawDeathDetailSwitcher(deathId);
-        ImGui.Spacing();
+        collapsedSelectedTimelineLeadUpRowId = null;
+        leadUpExpanded = true;
+    }
 
-        switch (selectedDeathDetailPage)
+    private void DrawTimelineLeadUpControls(string idSuffix)
+    {
+        var availableWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
+        var toggleWidth = GetThemedSwitchWidth("Timers");
+        if (availableWidth > toggleWidth)
         {
-            case DeathDetailPage.Mitigation:
-                DrawExtraMitigationContext(resolved, deathId);
-                break;
-            case DeathDetailPage.WhatIf:
-                DrawPossibleMitigationContext(resolved, deathId);
-                break;
-            case DeathDetailPage.LeadUp:
-                DrawBetterDeathsInformationContent(resolved, deathId);
-                break;
-            case DeathDetailPage.Replay:
-                DrawDeathReplayContext(resolved, deathId);
-                break;
-            default:
-                DrawCauseSummary(resolved);
-                break;
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0.0f, availableWidth - toggleWidth));
         }
 
-        DrawReviewPaneBottomPadding();
+        DrawLeadUpTimelineTimerToggle($"DeathTimeline{idSuffix}");
+        ImGui.Spacing();
     }
 
-    private static void DrawReviewPaneBottomPadding()
+    private void DrawSelectableDeathTimelineHeader(string id)
     {
-        ImGui.Dummy(new Vector2(1.0f, ReviewPaneBottomPadding));
+        if (!ImGui.BeginTable(
+            $"##ModernDeathTimelineHeader{id}",
+            5,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV,
+            GetRightPaddedTableSize(LeadUpTableRightPadding)))
+        {
+            return;
+        }
+
+        SetupDeathTimelineColumns();
+        DrawCenteredTableHeader("#", "Time", "Player", "Job", "Fatal event");
+        ImGui.EndTable();
     }
 
-    private static bool DrawCenteredRowSelectable(string text, string id, bool selected, float rowHeight, out bool pressed)
+    private static void SetupDeathTimelineColumns()
+    {
+        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.32f);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.62f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.72f);
+        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+    }
+
+    private static bool DrawTimelineIndexCell(
+        string text,
+        string id,
+        bool selected,
+        float rowHeight,
+        out bool pressed)
     {
         var cellStart = ImGui.GetCursorScreenPos();
         var cellWidth = ImGui.GetContentRegionAvail().X;
@@ -2096,10 +2160,90 @@ public sealed class RecapWindow : Window, IDisposable
             cellStart.Y);
         ImGui.GetWindowDrawList().AddText(
             textPosition,
-            ImGui.GetColorU32(ImGuiCol.Text),
+            ImGui.GetColorU32(selected ? LeadUpGoldColor : ModernTextColor),
             text);
 
         return clicked;
+    }
+
+    private void DrawTimelineLeadUpDropdown(PartyDeathRecord death, uint territoryId, string idSuffix)
+    {
+        var resolved = ResolveDeathDisplay(death, territoryId);
+        var rows = IsFocusedReviewMode()
+            ? GetFocusedLeadUpTimelineRows(resolved.TimelineRows)
+            : resolved.TimelineRows;
+        var panelHeight = GetTimelineLeadUpDropdownHeight(rows.Count);
+        var panelWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
+        var itemSpacing = ImGui.GetStyle().ItemSpacing;
+
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 7.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 4.0f));
+        if (ImGui.BeginChild($"##TimelineLeadUpDropdown{idSuffix}", new Vector2(panelWidth, panelHeight), true, OptionalScrollbarFlags))
+        {
+            DrawHpHistory(resolved, idSuffix, showLabel: false, showHeader: false, rightPadding: 0.0f);
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar(2);
+        ImGui.PopStyleColor(2);
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+    }
+
+    private static float GetTimelineLeadUpDropdownHeight(int rowCount)
+    {
+        var lineHeight = ImGui.GetTextLineHeightWithSpacing();
+        var rowHeight = MathF.Max(30.0f, lineHeight + 13.0f);
+        return Math.Clamp((rowCount * rowHeight) + 18.0f, 64.0f, 300.0f);
+    }
+
+    private static float GetThemedSwitchWidth(string label)
+    {
+        return 18.0f + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize(label).X;
+    }
+
+    private void DrawSelectedDeathPanel(ReviewPull pull, PartyDeathRecord? death, string idPrefix)
+    {
+        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
+        DrawSelectedDeathSectionTitle(pull.Title);
+        if (death is null)
+        {
+            ImGui.TextDisabled(pull.Deaths.Count == 0
+                ? "This pull has no recorded deaths."
+                : "Select a death from the timeline to inspect details.");
+            DrawReviewPaneBottomPadding();
+            return;
+        }
+
+        DrawSelectedDeathHeader(pull, death);
+        var deathId = $"{idPrefix}{pull.Key}{death.MemberKey}{death.SeenAtUtc.Ticks}";
+        var resolved = ResolveDeathDisplay(death, pull.TerritoryId);
+        DrawDeathDetailSwitcher(deathId);
+        ImGui.Spacing();
+
+        switch (selectedDeathDetailPage)
+        {
+            case DeathDetailPage.Mitigation:
+                DrawExtraMitigationContext(resolved, deathId);
+                break;
+            case DeathDetailPage.WhatIf:
+                DrawPossibleMitigationContext(resolved, deathId);
+                break;
+            case DeathDetailPage.Replay:
+                DrawDeathReplayContext(resolved, deathId);
+                break;
+            default:
+                DrawCauseSummary(resolved);
+                break;
+        }
+
+        DrawReviewPaneBottomPadding();
+    }
+
+    private static void DrawReviewPaneBottomPadding()
+    {
+        ImGui.Dummy(new Vector2(1.0f, ReviewPaneBottomPadding));
     }
 
     private void DrawDeathDetailSwitcher(string deathId)
@@ -2109,7 +2253,6 @@ public sealed class RecapWindow : Window, IDisposable
             new("Summary", DeathDetailPage.Summary),
             new("Mitigation", DeathDetailPage.Mitigation),
             new("What-if", DeathDetailPage.WhatIf),
-            new("10s Lead-up", DeathDetailPage.LeadUp),
             new("Replay", DeathDetailPage.Replay, ReplayBetaBadgeText),
         };
         if (ImGui.GetContentRegionAvail().X < DeathDetailCompactWidthThreshold)
@@ -2548,8 +2691,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         DrawReviewLegendTooltipLine("KO state", "A captured character has transitioned into death.");
         DrawReviewLegendTooltipLine("Fatal event", "The fatal hit group, fatal status, or selected event around the HP transition into KO.");
-        DrawReviewLegendTooltipLine("Fatal sequence", "A compact set of captured hits and combat-log confirmations around the HP transition into KO.");
-        DrawReviewLegendTooltipLine("Non-hit KO", "Kept in the death timeline. A detail panel is shown only when Better Deaths captured fatal sequence, status, or environmental context.");
+        DrawReviewLegendTooltipLine("Non-hit KO", "Kept in the death timeline. A detail panel is shown only when Better Deaths captured status, event, or environmental context.");
         DrawReviewLegendTooltipLine("Recorded pulls", "Created on duty reset, wipe, recommence, and territory changes when the pull had at least one death.");
         DrawReviewLegendTooltipLine("Recorded pull order", "Recorded pulls are grouped by duty, with the duty containing the newest pull shown first.");
         DrawReviewLegendTooltipLine("Duty dropdown", "All duties shows everything, while a selected duty only shows pulls from that duty.");
@@ -2729,6 +2871,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (deaths.Count == 0)
         {
             ImGui.TextDisabled("No deaths recorded this pull.");
+            DrawReviewPaneBottomPadding();
             return;
         }
 
@@ -2747,6 +2890,7 @@ public sealed class RecapWindow : Window, IDisposable
             if (deaths.Count == 0)
             {
                 ImGui.TextDisabled("No deaths recorded this pull.");
+                DrawReviewPaneBottomPadding();
                 return;
             }
         }
@@ -2754,6 +2898,7 @@ public sealed class RecapWindow : Window, IDisposable
         if (ImGui.BeginChild($"##CurrentPullWidgetScroll{idSuffix}", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             DrawCurrentPullWidgetDeathTable(deaths, idSuffix);
+            DrawReviewPaneBottomPadding();
         }
 
         ImGui.EndChild();
@@ -3204,17 +3349,6 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCenteredHeaderCell("Mits/Debuffs");
     }
 
-    private static void DrawLeadUpEventsTableHeader()
-    {
-        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        DrawCenteredIconHeaderCell(FontAwesomeIcon.Clock);
-        DrawCenteredHeaderCell("Source");
-        DrawCenteredHeaderCell("Action");
-        DrawCenteredHeaderCell("Amount");
-        DrawCenteredHeaderCell("HP + shields");
-        DrawCenteredHeaderCell("Mits/Debuffs");
-    }
-
     private static void DrawCenteredHeaderCell(string label)
     {
         ImGui.TableNextColumn();
@@ -3365,6 +3499,7 @@ public sealed class RecapWindow : Window, IDisposable
             .Select(FormatTimelineCauseLine)
             .ToList();
         var isExpanded = expandedTimelineCauseRows.Contains(id);
+        var wasExpanded = isExpanded;
         var summaryTextSize = ImGui.CalcTextSize(summary);
         var controlWidth = MathF.Max(0.0f, availableWidth);
         var controlSize = new Vector2(controlWidth, MathF.Max(ImGui.GetFrameHeight(), summaryTextSize.Y));
@@ -3428,6 +3563,11 @@ public sealed class RecapWindow : Window, IDisposable
         if (!isExpanded)
         {
             return arrowClicked;
+        }
+
+        if (arrowClicked && !wasExpanded)
+        {
+            return true;
         }
 
         ImGui.Dummy(new Vector2(0.0f, MathF.Max(1.0f, style.ItemInnerSpacing.Y * 0.5f)));
@@ -4013,8 +4153,6 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool HasDeathDetails(PartyDeathRecord death)
     {
         return DeathDisplaySelector.Select(death).Events.Count > 0 ||
-            death.FatalSequence is { Events.Count: > 0 } ||
-            death.FatalSequence is { LogEvents.Count: > 0 } ||
             death.EnvironmentalAssessment is { Confidence: > 0.0f };
     }
 
@@ -4098,15 +4236,31 @@ public sealed class RecapWindow : Window, IDisposable
         DrawEnvironmentalDeathContext(death);
 
         var buttonId = $"{death.MemberKey}{death.SeenAtUtc.Ticks}";
-        DrawDeathChatChannelCombo(buttonId);
-        ImGui.SameLine();
-        if (DrawThemedActionButton("Post information to chat", $"PostInfo{buttonId}"))
+        const string postInformationLabel = "Post information to chat";
+        var channelButtonMax = DrawDeathChatChannelCombo(buttonId);
+        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        var postInformationWidth = GetThemedActionButtonWidth(postInformationLabel);
+        var canFitPostInformationInline = channelButtonMax.X + ImGui.GetStyle().ItemSpacing.X + postInformationWidth <= contentRight;
+        if (canFitPostInformationInline)
+        {
+            ImGui.SameLine();
+        }
+
+        if (DrawThemedActionButton(
+                postInformationLabel,
+                $"PostInfo{buttonId}",
+                canFitPostInformationInline ? postInformationWidth : MathF.Min(postInformationWidth, ImGui.GetContentRegionAvail().X)))
         {
             plugin.PrintDeathInformationToChat(death);
         }
 
         DrawFatalEventRow(death, causeEvents);
-        DrawFatalSequenceSummary(death, resolved.Selection.AnchorSeenAtUtc);
+        ImGui.Separator();
+        DrawStatusSnapshot(
+            resolved.SummaryMitigationDebuffStatuses,
+            $"{death.MemberKey}{death.SeenAtUtc.Ticks}SummaryAtDeath");
+        ImGui.Separator();
+        DrawEarlierBossDebuffsNotOnFatalHit(resolved, $"{death.MemberKey}{death.SeenAtUtc.Ticks}Summary");
     }
 
     private void DrawEnvironmentalDeathContext(PartyDeathRecord death)
@@ -4377,7 +4531,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawDeathChatChannelCombo(string id, float width = 185.0f)
+    private Vector2 DrawDeathChatChannelCombo(string id, float width = 185.0f)
     {
         var effectiveChannel = Plugin.GetEffectiveChatChannel(configuration.DeathChatChannel);
         var buttonWidth = MathF.Min(width, MathF.Max(92.0f, ImGui.GetContentRegionAvail().X));
@@ -4422,7 +4576,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.PopStyleColor(6);
             ImGui.PopStyleVar(2);
-            return;
+            return buttonMax;
         }
 
         foreach (var option in Plugin.ChatChannelOptions)
@@ -4445,6 +4599,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndPopup();
         ImGui.PopStyleColor(6);
         ImGui.PopStyleVar(2);
+        return buttonMax;
     }
 
     private static float GetDeathChatChannelPopupWidth(float minimumWidth)
@@ -4534,7 +4689,7 @@ public sealed class RecapWindow : Window, IDisposable
         var contentMax = ImGui.GetWindowPos() + ImGui.GetWindowContentRegionMax();
         var linkPosition = new Vector2(
             MathF.Max(currentPosition.X, contentMax.X - textSize.X - style.ItemSpacing.X),
-            MathF.Max(currentPosition.Y + style.ItemSpacing.Y, contentMax.Y - textSize.Y - style.ItemSpacing.Y));
+            MathF.Max(currentPosition.Y + style.ItemSpacing.Y, contentMax.Y - textSize.Y - ReviewPaneBottomPadding));
 
         ImGui.SetCursorScreenPos(linkPosition);
         if (DrawInlineTextLink(label, $"TimelineKofi{idPrefix}"))
@@ -4710,99 +4865,6 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCenteredText(death.ClassJobName);
     }
 
-    private void DrawFatalSequenceSummary(PartyDeathRecord death, DateTime anchorSeenAtUtc)
-    {
-        if (death.FatalSequence is not { } sequence)
-        {
-            return;
-        }
-
-        var hasEvents = sequence.Events.Count > 0;
-        var hasLogEvents = sequence.LogEvents.Count > 0;
-        if (!hasEvents && !hasLogEvents)
-        {
-            return;
-        }
-
-        ImGui.Separator();
-        var id = $"FatalSequence{death.MemberKey}{death.SeenAtUtc.Ticks}";
-        var isExpanded = expandedFatalSequenceRows.Contains(id);
-        var title = "Fatal sequence";
-        var titleSize = ImGui.CalcTextSize(title);
-        var style = ImGui.GetStyle();
-        var controlPosition = ImGui.GetCursorScreenPos();
-        var controlHeight = MathF.Max(ImGui.GetFrameHeight(), titleSize.Y);
-        var arrowClicked = DrawDisclosureArrowButton(
-            $"##FatalSequenceArrow{id}",
-            isExpanded,
-            controlPosition,
-            controlHeight,
-            titleSize.Y,
-            ModernTextColor,
-            out var arrowHovered,
-            out var arrowSize,
-            out _);
-        var titlePosition = new Vector2(
-            controlPosition.X + style.FramePadding.X + arrowSize + style.ItemInnerSpacing.X,
-            controlPosition.Y + MathF.Max(0.0f, (controlHeight - titleSize.Y) * 0.5f));
-        ImGui.GetWindowDrawList().AddText(titlePosition, ImGui.GetColorU32(ModernTextColor), title);
-        ImGui.SetCursorScreenPos(new Vector2(controlPosition.X, controlPosition.Y + controlHeight));
-
-        if (arrowClicked)
-        {
-            if (isExpanded)
-            {
-                expandedFatalSequenceRows.Remove(id);
-                isExpanded = false;
-            }
-            else
-            {
-                expandedFatalSequenceRows.Add(id);
-                isExpanded = true;
-            }
-        }
-
-        if (arrowHovered)
-        {
-            SetThemedTooltip(isExpanded ? "Collapse fatal sequence." : "Expand fatal sequence.");
-        }
-
-        if (!isExpanded)
-        {
-            return;
-        }
-
-        ImGui.TextDisabled("Compact damage context around the HP transition into KO.");
-
-        if (hasEvents)
-        {
-            ImGui.BulletText("Captured events");
-            foreach (var combatEvent in sequence.Events.OrderBy(combatEvent => combatEvent.SeenAtUtc))
-            {
-                ImGui.Indent();
-                DrawCombatEventLine(
-                    combatEvent,
-                    $"{FormatRelativeToDeath(anchorSeenAtUtc, combatEvent.SeenAtUtc)} ",
-                    includeFlags: true);
-                ImGui.Unindent();
-            }
-        }
-
-        if (hasLogEvents)
-        {
-            ImGui.BulletText("Combat log confirmations");
-            foreach (var logEvent in sequence.LogEvents.OrderBy(logEvent => logEvent.SeenAtUtc))
-            {
-                ImGui.Indent();
-                ImGui.PushStyleColor(ImGuiCol.Text, DamageColor);
-                ImGui.TextWrapped(
-                    $"{FormatRelativeToDeath(anchorSeenAtUtc, logEvent.SeenAtUtc)} {FormatKnownPlayerName(logEvent.SourceName)}: {FormatActionNameForDisplay(logEvent.ActionName)} {FormatSignedDamageAmount(logEvent.Amount)}");
-                ImGui.PopStyleColor();
-                ImGui.Unindent();
-            }
-        }
-    }
-
     private LeadUpSummaryRow? GetLeadUpSummaryRow(
         PartyDeathRecord death,
         DeathDisplaySelection selection,
@@ -4957,7 +5019,6 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawExtraMitigationContext(ResolvedDeathDisplay resolved, string idSuffix)
     {
-        var death = resolved.Death;
         ImGui.TextUnformatted("Extra mitigation context");
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         DrawStatusSnapshot(
@@ -5598,16 +5659,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         ImGui.TextDisabled("Older saved pulls may show less detail if that data was not captured at the time.");
-        DrawLeadUpTableViewToggle(idSuffix);
-        ImGui.Spacing();
-        if (selectedLeadUpTableView == LeadUpTableView.Timeline)
-        {
-            DrawHpHistory(resolved, idSuffix);
-        }
-        else
-        {
-            DrawLeadUpEvents(resolved, idSuffix);
-        }
+        DrawHpHistory(resolved, idSuffix);
     }
 
     private IReadOnlyList<EnemyHpSnapshot> GetEnemyHpAtDeathForDisplay(PartyDeathRecord death)
@@ -5949,7 +6001,7 @@ public sealed class RecapWindow : Window, IDisposable
                 mechanicSeenAtUtc,
                 actorPosition.PullElapsedSeconds,
                 Math.Max(0.25f, (float)(mechanicEndAtUtc - mechanicSeenAtUtc).TotalSeconds),
-                $"marker:{marker.ActorKey}:{marker.RawMarkerId}:{marker.SeenAtUtc.Ticks}",
+                GetReplayMarkerMechanicSourceKey(marker),
                 marker.ActorName,
                 shape,
                 actorPosition.X,
@@ -6826,6 +6878,35 @@ public sealed class RecapWindow : Window, IDisposable
         return string.Equals(mechanic.RawEventKind, "target-icon", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static string GetReplayMarkerMechanicSourceKey(ReplayMarkerSnapshot marker)
+    {
+        return $"marker:{marker.ActorKey}:{marker.RawMarkerId}:{marker.SeenAtUtc.Ticks}";
+    }
+
+    private static HashSet<string> GetReplayMarkerMechanicSourceKeysWithVisibleBadges(
+        IReadOnlyList<ReplayMarkerSnapshot> markerStates,
+        IReadOnlyList<ReplayPositionSnapshot> actorStates)
+    {
+        if (markerStates.Count == 0 || actorStates.Count == 0)
+        {
+            return [];
+        }
+
+        var visibleActorKeys = actorStates
+            .Select(actor => actor.ActorKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var sourceKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var marker in markerStates)
+        {
+            if (visibleActorKeys.Contains(marker.ActorKey))
+            {
+                sourceKeys.Add(GetReplayMarkerMechanicSourceKey(marker));
+            }
+        }
+
+        return sourceKeys;
+    }
+
     private static bool TryFindReplayMechanicSourceActor(
         ReplayMechanicSnapshot mechanic,
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
@@ -7082,7 +7163,8 @@ public sealed class RecapWindow : Window, IDisposable
             : null;
         ImGui.PushClipRect(canvasStart, canvasEnd, true);
         DrawReplayGrid(drawList, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-        var mechanicScreenRegions = DrawReplayMechanics(drawList, mechanicStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        var markerMechanicSourceKeysWithVisibleBadges = GetReplayMarkerMechanicSourceKeysWithVisibleBadges(markerStates, actorStates);
+        var mechanicScreenRegions = DrawReplayMechanics(drawList, mechanicStates, markerMechanicSourceKeysWithVisibleBadges, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         DrawResolvedReplayMarkerMechanics(drawList, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         if (showTrails)
         {
@@ -7546,6 +7628,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static IReadOnlyList<(ReplayMechanicSnapshot Mechanic, Vector2 ScreenPosition, float Radius)> DrawReplayMechanics(
         ImDrawListPtr drawList,
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        IReadOnlySet<string> hiddenLabelMechanicSourceKeys,
         Vector2 canvasStart,
         Vector2 canvasSize,
         float minX,
@@ -7561,7 +7644,7 @@ public sealed class RecapWindow : Window, IDisposable
             var center = ReplayWorldPointToScreen(mechanic.X, mechanic.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
             var radius = Math.Clamp(ReplayWorldLengthToScreenRadius(GetReplayMechanicBoundsRadius(mechanic), canvasSize, minX, maxX, minZ, maxZ, zoom), 10.0f, 180.0f);
             screenRegions.Add((mechanic, center, radius));
-            DrawReplayMechanic(drawList, mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+            DrawReplayMechanic(drawList, mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, hideLabel: hiddenLabelMechanicSourceKeys.Contains(mechanic.SourceKey));
         }
 
         return screenRegions;
@@ -7587,7 +7670,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
 
             var center = ReplayWorldPointToScreen(state.Mechanic.X, state.Mechanic.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-            DrawReplayMechanic(drawList, state.Mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, state.Alpha, resolved: true);
+            DrawReplayMechanic(drawList, state.Mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, state.Alpha, resolved: true, hideLabel: true);
         }
     }
 
@@ -7604,7 +7687,8 @@ public sealed class RecapWindow : Window, IDisposable
         float zoom,
         Vector2 pan,
         float alpha = 1.0f,
-        bool resolved = false)
+        bool resolved = false,
+        bool hideLabel = false)
     {
         alpha = Math.Clamp(alpha, 0.0f, 1.0f);
         var color = GetReplayMechanicColor(mechanic);
@@ -7655,11 +7739,21 @@ public sealed class RecapWindow : Window, IDisposable
                 break;
         }
 
-        if (mechanic.Shape != ReplayMechanicShape.Tether &&
-            (!resolved || alpha > 0.22f))
+        if (ShouldDrawReplayMechanicLabel(mechanic, resolved, alpha, hideLabel))
         {
             DrawReplayMechanicLabel(drawList, mechanic, center, border, alpha);
         }
+    }
+
+    private static bool ShouldDrawReplayMechanicLabel(ReplayMechanicSnapshot mechanic, bool resolved, float alpha, bool hideLabel)
+    {
+        if (hideLabel ||
+            mechanic.Shape == ReplayMechanicShape.Tether)
+        {
+            return false;
+        }
+
+        return !resolved || alpha > 0.22f;
     }
 
     private static void DrawResolvedReplayMechanicGlow(
@@ -8646,38 +8740,19 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMutedWrappedText("Players are role-colored: blue tanks, green healers, red DPS. X means dead. Gold marks the selected death target. Thin accent lines are captured tethers. Muted enemy rings mean not targetable.");
     }
 
-    private void DrawLeadUpTableViewToggle(string idSuffix)
-    {
-        ImGui.BeginGroup();
-        DrawLeadUpTableViewButton("Timeline", LeadUpTableView.Timeline, idSuffix);
-        ImGui.SameLine(0.0f, 4.0f);
-        DrawLeadUpTableViewButton("Events", LeadUpTableView.Events, idSuffix);
-        ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X * 2.0f);
-        DrawLeadUpTimelineTimerToggle(idSuffix);
-        ImGui.EndGroup();
-    }
-
-    private void DrawLeadUpTableViewButton(string label, LeadUpTableView view, string idSuffix)
-    {
-        var selected = selectedLeadUpTableView == view;
-        var buttonColor = selected ? ModernNavButtonSelectedColor : ModernNavButtonColor;
-        var hoveredColor = selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor;
-        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(buttonColor, selected));
-        if (ImGui.Button($"{label}##LeadUpTableView{view}{idSuffix}", new Vector2(96.0f, 26.0f)))
-        {
-            selectedLeadUpTableView = view;
-        }
-
-        ImGui.PopStyleColor(4);
-    }
-
-    private void DrawHpHistory(ResolvedDeathDisplay resolved, string idSuffix)
+    private void DrawHpHistory(
+        ResolvedDeathDisplay resolved,
+        string idSuffix,
+        bool showLabel = true,
+        bool showHeader = true,
+        float rightPadding = LeadUpTableRightPadding)
     {
         var death = resolved.Death;
-        DrawLeadUpLabel("10 second HP history");
+        if (showLabel)
+        {
+            DrawLeadUpLabel("10 second HP history");
+        }
+
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
         var rows = IsFocusedReviewMode()
             ? GetFocusedLeadUpTimelineRows(resolved.TimelineRows)
@@ -8693,7 +8768,7 @@ public sealed class RecapWindow : Window, IDisposable
             $"##HpHistory{idSuffix}",
             5,
             ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg,
-            GetRightPaddedTableSize(LeadUpTableRightPadding)))
+            GetRightPaddedTableSize(rightPadding)))
         {
             return;
         }
@@ -8703,7 +8778,10 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
         ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 2.0f);
-        DrawHpHistoryTableHeader();
+        if (showHeader)
+        {
+            DrawHpHistoryTableHeader();
+        }
 
         string? previousSourceKey = null;
         for (var i = 0; i < rows.Count; i++)
@@ -9803,7 +9881,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawEarlierBossDebuffsNotOnFatalHit(ResolvedDeathDisplay resolved, string idSuffix)
     {
         var death = resolved.Death;
-        DrawLeadUpLabel("Mitigations that expired on the leadup to the hit");
+        DrawLeadUpLabel("Expired Mits");
         var selection = resolved.Selection;
         if (selection.Events.Count == 0)
         {
@@ -9895,75 +9973,6 @@ public sealed class RecapWindow : Window, IDisposable
         return combatEvent.SourceEntityId == 0
             ? combatEvent.SourceName
             : combatEvent.SourceEntityId.ToString("X8");
-    }
-
-    private void DrawLeadUpEvents(ResolvedDeathDisplay resolved, string idSuffix)
-    {
-        var death = resolved.Death;
-        DrawLeadUpLabel("Captured hits/events in last 10 seconds");
-        var events = resolved.LeadUpEvents;
-        var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
-
-        if (events.Count == 0)
-        {
-            DrawMutedWrappedText("No damage, miss, invulnerability, or status events captured in the last 10 seconds before KO.");
-            return;
-        }
-
-        if (!ImGui.BeginTable(
-            $"##LeadUpEvents{idSuffix}",
-            6,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg,
-            GetRightPaddedTableSize(LeadUpTableRightPadding)))
-        {
-            return;
-        }
-
-        ImGui.TableSetupColumn("Before death", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.35f);
-        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthStretch, 1.55f);
-        ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.55f);
-        ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, 2.55f);
-        DrawLeadUpEventsTableHeader();
-
-        string? previousSourceKey = null;
-        foreach (var combatEvent in events)
-        {
-            var (hpDisplay, healChange, damageChange) = GetTimelineEventHpDisplay(death, combatEvent, death.HpHistory, events);
-            var sourceKey = GetSourceKey(combatEvent);
-            var sourceChanged = previousSourceKey is not null &&
-                !string.Equals(previousSourceKey, sourceKey, StringComparison.Ordinal);
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            DrawCenteredText(FormatRelativeToDeath(displayAnchorSeenAtUtc, combatEvent.SeenAtUtc));
-            ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(
-                FormatKnownPlayerName(combatEvent.SourceName),
-                sourceChanged ? LeadUpGoldColor : null);
-            ImGui.TableNextColumn();
-            DrawActionText(combatEvent, false);
-            ImGui.TableNextColumn();
-            DrawAmountValue(combatEvent);
-            ImGui.TableNextColumn();
-            DrawCenteredHpShieldBar(
-                hpDisplay.CurrentHp,
-                hpDisplay.ShieldHp,
-                hpDisplay.MaxHp,
-                $"TimelineHp{idSuffix}{combatEvent.MemberKey}{combatEvent.SeenAtUtc.Ticks}",
-                GetIncomingDamageAmount(combatEvent),
-                hpDisplay.TooltipDetail,
-                healChange: healChange,
-                damageChange: damageChange);
-            ImGui.TableNextColumn();
-            DrawCombinedMitigationDebuffCell(
-                GetMergedPlayerStatusesForEvent(death, combatEvent),
-                GetEventSourceMitigationStatuses(death, combatEvent, events),
-                configuration.ShowLeadUpTimelineMitigationTimers);
-            previousSourceKey = sourceKey;
-        }
-
-        ImGui.EndTable();
     }
 
     private static void DrawLeadUpLabel(string label)
@@ -11133,6 +11142,18 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawInlineDebugTabButton();
 
+        var hideExampleTab = configuration.HideExampleTab;
+        if (DrawThemedCheckbox("Hide Example tab", ref hideExampleTab))
+        {
+            plugin.SetHideExampleTab(hideExampleTab);
+            if (hideExampleTab && currentMainPage == MainPage.Example)
+            {
+                currentMainPage = MainPage.Review;
+            }
+        }
+
+        DrawSettingsTooltip("Removes the Example tab from the top navigation. This does not change real pull capture or saved review data.");
+
         var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
         if (ImGui.SliderFloat(
             "Better Deaths window opacity",
@@ -11282,6 +11303,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
         DrawThemeSetting();
+        DrawReviewPaneBottomPadding();
     }
 
     private void DrawThemeSetting()
@@ -11844,6 +11866,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted("Widget preview");
         ImGui.TextDisabled("Uses static example pull data so the preview stays available outside combat.");
         DrawCurrentPullWidgetPreview();
+        DrawReviewPaneBottomPadding();
     }
 
     private static string GetWidgetDisplayModeLabel(WidgetDisplayMode mode)
@@ -12255,6 +12278,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
         DrawDebugCaptureTab();
+        DrawReviewPaneBottomPadding();
     }
 
     private void DrawDebugCaptureTab()
@@ -13381,7 +13405,6 @@ public sealed class RecapWindow : Window, IDisposable
         Summary,
         Mitigation,
         WhatIf,
-        LeadUp,
         Replay,
     }
 
@@ -13425,6 +13448,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextWrapped("The goal is to make wipe review fast: see who died, see why, see what was active, and keep the pull context intact between attempts.");
         ImGui.Separator();
         DrawCreatorNote();
+        DrawReviewPaneBottomPadding();
     }
 
     private void DrawDataPage()
@@ -13461,6 +13485,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Chat posting is opt-in. If you post recap information to chat, that information is shared through the selected in-game chat channel.");
         DrawWrappedBullet("Recap links are not web links and do not send data to a Better Deaths server. They are local Dalamud chat payloads used to find a matching recap.");
         DrawWrappedBullet("The Feedback tab only opens the Punish Discord invite in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
+        DrawReviewPaneBottomPadding();
     }
 
     private void DrawFeedbackPage()
@@ -13480,6 +13505,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawFeedbackConfirmationPopup();
+        DrawReviewPaneBottomPadding();
     }
 
     private static void DrawFeedbackConfirmationPopup()
@@ -13611,8 +13637,21 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawDataStat(string label, string value)
     {
-        ImGui.TextColored(LeadUpGoldColor, $"{label}:");
-        ImGui.SameLine();
+        var startX = ImGui.GetCursorPosX();
+        var labelText = $"{label}:";
+        ImGui.TextColored(LeadUpGoldColor, labelText);
+        var style = ImGui.GetStyle();
+        var remainingWidth = ImGui.GetContentRegionAvail().X;
+        var minimumInlineValueWidth = MathF.Min(180.0f, MathF.Max(80.0f, ImGui.CalcTextSize(value).X));
+        if (remainingWidth >= style.ItemSpacing.X + minimumInlineValueWidth)
+        {
+            ImGui.SameLine();
+        }
+        else
+        {
+            ImGui.SetCursorPosX(startX + ReviewPaneContentIndent);
+        }
+
         ImGui.TextWrapped(value);
     }
 
@@ -13639,6 +13678,17 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.210");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added broader mitigation tracking for secondary and granted effects, including Desperate Measures and other shield, regen, and healing-received effects.");
+        DrawHighlightedChangelogBullet("Moved the 10-second lead-up into the selected death row so the timeline review stays in one place.");
+        DrawWrappedBullet("Summary now keeps active mitigations/debuffs at death and Expired Mits directly with the death context.");
+        DrawWrappedBullet("Added a Customize option to hide the Example tab.");
+        DrawWrappedBullet("Cleaned up recap spacing across the window so bottom content no longer sits flush against the edge.");
+        DrawWrappedBullet("Cleaned up replay labels so marker badges do not duplicate the same mechanic name on top of the player.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.209");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added Walled detection for environment-source deaths such as death walls and jump-offs.");
@@ -14283,6 +14333,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Changed 8-player death link text to Party wipe detected.");
         DrawWrappedBullet("Reduced settings stutter by saving Recorded pulls kept after releasing the slider.");
         DrawWrappedBullet("Added safer bounded in-memory capture so Better Deaths does not behave like a debug logger.");
+        DrawReviewPaneBottomPadding();
     }
 
     private static void DrawBreathingGoldBullet(string text)

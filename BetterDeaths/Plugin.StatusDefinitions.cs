@@ -70,7 +70,8 @@ public sealed partial class Plugin
         float? MagicDamageReductionPercent = null,
         bool HasVariableMitigationPercent = false,
         string? MitigationPercentTooltip = null,
-        InducedMitigationDisplay[]? InducedStatuses = null);
+        InducedMitigationDisplay[]? InducedStatuses = null,
+        uint? StatusId = null);
 
     private sealed record BossMitigationStatusDefinition(
         uint StatusId,
@@ -103,8 +104,11 @@ public sealed partial class Plugin
             MitigationPercentTooltip: "Intervention can gain additional mitigation based on the active defensives running on the caster.",
             InducedStatuses: [new(2675, "Knight's Resolve"), new(2676, "Knight's Benediction")]),
         new("Passage of Arms", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f),
+        new("Arms Up", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f, StatusId: 1176),
         new("Bulwark", DefensiveStatusEffect.BlockOrParry),
         new("Divine Veil", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
+        new("Radiant Veil", DefensiveStatusEffect.Shield, StatusId: 3546),
+        new("Knight's Benediction", DefensiveStatusEffect.HealingOrRegen, StatusId: 2676),
         new("Hallowed Ground", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention),
 
         // Warrior
@@ -120,8 +124,11 @@ public sealed partial class Plugin
         new("Stem the Tide", DefensiveStatusEffect.Shield),
         new("Vengeance", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 30.0f),
         new("Damnation", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 40.0f),
+        new("Primeval Impulse", DefensiveStatusEffect.HealingOrRegen, StatusId: 3900),
         new("Shake It Off", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
+        new("Shake It Off (Over Time)", DefensiveStatusEffect.HealingOrRegen, StatusId: 2108),
         new("Thrill of Battle", DefensiveStatusEffect.MaxHpIncrease | DefensiveStatusEffect.HealingReceivedIncrease),
+        new("Equilibrium", DefensiveStatusEffect.HealingOrRegen, StatusId: 2681),
         new("Holmgang", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention),
 
         // Dark Knight
@@ -131,9 +138,12 @@ public sealed partial class Plugin
         new("Shadowed Vigil", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 40.0f),
         new("Oblation", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
         new("The Blackest Night", DefensiveStatusEffect.Shield),
+        new("Blackest Night", DefensiveStatusEffect.Shield, StatusId: 1178),
+        new("Blackest Night", DefensiveStatusEffect.Shield, StatusId: 1308),
         new("Living Dead", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention | DefensiveStatusEffect.HealingOrRegen),
         new("Walking Dead", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention | DefensiveStatusEffect.HealingOrRegen),
         new("Undead Rebirth", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention),
+        new("Undead Redemption", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention | DefensiveStatusEffect.HealingOrRegen, StatusId: 3039),
         new("Dark Force", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 80.0f),
 
         // Gunbreaker
@@ -143,6 +153,7 @@ public sealed partial class Plugin
         new("Heart of Stone", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.Shield, DamageReductionPercent: 15.0f),
         new("Heart of Corundum", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 15.0f),
         new("Clarity of Corundum", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f),
+        new("Catharsis of Corundum", DefensiveStatusEffect.HealingOrRegen, StatusId: 2685),
         new("Heart of Light", DefensiveStatusEffect.DamageReduction, PhysicalDamageReductionPercent: 5.0f, MagicDamageReductionPercent: 10.0f),
         new("Brutal Shell", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
         new("Superbolide", DefensiveStatusEffect.InvulnerabilityOrDeathPrevention),
@@ -162,16 +173,21 @@ public sealed partial class Plugin
         new("Consolation", DefensiveStatusEffect.Shield),
         new("Sacred Soil", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f),
         new("Expedient", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
+        new("Desperate Measures", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f, StatusId: 2711),
         new("Fey Illumination", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingReceivedIncrease, MagicDamageReductionPercent: 5.0f),
         new("Seraphic Illumination", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingReceivedIncrease, MagicDamageReductionPercent: 5.0f),
         new("Protraction", DefensiveStatusEffect.MaxHpIncrease | DefensiveStatusEffect.HealingReceivedIncrease),
 
         // Astrologian
         new("Collective Unconscious", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f),
+        new("Wheel of Fortune", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f, StatusId: 1206),
         new("Exaltation", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f),
         new("Sun Sign", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
         new("The Bole", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
+        new("The Arrow", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 3888),
         new("The Spire", DefensiveStatusEffect.Shield),
+        new("Macrocosmos", DefensiveStatusEffect.HealingOrRegen, StatusId: 2718),
+        new("Macrocosmos", DefensiveStatusEffect.HealingOrRegen, StatusId: 3104),
         new("Celestial Intersection", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
         new("Intersection", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
         new("Neutral Sect", DefensiveStatusEffect.Shield),
@@ -185,22 +201,34 @@ public sealed partial class Plugin
         new("Eukrasian Prognosis", DefensiveStatusEffect.Shield),
         new("Eukrasian Prognosis II", DefensiveStatusEffect.Shield),
         new("Kerachole", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f),
+        new("Kerakeia", DefensiveStatusEffect.HealingOrRegen, StatusId: 2938),
         new("Taurochole", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
         new("Holos", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f),
+        new("Holosakos", DefensiveStatusEffect.Shield, StatusId: 3365),
+        new("Physis II", DefensiveStatusEffect.HealingOrRegen, StatusId: 2620),
+        new("Autophysis", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 2621),
+        new("Krasis", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 2622),
         new("Haima", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
+        new("Haimatinon", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen, StatusId: 2642),
         new("Panhaima", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
+        new("Panhaimatinon", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen, StatusId: 2643),
 
         // Melee DPS
         new("Riddle of Earth", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 20.0f),
+        new("Mantra", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 102),
         new("Shade Shift", DefensiveStatusEffect.Shield),
         new("Third Eye", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f),
+        new("Tengentsu", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 10.0f, StatusId: 3853),
+        new("Tengentsu's Foresight", DefensiveStatusEffect.DamageReduction | DefensiveStatusEffect.HealingOrRegen, DamageReductionPercent: 10.0f, StatusId: 3854),
         new("Arcane Crest", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
         new("Crest of Time Borrowed", DefensiveStatusEffect.Shield | DefensiveStatusEffect.HealingOrRegen),
 
         // Physical ranged DPS
         new("Troubadour", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f),
+        new("Nature's Minne", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 1202),
         new("Tactician", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f),
         new("Shield Samba", DefensiveStatusEffect.DamageReduction, DamageReductionPercent: 15.0f),
+        new("Improvisation", DefensiveStatusEffect.HealingReceivedIncrease, StatusId: 1828),
         new("Improvised Finish", DefensiveStatusEffect.Shield),
 
         // Magical ranged DPS
@@ -219,19 +247,13 @@ public sealed partial class Plugin
         new(860, "Dismantled", DamageDownPercent: 10.0f),
     ];
 
-    private static readonly HashSet<string> DefensiveStatusNames = DefensiveStatusDefinitions
-        .Select(status => status.Name)
-        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
     private static readonly HashSet<uint> BossMitigationStatusIds = BossMitigationStatusDefinitions
         .Select(status => status.StatusId)
         .ToHashSet();
 
     internal static MitigationDisplayInfo GetMitigationDisplayInfo(StatusSnapshot status)
     {
-        var defensiveStatus = DefensiveStatusDefinitions
-            .FirstOrDefault(definition => definition.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase));
-        if (defensiveStatus is not null)
+        if (TryGetDefensiveStatusDefinition(status, out var defensiveStatus))
         {
             var mitigationPercents = BuildMitigationPercentDisplays(
                 defensiveStatus.DamageReductionPercent,
@@ -275,6 +297,31 @@ public sealed partial class Plugin
             false,
             null,
             []);
+    }
+
+    private static bool TryGetDefensiveStatusDefinition(StatusSnapshot status, out DefensiveStatusDefinition definition)
+    {
+        foreach (var candidate in DefensiveStatusDefinitions)
+        {
+            if (DefensiveStatusDefinitionMatches(candidate, status))
+            {
+                definition = candidate;
+                return true;
+            }
+        }
+
+        definition = null!;
+        return false;
+    }
+
+    private static bool DefensiveStatusDefinitionMatches(DefensiveStatusDefinition definition, StatusSnapshot status)
+    {
+        if (definition.StatusId is { } statusId)
+        {
+            return status.Id == statusId;
+        }
+
+        return definition.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<MitigationTypeDisplay> BuildMitigationTypes(DefensiveStatusDefinition definition)
