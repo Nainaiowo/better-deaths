@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.205";
+    private const string CurrentChangelogVersion = "0.1.0.206";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -152,6 +152,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float SectionBodyIndent = 8.0f;
     private const float ReviewPaneContentIndent = 8.0f;
     private const float ReviewPaneHorizontalPadding = 9.0f;
+    private const float ReviewPaneBottomPadding = 14.0f;
     private const float SectionHelpMarkerRightInset = 12.0f;
     private const float PullBrowserCollapsedWidth = 60.0f;
     private const float RecordedPullDutyFilterComboWidth = 260.0f;
@@ -1221,7 +1222,8 @@ public sealed class RecapWindow : Window, IDisposable
                                 pulls,
                                 idPrefix,
                                 selection,
-                                useVerticalDrawerControls: true));
+                                useVerticalDrawerControls: true,
+                                usePullCells: true));
                     }
 
                     DrawHorizontalReviewDivider(innerAvailable.X);
@@ -1367,7 +1369,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReviewPull> pulls,
         string idPrefix,
         ReviewSelectionState selection,
-        bool useVerticalDrawerControls = false)
+        bool useVerticalDrawerControls = false,
+        bool usePullCells = false)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawPullBrowserHeader(idPrefix, useVerticalDrawerControls);
@@ -1385,18 +1388,25 @@ public sealed class RecapWindow : Window, IDisposable
             foreach (var pull in pulls)
             {
                 var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
-                if (DrawExpandedPullCell(pull, $"PullRow{idPrefix}{pull.Key}", selected))
+                var rowId = $"PullRow{idPrefix}{pull.Key}";
+                var clicked = usePullCells
+                    ? DrawExpandedPullCell(pull, rowId, selected)
+                    : DrawWidePullListItem(pull, rowId, selected);
+                if (clicked)
                 {
                     selection.PullKey = pull.Key;
                     SelectDefaultDeathForPull(pull, selection);
                 }
 
-                if (ImGui.IsItemHovered())
+                if (usePullCells && ImGui.IsItemHovered())
                 {
                     SetThemedTooltip(FormatExpandedPullTooltip(pull));
                 }
 
-                ImGui.Dummy(new Vector2(1.0f, 6.0f));
+                if (usePullCells)
+                {
+                    ImGui.Dummy(new Vector2(1.0f, 6.0f));
+                }
             }
         }
 
@@ -1434,6 +1444,25 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
         ImGui.TextDisabled("Choose a pull to review.");
+    }
+
+    private bool DrawWidePullListItem(ReviewPull pull, string id, bool selected)
+    {
+        var clicked = ImGui.Selectable($"{GetPullCellTitle(pull)}###{id}", selected);
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(FormatExpandedPullTooltip(pull));
+        }
+
+        ImGui.TextDisabled(FormatPullDutyInfo(pull));
+        if (pull.Source == DeathSelectionSource.Recorded &&
+            !string.IsNullOrWhiteSpace(pull.Subtitle))
+        {
+            ImGui.TextDisabled(pull.Subtitle);
+        }
+
+        ImGui.Spacing();
+        return clicked;
     }
 
     private bool DrawExpandedPullCell(ReviewPull pull, string id, bool selected)
@@ -1958,6 +1987,13 @@ public sealed class RecapWindow : Window, IDisposable
                 DrawCauseSummary(resolved);
                 break;
         }
+
+        DrawReviewPaneBottomPadding();
+    }
+
+    private static void DrawReviewPaneBottomPadding()
+    {
+        ImGui.Dummy(new Vector2(1.0f, ReviewPaneBottomPadding));
     }
 
     private static bool DrawCenteredRowSelectable(string text, string id, bool selected, float rowHeight, out bool pressed)
@@ -3873,6 +3909,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawExtraMitigationContext(resolved, deathId);
             ImGui.Separator();
             DrawBetterDeathsInformation(resolved, deathId);
+            DrawReviewPaneBottomPadding();
         }
     }
 
@@ -13500,8 +13537,8 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.205");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.206");
+        ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Fixed death recap popups opening off-screen on smaller or lower-resolution displays.");
         DrawHighlightedChangelogBullet("Extended replay lead-up time from 20 seconds to 30 seconds before death.");
         DrawHighlightedChangelogBullet("Fixed replay arena orientation so player positions no longer appear flipped east/west.");
