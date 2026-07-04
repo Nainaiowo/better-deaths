@@ -142,13 +142,17 @@ public enum EnvironmentalDeathKind
     LikelyFall,
     LikelyDeathWall,
     PossibleDeathWall,
+    LikelyWalled,
 }
 
 public sealed record EnvironmentalDeathAssessment(
     EnvironmentalDeathKind Kind,
     float Confidence,
     string Summary,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence)
+{
+    public bool EnvironmentSourceDeath { get; init; }
+}
 
 public sealed record CombatEventRecord(
     DateTime SeenAtUtc,

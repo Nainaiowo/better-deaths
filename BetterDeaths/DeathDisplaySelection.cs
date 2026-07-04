@@ -244,6 +244,11 @@ public static class DeathDisplaySelector
 
     private static IReadOnlyList<FatalEventGroup> GetStoredFatalEventGroups(PartyDeathRecord death)
     {
+        if (IsEnvironmentSourceDeath(death))
+        {
+            return [];
+        }
+
         if (death.LikelyCause is { Kind: DeathEventKind.Status } statusCause)
         {
             return [new FatalEventGroup([statusCause])];
@@ -297,11 +302,21 @@ public static class DeathDisplaySelector
 
     private static DateTime GetLeadUpAnchorSeenAtUtc(PartyDeathRecord death)
     {
+        if (IsEnvironmentSourceDeath(death))
+        {
+            return death.SeenAtUtc;
+        }
+
         return death.FatalSequence?.EndAtUtc ?? GetDisplayCause(death)?.SeenAtUtc ?? death.SeenAtUtc;
     }
 
     private static CombatEventRecord? GetDisplayCause(PartyDeathRecord death)
     {
+        if (IsEnvironmentSourceDeath(death))
+        {
+            return null;
+        }
+
         var likelyCause = death.LikelyCause is { } storedCause && IsLikelyDeathCauseEvent(storedCause)
             ? storedCause
             : null;
@@ -313,6 +328,11 @@ public static class DeathDisplaySelector
                 .ThenByDescending(combatEvent => combatEvent.Kind == DeathEventKind.Damage)
                 .FirstOrDefault() ?? likelyCause
             : likelyCause;
+    }
+
+    private static bool IsEnvironmentSourceDeath(PartyDeathRecord death)
+    {
+        return death.EnvironmentalAssessment is { EnvironmentSourceDeath: true };
     }
 
     private static HpHistorySnapshot? GetFatalTailSnapshot(

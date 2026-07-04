@@ -200,6 +200,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayTetherPositionSampleInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan ReplayTetherActiveGrace = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan DeathActorControlLateMatchWindow = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan EffectResultHpHistoryPreResultWindow = TimeSpan.FromMilliseconds(75);
     private static readonly TimeSpan EffectResultHpHistoryPostResultWindow = TimeSpan.FromMilliseconds(5);
@@ -228,7 +229,7 @@ public sealed partial class Plugin : IDalamudPlugin
         @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:likely walled/)?non-hit KO\.(?:\s+HP before KO:\s+.+\.)?$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:Walled|(?:likely walled/)?non-hit KO)\.(?:\s+HP before KO:\s+.+\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly AddonEvent[] AddonInspectorLifecycleEvents =
     [
@@ -451,6 +452,8 @@ public sealed partial class Plugin : IDalamudPlugin
         byte Param9,
         RawCombatSnapshot? TargetSnapshot,
         RawCombatSnapshot? SourceSnapshot);
+
+    private readonly record struct DeathCaptureContext(bool EnvironmentSourceDeath);
 
     private sealed record RawMapEffectPacket(
         long Sequence,
@@ -1967,7 +1970,10 @@ public sealed partial class Plugin : IDalamudPlugin
             var hpSuffix = selection.Snapshot is null
                 ? string.Empty
                 : $" HP before KO: {FormatDeathChatHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: non-hit KO.{hpSuffix}");
+            var koLabel = death.EnvironmentalAssessment is { EnvironmentSourceDeath: true }
+                ? "Walled"
+                : "non-hit KO";
+            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {koLabel}.{hpSuffix}");
             QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
             QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
             return;
@@ -5733,6 +5739,7 @@ public sealed partial class Plugin : IDalamudPlugin
         if (packet.Category == ActorControlDeathCategory && member is not null)
         {
             var bestKnownStatuses = GetBestKnownStatuses(member, packet.SeenAtUtc);
+            var deathContext = CreateActorControlDeathContext(packet, member);
             TryCaptureDeath(
                 member with
                 {
@@ -5742,7 +5749,8 @@ public sealed partial class Plugin : IDalamudPlugin
                     Statuses = bestKnownStatuses,
                 },
                 packet.SeenAtUtc,
-                "ActorControl");
+                "ActorControl",
+                deathContext);
         }
 
         if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
@@ -6509,7 +6517,18 @@ public sealed partial class Plugin : IDalamudPlugin
         return false;
     }
 
-    private bool TryCaptureDeath(PartyMemberSnapshot member, DateTime deathSeenAtUtc, string signalSource)
+    private static DeathCaptureContext CreateActorControlDeathContext(RawActorControlPacket packet, PartyMemberSnapshot member)
+    {
+        var environmentSourceDeath = packet.Param1 == InvalidActorEntityId &&
+            (packet.Param2 == member.EntityId || packet.Param2 == packet.EntityId);
+        return new DeathCaptureContext(environmentSourceDeath);
+    }
+
+    private bool TryCaptureDeath(
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        string signalSource,
+        DeathCaptureContext? deathContext = null)
     {
         if (IsPlayerNameExcluded(member.MemberName))
         {
@@ -6529,11 +6548,16 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (!deadMemberKeys.Add(member.MemberKey))
         {
+            if (deathContext is { EnvironmentSourceDeath: true } context)
+            {
+                ApplyEnvironmentSourceDeathToCapturedDeaths(member, deathSeenAtUtc, context);
+            }
+
             return false;
         }
 
         EnsurePullStarted(deathSeenAtUtc);
-        var death = CreateDeathRecord(member, deathSeenAtUtc);
+        var death = CreateDeathRecord(member, deathSeenAtUtc, deathContext);
         currentDeaths.Add(death);
         if (Configuration.ShowDeathRecapPopup && IsLocalPlayer(member))
         {
@@ -6545,6 +6569,63 @@ public sealed partial class Plugin : IDalamudPlugin
         return true;
     }
 
+    private void ApplyEnvironmentSourceDeathToCapturedDeaths(
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        DeathCaptureContext context)
+    {
+        if (!context.EnvironmentSourceDeath)
+        {
+            return;
+        }
+
+        var updatedDeath = ApplyEnvironmentSourceDeathToDeathList(currentDeaths, member, deathSeenAtUtc);
+        _ = ApplyEnvironmentSourceDeathToDeathList(pendingDeathRecapLinks, member, deathSeenAtUtc);
+        if (updatedDeath is not null &&
+            !pendingDeathRecapLinks.Any(pending => DeathRecordsMatch(pending, updatedDeath)))
+        {
+            QueueDeathRecapLink(updatedDeath, DateTime.UtcNow);
+        }
+    }
+
+    private PartyDeathRecord? ApplyEnvironmentSourceDeathToDeathList(
+        List<PartyDeathRecord> deaths,
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc)
+    {
+        var territoryId = currentPullTerritoryId != 0
+            ? currentPullTerritoryId
+            : ClientState.TerritoryType;
+
+        for (var index = 0; index < deaths.Count; index++)
+        {
+            var death = deaths[index];
+            if (!string.Equals(death.MemberKey, member.MemberKey, StringComparison.Ordinal) ||
+                Duration(death.SeenAtUtc, deathSeenAtUtc) > DeathActorControlLateMatchWindow ||
+                death.EnvironmentalAssessment is { EnvironmentSourceDeath: true })
+            {
+                continue;
+            }
+
+            var updatedDeath = death with
+            {
+                LikelyCause = null,
+                EnvironmentalAssessment = CreateEnvironmentalDeathAssessment(
+                    member,
+                    death.SeenAtUtc,
+                    territoryId,
+                    null,
+                    death.FatalSequence,
+                    death.ReplayPositions,
+                    environmentSourceDeath: true),
+            };
+            deaths[index] = updatedDeath;
+            return updatedDeath;
+        }
+
+        return null;
+    }
+
     private static bool IsLocalPlayer(PartyMemberSnapshot member)
     {
         var localPlayer = ObjectTable.LocalPlayer;
@@ -6553,7 +6634,10 @@ public sealed partial class Plugin : IDalamudPlugin
             member.EntityId == localPlayer.EntityId;
     }
 
-    private PartyDeathRecord CreateDeathRecord(PartyMemberSnapshot member, DateTime deathSeenAtUtc)
+    private PartyDeathRecord CreateDeathRecord(
+        PartyMemberSnapshot member,
+        DateTime deathSeenAtUtc,
+        DeathCaptureContext? deathContext)
     {
         var events = GetRecentEvents(member.MemberKey, deathSeenAtUtc, Math.Max(Configuration.RecentEventSeconds, BetterDeathsLeadUpCaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, deathSeenAtUtc, BetterDeathsLeadUpCaptureSeconds);
@@ -6575,9 +6659,12 @@ public sealed partial class Plugin : IDalamudPlugin
             .FirstOrDefault();
         var eventCause = sequenceCause ?? fallbackEventCause;
         var statusCause = CreateStatusDeathCause(member, deathSeenAtUtc);
-        var cause = ShouldPreferStatusCause(statusCause, eventCause)
-            ? statusCause
-            : eventCause ?? statusCause;
+        var environmentSourceDeath = deathContext is { EnvironmentSourceDeath: true };
+        var cause = environmentSourceDeath
+            ? null
+            : ShouldPreferStatusCause(statusCause, eventCause)
+                ? statusCause
+                : eventCause ?? statusCause;
         var replayPositions = GetRecentReplayPositions(
             deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
             deathSeenAtUtc);
@@ -6590,7 +6677,8 @@ public sealed partial class Plugin : IDalamudPlugin
             territoryId,
             cause,
             fatalSequence,
-            replayPositions);
+            replayPositions,
+            environmentSourceDeath);
 
         return new PartyDeathRecord(
             deathSeenAtUtc,
@@ -6627,89 +6715,102 @@ public sealed partial class Plugin : IDalamudPlugin
         uint territoryId,
         CombatEventRecord? cause,
         FatalSequenceRecord? fatalSequence,
-        IReadOnlyList<ReplayPositionSnapshot> replayPositions)
+        IReadOnlyList<ReplayPositionSnapshot> replayPositions,
+        bool environmentSourceDeath)
     {
         var targetSamples = GetEnvironmentalDeathTargetSamples(member, deathSeenAtUtc, replayPositions);
-        if (targetSamples.Count < 2)
+        if (targetSamples.Count < 2 && !environmentSourceDeath)
         {
             return null;
         }
 
         var evidence = new List<string>();
-        var score = 0.0f;
-        var lastSample = targetSamples[^1];
-        var recentSamples = targetSamples
-            .Where(sample => sample.SeenAtUtc >= lastSample.SeenAtUtc - EnvironmentalDeathMotionWindow)
-            .ToList();
-        var highestSample = recentSamples
-            .OrderByDescending(sample => sample.Y)
-            .First();
-        var verticalDrop = highestSample.Y - lastSample.Y;
-        var hasFallEvidence = verticalDrop >= EnvironmentalFallYDropThreshold;
-        var hasPositionOutlierEvidence = false;
-        var hasKnownArenaEdgeEvidence = false;
-        if (hasFallEvidence)
+        var score = environmentSourceDeath ? 0.82f : 0.0f;
+        if (environmentSourceDeath)
         {
-            var dropSeconds = Math.Max(0.0, (lastSample.SeenAtUtc - highestSample.SeenAtUtc).TotalSeconds);
-            score += verticalDrop >= EnvironmentalStrongFallYDropThreshold ? 0.65f : 0.48f;
-            evidence.Add($"Recent position trail dropped {verticalDrop:0.0} yalms over {dropSeconds:0.0}s before KO.");
+            evidence.Add("The death packet reported the environment/no actor as the source.");
         }
 
         var noCapturedFatalEvent = cause is null &&
             fatalSequence is not { Events.Count: > 0 } &&
             fatalSequence is not { LogEvents.Count: > 0 };
-        var replayModule = ReplayEncounterModules.Get(territoryId);
-        if (replayModule.TryGetReplayArena(out var arena) &&
-            TryGetEnvironmentalArenaEdgeDistance(arena, lastSample, out var edgeDistance, out var edgeReferenceDistance) &&
-            edgeDistance <= EnvironmentalKnownArenaEdgeTolerance)
+        var hasFallEvidence = false;
+        var hasPositionOutlierEvidence = false;
+        var hasKnownArenaEdgeEvidence = false;
+
+        if (targetSamples.Count >= 2)
         {
-            hasKnownArenaEdgeEvidence = true;
-            if (noCapturedFatalEvent)
+            var lastSample = targetSamples[^1];
+            var recentSamples = targetSamples
+                .Where(sample => sample.SeenAtUtc >= lastSample.SeenAtUtc - EnvironmentalDeathMotionWindow)
+                .ToList();
+            var highestSample = recentSamples
+                .OrderByDescending(sample => sample.Y)
+                .First();
+            var verticalDrop = highestSample.Y - lastSample.Y;
+            hasFallEvidence = verticalDrop >= EnvironmentalFallYDropThreshold;
+            if (hasFallEvidence)
             {
-                score += edgeDistance <= 0.0f ? 0.60f : 0.48f;
-                evidence.Add(FormatKnownArenaEdgeEvidence(replayModule.Name, arena, edgeDistance, edgeReferenceDistance));
+                var dropSeconds = Math.Max(0.0, (lastSample.SeenAtUtc - highestSample.SeenAtUtc).TotalSeconds);
+                score += verticalDrop >= EnvironmentalStrongFallYDropThreshold ? 0.65f : 0.48f;
+                evidence.Add($"Recent position trail dropped {verticalDrop:0.0} yalms over {dropSeconds:0.0}s before KO.");
+            }
+
+            var replayModule = ReplayEncounterModules.Get(territoryId);
+            if (replayModule.TryGetReplayArena(out var arena) &&
+                TryGetEnvironmentalArenaEdgeDistance(arena, lastSample, out var edgeDistance, out var edgeReferenceDistance) &&
+                edgeDistance <= EnvironmentalKnownArenaEdgeTolerance)
+            {
+                hasKnownArenaEdgeEvidence = true;
+                if (noCapturedFatalEvent || environmentSourceDeath)
+                {
+                    score += edgeDistance <= 0.0f ? 0.60f : 0.48f;
+                    evidence.Add(FormatKnownArenaEdgeEvidence(replayModule.Name, arena, edgeDistance, edgeReferenceDistance));
+                }
+            }
+
+            if (TryGetEnvironmentalPartyReferenceBand(
+                    replayPositions,
+                    member,
+                    deathSeenAtUtc,
+                    out var partyCenter,
+                    out var partyRadius,
+                    out var referenceCount))
+            {
+                var targetDistance = DistanceXZ(new Vector3(lastSample.X, 0.0f, lastSample.Z), partyCenter);
+                var outlierDistance = MathF.Max(
+                    EnvironmentalOutlierMinimumDistance,
+                    MathF.Max(
+                        partyRadius + EnvironmentalOutlierMinimumMargin,
+                        partyRadius * EnvironmentalOutlierRadiusMultiplier));
+                if (targetDistance >= outlierDistance)
+                {
+                    hasPositionOutlierEvidence = true;
+                    var excessDistance = MathF.Max(0.0f, targetDistance - partyRadius);
+                    var outlierScore = Math.Clamp(excessDistance / 28.0f, 0.18f, 0.35f);
+                    score += outlierScore;
+                    evidence.Add(
+                        $"Last position was {targetDistance:0.0} yalms from the inferred party center; recent party band was about {partyRadius:0.0} yalms from {referenceCount} players.");
+                }
             }
         }
 
-        if (TryGetEnvironmentalPartyReferenceBand(
-                replayPositions,
-                member,
-                deathSeenAtUtc,
-                out var partyCenter,
-                out var partyRadius,
-                out var referenceCount))
-        {
-            var targetDistance = DistanceXZ(new Vector3(lastSample.X, 0.0f, lastSample.Z), partyCenter);
-            var outlierDistance = MathF.Max(
-                EnvironmentalOutlierMinimumDistance,
-                MathF.Max(
-                    partyRadius + EnvironmentalOutlierMinimumMargin,
-                    partyRadius * EnvironmentalOutlierRadiusMultiplier));
-            if (targetDistance >= outlierDistance)
-            {
-                hasPositionOutlierEvidence = true;
-                var excessDistance = MathF.Max(0.0f, targetDistance - partyRadius);
-                var outlierScore = Math.Clamp(excessDistance / 28.0f, 0.18f, 0.35f);
-                score += outlierScore;
-                evidence.Add(
-                    $"Last position was {targetDistance:0.0} yalms from the inferred party center; recent party band was about {partyRadius:0.0} yalms from {referenceCount} players.");
-            }
-        }
-
-        if (noCapturedFatalEvent && score > 0.0f)
+        if (noCapturedFatalEvent && score > 0.0f && !environmentSourceDeath)
         {
             score += 0.15f;
             evidence.Add("No captured fatal damage, status, or combat-log event. This supports environmental detection but is not proof.");
         }
 
-        if (!hasFallEvidence &&
+        if (!environmentSourceDeath &&
+            !hasFallEvidence &&
             (!(hasKnownArenaEdgeEvidence || hasPositionOutlierEvidence) || !noCapturedFatalEvent))
         {
             return null;
         }
 
-        score = Math.Clamp(score, 0.0f, 0.95f);
-        if (score < EnvironmentalDeathMinimumConfidence || evidence.Count == 0)
+        score = Math.Clamp(score, 0.0f, environmentSourceDeath ? 0.98f : 0.95f);
+        if (!environmentSourceDeath &&
+            (score < EnvironmentalDeathMinimumConfidence || evidence.Count == 0))
         {
             return null;
         }
@@ -6718,14 +6819,19 @@ public sealed partial class Plugin : IDalamudPlugin
             ? EnvironmentalDeathKind.LikelyFall
             : hasKnownArenaEdgeEvidence
                 ? EnvironmentalDeathKind.LikelyDeathWall
+                : environmentSourceDeath
+                    ? EnvironmentalDeathKind.LikelyWalled
                 : noCapturedFatalEvent
                     ? EnvironmentalDeathKind.PossibleDeathWall
                     : EnvironmentalDeathKind.PossibleEnvironmental;
         return new EnvironmentalDeathAssessment(
             kind,
             score,
-            CreateEnvironmentalDeathSummary(kind, score),
-            evidence);
+            environmentSourceDeath ? "Walled" : CreateEnvironmentalDeathSummary(kind, score),
+            evidence)
+        {
+            EnvironmentSourceDeath = environmentSourceDeath,
+        };
     }
 
     private static List<EnvironmentalPositionSample> GetEnvironmentalDeathTargetSamples(
@@ -6869,9 +6975,10 @@ public sealed partial class Plugin : IDalamudPlugin
                 : "low confidence";
         return kind switch
         {
-            EnvironmentalDeathKind.LikelyFall => $"Likely fall ({confidenceLabel})",
-            EnvironmentalDeathKind.LikelyDeathWall => $"Likely death wall ({confidenceLabel})",
-            EnvironmentalDeathKind.PossibleDeathWall => $"Possible death wall or out-of-bounds KO ({confidenceLabel})",
+            EnvironmentalDeathKind.LikelyFall => $"Likely walled: fall/jump-off ({confidenceLabel})",
+            EnvironmentalDeathKind.LikelyDeathWall => $"Likely walled: arena boundary ({confidenceLabel})",
+            EnvironmentalDeathKind.LikelyWalled => $"Likely walled ({confidenceLabel})",
+            EnvironmentalDeathKind.PossibleDeathWall => $"Possible wall or out-of-bounds KO ({confidenceLabel})",
             _ => $"Possible environmental KO ({confidenceLabel})",
         };
     }

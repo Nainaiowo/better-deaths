@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.208";
+    private const string CurrentChangelogVersion = "0.1.0.209";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -2006,6 +2006,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawJobCell(death);
             ImGui.TableNextColumn();
             if (DrawTimelineCauseText(
+                    death,
                     causeEvents,
                     causeId,
                     () =>
@@ -2792,7 +2793,7 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.TableNextColumn();
             DrawWidgetPlayerCell(death);
             ImGui.TableNextColumn();
-            DrawWidgetCauseSummary(causeEvents, conciseMode);
+            DrawWidgetCauseSummary(death, causeEvents, conciseMode);
             ImGui.TableNextColumn();
             DrawWidgetOverkillSummary(selection);
             ImGui.TableNextColumn();
@@ -3177,7 +3178,7 @@ public sealed class RecapWindow : Window, IDisposable
             DrawJobCell(death);
 
             ImGui.TableNextColumn();
-            DrawTimelineCauseText(causeEvents, $"Cause{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}");
+            DrawTimelineCauseText(death, causeEvents, $"Cause{idSuffix}{death.MemberKey}{death.SeenAtUtc.Ticks}");
         }
 
         ImGui.EndTable();
@@ -3293,6 +3294,7 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private bool DrawTimelineCauseText(
+        PartyDeathRecord? death,
         IReadOnlyList<CombatEventRecord> causeEvents,
         string id,
         Action? selectDeath = null,
@@ -3300,7 +3302,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         if (causeEvents.Count == 0)
         {
-            DrawCenteredOrWrappedText("Non-hit KO", WarningColor);
+            DrawCenteredOrWrappedText(GetNonHitKoLabel(death), WarningColor);
             return false;
         }
 
@@ -3330,6 +3332,23 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return false;
+    }
+
+    private static string GetNonHitKoLabel(PartyDeathRecord? death)
+    {
+        return IsEnvironmentSourceDeath(death) ? "Walled" : "Non-hit KO";
+    }
+
+    private static string GetNonHitKoTooltip(PartyDeathRecord? death)
+    {
+        return IsEnvironmentSourceDeath(death)
+            ? "Walled."
+            : "Non-hit KO.";
+    }
+
+    private static bool IsEnvironmentSourceDeath(PartyDeathRecord? death)
+    {
+        return death?.EnvironmentalAssessment is { EnvironmentSourceDeath: true };
     }
 
     private bool DrawCollapsedTimelineCauseText(
@@ -3526,18 +3545,21 @@ public sealed class RecapWindow : Window, IDisposable
             : FormatActionNameForDisplay(combatEvent);
     }
 
-    private void DrawWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents, bool conciseMode)
+    private void DrawWidgetCauseSummary(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatEventRecord> causeEvents,
+        bool conciseMode)
     {
         var text = conciseMode
-            ? FormatConciseWidgetCauseSummary(causeEvents)
-            : FormatWidgetCauseSummary(causeEvents);
+            ? FormatConciseWidgetCauseSummary(death, causeEvents)
+            : FormatWidgetCauseSummary(death, causeEvents);
         DrawCenteredOrWrappedText(text, GetWidgetCauseColor(causeEvents));
 
         if (ImGui.IsItemHovered())
         {
             if (causeEvents.Count == 0)
             {
-                SetThemedTooltip("Non-hit KO.");
+                SetThemedTooltip(GetNonHitKoTooltip(death));
                 return;
             }
 
@@ -3552,11 +3574,11 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private string FormatWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
+    private string FormatWidgetCauseSummary(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
     {
         if (causeEvents.Count == 0)
         {
-            return "Non-hit KO";
+            return GetNonHitKoLabel(death);
         }
 
         var damageEvents = causeEvents
@@ -3579,11 +3601,11 @@ public sealed class RecapWindow : Window, IDisposable
             : $"{FormatSignedEventAmount(cause)} {FormatActionNameForDisplay(cause)}";
     }
 
-    private static string FormatConciseWidgetCauseSummary(IReadOnlyList<CombatEventRecord> causeEvents)
+    private static string FormatConciseWidgetCauseSummary(PartyDeathRecord death, IReadOnlyList<CombatEventRecord> causeEvents)
     {
         if (causeEvents.Count == 0)
         {
-            return "-";
+            return IsEnvironmentSourceDeath(death) ? "Walled" : "-";
         }
 
         var totalDamage = causeEvents
@@ -4065,7 +4087,11 @@ public sealed class RecapWindow : Window, IDisposable
         else
         {
             ImGui.BulletText("HP + shields before fatal hit");
-            ImGui.TextColored(WarningColor, "No fatal hit was captured inside the configured event window.");
+            ImGui.TextColored(
+                WarningColor,
+                IsEnvironmentSourceDeath(death)
+                    ? "The death packet was environmental; no boss/player fatal hit was assigned."
+                    : "No fatal hit was captured inside the configured event window.");
         }
 
         DrawDmuP4AssignmentSummary(resolved);
@@ -4092,12 +4118,22 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.Spacing();
         DrawLeadUpLabel("Environmental context");
+        var assessmentText = assessment.EnvironmentSourceDeath
+            ? "Walled"
+            : $"{assessment.Summary} - {FormatEnvironmentalConfidence(assessment.Confidence)}";
         ImGui.TextColored(
             GetEnvironmentalDeathContextColor(assessment.Confidence),
-            $"{assessment.Summary} - {FormatEnvironmentalConfidence(assessment.Confidence)}");
+            assessmentText);
         if (ImGui.IsItemHovered())
         {
-            SetThemedTooltip("Confidence-based only. Better Deaths does not have exact arena bounds for every fight.");
+            SetThemedTooltip(assessment.EnvironmentSourceDeath
+                ? "The death packet reported environment/no actor as the source. Better Deaths treats death walls and jump-offs as walling."
+                : "Confidence-based only. Better Deaths does not have exact arena bounds for every fight.");
+        }
+
+        if (assessment.EnvironmentSourceDeath)
+        {
+            return;
         }
 
         foreach (var evidence in assessment.Evidence.Take(3))
@@ -4462,19 +4498,19 @@ public sealed class RecapWindow : Window, IDisposable
         var enemyHpAtDeath = GetEnemyHpAtDeathForDisplay(death);
         if (enemyHpAtDeath.Count == 0)
         {
-            DrawFatalEventHeaderAndDetails(causeEvents);
+            DrawFatalEventHeaderAndDetails(death, causeEvents);
             return;
         }
 
         if (IsFocusedReviewMode())
         {
-            DrawFocusedFatalEventColumns(causeEvents, enemyHpAtDeath);
+            DrawFocusedFatalEventColumns(death, causeEvents, enemyHpAtDeath);
             return;
         }
 
         if (!ImGui.BeginTable($"##FatalEventHealthsAtDeath{death.MemberKey}{death.SeenAtUtc.Ticks}", 2, ImGuiTableFlags.SizingStretchProp))
         {
-            DrawFatalEventHeaderAndDetails(causeEvents);
+            DrawFatalEventHeaderAndDetails(death, causeEvents);
             DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
             return;
         }
@@ -4483,7 +4519,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Enemy HP at death", ImGuiTableColumnFlags.WidthStretch, 1.0f);
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        DrawFatalEventHeaderAndDetails(causeEvents);
+        DrawFatalEventHeaderAndDetails(death, causeEvents);
         ImGui.TableNextColumn();
         DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
         ImGui.EndTable();
@@ -4537,6 +4573,7 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private void DrawFocusedFatalEventColumns(
+        PartyDeathRecord death,
         IReadOnlyList<CombatEventRecord> causeEvents,
         IReadOnlyList<EnemyHpSnapshot> enemyHpAtDeath)
     {
@@ -4544,7 +4581,7 @@ public sealed class RecapWindow : Window, IDisposable
         var spacing = ImGui.GetStyle().ItemSpacing.X * 2.0f;
         if (availableWidth < 420.0f)
         {
-            DrawFatalEventHeaderAndDetails(causeEvents);
+            DrawFatalEventHeaderAndDetails(death, causeEvents);
             ImGui.Spacing();
             DrawEnemyHpAtDeathHeaderAndBullets(enemyHpAtDeath);
             return;
@@ -4555,7 +4592,7 @@ public sealed class RecapWindow : Window, IDisposable
         var rowStart = ImGui.GetCursorScreenPos();
         ImGui.BeginGroup();
         ImGui.PushTextWrapPos(rowStart.X + leftWidth);
-        DrawFatalEventHeaderAndDetails(causeEvents);
+        DrawFatalEventHeaderAndDetails(death, causeEvents);
         ImGui.PopTextWrapPos();
         ImGui.EndGroup();
         var leftEndY = ImGui.GetCursorScreenPos().Y;
@@ -4570,12 +4607,18 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SetCursorScreenPos(new Vector2(rowStart.X, MathF.Max(leftEndY, rightEndY)));
     }
 
-    private void DrawFatalEventHeaderAndDetails(IReadOnlyList<CombatEventRecord> causeEvents)
+    private void DrawFatalEventHeaderAndDetails(
+        PartyDeathRecord death,
+        IReadOnlyList<CombatEventRecord> causeEvents)
     {
         ImGui.TextUnformatted(causeEvents.Count > 1 ? "Fatal events" : "Fatal event");
         if (causeEvents.Count == 0)
         {
-            ImGui.TextColored(WarningColor, "Non-hit KO. Possible death wall, reconnect spawn KO, or scripted KO.");
+            ImGui.TextColored(
+                WarningColor,
+                IsEnvironmentSourceDeath(death)
+                    ? "Walled."
+                    : "Non-hit KO. Possible death wall, reconnect spawn KO, or scripted KO.");
             return;
         }
 
@@ -13596,6 +13639,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.209");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added Walled detection for environment-source deaths such as death walls and jump-offs.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.208");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Updated the Updates creator note.");
