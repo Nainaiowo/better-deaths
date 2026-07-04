@@ -5,7 +5,7 @@
   "DownloadCount": 1179,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Added broader mitigation tracking for secondary and granted effects.\nMoved the 10-second lead-up into the death timeline row.\nAdded a Customize option to hide the Example tab.\nCleaned up recap spacing and replay labels.",
+  "Changelog": "Pull changes now start with death timeline rows collapsed instead of auto-opening the first player.\nWhat-if Mit% values now wrap inside their column when the window is narrow.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

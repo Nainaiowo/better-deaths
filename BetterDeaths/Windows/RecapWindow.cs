@@ -111,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.210";
+    private const string CurrentChangelogVersion = "0.1.0.211";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1408,7 +1408,7 @@ public sealed class RecapWindow : Window, IDisposable
                 if (clicked)
                 {
                     selection.PullKey = pull.Key;
-                    SelectDefaultDeathForPull(pull, selection);
+                    ClearSelectedDeath(selection);
                 }
 
                 if (usePullCells && ImGui.IsItemHovered())
@@ -1650,7 +1650,7 @@ public sealed class RecapWindow : Window, IDisposable
             if (DrawCollapsedPullButton(label, $"StackedCollapsedPull{idPrefix}{pull.Key}", selected, width))
             {
                 selection.PullKey = pull.Key;
-                SelectDefaultDeathForPull(pull, selection);
+                ClearSelectedDeath(selection);
             }
 
             if (ImGui.IsItemHovered())
@@ -1737,7 +1737,7 @@ public sealed class RecapWindow : Window, IDisposable
                     if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedPullRail{id}{pull.Key}", selected))
                     {
                         selection.PullKey = pull.Key;
-                        SelectDefaultDeathForPull(pull, selection);
+                        ClearSelectedDeath(selection);
                     }
 
                     if (ImGui.IsItemHovered())
@@ -2748,13 +2748,13 @@ public sealed class RecapWindow : Window, IDisposable
         {
             selectedPull = pulls.FirstOrDefault(pull => pull.Deaths.Count > 0) ?? pulls[0];
             selection.PullKey = selectedPull.Key;
-            SelectDefaultDeathForPull(selectedPull, selection);
+            ClearSelectedDeath(selection);
             return;
         }
 
         if (GetSelectedReviewDeath(selectedPull, selection) is null)
         {
-            SelectDefaultDeathForPull(selectedPull, selection);
+            ClearSelectedDeath(selection);
         }
     }
 
@@ -2778,29 +2778,18 @@ public sealed class RecapWindow : Window, IDisposable
             IsDeathTarget(death, selection.DeathSeenAtTicks.Value, selection.DeathMemberKeyHash.Value));
     }
 
-    private static void SelectDefaultDeathForPull(
-        ReviewPull pull,
-        ReviewSelectionState selection)
-    {
-        var death = GetDeathsInTimelineOrder(pull.Deaths)
-            .FirstOrDefault(HasDeathDetails) ??
-            GetDeathsInTimelineOrder(pull.Deaths).FirstOrDefault();
-        if (death is null)
-        {
-            selection.DeathSeenAtTicks = null;
-            selection.DeathMemberKeyHash = null;
-            return;
-        }
-
-        SelectDeath(death, selection);
-    }
-
     private static void SelectDeath(
         PartyDeathRecord death,
         ReviewSelectionState selection)
     {
         selection.DeathSeenAtTicks = death.SeenAtUtc.Ticks;
         selection.DeathMemberKeyHash = Plugin.GetMemberKeyHash(death.MemberKey);
+    }
+
+    private static void ClearSelectedDeath(ReviewSelectionState selection)
+    {
+        selection.DeathSeenAtTicks = null;
+        selection.DeathMemberKeyHash = null;
     }
 
     private static bool IsSelectedReviewDeath(
@@ -5411,24 +5400,34 @@ public sealed class RecapWindow : Window, IDisposable
         var iconSize = Math.Clamp(ImGui.GetTextLineHeight(), 12.0f, 18.0f);
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var separatorWidth = ImGui.CalcTextSize("/").X + (spacing * 2.0f);
-        var groupWidth = parts.Sum(part => (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X) +
-            (Math.Max(0, parts.Count - 1) * separatorWidth);
-        CenterNextItem(groupWidth);
+        var availableWidth = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var rows = BuildPossibleMitigationPercentRows(parts, iconSize, spacing, separatorWidth, availableWidth);
 
-        ImGui.BeginGroup();
-        for (var index = 0; index < parts.Count; index++)
+        foreach (var row in rows)
         {
-            if (index > 0)
+            var rowWidth = GetPossibleMitigationPercentRowWidth(row, iconSize, spacing, separatorWidth);
+            if (row.Count == 1 && rowWidth > availableWidth)
             {
-                ImGui.SameLine();
-                ImGui.TextUnformatted("/");
-                ImGui.SameLine();
+                DrawPossibleMitigationPercentPartStacked(row[0], iconSize);
+                continue;
             }
 
-            DrawPossibleMitigationPercentPart(parts[index], iconSize);
-        }
+            CenterNextItem(rowWidth);
+            ImGui.BeginGroup();
+            for (var index = 0; index < row.Count; index++)
+            {
+                if (index > 0)
+                {
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("/");
+                    ImGui.SameLine();
+                }
 
-        ImGui.EndGroup();
+                DrawPossibleMitigationPercentPart(row[index], iconSize);
+            }
+
+            ImGui.EndGroup();
+        }
     }
 
     private static void DrawPossibleMitigationPercentPart(Plugin.MitigationPercentDisplay part, float iconSize)
@@ -5440,6 +5439,71 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.TextUnformatted(part.Text);
+    }
+
+    private static void DrawPossibleMitigationPercentPartStacked(Plugin.MitigationPercentDisplay part, float iconSize)
+    {
+        if (part.IconId != 0)
+        {
+            DrawCenteredGameIcon(part.IconId, iconSize, part.Tooltip ?? part.Text);
+        }
+
+        DrawCenteredOrWrappedText(part.Text);
+    }
+
+    private static IReadOnlyList<IReadOnlyList<Plugin.MitigationPercentDisplay>> BuildPossibleMitigationPercentRows(
+        IReadOnlyList<Plugin.MitigationPercentDisplay> parts,
+        float iconSize,
+        float spacing,
+        float separatorWidth,
+        float availableWidth)
+    {
+        var rows = new List<IReadOnlyList<Plugin.MitigationPercentDisplay>>();
+        var currentRow = new List<Plugin.MitigationPercentDisplay>();
+        var currentWidth = 0.0f;
+
+        foreach (var part in parts)
+        {
+            var partWidth = GetPossibleMitigationPercentPartWidth(part, iconSize, spacing);
+            var nextWidth = currentRow.Count == 0
+                ? partWidth
+                : currentWidth + separatorWidth + partWidth;
+            if (currentRow.Count > 0 && nextWidth > availableWidth)
+            {
+                rows.Add(currentRow);
+                currentRow = [];
+                currentWidth = 0.0f;
+                nextWidth = partWidth;
+            }
+
+            currentRow.Add(part);
+            currentWidth = nextWidth;
+        }
+
+        if (currentRow.Count > 0)
+        {
+            rows.Add(currentRow);
+        }
+
+        return rows;
+    }
+
+    private static float GetPossibleMitigationPercentRowWidth(
+        IReadOnlyList<Plugin.MitigationPercentDisplay> parts,
+        float iconSize,
+        float spacing,
+        float separatorWidth)
+    {
+        return parts.Sum(part => GetPossibleMitigationPercentPartWidth(part, iconSize, spacing)) +
+            (Math.Max(0, parts.Count - 1) * separatorWidth);
+    }
+
+    private static float GetPossibleMitigationPercentPartWidth(
+        Plugin.MitigationPercentDisplay part,
+        float iconSize,
+        float spacing)
+    {
+        return (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X;
     }
 
     private void DrawPossibleMitigationResult(
@@ -13678,6 +13742,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.211");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Pull changes now start with death timeline rows collapsed instead of auto-opening the first player.");
+        DrawWrappedBullet("What-if Mit% values now wrap inside their column when the window is narrow.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.210");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added broader mitigation tracking for secondary and granted effects, including Desperate Measures and other shield, regen, and healing-received effects.");
