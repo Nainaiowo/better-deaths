@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.219";
+    private const string CurrentChangelogVersion = "0.1.0.220";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -5657,8 +5657,8 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.65f);
         ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 2.05f);
-        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.95f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.55f);
+        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.4f);
         DrawCenteredTableHeader("Ability", "Source", "Mit%", "Availability");
 
         foreach (var option in options)
@@ -5723,7 +5723,7 @@ public sealed class RecapWindow : Window, IDisposable
             var selectionKey = BuildPossibleMitigationSelectionKey(idSuffix, option);
             var selected = selectedPossibleMitigationKeys.Contains(selectionKey);
             var sourceLabel = FormatPossibleMitigationSourceLabel(option);
-            var abilityLabel = option.ActionName;
+            var abilityLabel = FormatPossibleMitigationAbilityLabel(option.ActionName);
             var abilityHeight = GetIconTextWrappedHeight(abilityLabel, abilityColumnWidth, option.ActionIconId, iconSize);
             var sourceHeight = GetIconTextWrappedHeight(sourceLabel, sourceColumnWidth, option.ClassJobId == 0 ? 0U : GetClassJobIconId(option.ClassJobId), iconSize);
             var rowHeight = MathF.Max(ImGui.GetFrameHeight(), MathF.Max(sourceHeight, abilityHeight)) + (FocusedDataRowPaddingY * 2.0f);
@@ -5761,7 +5761,10 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static string FormatPossibleMitigationAvailability(string availability)
     {
-        return availability.TrimEnd('.');
+        var trimmedAvailability = availability.Trim().TrimEnd('.');
+        return trimmedAvailability.StartsWith("Ready", StringComparison.OrdinalIgnoreCase)
+            ? "ready"
+            : trimmedAvailability;
     }
 
     private string FormatPossibleMitigationSourceLabel(PossibleMitigationSnapshot option)
@@ -5786,7 +5789,37 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawPossibleMitigationAbility(PossibleMitigationSnapshot option, float width)
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
-        DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, option.ActionName, MathF.Max(24.0f, width));
+        DrawIconTextWrapped(
+            option.ActionIconId,
+            iconSize,
+            option.ActionName,
+            FormatPossibleMitigationAbilityLabel(option.ActionName),
+            MathF.Max(24.0f, width));
+    }
+
+    private static string FormatPossibleMitigationAbilityLabel(string actionName)
+    {
+        return actionName switch
+        {
+            "Shadowed Vigil" => "SV",
+            "Great Nebula" => "GN",
+            "Riddle of Earth" => "RoE",
+            "Third Eye / Tengentsu" => "Third Eye",
+            "Bloodwhetting" => "BW",
+            "Nascent Flash" => "NF",
+            "Heart of Corundum" => "HoC",
+            "Exaltation" => "Exalt",
+            "Taurochole" => "Tauro",
+            "Dark Missionary" => "DM",
+            "Heart of Light" => "HoL",
+            "Temperance" => "Temp",
+            "Sacred Soil" => "Soil",
+            "Collective Unconscious" => "CU",
+            "Troubadour" => "Troub",
+            "Shield Samba" => "Samba",
+            "Magick Barrier" => "MB",
+            _ => actionName,
+        };
     }
 
     private static void DrawPossibleMitigationPercentCell(IReadOnlyList<StatusSnapshot> statuses)
@@ -14074,6 +14107,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.220");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Simplified What-if information.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.219");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Removed duplicate mitigation tab, apologies.");
