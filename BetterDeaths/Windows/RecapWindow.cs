@@ -111,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.213";
+    private const string CurrentChangelogVersion = "0.1.0.209";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -13863,41 +13863,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.213");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("The 10s lead-up resize control now appears as a visible drag bar under the container.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.212");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Replay Trails now remembers your selection.");
-        DrawHighlightedChangelogBullet("Path of Light replay draws now stay synced more cleanly with player positions.");
-        DrawHighlightedChangelogBullet("The 10s lead-up container can now be resized by dragging its bottom edge.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.211");
-        ImGui.TextDisabled("Testing update.");
-        DrawWrappedBullet("Pull changes now start with death timeline rows collapsed instead of auto-opening the first player.");
-        DrawWrappedBullet("What-if Mit% values now wrap inside their column when the window is narrow.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.210");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.209");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added Walled detection for environment-source deaths such as death walls and jump-offs.");
         DrawHighlightedChangelogBullet("Added broader mitigation tracking for secondary and granted effects, including Desperate Measures and other shield, regen, and healing-received effects.");
-        DrawHighlightedChangelogBullet("Moved the 10-second lead-up into the selected death row so the timeline review stays in one place.");
+        DrawHighlightedChangelogBullet("Moved the 10-second lead-up into the selected death row.");
+        DrawHighlightedChangelogBullet("The 10s lead-up container can now be resized by dragging its bottom edge.");
         DrawWrappedBullet("Summary now keeps active mitigations/debuffs at death and Expired Mits directly with the death context.");
         DrawWrappedBullet("Added a Customize option to hide the Example tab.");
-        DrawWrappedBullet("Cleaned up recap spacing across the window so bottom content no longer sits flush against the edge.");
-        DrawWrappedBullet("Cleaned up replay labels so marker badges do not duplicate the same mechanic name on top of the player.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.209");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Added Walled detection for environment-source deaths such as death walls and jump-offs.");
+        DrawHighlightedChangelogBullet("Forsaken Towers should draw more consistently (hopefully).");
 
         ImGui.Separator();
 
