@@ -2370,6 +2370,30 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (float.IsNaN(Configuration.StackedPullBrowserHeight) ||
+            float.IsInfinity(Configuration.StackedPullBrowserHeight) ||
+            Configuration.StackedPullBrowserHeight < 0.0f)
+        {
+            Configuration.StackedPullBrowserHeight = 0.0f;
+            changed = true;
+        }
+
+        if (float.IsNaN(Configuration.StackedCollapsedPullBrowserHeight) ||
+            float.IsInfinity(Configuration.StackedCollapsedPullBrowserHeight) ||
+            Configuration.StackedCollapsedPullBrowserHeight < 0.0f)
+        {
+            Configuration.StackedCollapsedPullBrowserHeight = 0.0f;
+            changed = true;
+        }
+
+        if (float.IsNaN(Configuration.StackedTimelineHeight) ||
+            float.IsInfinity(Configuration.StackedTimelineHeight) ||
+            Configuration.StackedTimelineHeight < 0.0f)
+        {
+            Configuration.StackedTimelineHeight = 0.0f;
+            changed = true;
+        }
+
         if (float.IsNaN(Configuration.DeathTimelineLeadUpHeight) ||
             float.IsInfinity(Configuration.DeathTimelineLeadUpHeight) ||
             Configuration.DeathTimelineLeadUpHeight < 0.0f)

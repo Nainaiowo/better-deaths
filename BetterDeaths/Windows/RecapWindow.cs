@@ -26,6 +26,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool showDebugTab;
     private bool windowStylePushed;
     private bool reviewTimelineSplitterDragging;
+    private string? stackedReviewSplitterDraggingId;
     private bool deathTimelineLeadUpResizeDragging;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
@@ -108,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.215";
+    private const string CurrentChangelogVersion = "0.1.0.217";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -142,6 +143,8 @@ public sealed class RecapWindow : Window, IDisposable
     private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
     private const float TimelineLeadUpResizeHandleHeight = 14.0f;
     private const float TimelineLeadUpResizeHandleWidth = 72.0f;
+    private const float TimelineLeadUpScrollBoundaryEpsilon = 0.5f;
+    private const float TimelineLeadUpMouseWheelScrollLines = 5.0f;
     private const float MainNavigationButtonWidth = 118.0f;
     private const float MainNavigationButtonMinWidth = 92.0f;
     private const float MainNavigationCompactWidthThreshold = 300.0f;
@@ -169,6 +172,14 @@ public sealed class RecapWindow : Window, IDisposable
     private const float PullCellHeight = 58.0f;
     private const float CollapsedPullCellHeight = 30.0f;
     private const float StackedCollapsedPullBrowserHeight = 88.0f;
+    private const float StackedReviewSplitterHeight = 9.0f;
+    private const float StackedExpandedPullBrowserMinHeight = 150.0f;
+    private const float StackedExpandedPullBrowserMaxHeight = 460.0f;
+    private const float StackedCollapsedPullBrowserMinHeight = 64.0f;
+    private const float StackedCollapsedPullBrowserMaxHeight = 180.0f;
+    private const float StackedTimelineMinHeight = 170.0f;
+    private const float StackedTimelineMaxHeight = 620.0f;
+    private const float StackedDeathDetailsMinHeight = 180.0f;
     private const float MinimumTimelinePaneWidth = 360.0f;
     private const float MinimumDeathDetailsPaneWidth = 430.0f;
     private const float ReviewPaneDividerWidth = 1.0f;
@@ -285,6 +296,22 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMarkerSnapshot> MarkerStates,
         IReadOnlyList<ReplayMechanicSnapshot> MechanicStates,
         IReadOnlyList<ResolvedReplayMarkerState> ResolvedMarkerStates);
+
+    private readonly record struct StackedReviewLayout(
+        float PullBrowserHeight,
+        float PullBrowserMinHeight,
+        float PullBrowserMaxHeight,
+        float TimelineHeight,
+        float TimelineMinHeight,
+        float TimelineMaxHeight,
+        float DeathDetailsHeight);
+
+    private enum StackedReviewResizeTarget
+    {
+        PullBrowser,
+        CollapsedPullBrowser,
+        Timeline,
+    }
 
     private sealed record DmuP4AssignmentSummaryStatus(
         StatusSnapshot Status,
@@ -1230,7 +1257,8 @@ public sealed class RecapWindow : Window, IDisposable
             () => DrawSelectedPullTimeline(
                 selectedPull,
                 idPrefix,
-                selection));
+                selection,
+                allowLeadUpScrollHandoff: true));
         DrawResizableTimelineDivider($"{idPrefix}TimelineDivider", available.Y, reviewWidth, centerWidth);
         DrawReviewPane(
             $"##{idPrefix}DeathDetails",
@@ -1253,20 +1281,21 @@ public sealed class RecapWindow : Window, IDisposable
             () =>
             {
                 var innerAvailable = ImGui.GetContentRegionAvail();
+                var stackedLayout = GetStackedReviewLayout(innerAvailable.Y, showPullBrowser, configuration.PullBrowserCollapsed);
                 if (showPullBrowser)
                 {
                     if (configuration.PullBrowserCollapsed)
                     {
                         DrawReviewPane(
                             $"##{idPrefix}PullBrowserStackedCollapsed",
-                            new Vector2(0.0f, StackedCollapsedPullBrowserHeight),
+                            new Vector2(0.0f, stackedLayout.PullBrowserHeight),
                             () => DrawCollapsedPullBrowser(idPrefix, pulls, selection));
                     }
                     else
                     {
                         DrawReviewPane(
                             $"##{idPrefix}PullBrowserStacked",
-                            new Vector2(0.0f, MathF.Min(260.0f, MathF.Max(170.0f, innerAvailable.Y * 0.28f))),
+                            new Vector2(0.0f, stackedLayout.PullBrowserHeight),
                             () => DrawPullBrowser(
                                 pulls,
                                 idPrefix,
@@ -1275,23 +1304,137 @@ public sealed class RecapWindow : Window, IDisposable
                                 usePullCells: true));
                     }
 
-                    DrawHorizontalReviewDivider(innerAvailable.X);
+                    DrawResizableStackedReviewDivider(
+                        $"{idPrefix}PullBrowserStackedResize",
+                        innerAvailable.X,
+                        configuration.PullBrowserCollapsed
+                            ? StackedReviewResizeTarget.CollapsedPullBrowser
+                            : StackedReviewResizeTarget.PullBrowser,
+                        stackedLayout.PullBrowserHeight,
+                        stackedLayout.PullBrowserMinHeight,
+                        stackedLayout.PullBrowserMaxHeight,
+                        "Drag to resize Pulls.");
                 }
 
                 DrawReviewPane(
                     $"##{idPrefix}TimelineStacked",
-                    new Vector2(0.0f, MathF.Min(330.0f, MathF.Max(210.0f, innerAvailable.Y * 0.35f))),
+                    new Vector2(0.0f, stackedLayout.TimelineHeight),
                     () => DrawSelectedPullTimeline(
                         selectedPull,
                         idPrefix,
-                        selection));
-                DrawHorizontalReviewDivider(innerAvailable.X);
+                        selection,
+                        allowLeadUpScrollHandoff: true));
+                DrawResizableStackedReviewDivider(
+                    $"{idPrefix}TimelineStackedResize",
+                    innerAvailable.X,
+                    StackedReviewResizeTarget.Timeline,
+                    stackedLayout.TimelineHeight,
+                    stackedLayout.TimelineMinHeight,
+                    stackedLayout.TimelineMaxHeight,
+                    "Drag to resize the death timeline.");
                 DrawReviewPane(
                     $"##{idPrefix}DeathDetailsStacked",
-                    Vector2.Zero,
+                    new Vector2(0.0f, stackedLayout.DeathDetailsHeight),
                     () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
             },
             indentContent: false);
+    }
+
+    private StackedReviewLayout GetStackedReviewLayout(float availableHeight, bool showPullBrowser, bool pullBrowserCollapsed)
+    {
+        var dividerCount = showPullBrowser ? 2 : 1;
+        var availableForPanes = MathF.Max(1.0f, availableHeight - (dividerCount * StackedReviewSplitterHeight));
+        var pullTarget = pullBrowserCollapsed
+            ? StackedReviewResizeTarget.CollapsedPullBrowser
+            : StackedReviewResizeTarget.PullBrowser;
+        var pullMinHeight = showPullBrowser
+            ? pullBrowserCollapsed ? StackedCollapsedPullBrowserMinHeight : StackedExpandedPullBrowserMinHeight
+            : 0.0f;
+        var pullMaxHeight = showPullBrowser
+            ? MathF.Min(
+                pullBrowserCollapsed ? StackedCollapsedPullBrowserMaxHeight : StackedExpandedPullBrowserMaxHeight,
+                MathF.Max(pullMinHeight, availableForPanes - StackedTimelineMinHeight - StackedDeathDetailsMinHeight))
+            : 0.0f;
+        var defaultPullHeight = pullBrowserCollapsed
+            ? StackedCollapsedPullBrowserHeight
+            : MathF.Min(260.0f, MathF.Max(170.0f, availableHeight * 0.28f));
+        var pullHeight = showPullBrowser
+            ? GetStackedReviewPaneHeight(pullTarget, defaultPullHeight, pullMinHeight, pullMaxHeight)
+            : 0.0f;
+
+        var timelineMinHeight = StackedTimelineMinHeight;
+        var timelineMaxHeight = MathF.Min(
+            StackedTimelineMaxHeight,
+            MathF.Max(timelineMinHeight, availableForPanes - pullHeight - StackedDeathDetailsMinHeight));
+        var defaultTimelineHeight = MathF.Min(330.0f, MathF.Max(210.0f, availableHeight * 0.35f));
+        var timelineHeight = GetStackedReviewPaneHeight(
+            StackedReviewResizeTarget.Timeline,
+            defaultTimelineHeight,
+            timelineMinHeight,
+            timelineMaxHeight);
+        var deathDetailsHeight = MathF.Max(
+            StackedDeathDetailsMinHeight,
+            availableForPanes - pullHeight - timelineHeight);
+
+        return new StackedReviewLayout(
+            pullHeight,
+            pullMinHeight,
+            pullMaxHeight,
+            timelineHeight,
+            timelineMinHeight,
+            timelineMaxHeight,
+            deathDetailsHeight);
+    }
+
+    private float GetStackedReviewPaneHeight(
+        StackedReviewResizeTarget target,
+        float defaultHeight,
+        float minHeight,
+        float maxHeight)
+    {
+        var configuredHeight = GetConfiguredStackedReviewPaneHeight(target);
+        var height = IsUsableStackedReviewPaneHeight(configuredHeight)
+            ? configuredHeight
+            : defaultHeight;
+        return ClampStackedReviewPaneHeight(height, minHeight, maxHeight);
+    }
+
+    private float GetConfiguredStackedReviewPaneHeight(StackedReviewResizeTarget target)
+    {
+        return target switch
+        {
+            StackedReviewResizeTarget.PullBrowser => configuration.StackedPullBrowserHeight,
+            StackedReviewResizeTarget.CollapsedPullBrowser => configuration.StackedCollapsedPullBrowserHeight,
+            StackedReviewResizeTarget.Timeline => configuration.StackedTimelineHeight,
+            _ => 0.0f,
+        };
+    }
+
+    private void SetConfiguredStackedReviewPaneHeight(StackedReviewResizeTarget target, float height)
+    {
+        switch (target)
+        {
+            case StackedReviewResizeTarget.PullBrowser:
+                configuration.StackedPullBrowserHeight = height;
+                break;
+            case StackedReviewResizeTarget.CollapsedPullBrowser:
+                configuration.StackedCollapsedPullBrowserHeight = height;
+                break;
+            case StackedReviewResizeTarget.Timeline:
+                configuration.StackedTimelineHeight = height;
+                break;
+        }
+    }
+
+    private static bool IsUsableStackedReviewPaneHeight(float height)
+    {
+        return !float.IsNaN(height) && !float.IsInfinity(height) && height > 0.0f;
+    }
+
+    private static float ClampStackedReviewPaneHeight(float height, float minHeight, float maxHeight)
+    {
+        var safeMaxHeight = MathF.Max(minHeight, maxHeight);
+        return Math.Clamp(height, minHeight, safeMaxHeight);
     }
 
     private void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true)
@@ -1401,17 +1544,61 @@ public sealed class RecapWindow : Window, IDisposable
         return !float.IsNaN(width) && !float.IsInfinity(width) && width > 0.0f;
     }
 
-    private static void DrawHorizontalReviewDivider(float width)
+    private void DrawResizableStackedReviewDivider(
+        string id,
+        float width,
+        StackedReviewResizeTarget target,
+        float currentHeight,
+        float minHeight,
+        float maxHeight,
+        string tooltip)
     {
         var cursor = ImGui.GetCursorScreenPos();
+        var safeWidth = MathF.Max(1.0f, width);
+        var safeMaxHeight = MathF.Max(minHeight, maxHeight);
         var drawList = ImGui.GetWindowDrawList();
-        var y = cursor.Y + 3.0f;
+        var y = cursor.Y + MathF.Floor(StackedReviewSplitterHeight * 0.5f);
         drawList.AddLine(
             new Vector2(cursor.X, y),
-            new Vector2(cursor.X + MathF.Max(0.0f, width), y),
+            new Vector2(cursor.X + safeWidth, y),
             ImGui.GetColorU32(ModernDividerColor),
             1.0f);
-        ImGui.Dummy(new Vector2(width, 7.0f));
+
+        ImGui.InvisibleButton($"##{id}", new Vector2(safeWidth, StackedReviewSplitterHeight));
+        var hovered = ImGui.IsItemHovered();
+        var active = ImGui.IsItemActive();
+        if (hovered || active)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+        }
+
+        if (active)
+        {
+            stackedReviewSplitterDraggingId = id;
+            var deltaY = ImGui.GetIO().MouseDelta.Y;
+            if (MathF.Abs(deltaY) > 0.0f)
+            {
+                var configuredHeight = GetConfiguredStackedReviewPaneHeight(target);
+                var baseHeight = IsUsableStackedReviewPaneHeight(configuredHeight)
+                    ? configuredHeight
+                    : currentHeight;
+                var newHeight = Math.Clamp(baseHeight + deltaY, minHeight, safeMaxHeight);
+                if (MathF.Abs(configuredHeight - newHeight) > 0.1f)
+                {
+                    SetConfiguredStackedReviewPaneHeight(target, newHeight);
+                }
+            }
+        }
+        else if (string.Equals(stackedReviewSplitterDraggingId, id, StringComparison.Ordinal))
+        {
+            stackedReviewSplitterDraggingId = null;
+            plugin.SaveConfiguration();
+        }
+
+        if (hovered)
+        {
+            SetThemedTooltip(tooltip);
+        }
     }
 
     private void DrawPullBrowser(
@@ -1974,7 +2161,8 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawSelectedPullTimeline(
         ReviewPull pull,
         string idPrefix,
-        ReviewSelectionState selection)
+        ReviewSelectionState selection,
+        bool allowLeadUpScrollHandoff = false)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
         DrawTimelineSectionTitle(GetPullDeathTimelineTitle(pull), pull.Subtitle, idPrefix);
@@ -1988,7 +2176,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawTimelineLeadUpControls($"{idPrefix}{pull.Key}");
-        DrawSelectableDeathTimeline(pull, idPrefix, selection);
+        DrawSelectableDeathTimeline(pull, idPrefix, selection, allowLeadUpScrollHandoff);
         DrawTimelineKofiLink(idPrefix);
         DrawKofiConfirmationPopup();
         DrawReviewPaneBottomPadding();
@@ -2012,9 +2200,11 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawSelectableDeathTimeline(
         ReviewPull pull,
         string idPrefix,
-        ReviewSelectionState selection)
+        ReviewSelectionState selection,
+        bool allowLeadUpScrollHandoff)
     {
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
+        var pendingLeadUpScrollHandoff = 0.0f;
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 0.0f));
         DrawSelectableDeathTimelineHeader($"{idPrefix}{pull.Key}");
         var orderedDeaths = GetDeathsInTimelineOrder(pull.Deaths);
@@ -2111,11 +2301,17 @@ public sealed class RecapWindow : Window, IDisposable
             ImGui.EndTable();
             if (leadUpExpanded)
             {
-                DrawTimelineLeadUpDropdown(death, pull.TerritoryId, leadUpId);
+                DrawTimelineLeadUpDropdown(
+                    death,
+                    pull.TerritoryId,
+                    leadUpId,
+                    allowLeadUpScrollHandoff,
+                    ref pendingLeadUpScrollHandoff);
             }
         }
 
         ImGui.PopStyleVar();
+        ApplyTimelineLeadUpScrollHandoff(pendingLeadUpScrollHandoff);
     }
 
     private bool IsTimelineLeadUpExpanded(string leadUpId, bool rowSelected)
@@ -2211,7 +2407,12 @@ public sealed class RecapWindow : Window, IDisposable
         return clicked;
     }
 
-    private void DrawTimelineLeadUpDropdown(PartyDeathRecord death, uint territoryId, string idSuffix)
+    private void DrawTimelineLeadUpDropdown(
+        PartyDeathRecord death,
+        uint territoryId,
+        string idSuffix,
+        bool allowScrollHandoff,
+        ref float pendingScrollHandoff)
     {
         var resolved = ResolveDeathDisplay(death, territoryId);
         var rows = IsFocusedReviewMode()
@@ -2220,21 +2421,89 @@ public sealed class RecapWindow : Window, IDisposable
         var panelHeight = GetTimelineLeadUpDropdownHeight(rows.Count);
         var panelWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
+        var parentScrollYBefore = ImGui.GetScrollY();
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8.0f, 7.0f));
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 4.0f));
+        var childHovered = false;
+        var childMouseWheel = 0.0f;
+        var childScrollY = 0.0f;
+        var childScrollMaxY = 0.0f;
         if (ImGui.BeginChild($"##TimelineLeadUpDropdown{idSuffix}", new Vector2(panelWidth, panelHeight), true, OptionalScrollbarFlags))
         {
             DrawHpHistory(resolved, idSuffix, showLabel: false, showHeader: false, rightPadding: 0.0f);
+            childHovered = ImGui.IsWindowHovered();
+            childMouseWheel = ImGui.GetIO().MouseWheel;
+            childScrollY = ImGui.GetScrollY();
+            childScrollMaxY = ImGui.GetScrollMaxY();
         }
 
         ImGui.EndChild();
+        QueueTimelineLeadUpScrollHandoff(
+            allowScrollHandoff,
+            parentScrollYBefore,
+            childHovered,
+            childMouseWheel,
+            childScrollY,
+            childScrollMaxY,
+            ref pendingScrollHandoff);
         DrawTimelineLeadUpResizeHandle(idSuffix, panelWidth, panelHeight);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(2);
         ImGui.Dummy(new Vector2(1.0f, 4.0f));
+    }
+
+    private static void QueueTimelineLeadUpScrollHandoff(
+        bool enabled,
+        float parentScrollYBefore,
+        bool childHovered,
+        float mouseWheel,
+        float childScrollY,
+        float childScrollMaxY,
+        ref float pendingScrollHandoff)
+    {
+        if (!enabled ||
+            !childHovered ||
+            MathF.Abs(mouseWheel) <= 0.001f ||
+            MathF.Abs(ImGui.GetScrollY() - parentScrollYBefore) > TimelineLeadUpScrollBoundaryEpsilon)
+        {
+            return;
+        }
+
+        var childHasScrollableContent = childScrollMaxY > TimelineLeadUpScrollBoundaryEpsilon;
+        var childAtTop = childScrollY <= TimelineLeadUpScrollBoundaryEpsilon;
+        var childAtBottom = childScrollY >= childScrollMaxY - TimelineLeadUpScrollBoundaryEpsilon;
+        if (childHasScrollableContent &&
+            (mouseWheel > 0.0f && !childAtTop ||
+                mouseWheel < 0.0f && !childAtBottom))
+        {
+            return;
+        }
+
+        pendingScrollHandoff += -mouseWheel * ImGui.GetTextLineHeightWithSpacing() * TimelineLeadUpMouseWheelScrollLines;
+    }
+
+    private static void ApplyTimelineLeadUpScrollHandoff(float scrollDelta)
+    {
+        if (MathF.Abs(scrollDelta) <= 0.001f)
+        {
+            return;
+        }
+
+        var scrollMaxY = ImGui.GetScrollMaxY();
+        if (scrollMaxY <= TimelineLeadUpScrollBoundaryEpsilon)
+        {
+            return;
+        }
+
+        var scrollY = ImGui.GetScrollY();
+        var updatedScrollY = Math.Clamp(scrollY + scrollDelta, 0.0f, scrollMaxY);
+        if (MathF.Abs(updatedScrollY - scrollY) > TimelineLeadUpScrollBoundaryEpsilon)
+        {
+            ImGui.SetScrollY(updatedScrollY);
+        }
     }
 
     private float GetTimelineLeadUpDropdownHeight(int rowCount)
@@ -13810,6 +14079,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.217");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Stacked review sections can now be resized by dragging the dividers between Pulls, Death Timeline, and Selected Death.");
+        DrawHighlightedChangelogBullet("The 10s lead-up now hands off mouse-wheel scrolling to the timeline when it reaches the top or bottom.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.215");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Death Replay now hides stale untargetable enemies after they sit still for 15 seconds.");

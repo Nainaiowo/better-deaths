@@ -300,6 +300,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public float ReviewTimelineWidth { get; set; }
 
+    public float StackedPullBrowserHeight { get; set; }
+
+    public float StackedCollapsedPullBrowserHeight { get; set; }
+
+    public float StackedTimelineHeight { get; set; }
+
     public float DeathTimelineLeadUpHeight { get; set; }
 
     public bool ShowLeadUpTimelineMitigationTimers { get; set; } = true;
