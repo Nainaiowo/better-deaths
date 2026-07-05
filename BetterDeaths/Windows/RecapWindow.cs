@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.218";
+    private const string CurrentChangelogVersion = "0.1.0.219";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -2632,9 +2632,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         switch (selectedDeathDetailPage)
         {
-            case DeathDetailPage.Mitigation:
-                DrawExtraMitigationContext(resolved, deathId);
-                break;
             case DeathDetailPage.WhatIf:
                 DrawPossibleMitigationContext(resolved, deathId);
                 break;
@@ -2659,7 +2656,6 @@ public sealed class RecapWindow : Window, IDisposable
         var items = new DeathDetailNavigationItem[]
         {
             new("Summary", DeathDetailPage.Summary),
-            new("Mitigation", DeathDetailPage.Mitigation),
             new("What-if", DeathDetailPage.WhatIf),
             new("Replay", DeathDetailPage.Replay, ReplayBetaBadgeText),
         };
@@ -13805,7 +13801,6 @@ public sealed class RecapWindow : Window, IDisposable
     private enum DeathDetailPage
     {
         Summary,
-        Mitigation,
         WhatIf,
         Replay,
     }
@@ -14079,6 +14074,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.219");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Removed duplicate mitigation tab, apologies.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.218");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Stacked review sections can now be resized by dragging the dividers between Pulls, Death Timeline, and Selected Death.");
