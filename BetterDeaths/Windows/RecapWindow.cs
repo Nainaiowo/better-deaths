@@ -111,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.212";
+    private const string CurrentChangelogVersion = "0.1.0.213";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -138,8 +138,8 @@ public sealed class RecapWindow : Window, IDisposable
     private const float LeadUpTableRightPadding = 10.0f;
     private const float TimelineLeadUpDropdownMinHeight = 64.0f;
     private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
-    private const float TimelineLeadUpResizeHandleHeight = 10.0f;
-    private const float TimelineLeadUpResizeHandleWidth = 54.0f;
+    private const float TimelineLeadUpResizeHandleHeight = 14.0f;
+    private const float TimelineLeadUpResizeHandleWidth = 72.0f;
     private const float MainNavigationButtonWidth = 118.0f;
     private const float MainNavigationButtonMinWidth = 92.0f;
     private const float MainNavigationCompactWidthThreshold = 300.0f;
@@ -2182,7 +2182,6 @@ public sealed class RecapWindow : Window, IDisposable
         var panelHeight = GetTimelineLeadUpDropdownHeight(rows.Count);
         var panelWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
-        var panelStart = ImGui.GetCursorScreenPos();
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
@@ -2194,7 +2193,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
-        DrawTimelineLeadUpResizeHandle(idSuffix, panelStart, panelWidth, panelHeight);
+        DrawTimelineLeadUpResizeHandle(idSuffix, panelWidth, panelHeight);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(2);
         ImGui.Dummy(new Vector2(1.0f, 4.0f));
@@ -2215,14 +2214,13 @@ public sealed class RecapWindow : Window, IDisposable
         return Math.Clamp((rowCount * rowHeight) + 18.0f, TimelineLeadUpDropdownMinHeight, 300.0f);
     }
 
-    private void DrawTimelineLeadUpResizeHandle(string idSuffix, Vector2 panelStart, float panelWidth, float panelHeight)
+    private void DrawTimelineLeadUpResizeHandle(string idSuffix, float panelWidth, float panelHeight)
     {
-        var previousCursor = ImGui.GetCursorScreenPos();
-        var handleTop = panelStart.Y + MathF.Max(0.0f, panelHeight - TimelineLeadUpResizeHandleHeight);
-        ImGui.SetCursorScreenPos(new Vector2(panelStart.X, handleTop));
+        var start = ImGui.GetCursorScreenPos();
+        var size = new Vector2(MathF.Max(1.0f, panelWidth), TimelineLeadUpResizeHandleHeight);
         ImGui.InvisibleButton(
             $"##TimelineLeadUpResize{idSuffix}",
-            new Vector2(MathF.Max(1.0f, panelWidth), TimelineLeadUpResizeHandleHeight));
+            size);
 
         var hovered = ImGui.IsItemHovered();
         var active = ImGui.IsItemActive();
@@ -2257,27 +2255,43 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var drawList = ImGui.GetWindowDrawList();
-        var color = active
+        var end = start + size;
+        var backgroundColor = active
+            ? ModernAccentSoftColor with { W = ActiveThemeUsesLightPanels() ? 0.34f : 0.28f }
+            : hovered
+                ? BlendColors(ModernPanelAltColor, ModernAccentSoftColor, 0.45f) with { W = ActiveThemeUsesLightPanels() ? 0.42f : 0.34f }
+                : ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.28f : 0.22f };
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(backgroundColor), 0.0f);
+        drawList.AddLine(
+            start,
+            new Vector2(end.X, start.Y),
+            ImGui.GetColorU32(ModernPanelBorderColor with { W = hovered || active ? 0.78f : 0.50f }),
+            1.0f);
+
+        var gripColor = active
             ? LeadUpGoldColor
             : hovered
                 ? ModernAccentColor
-                : ModernDividerColor;
+                : ModernMutedTextColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.58f };
         var center = new Vector2(
-            panelStart.X + (panelWidth * 0.5f),
-            handleTop + (TimelineLeadUpResizeHandleHeight * 0.5f));
+            start.X + (size.X * 0.5f),
+            start.Y + (size.Y * 0.5f));
         var halfWidth = MathF.Min(TimelineLeadUpResizeHandleWidth * 0.5f, MathF.Max(0.0f, panelWidth * 0.25f));
         drawList.AddLine(
-            new Vector2(center.X - halfWidth, center.Y),
-            new Vector2(center.X + halfWidth, center.Y),
-            ImGui.GetColorU32(color),
+            new Vector2(center.X - halfWidth, center.Y - 2.0f),
+            new Vector2(center.X + halfWidth, center.Y - 2.0f),
+            ImGui.GetColorU32(gripColor),
+            hovered || active ? 2.0f : 1.0f);
+        drawList.AddLine(
+            new Vector2(center.X - halfWidth, center.Y + 2.0f),
+            new Vector2(center.X + halfWidth, center.Y + 2.0f),
+            ImGui.GetColorU32(gripColor),
             hovered || active ? 2.0f : 1.0f);
 
         if (hovered)
         {
             SetThemedTooltip("Drag to resize the 10s lead-up.");
         }
-
-        ImGui.SetCursorScreenPos(previousCursor);
     }
 
     private static bool IsUsableTimelineLeadUpDropdownHeight(float height)
@@ -13849,6 +13863,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.213");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("The 10s lead-up resize control now appears as a visible drag bar under the container.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.212");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Replay Trails now remembers your selection.");
