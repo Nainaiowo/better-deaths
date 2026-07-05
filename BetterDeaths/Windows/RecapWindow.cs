@@ -668,19 +668,18 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawModernHeaderCredit()
     {
+        const float rightPadding = 12.0f;
         const string prefix = "Powered by ";
         const string nai = "Nai";
         const string middle = " and ";
-        const string you = "you";
-        const string suffix = ".";
+        const string you = "You";
 
         var prefixSize = ImGui.CalcTextSize(prefix);
         var naiSize = ImGui.CalcTextSize(nai);
         var middleSize = ImGui.CalcTextSize(middle);
         var youSize = ImGui.CalcTextSize(you);
-        var suffixSize = ImGui.CalcTextSize(suffix);
-        var signatureWidth = prefixSize.X + naiSize.X + middleSize.X + youSize.X + suffixSize.X;
-        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        var signatureWidth = prefixSize.X + naiSize.X + middleSize.X + youSize.X;
+        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X - rightPadding;
         var subtitleEnd = ImGui.GetItemRectMax();
         var signatureStartX = contentRight - signatureWidth;
         var minimumGap = ImGui.GetStyle().ItemSpacing.X * 2.0f;
@@ -701,8 +700,6 @@ public sealed class RecapWindow : Window, IDisposable
         drawList.AddText(position, mutedColor, middle);
         position.X += middleSize.X;
         drawList.AddText(position, highlightColor, you);
-        position.X += youSize.X;
-        drawList.AddText(position, mutedColor, suffix);
     }
 
     private void DrawModernNavigation()
