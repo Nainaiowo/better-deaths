@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.217";
+    private const string CurrentChangelogVersion = "0.1.0.218";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -14079,15 +14079,10 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.217");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.218");
+        ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Stacked review sections can now be resized by dragging the dividers between Pulls, Death Timeline, and Selected Death.");
         DrawHighlightedChangelogBullet("The 10s lead-up now hands off mouse-wheel scrolling to the timeline when it reaches the top or bottom.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.215");
-        ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Death Replay now hides stale untargetable enemies after they sit still for 15 seconds.");
 
         ImGui.Separator();
