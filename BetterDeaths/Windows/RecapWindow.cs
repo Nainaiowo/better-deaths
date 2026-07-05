@@ -108,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.214";
+    private const string CurrentChangelogVersion = "0.1.0.215";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -125,6 +125,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayP4AssignmentSharedResolveWindowSeconds = 0.75f;
     private const float ReplayPathOfLightMinimumResolveDurationSeconds = 6.0f;
     private const float ReplayPathOfLightFallbackDurationSeconds = 10.4f;
+    private const float ReplayUntargetableStationaryHideSeconds = 15.0f;
+    private const float ReplayPositionMovementEpsilon = 0.05f;
+    private const float ReplayStationaryMaxSampleGapSeconds = 2.0f;
     private const float ReplayCanvasMinSide = 180.0f;
     private const float ReplayCanvasMaxSide = 820.0f;
     private const float ReplayMinZoom = 1.0f;
@@ -6542,14 +6545,82 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionTrack> positionTracks,
         DateTime selectedAtUtc)
     {
-        return positionTracks
-            .Select(track => CreateReplayActorState(track.Positions, selectedAtUtc))
-            .Where(position => position is not null)
-            .Select(position => position!)
+        var actorStates = new List<ReplayPositionSnapshot>(positionTracks.Count);
+        foreach (var track in positionTracks)
+        {
+            var actorState = CreateReplayActorState(track.Positions, selectedAtUtc);
+            if (actorState is null ||
+                ShouldHideStationaryUntargetableReplayActor(track.Positions, actorState, selectedAtUtc))
+            {
+                continue;
+            }
+
+            actorStates.Add(actorState);
+        }
+
+        return actorStates
             .OrderBy(position => position.ActorKind)
             .ThenBy(position => position.PartyIndex)
             .ThenBy(position => position.ActorName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static bool ShouldHideStationaryUntargetableReplayActor(
+        IReadOnlyList<ReplayPositionSnapshot> actorPositions,
+        ReplayPositionSnapshot actor,
+        DateTime selectedAtUtc)
+    {
+        return actor.ActorKind == ReplayActorKind.Enemy &&
+            !actor.IsTargetable &&
+            !HasReplayActorMovedRecently(actorPositions, selectedAtUtc);
+    }
+
+    private static bool HasReplayActorMovedRecently(
+        IReadOnlyList<ReplayPositionSnapshot> actorPositions,
+        DateTime selectedAtUtc)
+    {
+        var endIndex = FindReplayPositionIndexAtOrBefore(actorPositions, selectedAtUtc);
+        if (endIndex <= 0)
+        {
+            return true;
+        }
+
+        var windowStartAtUtc = selectedAtUtc.AddSeconds(-ReplayUntargetableStationaryHideSeconds);
+        var latest = actorPositions[endIndex];
+        if (latest.SeenAtUtc <= windowStartAtUtc)
+        {
+            return true;
+        }
+
+        for (var index = endIndex; index > 0; index--)
+        {
+            var current = actorPositions[index];
+            var previous = actorPositions[index - 1];
+            if ((current.SeenAtUtc - previous.SeenAtUtc).TotalSeconds > ReplayStationaryMaxSampleGapSeconds)
+            {
+                return true;
+            }
+
+            if (ReplayPositionsMoved(previous, current))
+            {
+                return true;
+            }
+
+            if (previous.SeenAtUtc <= windowStartAtUtc)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ReplayPositionsMoved(ReplayPositionSnapshot previous, ReplayPositionSnapshot current)
+    {
+        var dx = current.X - previous.X;
+        var dy = current.Y - previous.Y;
+        var dz = current.Z - previous.Z;
+        return (dx * dx) + (dy * dy) + (dz * dz) > ReplayPositionMovementEpsilon * ReplayPositionMovementEpsilon;
     }
 
     private static ReplayPositionSnapshot? CreateReplayActorState(
@@ -7336,7 +7407,10 @@ public sealed class RecapWindow : Window, IDisposable
         DrawResolvedReplayMarkerMechanics(drawList, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         if (showTrails)
         {
-            DrawReplayTrails(drawList, death, positionTracks, selectedAtUtc, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+            var visibleActorKeys = actorStates
+                .Select(actor => actor.ActorKey)
+                .ToHashSet(StringComparer.Ordinal);
+            DrawReplayTrails(drawList, death, positionTracks, visibleActorKeys, selectedAtUtc, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         }
 
         var markersByActor = markerStates
@@ -8115,6 +8189,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImDrawListPtr drawList,
         PartyDeathRecord death,
         IReadOnlyList<ReplayPositionTrack> positionTracks,
+        IReadOnlySet<string> visibleActorKeys,
         DateTime selectedAtUtc,
         Vector2 canvasStart,
         Vector2 canvasSize,
@@ -8128,6 +8203,11 @@ public sealed class RecapWindow : Window, IDisposable
         var trailStartAtUtc = selectedAtUtc.AddSeconds(-ReplayTrailSeconds);
         foreach (var track in positionTracks)
         {
+            if (!visibleActorKeys.Contains(track.ActorKey))
+            {
+                continue;
+            }
+
             var positions = track.Positions;
             var endIndex = FindReplayPositionIndexAtOrBefore(positions, selectedAtUtc);
             if (endIndex < 0 ||
@@ -13733,13 +13813,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.214");
+        ImGui.TextUnformatted("v0.1.0.215");
         ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Refined Death Replay playback so the timeline starts at the 30-second lead-up and stops at useful post-death replay data while keeping active draws visible.");
-        DrawHighlightedChangelogBullet("Cleaned up the Death Replay view by removing redundant helper text and giving the replay canvas more side spacing.");
-        DrawWrappedBullet("Removed excluded-player capture filtering and settings.");
-        DrawWrappedBullet("Enemy HP at death now only lists targetable enemies.");
-        DrawWrappedBullet("Added a small shared-credit note to the header when space allows.");
+        DrawHighlightedChangelogBullet("Death Replay now hides stale untargetable enemies after they sit still for 15 seconds.");
 
         ImGui.Separator();
 
