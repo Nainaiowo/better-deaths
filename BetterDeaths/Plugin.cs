@@ -144,6 +144,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const float DmuP2PathOfLightTowerDistance = 8.0f;
     private const float DmuP2PathOfLightTowerRadius = 4.0f;
     private const float DmuP2PathOfLightTowerFallbackDurationSeconds = 10.4f;
+    private const float DmuP2PathOfLightTowerMinResolveMatchSeconds = 6.0f;
     private const float DmuP2PathOfLightTowerMaxMatchSeconds = 14.0f;
     private const float DmuP2PathOfLightTowerResolveMatchDistance = 7.0f;
     private const uint DmuP4RealityTellStatusId = 2056;
@@ -1905,6 +1906,17 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetShowReplayTrails(bool show)
+    {
+        if (Configuration.ShowReplayTrails == show)
+        {
+            return;
+        }
+
+        Configuration.ShowReplayTrails = show;
+        SaveConfiguration();
+    }
+
     public void SetWidgetIconSize(float size)
     {
         Configuration.WidgetIconSize = Math.Clamp(size, MinWidgetIconSize, MaxWidgetIconSize);
@@ -2501,6 +2513,14 @@ public sealed partial class Plugin : IDalamudPlugin
             Configuration.ReviewTimelineWidth < 0.0f)
         {
             Configuration.ReviewTimelineWidth = 0.0f;
+            changed = true;
+        }
+
+        if (float.IsNaN(Configuration.DeathTimelineLeadUpHeight) ||
+            float.IsInfinity(Configuration.DeathTimelineLeadUpHeight) ||
+            Configuration.DeathTimelineLeadUpHeight < 0.0f)
+        {
+            Configuration.DeathTimelineLeadUpHeight = 0.0f;
             changed = true;
         }
 
@@ -5222,9 +5242,18 @@ public sealed partial class Plugin : IDalamudPlugin
             return false;
         }
 
+        var resolveCandidates = activeDmuP2PathOfLightTowersByIndex.Values
+            .Where(candidate => (packet.SeenAtUtc - candidate.SeenAtUtc).TotalSeconds >= DmuP2PathOfLightTowerMinResolveMatchSeconds)
+            .ToList();
+        if (resolveCandidates.Count == 0)
+        {
+            tower = default!;
+            return false;
+        }
+
         if (TryGetReplayPathOfLightResolvePosition(packet, out var resolvePosition))
         {
-            var nearest = activeDmuP2PathOfLightTowersByIndex.Values
+            var nearest = resolveCandidates
                 .OrderBy(candidate => DistanceXZ(candidate.Position, resolvePosition))
                 .First();
             if (DistanceXZ(nearest.Position, resolvePosition) <= DmuP2PathOfLightTowerResolveMatchDistance)
@@ -5234,9 +5263,9 @@ public sealed partial class Plugin : IDalamudPlugin
             }
         }
 
-        if (activeDmuP2PathOfLightTowersByIndex.Count == 1)
+        if (resolveCandidates.Count == 1)
         {
-            tower = activeDmuP2PathOfLightTowersByIndex.Values.First();
+            tower = resolveCandidates[0];
             return true;
         }
 

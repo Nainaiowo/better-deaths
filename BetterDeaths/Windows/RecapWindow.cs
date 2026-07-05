@@ -26,6 +26,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool showDebugTab;
     private bool windowStylePushed;
     private bool reviewTimelineSplitterDragging;
+    private bool deathTimelineLeadUpResizeDragging;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
     private string addonInspectorEventFilter = string.Empty;
@@ -45,7 +46,6 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly Dictionary<string, float> replayScrubSecondsByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> replayPlayingByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, float> replaySpeedByDeathId = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, bool> replayTrailsByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> replayLastFrameAtUtcByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> replayShowEarlierMarkersByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, float> replayZoomByDeathId = new(StringComparer.Ordinal);
@@ -111,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.211";
+    private const string CurrentChangelogVersion = "0.1.0.212";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -125,6 +125,8 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayTrailSeconds = 6.0f;
     private const float ReplayTrailMaxSegmentSeconds = 0.8f;
     private const float ReplayP4AssignmentSharedResolveWindowSeconds = 0.75f;
+    private const float ReplayPathOfLightMinimumResolveDurationSeconds = 6.0f;
+    private const float ReplayPathOfLightFallbackDurationSeconds = 10.4f;
     private const float ReplayCanvasMaxSide = 820.0f;
     private const float ReplayMinZoom = 1.0f;
     private const float ReplayMaxZoom = 4.0f;
@@ -134,6 +136,10 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayZoomOverlayHeight = 30.0f;
     private const float ReplayWheelScrollSinkHeight = 1.0f;
     private const float LeadUpTableRightPadding = 10.0f;
+    private const float TimelineLeadUpDropdownMinHeight = 64.0f;
+    private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
+    private const float TimelineLeadUpResizeHandleHeight = 10.0f;
+    private const float TimelineLeadUpResizeHandleWidth = 54.0f;
     private const float MainNavigationButtonWidth = 118.0f;
     private const float MainNavigationButtonMinWidth = 92.0f;
     private const float MainNavigationCompactWidthThreshold = 300.0f;
@@ -146,6 +152,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground;
     private const int MaxReplayTrailPointsPerActor = 24;
     private const int MaxReplayMarkerBadgesPerActor = 3;
+    private const string ReplayPathOfLightRawEventKind = "dmu-p2-path-of-light";
     private const float PullBodyIndent = 8.0f;
     private const float DeathDetailIndent = 8.0f;
     private const float SectionBodyIndent = 8.0f;
@@ -2175,6 +2182,7 @@ public sealed class RecapWindow : Window, IDisposable
         var panelHeight = GetTimelineLeadUpDropdownHeight(rows.Count);
         var panelWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
+        var panelStart = ImGui.GetCursorScreenPos();
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
@@ -2186,16 +2194,95 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        DrawTimelineLeadUpResizeHandle(idSuffix, panelStart, panelWidth, panelHeight);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(2);
         ImGui.Dummy(new Vector2(1.0f, 4.0f));
     }
 
-    private static float GetTimelineLeadUpDropdownHeight(int rowCount)
+    private float GetTimelineLeadUpDropdownHeight(int rowCount)
+    {
+        var defaultHeight = GetDefaultTimelineLeadUpDropdownHeight(rowCount);
+        return IsUsableTimelineLeadUpDropdownHeight(configuration.DeathTimelineLeadUpHeight)
+            ? Math.Clamp(configuration.DeathTimelineLeadUpHeight, TimelineLeadUpDropdownMinHeight, TimelineLeadUpDropdownMaxHeight)
+            : defaultHeight;
+    }
+
+    private static float GetDefaultTimelineLeadUpDropdownHeight(int rowCount)
     {
         var lineHeight = ImGui.GetTextLineHeightWithSpacing();
         var rowHeight = MathF.Max(30.0f, lineHeight + 13.0f);
-        return Math.Clamp((rowCount * rowHeight) + 18.0f, 64.0f, 300.0f);
+        return Math.Clamp((rowCount * rowHeight) + 18.0f, TimelineLeadUpDropdownMinHeight, 300.0f);
+    }
+
+    private void DrawTimelineLeadUpResizeHandle(string idSuffix, Vector2 panelStart, float panelWidth, float panelHeight)
+    {
+        var previousCursor = ImGui.GetCursorScreenPos();
+        var handleTop = panelStart.Y + MathF.Max(0.0f, panelHeight - TimelineLeadUpResizeHandleHeight);
+        ImGui.SetCursorScreenPos(new Vector2(panelStart.X, handleTop));
+        ImGui.InvisibleButton(
+            $"##TimelineLeadUpResize{idSuffix}",
+            new Vector2(MathF.Max(1.0f, panelWidth), TimelineLeadUpResizeHandleHeight));
+
+        var hovered = ImGui.IsItemHovered();
+        var active = ImGui.IsItemActive();
+        if (hovered || active)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+        }
+
+        if (active)
+        {
+            deathTimelineLeadUpResizeDragging = true;
+            var deltaY = ImGui.GetIO().MouseDelta.Y;
+            if (MathF.Abs(deltaY) > 0.0f)
+            {
+                var currentHeight = IsUsableTimelineLeadUpDropdownHeight(configuration.DeathTimelineLeadUpHeight)
+                    ? configuration.DeathTimelineLeadUpHeight
+                    : panelHeight;
+                var newHeight = Math.Clamp(
+                    currentHeight + deltaY,
+                    TimelineLeadUpDropdownMinHeight,
+                    TimelineLeadUpDropdownMaxHeight);
+                if (MathF.Abs(configuration.DeathTimelineLeadUpHeight - newHeight) > 0.1f)
+                {
+                    configuration.DeathTimelineLeadUpHeight = newHeight;
+                }
+            }
+        }
+        else if (deathTimelineLeadUpResizeDragging)
+        {
+            deathTimelineLeadUpResizeDragging = false;
+            plugin.SaveConfiguration();
+        }
+
+        var drawList = ImGui.GetWindowDrawList();
+        var color = active
+            ? LeadUpGoldColor
+            : hovered
+                ? ModernAccentColor
+                : ModernDividerColor;
+        var center = new Vector2(
+            panelStart.X + (panelWidth * 0.5f),
+            handleTop + (TimelineLeadUpResizeHandleHeight * 0.5f));
+        var halfWidth = MathF.Min(TimelineLeadUpResizeHandleWidth * 0.5f, MathF.Max(0.0f, panelWidth * 0.25f));
+        drawList.AddLine(
+            new Vector2(center.X - halfWidth, center.Y),
+            new Vector2(center.X + halfWidth, center.Y),
+            ImGui.GetColorU32(color),
+            hovered || active ? 2.0f : 1.0f);
+
+        if (hovered)
+        {
+            SetThemedTooltip("Drag to resize the 10s lead-up.");
+        }
+
+        ImGui.SetCursorScreenPos(previousCursor);
+    }
+
+    private static bool IsUsableTimelineLeadUpDropdownHeight(float height)
+    {
+        return !float.IsNaN(height) && !float.IsInfinity(height) && height > 0.0f;
     }
 
     private static float GetThemedSwitchWidth(string label)
@@ -5804,7 +5891,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMutedWrappedText($"{FormatReplayOffset(scrubSeconds)} | Pull {FormatCombatTimer(death.PullElapsedSeconds + scrubSeconds)}");
         var selectedAtUtc = death.SeenAtUtc.AddSeconds(scrubSeconds);
         var replayFrame = GetReplayFrameDisplayCache(idSuffix, death, positions, replayDisplay, selectedAtUtc, showEarlierMarkers, replayModule);
-        var showTrails = GetReplayShowTrails(idSuffix);
+        var showTrails = GetReplayShowTrails();
         DrawDeathReplayCanvas(
             death,
             positions,
@@ -6011,7 +6098,9 @@ public sealed class RecapWindow : Window, IDisposable
         DateTime replayStartAtUtc,
         bool showEarlierMarkers)
     {
-        var mechanics = new List<ReplayMechanicSnapshot>(replayModule.GetReplayMechanics(death));
+        var mechanics = replayModule.GetReplayMechanics(death)
+            .Select(NormalizeReplayMechanicForDisplay)
+            .ToList();
         if (death.ReplayMarkers.Count == 0 || death.ReplayPositions.Count == 0)
         {
             return mechanics
@@ -6088,6 +6177,24 @@ public sealed class RecapWindow : Window, IDisposable
             .ThenBy(mechanic => mechanic.SourceName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(mechanic => mechanic.RawEventId)
             .ToList();
+    }
+
+    private static ReplayMechanicSnapshot NormalizeReplayMechanicForDisplay(ReplayMechanicSnapshot mechanic)
+    {
+        if (IsReplayPathOfLightMechanic(mechanic) &&
+            mechanic.DurationSeconds > 0.0f &&
+            mechanic.DurationSeconds < ReplayPathOfLightMinimumResolveDurationSeconds)
+        {
+            return mechanic with { DurationSeconds = ReplayPathOfLightFallbackDurationSeconds };
+        }
+
+        return mechanic;
+    }
+
+    private static bool IsReplayPathOfLightMechanic(ReplayMechanicSnapshot mechanic)
+    {
+        return string.Equals(mechanic.RawEventKind, ReplayPathOfLightRawEventKind, StringComparison.Ordinal) &&
+            mechanic.Shape == ReplayMechanicShape.Tower;
     }
 
     private static ReplayPositionSnapshot? FindReplayMarkerActorPosition(
@@ -6239,10 +6346,10 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReplaySpeedButton(idSuffix, "2x", 2.0f);
 
         ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X * 2.0f);
-        var showTrails = GetReplayShowTrails(idSuffix);
+        var showTrails = GetReplayShowTrails();
         if (DrawSegmentedButton("Trails", $"ReplayTrails{idSuffix}", showTrails, 70.0f))
         {
-            replayTrailsByDeathId[idSuffix] = !showTrails;
+            plugin.SetShowReplayTrails(!showTrails);
         }
 
         if (ImGui.IsItemHovered())
@@ -6294,9 +6401,9 @@ public sealed class RecapWindow : Window, IDisposable
             : 1.0f;
     }
 
-    private bool GetReplayShowTrails(string idSuffix)
+    private bool GetReplayShowTrails()
     {
-        return !replayTrailsByDeathId.TryGetValue(idSuffix, out var showTrails) || showTrails;
+        return configuration.ShowReplayTrails;
     }
 
     private float GetReplayZoom(string idSuffix)
@@ -13742,6 +13849,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.212");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Replay Trails now remembers your selection.");
+        DrawHighlightedChangelogBullet("Path of Light replay draws now stay synced more cleanly with player positions.");
+        DrawHighlightedChangelogBullet("The 10s lead-up container can now be resized by dragging its bottom edge.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.211");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Pull changes now start with death timeline rows collapsed instead of auto-opening the first player.");

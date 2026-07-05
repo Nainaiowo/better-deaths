@@ -304,7 +304,11 @@ public sealed class Configuration : IPluginConfiguration
 
     public float ReviewTimelineWidth { get; set; }
 
+    public float DeathTimelineLeadUpHeight { get; set; }
+
     public bool ShowLeadUpTimelineMitigationTimers { get; set; } = true;
+
+    public bool ShowReplayTrails { get; set; } = true;
 
     public bool ShowDebugTab { get; set; }
 
