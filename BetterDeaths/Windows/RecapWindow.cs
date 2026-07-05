@@ -30,10 +30,7 @@ public sealed class RecapWindow : Window, IDisposable
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
     private string addonInspectorEventFilter = string.Empty;
-    private string excludedPlayerNameInput = string.Empty;
-    private string excludedPlayerNameFeedback = string.Empty;
     private string pullBrowserPlayerSearch = string.Empty;
-    private bool excludedPlayerNameFeedbackIsError;
     private bool addonInspectorHideCommonNoise = true;
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
@@ -111,7 +108,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.209";
+    private const string CurrentChangelogVersion = "0.1.0.214";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -119,6 +116,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string ReplayBetaBadgeText = "beta";
     private const float LeadUpHistorySeconds = 10.0f;
     private const float DeathReplayLeadUpSeconds = 30.0f;
+    private const float DeathReplayMaxPostDeathSeconds = 10.0f;
     private const float ReplayMarkerCarryInSeconds = 30.0f;
     private const float ReplayResolvedMarkerFadeSeconds = 1.15f;
     private const float ReplayMarkerBadgeStackWindowSeconds = 1.25f;
@@ -127,10 +125,11 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayP4AssignmentSharedResolveWindowSeconds = 0.75f;
     private const float ReplayPathOfLightMinimumResolveDurationSeconds = 6.0f;
     private const float ReplayPathOfLightFallbackDurationSeconds = 10.4f;
+    private const float ReplayCanvasMinSide = 180.0f;
     private const float ReplayCanvasMaxSide = 820.0f;
     private const float ReplayMinZoom = 1.0f;
     private const float ReplayMaxZoom = 4.0f;
-    private const float ReplayContentRightPadding = 12.0f;
+    private const float ReplayCanvasHorizontalGutter = 20.0f;
     private const float ReplayZoomSliderWidth = 220.0f;
     private const float ReplayZoomOverlayPadding = 10.0f;
     private const float ReplayZoomOverlayHeight = 30.0f;
@@ -274,7 +273,6 @@ public sealed class RecapWindow : Window, IDisposable
         DateTime ReplayStartAtUtc,
         IReadOnlyList<ReplayPositionTrack> PositionTracks,
         IReadOnlyList<ReplayMechanicSnapshot> Mechanics,
-        IReadOnlyList<ReplayMarkerSnapshot> DetectedOverheadMarkers,
         float MinOffset,
         float MaxOffset);
 
@@ -662,6 +660,46 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(ModernAccentColor, "Better Deaths");
         ImGui.SameLine();
         ImGui.TextDisabled("Pull review that starts simple and opens detail only when needed.");
+        DrawModernHeaderCredit();
+    }
+
+    private static void DrawModernHeaderCredit()
+    {
+        const string prefix = "Powered by ";
+        const string nai = "Nai";
+        const string middle = " and ";
+        const string you = "you";
+        const string suffix = ".";
+
+        var prefixSize = ImGui.CalcTextSize(prefix);
+        var naiSize = ImGui.CalcTextSize(nai);
+        var middleSize = ImGui.CalcTextSize(middle);
+        var youSize = ImGui.CalcTextSize(you);
+        var suffixSize = ImGui.CalcTextSize(suffix);
+        var signatureWidth = prefixSize.X + naiSize.X + middleSize.X + youSize.X + suffixSize.X;
+        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        var subtitleEnd = ImGui.GetItemRectMax();
+        var signatureStartX = contentRight - signatureWidth;
+        var minimumGap = ImGui.GetStyle().ItemSpacing.X * 2.0f;
+        if (signatureStartX <= subtitleEnd.X + minimumGap)
+        {
+            return;
+        }
+
+        var drawList = ImGui.GetWindowDrawList();
+        var mutedColor = ImGui.GetColorU32(ModernMutedTextColor);
+        var highlightColor = ImGui.GetColorU32(ModernAccentColor);
+        var position = new Vector2(signatureStartX, ImGui.GetItemRectMin().Y);
+
+        drawList.AddText(position, mutedColor, prefix);
+        position.X += prefixSize.X;
+        drawList.AddText(position, highlightColor, nai);
+        position.X += naiSize.X;
+        drawList.AddText(position, mutedColor, middle);
+        position.X += middleSize.X;
+        drawList.AddText(position, highlightColor, you);
+        position.X += youSize.X;
+        drawList.AddText(position, mutedColor, suffix);
     }
 
     private void DrawModernNavigation()
@@ -5829,9 +5867,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<EnemyHpSnapshot> GetEnemyHpAtDeathForDisplay(PartyDeathRecord death)
     {
-        return IsFocusedReviewMode()
-            ? death.EnemyHpAtDeath.Where(enemy => enemy.IsTargetable).ToList()
-            : death.EnemyHpAtDeath;
+        return death.EnemyHpAtDeath
+            .Where(enemy => enemy.IsTargetable)
+            .ToList();
     }
 
     private void DrawEnemyHpAtDeathHeaderAndBullets(IReadOnlyList<EnemyHpSnapshot> enemies)
@@ -5845,20 +5883,11 @@ public sealed class RecapWindow : Window, IDisposable
         foreach (var enemy in enemies)
         {
             var enemyHpText = $"{enemy.Name}: {FormatEnemyHpPercent(enemy)}";
-            if (enemy.IsTargetable)
-            {
-                ImGui.BulletText(enemyHpText);
-            }
-            else
-            {
-                ImGui.Bullet();
-                ImGui.SameLine();
-                ImGui.TextColored(ModernMutedTextColor, enemyHpText);
-            }
+            ImGui.BulletText(enemyHpText);
 
             if (ImGui.IsItemHovered())
             {
-                SetThemedTooltip($"{enemy.Name}\nHP: {enemy.CurrentHp:N0} / {enemy.MaxHp:N0}\nEntity: {enemy.EntityId:X8}\n{FormatEnemyTargetable(enemy)}");
+                SetThemedTooltip($"{enemy.Name}\nHP: {enemy.CurrentHp:N0} / {enemy.MaxHp:N0}\nEntity: {enemy.EntityId:X8}");
             }
         }
     }
@@ -5871,8 +5900,6 @@ public sealed class RecapWindow : Window, IDisposable
         var showEarlierMarkers = GetShowEarlierReplayMarkers(death, idSuffix, replayStartAtUtc);
         var replayModule = ReplayEncounterModules.Get(resolved.TerritoryId);
 
-        DrawLeadUpLabel("Death replay");
-        DrawMutedWrappedText("Shows captured positions around the selected death. Older pulls may not have replay data.");
         DrawShowEarlierReplayMarkersToggle(death, idSuffix, replayStartAtUtc, ref showEarlierMarkers);
         KeepOnlyActiveReplayDisplayCache(idSuffix);
         var replayDisplay = GetReplayStaticDisplayCache(idSuffix, death, resolved.TerritoryId, replayModule, showEarlierMarkers);
@@ -5881,7 +5908,6 @@ public sealed class RecapWindow : Window, IDisposable
         if (positions.Count == 0 && replayMechanics.Count == 0)
         {
             DrawMutedWrappedText("No replay position data was captured for this death.");
-            DrawDetectedReplayOverheadMechanics(death, replayDisplay.DetectedOverheadMarkers, replayModule);
             return;
         }
 
@@ -5919,8 +5945,6 @@ public sealed class RecapWindow : Window, IDisposable
             idSuffix,
             replayModule,
             showTrails);
-        DrawDeathReplayLegend();
-        DrawDetectedReplayOverheadMechanics(death, replayDisplay.DetectedOverheadMarkers, replayModule);
     }
 
     private ReplayStaticDisplayCache GetReplayStaticDisplayCache(
@@ -5940,9 +5964,8 @@ public sealed class RecapWindow : Window, IDisposable
         var replayStartAtUtc = death.SeenAtUtc.AddSeconds(-DeathReplayLeadUpSeconds);
         var positionTracks = BuildReplayPositionTracks(death.ReplayPositions);
         var mechanics = GetReplayMechanicsForDisplay(death, replayModule, replayStartAtUtc, showEarlierMarkers);
-        var detectedOverheadMarkers = SelectDetectedReplayOverheadMechanics(death.ReplayMarkers, replayStartAtUtc, showEarlierMarkers);
         GetReplayTimeBounds(death, death.ReplayPositions, mechanics, out var minOffset, out var maxOffset);
-        var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, positionTracks, mechanics, detectedOverheadMarkers, minOffset, maxOffset);
+        var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, positionTracks, mechanics, minOffset, maxOffset);
         replayStaticDisplayCacheByDeathId[idSuffix] = updated;
         replayFrameDisplayCacheByDeathId.Remove(idSuffix);
         return updated;
@@ -6264,14 +6287,26 @@ public sealed class RecapWindow : Window, IDisposable
         out float minOffset,
         out float maxOffset)
     {
+        var minimumVisibleOffset = GetReplayMinimumVisibleOffset(death);
+        if (positions.Count > 0)
+        {
+            var latestPositionOffset = positions
+                .Select(position => (float)(position.SeenAtUtc - death.SeenAtUtc).TotalSeconds)
+                .DefaultIfEmpty(0.0f)
+                .Max();
+            minOffset = minimumVisibleOffset;
+            maxOffset = MathF.Min(MathF.Max(0.0f, latestPositionOffset), DeathReplayMaxPostDeathSeconds);
+            if (maxOffset - minOffset < 0.05f)
+            {
+                maxOffset = MathF.Min(DeathReplayMaxPostDeathSeconds, minOffset + 0.5f);
+            }
+
+            return;
+        }
+
         var hasOffset = false;
         minOffset = 0.0f;
         maxOffset = 0.0f;
-        foreach (var position in positions)
-        {
-            IncludeReplayTimeOffset((float)(position.SeenAtUtc - death.SeenAtUtc).TotalSeconds, ref hasOffset, ref minOffset, ref maxOffset);
-        }
-
         foreach (var mechanic in mechanics)
         {
             var startOffset = (float)(mechanic.SeenAtUtc - death.SeenAtUtc).TotalSeconds;
@@ -6281,16 +6316,22 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (!hasOffset)
         {
-            minOffset = -DeathReplayLeadUpSeconds;
+            minOffset = minimumVisibleOffset;
             maxOffset = 0.0f;
             return;
         }
 
+        minOffset = MathF.Max(minOffset, minimumVisibleOffset);
+        maxOffset = MathF.Min(maxOffset, DeathReplayMaxPostDeathSeconds);
         if (maxOffset - minOffset < 0.05f)
         {
-            minOffset -= 0.5f;
-            maxOffset += 0.5f;
+            maxOffset = MathF.Min(DeathReplayMaxPostDeathSeconds, minOffset + 0.5f);
         }
+    }
+
+    private static float GetReplayMinimumVisibleOffset(PartyDeathRecord death)
+    {
+        return MathF.Max(-DeathReplayLeadUpSeconds, -MathF.Max(0.0f, death.PullElapsedSeconds));
     }
 
     private static void IncludeReplayTimeOffset(float offset, ref bool hasOffset, ref float minOffset, ref float maxOffset)
@@ -7183,66 +7224,6 @@ public sealed class RecapWindow : Window, IDisposable
         return (x * x) + (z * z);
     }
 
-    private void DrawDetectedReplayOverheadMechanics(
-        PartyDeathRecord death,
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        IReplayEncounterModule replayModule)
-    {
-        ImGui.Spacing();
-        DrawLeadUpLabel("Detected replay mechanics");
-        if (markers.Count == 0)
-        {
-            ImGui.TextDisabled("No replay mechanics detected.");
-            return;
-        }
-
-        foreach (var marker in markers)
-        {
-            ImGui.Bullet();
-            ImGui.SameLine();
-            ImGui.TextColored(
-                ModernMutedTextColor,
-                FormatReplayOffset((float)(marker.SeenAtUtc - death.SeenAtUtc).TotalSeconds));
-            ImGui.SameLine(0.0f, 6.0f);
-            ImGui.TextUnformatted($"{FormatReplayMarkerActorLabel(marker)}:");
-            ImGui.SameLine(0.0f, 4.0f);
-            ImGui.TextColored(LeadUpGoldColor, FormatReplayMarkerSummaryLabel(marker, markers, replayModule));
-
-            if (ImGui.IsItemHovered())
-            {
-                SetThemedTooltip($"{FormatReplayMarkerTooltipLabel(marker, markers, replayModule)}\nRaw ID: {marker.RawMarkerId}\nCaptured at pull {FormatCombatTimer(marker.PullElapsedSeconds)}");
-            }
-        }
-    }
-
-    private static IReadOnlyList<ReplayMarkerSnapshot> SelectDetectedReplayOverheadMechanics(
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        DateTime replayStartAtUtc,
-        bool showEarlierMarkers)
-    {
-        var selected = new List<ReplayMarkerSnapshot>();
-        foreach (var marker in markers
-            .Where(marker => showEarlierMarkers || marker.SeenAtUtc >= replayStartAtUtc)
-            .OrderBy(marker => marker.SeenAtUtc)
-            .ThenBy(marker => marker.ActorKind)
-            .ThenBy(marker => marker.PartyIndex)
-            .ThenBy(marker => marker.ActorName, StringComparer.OrdinalIgnoreCase))
-        {
-            var last = selected.Count == 0 ? null : selected[^1];
-            if (last is not null &&
-                string.Equals(last.ActorKey, marker.ActorKey, StringComparison.Ordinal) &&
-                last.MarkerId == marker.MarkerId &&
-                marker.SeenAtUtc - last.SeenAtUtc <= TimeSpan.FromSeconds(1.0))
-            {
-                continue;
-            }
-
-            selected.Add(marker);
-        }
-
-        return selected;
-    }
-
     private static Vector2 GetRightPaddedTableSize(float rightPadding)
     {
         var width = ImGui.GetContentRegionAvail().X;
@@ -7291,10 +7272,12 @@ public sealed class RecapWindow : Window, IDisposable
         bool showTrails)
     {
         var cursorStart = ImGui.GetCursorScreenPos();
-        var availableWidth = MathF.Max(180.0f, ImGui.GetContentRegionAvail().X);
-        var paddedWidth = MathF.Max(180.0f, availableWidth - MathF.Min(ReplayContentRightPadding, MathF.Max(0.0f, availableWidth - 180.0f)));
-        var canvasSide = MathF.Min(paddedWidth, ReplayCanvasMaxSide);
-        var canvasX = cursorStart.X + MathF.Max(0.0f, (paddedWidth - canvasSide) * 0.5f);
+        var availableWidth = MathF.Max(ReplayCanvasMinSide, ImGui.GetContentRegionAvail().X);
+        var horizontalGutter = MathF.Min(
+            ReplayCanvasHorizontalGutter,
+            MathF.Max(0.0f, availableWidth - ReplayCanvasMinSide) * 0.5f);
+        var canvasSide = MathF.Min(availableWidth - (horizontalGutter * 2.0f), ReplayCanvasMaxSide);
+        var canvasX = cursorStart.X + MathF.Max(0.0f, (availableWidth - canvasSide) * 0.5f);
 
         var canvasSize = new Vector2(canvasSide, canvasSide);
         ImGui.SetCursorScreenPos(new Vector2(canvasX, cursorStart.Y));
@@ -7331,9 +7314,9 @@ public sealed class RecapWindow : Window, IDisposable
             .Where(mechanic => mechanic is not null)
             .Select(mechanic => mechanic!)
             .ToList();
-        var boundsMechanics = mechanicStates.Count == 0
+        var boundsMechanics = allPositions.Count == 0
             ? allMechanics.Concat(resolvedMechanics).ToList()
-            : allMechanics.Concat(mechanicStates).Concat(resolvedMechanics).ToList();
+            : mechanicStates.Concat(resolvedMechanics).ToList();
         if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
@@ -8918,11 +8901,6 @@ public sealed class RecapWindow : Window, IDisposable
             canvasStart + ((canvasSize - textSize) * 0.5f),
             ImGui.GetColorU32(ModernMutedTextColor),
             text);
-    }
-
-    private static void DrawDeathReplayLegend()
-    {
-        DrawMutedWrappedText("Players are role-colored: blue tanks, green healers, red DPS. X means dead. Gold marks the selected death target. Thin accent lines are captured tethers. Muted enemy rings mean not targetable.");
     }
 
     private void DrawHpHistory(
@@ -11212,111 +11190,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawExcludedPlayerSettings()
-    {
-        ImGui.Spacing();
-        ImGui.TextColored(LeadUpGoldColor, "Excluded players");
-        DrawMutedWrappedText("Saved as salted hashes. Future captures skip matching player names; old saved pulls are not changed.");
-
-        var style = ImGui.GetStyle();
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var addButtonWidth = MathF.Min(GetThemedActionButtonWidth("Add"), MathF.Max(54.0f, availableWidth * 0.28f));
-        var canFitInline = availableWidth >= 220.0f;
-        var inputWidth = canFitInline
-            ? MathF.Max(96.0f, availableWidth - addButtonWidth - style.ItemSpacing.X)
-            : availableWidth;
-
-        ImGui.SetNextItemWidth(inputWidth);
-        ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ModernFrameHoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ModernAccentSoftColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
-        var addRequested = ImGui.InputTextWithHint(
-            "##ExcludedPlayerNameInput",
-            "First Last",
-            ref excludedPlayerNameInput,
-            64,
-            ImGuiInputTextFlags.EnterReturnsTrue);
-        ImGui.PopStyleColor(4);
-
-        if (canFitInline)
-        {
-            ImGui.SameLine();
-        }
-
-        if (DrawThemedActionButton("Add", "AddExcludedPlayerName", canFitInline ? addButtonWidth : MathF.Min(addButtonWidth, availableWidth)))
-        {
-            addRequested = true;
-        }
-
-        if (addRequested)
-        {
-            if (plugin.TryAddExcludedPlayerName(excludedPlayerNameInput, out var message))
-            {
-                excludedPlayerNameInput = string.Empty;
-                excludedPlayerNameFeedbackIsError = false;
-            }
-            else
-            {
-                excludedPlayerNameFeedbackIsError = true;
-            }
-
-            excludedPlayerNameFeedback = message;
-        }
-
-        if (!string.IsNullOrWhiteSpace(excludedPlayerNameFeedback))
-        {
-            ImGui.TextColored(
-                excludedPlayerNameFeedbackIsError ? WarningColor : HealColor,
-                excludedPlayerNameFeedback);
-        }
-
-        var savedHashes = plugin.ExcludedPlayerNameHashes;
-        if (savedHashes.Count == 0)
-        {
-            ImGui.TextColored(ModernMutedTextColor, "No excluded players saved.");
-            return;
-        }
-
-        ImGui.TextColored(ModernMutedTextColor, $"{savedHashes.Count:N0} saved hashed {(savedHashes.Count == 1 ? "entry" : "entries")}");
-        if (ImGui.BeginTable("##ExcludedPlayerHashes", 2, ImGuiTableFlags.SizingStretchProp))
-        {
-            ImGui.TableSetupColumn("Hash", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-            ImGui.TableSetupColumn("Remove", ImGuiTableColumnFlags.WidthFixed, GetThemedActionButtonWidth("Remove"));
-            foreach (var hash in savedHashes.ToList())
-            {
-                ImGui.TableNextRow();
-                ImGui.TableNextColumn();
-                ImGui.TextColored(ModernMutedTextColor, FormatExcludedPlayerHashLabel(hash));
-                if (ImGui.IsItemHovered())
-                {
-                    SetThemedTooltip("Only the salted hash is saved locally. The original name is not stored here.");
-                }
-
-                ImGui.TableNextColumn();
-                if (DrawThemedActionButton("Remove", $"RemoveExcludedPlayerName{hash}", GetThemedActionButtonWidth("Remove")) &&
-                    plugin.RemoveExcludedPlayerNameHash(hash))
-                {
-                    excludedPlayerNameFeedback = "Player exclusion removed.";
-                    excludedPlayerNameFeedbackIsError = false;
-                }
-            }
-
-            ImGui.EndTable();
-        }
-    }
-
-    private static string FormatExcludedPlayerHashLabel(string hash)
-    {
-        if (string.IsNullOrWhiteSpace(hash))
-        {
-            return "Saved hash";
-        }
-
-        var prefixLength = Math.Min(hash.Length, 12);
-        return $"Hash {hash[..prefixLength]}...";
-    }
-
     private void DrawSettingsTab()
     {
         var showWindow = configuration.ShowWindow;
@@ -11415,8 +11288,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("A way to show information to others without doxxing your party");
-
-        DrawExcludedPlayerSettings();
 
         var removeChatBranding = configuration.RemoveChatBranding;
         if (DrawThemedCheckbox("Remove Better Deaths branding from chat posts", ref removeChatBranding))
@@ -13649,7 +13520,6 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Recorded pulls are saved locally so you can review pulls after wipes, resets, reloads, or plugin updates.");
         DrawWrappedBullet("Saved pull data can include player names, jobs, duty names, death timing, player and enemy HP, shields, damage events, actions, statuses, and mitigation context.");
         DrawWrappedBullet("Name Redaction helps with screenshots and shared display, but local saved pull files may still contain the original captured names.");
-        DrawWrappedBullet("Excluded player names are saved as salted hashes so the original names are not stored in the setting.");
         DrawWrappedBullet("Debug capture is local and optional. It can contain raw troubleshooting data, so leave it off unless you are testing or debugging.");
 
         ImGui.Spacing();
@@ -13863,6 +13733,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.214");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Refined Death Replay playback so the timeline starts at the 30-second lead-up and stops at useful post-death replay data while keeping active draws visible.");
+        DrawHighlightedChangelogBullet("Cleaned up the Death Replay view by removing redundant helper text and giving the replay canvas more side spacing.");
+        DrawWrappedBullet("Removed excluded-player capture filtering and settings.");
+        DrawWrappedBullet("Enemy HP at death now only lists targetable enemies.");
+        DrawWrappedBullet("Added a small shared-credit note to the header when space allows.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.209");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added Walled detection for environment-source deaths such as death walls and jump-offs.");
@@ -15974,11 +15854,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         var ratio = Math.Clamp((double)enemy.CurrentHp / enemy.MaxHp, 0.0, 1.0);
         return $"{ratio:P1}";
-    }
-
-    private static string FormatEnemyTargetable(EnemyHpSnapshot enemy)
-    {
-        return enemy.IsTargetable ? "Targetable" : "Not targetable";
     }
 
     private static ulong? GetIncomingDamageAmount(CombatEventRecord combatEvent)

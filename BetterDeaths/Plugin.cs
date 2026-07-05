@@ -32,7 +32,6 @@ using System.Numerics;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -560,8 +559,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly DeathRecapPopupWindow deathRecapPopupWindow;
     private readonly List<PartyMemberSnapshot> currentMembers = [];
     private readonly List<PartyDeathRecord> currentDeaths = [];
-    private readonly HashSet<string> excludedPlayerNameHashLookup = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, bool> excludedPlayerNameMatchCache = new(StringComparer.Ordinal);
     private readonly List<RecordedPullState> recordedPulls = [];
     private readonly object recordedPullLock = new();
     private IReadOnlyList<RecordedPullSummary> recordedPullSummaries = [];
@@ -1095,57 +1092,6 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         Configuration.RedactPlayerNames = enabled;
         SaveConfiguration();
-    }
-
-    public IReadOnlyList<string> ExcludedPlayerNameHashes => Configuration.ExcludedPlayerNameHashes;
-
-    public bool TryAddExcludedPlayerName(string playerName, out string message)
-    {
-        var normalizedName = NormalizeExcludedPlayerName(playerName);
-        if (string.IsNullOrWhiteSpace(normalizedName))
-        {
-            message = "Enter a player name first.";
-            return false;
-        }
-
-        if (normalizedName.Length > 64)
-        {
-            message = "That name is too long.";
-            return false;
-        }
-
-        var hash = HashExcludedPlayerName(normalizedName, EnsureExcludedPlayerNameSalt());
-        if (excludedPlayerNameHashLookup.Contains(hash))
-        {
-            message = "That player is already excluded.";
-            return false;
-        }
-
-        Configuration.ExcludedPlayerNameHashes.Add(hash);
-        Configuration.ExcludedPlayerNameHashes.Sort(StringComparer.Ordinal);
-        RefreshExcludedPlayerNameHashLookup();
-        SaveConfiguration();
-        message = "Player exclusion saved.";
-        return true;
-    }
-
-    public bool RemoveExcludedPlayerNameHash(string hash)
-    {
-        if (string.IsNullOrWhiteSpace(hash))
-        {
-            return false;
-        }
-
-        var removed = Configuration.ExcludedPlayerNameHashes.RemoveAll(saved =>
-            string.Equals(saved, hash, StringComparison.Ordinal)) > 0;
-        if (!removed)
-        {
-            return false;
-        }
-
-        RefreshExcludedPlayerNameHashLookup();
-        SaveConfiguration();
-        return true;
     }
 
     public void SetShowDeathRecapPopup(bool enabled)
@@ -2341,98 +2287,6 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration.Save();
     }
 
-    private void RefreshExcludedPlayerNameHashLookup()
-    {
-        excludedPlayerNameHashLookup.Clear();
-        foreach (var hash in Configuration.ExcludedPlayerNameHashes)
-        {
-            if (!string.IsNullOrWhiteSpace(hash))
-            {
-                excludedPlayerNameHashLookup.Add(hash);
-            }
-        }
-
-        excludedPlayerNameMatchCache.Clear();
-    }
-
-    private string EnsureExcludedPlayerNameSalt()
-    {
-        if (!string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
-        {
-            return Configuration.ExcludedPlayerNameSalt;
-        }
-
-        Configuration.ExcludedPlayerNameSalt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
-        return Configuration.ExcludedPlayerNameSalt;
-    }
-
-    private bool IsPlayerNameExcluded(string? playerName)
-    {
-        if (excludedPlayerNameHashLookup.Count == 0 ||
-            string.IsNullOrWhiteSpace(playerName) ||
-            string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
-        {
-            return false;
-        }
-
-        var normalizedName = NormalizeExcludedPlayerName(playerName);
-        if (string.IsNullOrWhiteSpace(normalizedName))
-        {
-            return false;
-        }
-
-        if (excludedPlayerNameMatchCache.TryGetValue(normalizedName, out var cachedResult))
-        {
-            return cachedResult;
-        }
-
-        var hash = HashExcludedPlayerName(normalizedName, Configuration.ExcludedPlayerNameSalt);
-        var result = excludedPlayerNameHashLookup.Contains(hash);
-        excludedPlayerNameMatchCache[normalizedName] = result;
-        return result;
-    }
-
-    private bool IsEntityIdExcludedPlayer(uint entityId)
-    {
-        entityId = NormalizeActorEntityId(entityId);
-        if (entityId == 0 || excludedPlayerNameHashLookup.Count == 0)
-        {
-            return false;
-        }
-
-        try
-        {
-            return ObjectTable.SearchByEntityId(entityId) is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
-                IsPlayerNameExcluded(player.Name.TextValue);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string NormalizeExcludedPlayerName(string playerName)
-    {
-        if (string.IsNullOrWhiteSpace(playerName))
-        {
-            return string.Empty;
-        }
-
-        var words = playerName
-            .Replace(",", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal)
-            .Trim()
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return string.Join(' ', words).ToUpperInvariant();
-    }
-
-    private static string HashExcludedPlayerName(string normalizedPlayerName, string salt)
-    {
-        var bytes = Encoding.UTF8.GetBytes($"{salt}\n{normalizedPlayerName}");
-        using var sha256 = SHA256.Create();
-        return Convert.ToHexString(sha256.ComputeHash(bytes));
-    }
-
     private void NormalizeUserConfiguration()
     {
         var changed = false;
@@ -2594,33 +2448,6 @@ public sealed partial class Plugin : IDalamudPlugin
             Configuration.DeathChatChannel = DeathChatChannel.Party;
             changed = true;
         }
-
-        if (Configuration.ExcludedPlayerNameHashes is null)
-        {
-            Configuration.ExcludedPlayerNameHashes = [];
-            changed = true;
-        }
-
-        var normalizedExcludedPlayerNameHashes = Configuration.ExcludedPlayerNameHashes
-            .Where(hash => !string.IsNullOrWhiteSpace(hash))
-            .Select(hash => hash.Trim().ToUpperInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(hash => hash, StringComparer.Ordinal)
-            .ToList();
-        if (!Configuration.ExcludedPlayerNameHashes.SequenceEqual(normalizedExcludedPlayerNameHashes, StringComparer.Ordinal))
-        {
-            Configuration.ExcludedPlayerNameHashes = normalizedExcludedPlayerNameHashes;
-            changed = true;
-        }
-
-        if (Configuration.ExcludedPlayerNameHashes.Count > 0 &&
-            string.IsNullOrWhiteSpace(Configuration.ExcludedPlayerNameSalt))
-        {
-            Configuration.ExcludedPlayerNameHashes.Clear();
-            changed = true;
-        }
-
-        RefreshExcludedPlayerNameHashLookup();
 
         if (Configuration.Version != CurrentConfigurationVersion)
         {
@@ -3031,12 +2858,6 @@ public sealed partial class Plugin : IDalamudPlugin
                 continue;
             }
 
-            if (IsPlayerNameExcluded(memberName))
-            {
-                partyIndex++;
-                continue;
-            }
-
             var memberKey = member.ContentId != 0
                 ? member.ContentId.ToString("X16")
                 : member.EntityId != 0
@@ -3091,11 +2912,6 @@ public sealed partial class Plugin : IDalamudPlugin
                     continue;
                 }
 
-                if (IsPlayerNameExcluded(memberName))
-                {
-                    continue;
-                }
-
                 var statusSnapshots = BuildCharacterStatusSnapshots(player, []);
                 var classJobId = player.ClassJob.RowId;
                 members.Add(new PartyMemberSnapshot(
@@ -3141,8 +2957,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var memberName = localPlayer.Name.TextValue;
         if (string.IsNullOrWhiteSpace(memberName) ||
             trackedEntityIds.Contains(localPlayer.EntityId) ||
-            trackedNames.Contains(memberName) ||
-            IsPlayerNameExcluded(memberName))
+            trackedNames.Contains(memberName))
         {
             return;
         }
@@ -3227,12 +3042,6 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             var gameObject = ObjectTable.SearchByEntityId(entityId);
             if (playerOnly && gameObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter)
-            {
-                return null;
-            }
-
-            if (gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
-                IsPlayerNameExcluded(player.Name.TextValue))
             {
                 return null;
             }
@@ -3978,7 +3787,6 @@ public sealed partial class Plugin : IDalamudPlugin
         uint? actionIconId = null;
         string? sourceName = null;
         IReadOnlyList<StatusSnapshot>? sourceStatuses = null;
-        bool? packetSourceIsExcluded = null;
         var foundRelevantEffect = false;
         var trackedSourceStatuses = false;
 
@@ -4031,14 +3839,10 @@ public sealed partial class Plugin : IDalamudPlugin
                 EnsurePullStarted(packet.SeenAtUtc);
                 var resolvedActionName = actionName ??= GetActionName(packet.ActionId);
                 var resolvedActionIconId = actionIconId ??= GetActionIconId(packet.ActionId);
-                packetSourceIsExcluded ??= IsEntityIdExcludedPlayer(packet.CasterEntityId);
-                var sourceIsExcluded = packetSourceIsExcluded.Value;
-                var resolvedSourceName = sourceName ??= sourceIsExcluded
-                    ? "Excluded player"
-                    : string.IsNullOrWhiteSpace(packet.CasterName)
-                        ? GetEntityDisplayName(packet.CasterEntityId)
-                        : packet.CasterName;
-                var shouldTrackSourceStatuses = !sourceIsExcluded && kind.Value != DeathEventKind.Heal;
+                var resolvedSourceName = sourceName ??= string.IsNullOrWhiteSpace(packet.CasterName)
+                    ? GetEntityDisplayName(packet.CasterEntityId)
+                    : packet.CasterName;
+                var shouldTrackSourceStatuses = kind.Value != DeathEventKind.Heal;
                 var resolvedSourceStatuses = shouldTrackSourceStatuses
                     ? sourceStatuses ??= GetBossMitigationStatuses(packet.SourceSnapshot is null
                         ? BuildSourceStatusSnapshots(packet.CasterEntityId)
@@ -5477,12 +5281,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawEffectResultPacket(RawEffectResultPacket packet)
     {
         var member = FindCurrentMemberByEffectResultPacket(packet);
-        if (member is null &&
-            (IsEntityIdExcludedPlayer(packet.TargetId) || IsEntityIdExcludedPlayer(packet.ActorId)))
-        {
-            return;
-        }
-
         var shouldRecordDebug = Configuration.DebugLogEnabled &&
             !debugCaptureFrozen &&
             (member is not null || Configuration.CaptureOtherDeaths);
@@ -5754,10 +5552,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
         var member = FindCurrentMemberByEntityId(packet.EntityId);
-        if (member is null && IsEntityIdExcludedPlayer(packet.EntityId))
-        {
-            return;
-        }
 
         if (packet.Category == ActorControlTargetIconCategory)
         {
@@ -5838,26 +5632,18 @@ public sealed partial class Plugin : IDalamudPlugin
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
     {
         return currentMembers.FirstOrDefault(member =>
-            !IsPlayerNameExcluded(member.MemberName) &&
             TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(RawTargetId targetId)
     {
         return currentMembers.FirstOrDefault(member =>
-            !IsPlayerNameExcluded(member.MemberName) &&
             TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByName(string memberName)
     {
-        if (IsPlayerNameExcluded(memberName))
-        {
-            return null;
-        }
-
         return currentMembers.FirstOrDefault(member =>
-            !IsPlayerNameExcluded(member.MemberName) &&
             string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -5866,7 +5652,6 @@ public sealed partial class Plugin : IDalamudPlugin
         return entityId == 0
             ? null
             : currentMembers.FirstOrDefault(member =>
-                !IsPlayerNameExcluded(member.MemberName) &&
                 member.EntityId != 0 &&
                 member.EntityId == entityId);
     }
@@ -5874,7 +5659,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private PartyMemberSnapshot? FindCurrentMemberByEffectResultPacket(RawEffectResultPacket packet)
     {
         return currentMembers.FirstOrDefault(member =>
-            !IsPlayerNameExcluded(member.MemberName) &&
             member.EntityId != 0 &&
             (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
     }
@@ -5909,11 +5693,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (member is not null)
         {
-            if (IsPlayerNameExcluded(member.MemberName))
-            {
-                return null;
-            }
-
             return new ReplayMarkerSnapshot(
                 packet.SeenAtUtc,
                 CalculatePullElapsed(packet.SeenAtUtc),
@@ -5933,11 +5712,6 @@ public sealed partial class Plugin : IDalamudPlugin
             var gameObject = ObjectTable.SearchByEntityId(entityId);
             if (gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player)
             {
-                if (IsPlayerNameExcluded(player.Name.TextValue))
-                {
-                    return null;
-                }
-
                 var classJobId = player.ClassJob.RowId;
                 return new ReplayMarkerSnapshot(
                     packet.SeenAtUtc,
@@ -6098,11 +5872,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlHotEvent(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
-        if (IsPlayerNameExcluded(member.MemberName))
-        {
-            return;
-        }
-
         if (packet.Category != ActorControlHotCategory ||
             packet.Param2 == 0)
         {
@@ -6128,12 +5897,9 @@ public sealed partial class Plugin : IDalamudPlugin
             sourceEntityId = 0;
         }
 
-        var sourceIsExcluded = sourceEntityId != 0 && IsEntityIdExcludedPlayer(sourceEntityId);
-        var sourceName = sourceIsExcluded
-            ? "Excluded player"
-            : sourceEntityId == 0
-                ? "Healing over time"
-                : GetEntityDisplayName(sourceEntityId);
+        var sourceName = sourceEntityId == 0
+            ? "Healing over time"
+            : GetEntityDisplayName(sourceEntityId);
         var actionId = packet.Param1 != 0 ? packet.Param1 : ActorControlHotCategory;
         var actionName = packet.Param1 != 0
             ? GetStatusName(packet.Param1)
@@ -6181,11 +5947,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlDotEvent(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
-        if (IsPlayerNameExcluded(member.MemberName))
-        {
-            return;
-        }
-
         if (packet.Category != ActorControlDotCategory ||
             packet.Param2 == 0)
         {
@@ -6204,13 +5965,10 @@ public sealed partial class Plugin : IDalamudPlugin
             sourceEntityId = 0;
         }
 
-        var sourceIsExcluded = sourceEntityId != 0 && IsEntityIdExcludedPlayer(sourceEntityId);
-        var sourceName = sourceIsExcluded
-            ? "Excluded player"
-            : sourceEntityId == 0
-                ? "Damage over time"
-                : GetEntityDisplayName(sourceEntityId);
-        var sourceStatuses = sourceEntityId == 0 || sourceIsExcluded
+        var sourceName = sourceEntityId == 0
+            ? "Damage over time"
+            : GetEntityDisplayName(sourceEntityId);
+        var sourceStatuses = sourceEntityId == 0
             ? []
             : GetBossMitigationStatuses(packet.SourceSnapshot is null
                 ? BuildSourceStatusSnapshots(sourceEntityId)
@@ -6258,11 +6016,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void CaptureActorControlStatusChange(RawActorControlPacket packet, PartyMemberSnapshot member)
     {
-        if (IsPlayerNameExcluded(member.MemberName))
-        {
-            return;
-        }
-
         var statusLookup = packet.TargetSnapshot is null
             ? member.Statuses
             : BuildStatusSnapshots(packet.TargetSnapshot);
@@ -6565,11 +6318,6 @@ public sealed partial class Plugin : IDalamudPlugin
         string signalSource,
         DeathCaptureContext? deathContext = null)
     {
-        if (IsPlayerNameExcluded(member.MemberName))
-        {
-            return false;
-        }
-
         if (pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
         {
             return false;
@@ -7030,6 +6778,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 battleNpc.EntityId == InvalidActorEntityId ||
                 battleNpc.MaxHp == 0 ||
                 battleNpc.CurrentHp == 0 ||
+                !battleNpc.IsTargetable ||
                 !seenEntityIds.Add(battleNpc.EntityId))
             {
                 continue;
@@ -7052,8 +6801,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         return snapshots
-            .OrderByDescending(snapshot => snapshot.IsTargetable)
-            .ThenByDescending(snapshot => snapshot.MaxHp)
+            .OrderByDescending(snapshot => snapshot.MaxHp)
             .ThenBy(snapshot => snapshot.Name, StringComparer.OrdinalIgnoreCase)
             .Take(MaxEnemyHpSnapshotsAtDeath)
             .ToList();
@@ -7310,11 +7058,6 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         foreach (var member in members)
         {
-            if (IsPlayerNameExcluded(member.MemberName))
-            {
-                continue;
-            }
-
             TrackRecentStatusObservations(
                 member.MemberKey,
                 now,
@@ -7330,8 +7073,7 @@ public sealed partial class Plugin : IDalamudPlugin
         foreach (var member in members)
         {
             if (member.IsDead ||
-                member.MaxHp == 0 ||
-                IsPlayerNameExcluded(member.MemberName))
+                member.MaxHp == 0)
             {
                 continue;
             }
@@ -7360,11 +7102,6 @@ public sealed partial class Plugin : IDalamudPlugin
         uint shieldHp,
         IReadOnlyList<StatusSnapshot> mergedStatuses)
     {
-        if (IsPlayerNameExcluded(member.MemberName))
-        {
-            return;
-        }
-
         if (packet.MaxHp == 0 ||
             pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
         {
@@ -7496,11 +7233,6 @@ public sealed partial class Plugin : IDalamudPlugin
         lastReplayPositionSampleAtUtc = now;
         foreach (var member in members)
         {
-            if (IsPlayerNameExcluded(member.MemberName))
-            {
-                continue;
-            }
-
             AddRecentReplayPositionSnapshot(CreatePlayerReplayPositionSnapshot(member, now));
         }
 
@@ -8354,11 +8086,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
         foreach (var member in members)
         {
-            if (IsPlayerNameExcluded(member.MemberName))
-            {
-                continue;
-            }
-
             var statuses = member.Statuses.ToList();
             if (debugStatusSnapshotsByMember.TryGetValue(member.MemberKey, out var existing))
             {
