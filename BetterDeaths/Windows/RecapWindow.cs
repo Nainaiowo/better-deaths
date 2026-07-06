@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.220";
+    private const string CurrentChangelogVersion = "0.1.0.221";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -250,7 +250,8 @@ public sealed class RecapWindow : Window, IDisposable
         ReplayPositionSnapshot Actor,
         IReadOnlyList<ReplayMarkerSnapshot> Markers,
         Vector2 ScreenPosition,
-        float Radius);
+        float Radius,
+        float InteractionRadius);
 
     private readonly record struct ReplayCanvasInputState(bool Hovered, bool Active);
 
@@ -5650,16 +5651,15 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##PossibleMitigationOptions{idSuffix}", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.65f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 2.05f);
-        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.55f);
-        ImGui.TableSetupColumn("Availability", ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        DrawCenteredTableHeader("Ability", "Source", "Mit%", "Availability");
+        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.85f);
+        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 2.25f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.9f);
+        DrawCenteredTableHeader("Ability", "Source", "Mit%");
 
         foreach (var option in options)
         {
@@ -5689,9 +5689,6 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.TableNextColumn();
             DrawPossibleMitigationPercentCell(option.Statuses);
-
-            ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(FormatPossibleMitigationAvailability(option.Availability), ModernMutedTextColor);
         }
 
         ImGui.EndTable();
@@ -5757,14 +5754,6 @@ public sealed class RecapWindow : Window, IDisposable
 
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
         }
-    }
-
-    private static string FormatPossibleMitigationAvailability(string availability)
-    {
-        var trimmedAvailability = availability.Trim().TrimEnd('.');
-        return trimmedAvailability.StartsWith("Ready", StringComparison.OrdinalIgnoreCase)
-            ? "ready"
-            : trimmedAvailability;
     }
 
     private string FormatPossibleMitigationSourceLabel(PossibleMitigationSnapshot option)
@@ -7715,21 +7704,21 @@ public sealed class RecapWindow : Window, IDisposable
         foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Enemy && !IsFocusedReplayActor(actor, focusedActorKey)))
         {
             markersByActor.TryGetValue(actor.ActorKey, out var markers);
-            DrawReplayActor(drawList, death, actor, markers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, replayModule, focused: false);
+            DrawReplayActor(drawList, death, actor, markers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: false);
         }
 
         foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Player && !IsFocusedReplayActor(actor, focusedActorKey)))
         {
             markersByActor.TryGetValue(actor.ActorKey, out var markers);
-            DrawReplayActor(drawList, death, actor, markers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, replayModule, focused: false);
+            DrawReplayActor(drawList, death, actor, markers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: false);
         }
 
-        DrawResolvedReplayMarkerBadges(drawList, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, replayModule);
+        DrawResolvedReplayMarkerBadges(drawList, death, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, focusedActorKey, canvasInputHovered, replayModule);
         var focusedActor = actorStates.FirstOrDefault(actor => IsFocusedReplayActor(actor, focusedActorKey));
         if (focusedActor is not null)
         {
             markersByActor.TryGetValue(focusedActor.ActorKey, out var focusedMarkers);
-            DrawReplayActor(drawList, death, focusedActor, focusedMarkers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, replayModule, focused: true);
+            DrawReplayActor(drawList, death, focusedActor, focusedMarkers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: true);
         }
 
         ImGui.PopClipRect();
@@ -7741,7 +7730,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             var mouse = ImGui.GetIO().MousePos;
             var hovered = actorScreenPositions
-                .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius + 4.0f)
+                .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.InteractionRadius)
                 .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
                 .FirstOrDefault();
             if (hovered is not null)
@@ -7957,7 +7946,7 @@ public sealed class RecapWindow : Window, IDisposable
         var mouse = ImGui.GetIO().MousePos;
         var clickedPlayer = actorScreenPositions
             .Where(entry => entry.Actor.ActorKind == ReplayActorKind.Player)
-            .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius + 7.0f)
+            .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.InteractionRadius)
             .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
             .FirstOrDefault();
         if (clickedPlayer is not null)
@@ -8595,6 +8584,7 @@ public sealed class RecapWindow : Window, IDisposable
         float zoom,
         Vector2 pan,
         List<ReplayActorScreenState> actorScreenPositions,
+        bool canvasHovered,
         IReplayEncounterModule replayModule,
         bool focused)
     {
@@ -8602,6 +8592,8 @@ public sealed class RecapWindow : Window, IDisposable
         var isDeathTarget = IsReplayDeathTarget(death, actor);
         var baseRadius = isDeathTarget ? 7.0f : actor.ActorKind == ReplayActorKind.Enemy ? 6.0f : 5.0f;
         var radius = focused ? baseRadius + 3.5f : baseRadius;
+        var interactionRadius = GetReplayActorInteractionRadius(radius, markers.Count);
+        var hovered = canvasHovered && IsReplayActorHovered(screenPosition, interactionRadius);
         var color = GetReplayActorColor(death, actor);
         if (focused)
         {
@@ -8621,26 +8613,56 @@ public sealed class RecapWindow : Window, IDisposable
             drawList.AddCircle(screenPosition, radius + 4.0f, ImGui.GetColorU32(ModernMutedTextColor with { W = 0.55f }), 18, 1.0f);
         }
 
-        var label = FormatReplayActorLabel(actor);
-        var labelYOffset = actor.ActorKind == ReplayActorKind.Player
-            ? radius + 6.0f
-            : -ImGui.GetTextLineHeight() * 0.5f;
-        var textPosition = screenPosition + new Vector2(radius + 5.0f, labelYOffset);
-        if (focused)
+        var shouldDrawFullLabel = actor.ActorKind == ReplayActorKind.Enemy || focused || isDeathTarget || hovered;
+        if (shouldDrawFullLabel)
         {
-            DrawFocusedReplayActorLabel(drawList, label, textPosition);
-        }
-        else
-        {
-            drawList.AddText(textPosition, ImGui.GetColorU32(isDeathTarget ? LeadUpGoldColor : ModernTextColor), label);
+            var label = FormatReplayActorLabel(actor);
+            var labelYOffset = actor.ActorKind == ReplayActorKind.Player
+                ? radius + 6.0f
+                : -ImGui.GetTextLineHeight() * 0.5f;
+            var textPosition = screenPosition + new Vector2(radius + 5.0f, labelYOffset);
+            if (focused)
+            {
+                DrawFocusedReplayActorLabel(drawList, label, textPosition);
+            }
+            else
+            {
+                drawList.AddText(textPosition, ImGui.GetColorU32(isDeathTarget ? LeadUpGoldColor : ModernTextColor), label);
+            }
         }
 
         if (markers.Count > 0)
         {
-            DrawReplayMarkerBadges(drawList, markers, screenPosition, radius, canvasStart, canvasSize, replayModule);
+            if (focused || isDeathTarget || hovered)
+            {
+                DrawReplayMarkerBadges(drawList, markers, screenPosition, radius, canvasStart, canvasSize, replayModule);
+            }
+            else
+            {
+                DrawReplayMarkerIndicators(
+                    drawList,
+                    markers.Select(marker => new ReplayMarkerBadgeDrawEntry(marker, 1.0f, false)),
+                    screenPosition,
+                    radius,
+                    canvasStart,
+                    canvasSize,
+                    replayModule);
+            }
         }
 
-        actorScreenPositions.Add(new ReplayActorScreenState(actor, markers, screenPosition, radius));
+        actorScreenPositions.Add(new ReplayActorScreenState(actor, markers, screenPosition, radius, interactionRadius));
+    }
+
+    private static float GetReplayActorInteractionRadius(float actorRadius, int markerCount)
+    {
+        return markerCount > 0
+            ? actorRadius + 24.0f
+            : actorRadius + 7.0f;
+    }
+
+    private static bool IsReplayActorHovered(Vector2 screenPosition, float interactionRadius)
+    {
+        return Vector2.Distance(ImGui.GetIO().MousePos, screenPosition) <= interactionRadius;
     }
 
     private static void DrawReplayDeadActorMarker(ImDrawListPtr drawList, Vector2 center, float actorRadius)
@@ -8677,6 +8699,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawResolvedReplayMarkerBadges(
         ImDrawListPtr drawList,
+        PartyDeathRecord death,
         IReadOnlyList<ResolvedReplayMarkerState> resolvedMarkerStates,
         Vector2 canvasStart,
         Vector2 canvasSize,
@@ -8686,6 +8709,8 @@ public sealed class RecapWindow : Window, IDisposable
         float maxZ,
         float zoom,
         Vector2 pan,
+        string? focusedActorKey,
+        bool canvasHovered,
         IReplayEncounterModule replayModule)
     {
         foreach (var actorGroup in resolvedMarkerStates
@@ -8704,14 +8729,35 @@ public sealed class RecapWindow : Window, IDisposable
 
             var anchorState = orderedStates[0];
             var screenPosition = ReplayWorldToScreen(anchorState.Actor, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-            DrawReplayMarkerBadgeColumn(
-                drawList,
-                orderedStates.Select(state => new ReplayMarkerBadgeDrawEntry(state.Marker, state.Alpha, true)),
-                screenPosition,
-                5.0f,
-                canvasStart,
-                canvasSize,
-                replayModule);
+            const float actorRadius = 5.0f;
+            var interactionRadius = GetReplayActorInteractionRadius(actorRadius, orderedStates.Count);
+            var hovered = canvasHovered && IsReplayActorHovered(screenPosition, interactionRadius);
+            var shouldReveal = IsReplayDeathTarget(death, anchorState.Actor) ||
+                IsFocusedReplayActor(anchorState.Actor, focusedActorKey) ||
+                hovered;
+            var badgeEntries = orderedStates.Select(state => new ReplayMarkerBadgeDrawEntry(state.Marker, state.Alpha, true));
+            if (shouldReveal)
+            {
+                DrawReplayMarkerBadgeColumn(
+                    drawList,
+                    badgeEntries,
+                    screenPosition,
+                    actorRadius,
+                    canvasStart,
+                    canvasSize,
+                    replayModule);
+            }
+            else
+            {
+                DrawReplayMarkerIndicators(
+                    drawList,
+                    badgeEntries,
+                    screenPosition,
+                    actorRadius,
+                    canvasStart,
+                    canvasSize,
+                    replayModule);
+            }
         }
     }
 
@@ -8732,6 +8778,127 @@ public sealed class RecapWindow : Window, IDisposable
             canvasStart,
             canvasSize,
             replayModule);
+    }
+
+    private static void DrawReplayMarkerIndicators(
+        ImDrawListPtr drawList,
+        IEnumerable<ReplayMarkerBadgeDrawEntry> badgeEntries,
+        Vector2 actorScreenPosition,
+        float actorRadius,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        IReplayEncounterModule replayModule)
+    {
+        const float indicatorSize = 7.0f;
+        const float indicatorGap = 3.0f;
+        var entries = badgeEntries
+            .Select(entry => (
+                Entry: entry,
+                Display: GetReplayMarkerBadgeDisplay(entry.Marker, replayModule),
+                Shape: GetReplayMarkerIndicatorShape(entry.Marker, replayModule)))
+            .Where(entry => entry.Entry.Alpha > 0.0f && !string.IsNullOrWhiteSpace(entry.Display.Text))
+            .Take(MaxReplayMarkerBadgesPerActor)
+            .ToList();
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        var canvasEnd = canvasStart + canvasSize;
+        var rowWidth = (entries.Count * indicatorSize) + (Math.Max(0, entries.Count - 1) * indicatorGap);
+        var rowHeight = indicatorSize;
+        var minX = canvasStart.X + 4.0f;
+        var maxX = Math.Max(minX, canvasEnd.X - rowWidth - 4.0f);
+        var minY = canvasStart.Y + 4.0f;
+        var maxY = Math.Max(minY, canvasEnd.Y - rowHeight - 4.0f);
+        var rowStart = new Vector2(
+            Math.Clamp(actorScreenPosition.X - (rowWidth * 0.5f), minX, maxX),
+            Math.Clamp(actorScreenPosition.Y - actorRadius - 10.0f - rowHeight, minY, maxY));
+
+        var resolvedEntry = entries.FirstOrDefault(entry => entry.Entry.Resolved);
+        if (resolvedEntry.Entry.Marker is not null)
+        {
+            var alpha = Math.Clamp(resolvedEntry.Entry.Alpha, 0.0f, 1.0f);
+            drawList.AddCircle(
+                actorScreenPosition,
+                actorRadius + 9.0f,
+                ImGui.GetColorU32(resolvedEntry.Display.Color with { W = 0.22f * alpha }),
+                24,
+                2.0f);
+        }
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var center = rowStart + new Vector2(
+                (indicatorSize * 0.5f) + (index * (indicatorSize + indicatorGap)),
+                indicatorSize * 0.5f);
+            DrawReplayMarkerIndicatorAt(drawList, entry.Entry, entry.Display, entry.Shape, center, indicatorSize);
+        }
+    }
+
+    private static ReplayMechanicShape? GetReplayMarkerIndicatorShape(
+        ReplayMarkerSnapshot marker,
+        IReplayEncounterModule replayModule)
+    {
+        return replayModule.TryGetMarkerInfo(marker.MarkerId, out var info)
+            ? info.Shape
+            : null;
+    }
+
+    private static void DrawReplayMarkerIndicatorAt(
+        ImDrawListPtr drawList,
+        ReplayMarkerBadgeDrawEntry entry,
+        ReplayMarkerBadgeDisplay display,
+        ReplayMechanicShape? shape,
+        Vector2 center,
+        float size)
+    {
+        var alpha = Math.Clamp(entry.Alpha, 0.0f, 1.0f);
+        var color = display.Color with { W = display.Color.W * alpha };
+        var shellColor = ActiveThemeUsesLightPanels()
+            ? ModernPanelColor with { W = 0.92f * alpha }
+            : ModernShellColor with { W = 0.92f * alpha };
+        var borderColor = color with { W = Math.Clamp(color.W, 0.0f, 1.0f) };
+        var half = size * 0.5f;
+
+        drawList.AddCircleFilled(center, half + 2.0f, ImGui.GetColorU32(shellColor), 16);
+        if (entry.Resolved)
+        {
+            drawList.AddCircle(center, half + 3.0f, ImGui.GetColorU32(color with { W = 0.30f * alpha }), 16, 1.4f);
+        }
+
+        switch (shape)
+        {
+            case ReplayMechanicShape.Cone:
+                drawList.AddTriangleFilled(
+                    center + new Vector2(0.0f, -half),
+                    center + new Vector2(half, half),
+                    center + new Vector2(-half, half),
+                    ImGui.GetColorU32(color));
+                drawList.AddTriangle(
+                    center + new Vector2(0.0f, -half),
+                    center + new Vector2(half, half),
+                    center + new Vector2(-half, half),
+                    ImGui.GetColorU32(borderColor),
+                    1.0f);
+                break;
+            case ReplayMechanicShape.Tower:
+                drawList.AddRectFilled(center - new Vector2(half), center + new Vector2(half), ImGui.GetColorU32(color), 1.0f);
+                drawList.AddRect(center - new Vector2(half), center + new Vector2(half), ImGui.GetColorU32(borderColor), 1.0f);
+                break;
+            case ReplayMechanicShape.Line:
+                drawList.AddLine(center - new Vector2(half, 0.0f), center + new Vector2(half, 0.0f), ImGui.GetColorU32(color), 3.0f);
+                drawList.AddLine(center - new Vector2(half, 0.0f), center + new Vector2(half, 0.0f), ImGui.GetColorU32(borderColor), 1.0f);
+                break;
+            case ReplayMechanicShape.Donut:
+                drawList.AddCircle(center, half, ImGui.GetColorU32(color), 16, 2.0f);
+                break;
+            default:
+                drawList.AddCircleFilled(center, half, ImGui.GetColorU32(color), 16);
+                drawList.AddCircle(center, half, ImGui.GetColorU32(borderColor), 16, 1.0f);
+                break;
+        }
     }
 
     private static void DrawReplayMarkerBadgeColumn(
@@ -10026,26 +10193,23 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        if (!ImGui.BeginTable($"##DeathStatusSnapshot{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable($"##DeathStatusSnapshot{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthStretch, 0.45f);
-        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 1.7f);
-        ImGui.TableSetupColumn("Mit Type", ImGuiTableColumnFlags.WidthStretch, 1.1f);
-        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        ImGui.TableSetupColumn("Linked Effects", ImGuiTableColumnFlags.WidthStretch, 1.1f);
-        DrawCenteredTableHeader("Icon", "Ability", "Mit Type", "Mit%", "Linked Effects");
+        ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 2.25f);
+        ImGui.TableSetupColumn("Mit Type", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        ImGui.TableSetupColumn("Linked Effects", ImGuiTableColumnFlags.WidthStretch, 0.95f);
+        DrawCenteredTableHeader("Ability", "Mit Type", "Mit%", "Linked Effects");
 
         foreach (var status in statuses.OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase))
         {
             var displayInfo = Plugin.GetMitigationDisplayInfo(status);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawCenteredGameIcon(status.IconId, configuration.StatusIconSize, status.Name);
-            ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(status.Name);
+            DrawStatusSnapshotAbility(status, ImGui.GetContentRegionAvail().X);
             ImGui.TableNextColumn();
             DrawMitigationTypeCell(displayInfo.Types);
             ImGui.TableNextColumn();
@@ -10056,6 +10220,12 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.EndTable();
         DrawMitigationTotal(statuses);
+    }
+
+    private void DrawStatusSnapshotAbility(StatusSnapshot status, float width)
+    {
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        DrawIconTextWrapped(status.IconId, iconSize, status.Name, status.Name, MathF.Max(24.0f, width));
     }
 
     private void DrawFocusedStatusSnapshotList(IReadOnlyList<StatusSnapshot> statuses)
@@ -14107,6 +14277,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.221");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Reduced replay label clutter with compact mechanic indicators and hover/focus details.");
+        DrawWrappedBullet("Cleaned up active mitigation and What-if review tables for easier scanning.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.220");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Simplified What-if information.");
