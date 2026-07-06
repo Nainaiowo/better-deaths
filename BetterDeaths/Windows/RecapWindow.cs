@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.222";
+    private const string CurrentChangelogVersion = "0.1.0.223";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -119,7 +119,6 @@ public sealed class RecapWindow : Window, IDisposable
     private const float DeathReplayLeadUpSeconds = 30.0f;
     private const float DeathReplayMaxPostDeathSeconds = 10.0f;
     private const float ReplayMarkerCarryInSeconds = 30.0f;
-    private const float ReplayResolvedMarkerFadeSeconds = 1.15f;
     private const float ReplayMarkerBadgeStackWindowSeconds = 1.25f;
     private const float ReplayTrailSeconds = 6.0f;
     private const float ReplayTrailMaxSegmentSeconds = 0.8f;
@@ -231,16 +230,9 @@ public sealed class RecapWindow : Window, IDisposable
 
     private sealed record WidgetMitStatus(StatusSnapshot Status, string Category, string SourceName);
 
-    private sealed record ResolvedReplayMarkerState(
-        ReplayMarkerSnapshot Marker,
-        ReplayPositionSnapshot Actor,
-        ReplayMechanicSnapshot? Mechanic,
-        float Alpha);
-
     private readonly record struct ReplayMarkerBadgeDrawEntry(
         ReplayMarkerSnapshot Marker,
-        float Alpha,
-        bool Resolved);
+        float Alpha);
 
     private readonly record struct ReplayMarkerBadgeDisplay(
         string Text,
@@ -295,8 +287,7 @@ public sealed class RecapWindow : Window, IDisposable
         ReplayFrameDisplayCacheKey Key,
         IReadOnlyList<ReplayPositionSnapshot> ActorStates,
         IReadOnlyList<ReplayMarkerSnapshot> MarkerStates,
-        IReadOnlyList<ReplayMechanicSnapshot> MechanicStates,
-        IReadOnlyList<ResolvedReplayMarkerState> ResolvedMarkerStates);
+        IReadOnlyList<ReplayMechanicSnapshot> MechanicStates);
 
     private readonly record struct StackedReviewLayout(
         float PullBrowserHeight,
@@ -4647,6 +4638,10 @@ public sealed class RecapWindow : Window, IDisposable
         {
             plugin.PrintDeathInformationToChat(death);
         }
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Other Better Deaths users present will see a link to this pull.");
+        }
 
         DrawFatalEventRow(death, causeEvents);
         ImGui.Separator();
@@ -6227,7 +6222,6 @@ public sealed class RecapWindow : Window, IDisposable
             replayFrame.ActorStates,
             replayFrame.MarkerStates,
             replayFrame.MechanicStates,
-            replayFrame.ResolvedMarkerStates,
             selectedAtUtc,
             idSuffix,
             replayModule,
@@ -6276,16 +6270,7 @@ public sealed class RecapWindow : Window, IDisposable
         var actorStates = SelectReplayActorStates(replayDisplay.PositionTracks, selectedAtUtc);
         var markerStates = SelectReplayMarkerStates(death.ReplayMarkers, positions, selectedAtUtc, replayDisplay.ReplayStartAtUtc, showEarlierMarkers, replayModule);
         var mechanicStates = SelectReplayMechanicStates(replayDisplay.Mechanics, death.ReplayMarkers, positions, actorStates, selectedAtUtc, replayModule);
-        var resolvedMarkerStates = SelectResolvedReplayMarkerStates(
-            death.ReplayMarkers,
-            positions,
-            replayDisplay.PositionTracks,
-            selectedAtUtc,
-            replayDisplay.ReplayStartAtUtc,
-            showEarlierMarkers,
-            replayModule,
-            markerStates);
-        var updated = new ReplayFrameDisplayCache(key, actorStates, markerStates, mechanicStates, resolvedMarkerStates);
+        var updated = new ReplayFrameDisplayCache(key, actorStates, markerStates, mechanicStates);
         replayFrameDisplayCacheByDeathId[idSuffix] = updated;
         return updated;
     }
@@ -7131,176 +7116,6 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private static IReadOnlyList<ResolvedReplayMarkerState> SelectResolvedReplayMarkerStates(
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        IReadOnlyList<ReplayPositionSnapshot> positions,
-        IReadOnlyList<ReplayPositionTrack> positionTracks,
-        DateTime selectedAtUtc,
-        DateTime replayStartAtUtc,
-        bool showEarlierMarkers,
-        IReplayEncounterModule replayModule,
-        IReadOnlyList<ReplayMarkerSnapshot> currentMarkers)
-    {
-        if (markers.Count == 0 || positionTracks.Count == 0)
-        {
-            return [];
-        }
-
-        var currentMarkerKeys = currentMarkers
-            .Select(GetReplayMarkerIdentityKey)
-            .ToHashSet(StringComparer.Ordinal);
-        var fadeWindowStartAtUtc = selectedAtUtc.AddSeconds(-ReplayResolvedMarkerFadeSeconds);
-        var resolved = new List<ResolvedReplayMarkerState>();
-        foreach (var marker in SelectReplayMarkerResolveCandidates(markers, selectedAtUtc, replayStartAtUtc, showEarlierMarkers)
-            .Where(marker => !currentMarkerKeys.Contains(GetReplayMarkerIdentityKey(marker))))
-        {
-            if (IsReplayMarkerDisplayableAt(marker, markers, positions, selectedAtUtc, replayModule))
-            {
-                continue;
-            }
-
-            var visibleProbeAtUtc = MaxDateTime(marker.SeenAtUtc, fadeWindowStartAtUtc);
-            if (!IsReplayMarkerDisplayableAt(marker, markers, positions, visibleProbeAtUtc, replayModule))
-            {
-                continue;
-            }
-
-            var hiddenAtUtc = FindReplayMarkerHiddenAt(marker, markers, positions, visibleProbeAtUtc, selectedAtUtc, replayModule);
-            var elapsedSeconds = (float)(selectedAtUtc - hiddenAtUtc).TotalSeconds;
-            if (elapsedSeconds < 0.0f || elapsedSeconds > ReplayResolvedMarkerFadeSeconds)
-            {
-                continue;
-            }
-
-            var alpha = Math.Clamp(1.0f - (elapsedSeconds / ReplayResolvedMarkerFadeSeconds), 0.0f, 1.0f);
-            var actorTrack = FindReplayPositionTrack(positionTracks, marker.ActorKey);
-            var actor = actorTrack is null
-                ? null
-                : CreateReplayActorState(actorTrack.Positions, hiddenAtUtc);
-            if (actor is null)
-            {
-                continue;
-            }
-
-            var actorStatesAtResolve = SelectReplayActorStates(positionTracks, hiddenAtUtc);
-            var mechanic = CreateResolvedReplayMarkerMechanic(marker, actor, actorStatesAtResolve, replayModule);
-            resolved.Add(new ResolvedReplayMarkerState(marker, actor, mechanic, alpha));
-        }
-
-        return resolved
-            .OrderBy(state => state.Marker.ActorKind)
-            .ThenBy(state => state.Marker.PartyIndex)
-            .ThenBy(state => state.Marker.ActorName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    private static IReadOnlyList<ReplayMarkerSnapshot> SelectReplayMarkerResolveCandidates(
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        DateTime selectedAtUtc,
-        DateTime replayStartAtUtc,
-        bool showEarlierMarkers)
-    {
-        var selected = new List<ReplayMarkerSnapshot>();
-        foreach (var actorMarkers in markers
-            .Where(marker => marker.SeenAtUtc <= selectedAtUtc)
-            .Where(marker => showEarlierMarkers || marker.SeenAtUtc >= replayStartAtUtc)
-            .GroupBy(marker => marker.ActorKey, StringComparer.Ordinal))
-        {
-            selected.AddRange(SelectLatestReplayMarkerCluster(actorMarkers)
-                .Take(MaxReplayMarkerBadgesPerActor));
-        }
-
-        return selected;
-    }
-
-    private static string GetReplayMarkerIdentityKey(ReplayMarkerSnapshot marker)
-    {
-        return $"{marker.ActorKey}:{marker.MarkerId}:{marker.RawMarkerId}:{marker.SeenAtUtc.Ticks}";
-    }
-
-    private static ReplayPositionTrack? FindReplayPositionTrack(
-        IReadOnlyList<ReplayPositionTrack> positionTracks,
-        string actorKey)
-    {
-        foreach (var track in positionTracks)
-        {
-            if (string.Equals(track.ActorKey, actorKey, StringComparison.Ordinal))
-            {
-                return track;
-            }
-        }
-
-        return null;
-    }
-
-    private static DateTime FindReplayMarkerHiddenAt(
-        ReplayMarkerSnapshot marker,
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        IReadOnlyList<ReplayPositionSnapshot> positions,
-        DateTime visibleAtUtc,
-        DateTime hiddenAtUtc,
-        IReplayEncounterModule replayModule)
-    {
-        var low = visibleAtUtc;
-        var high = hiddenAtUtc;
-        for (var i = 0; i < 8; i++)
-        {
-            var mid = low.AddTicks((high - low).Ticks / 2);
-            if (IsReplayMarkerDisplayableAt(marker, markers, positions, mid, replayModule))
-            {
-                low = mid;
-            }
-            else
-            {
-                high = mid;
-            }
-        }
-
-        return high;
-    }
-
-    private static ReplayMechanicSnapshot? CreateResolvedReplayMarkerMechanic(
-        ReplayMarkerSnapshot marker,
-        ReplayPositionSnapshot actor,
-        IReadOnlyList<ReplayPositionSnapshot> actorStatesAtResolve,
-        IReplayEncounterModule replayModule)
-    {
-        if (!replayModule.TryGetMarkerInfo(marker.MarkerId, out var markerInfo) ||
-            markerInfo.Shape is not { } shape)
-        {
-            return null;
-        }
-
-        var rotation = actor.Rotation;
-        if (shape == ReplayMechanicShape.Cone &&
-            markerInfo.ConeBaitsClosestPlayer &&
-            TryFindClosestReplayPlayer(actor, actorStatesAtResolve, out var targetActor))
-        {
-            rotation = MathF.Atan2(targetActor.Z - actor.Z, targetActor.X - actor.X);
-        }
-
-        return new ReplayMechanicSnapshot(
-            actor.SeenAtUtc,
-            actor.PullElapsedSeconds,
-            ReplayResolvedMarkerFadeSeconds,
-            $"resolved-marker:{marker.ActorKey}:{marker.RawMarkerId}:{marker.SeenAtUtc.Ticks}",
-            marker.ActorName,
-            shape,
-            actor.X,
-            actor.Y,
-            actor.Z,
-            rotation,
-            markerInfo.Radius,
-            markerInfo.Length,
-            markerInfo.Width,
-            markerInfo.AngleDegrees,
-            markerInfo.Description,
-            "resolved-target-icon",
-            marker.RawMarkerId,
-            marker.EntityId,
-            true);
-    }
-
     private static bool ShouldDisplayReplayMechanic(
         ReplayMechanicSnapshot mechanic,
         IReadOnlyList<ReplayMarkerSnapshot> markers,
@@ -7620,7 +7435,6 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
         IReadOnlyList<ReplayMarkerSnapshot> markerStates,
         IReadOnlyList<ReplayMechanicSnapshot> mechanicStates,
-        IReadOnlyList<ResolvedReplayMarkerState> resolvedMarkerStates,
         DateTime selectedAtUtc,
         string idSuffix,
         IReplayEncounterModule replayModule,
@@ -7664,14 +7478,9 @@ public sealed class RecapWindow : Window, IDisposable
         drawList.AddRectFilled(canvasStart, canvasEnd, ImGui.GetColorU32(ModernPanelAltColor with { W = 0.62f }), 5.0f);
         drawList.AddRect(canvasStart, canvasEnd, ImGui.GetColorU32(ModernPanelBorderColor), 5.0f);
 
-        var resolvedMechanics = resolvedMarkerStates
-            .Select(state => state.Mechanic)
-            .Where(mechanic => mechanic is not null)
-            .Select(mechanic => mechanic!)
-            .ToList();
         var boundsMechanics = allPositions.Count == 0
-            ? allMechanics.Concat(resolvedMechanics).ToList()
-            : mechanicStates.Concat(resolvedMechanics).ToList();
+            ? allMechanics
+            : mechanicStates;
         if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
@@ -7688,7 +7497,6 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReplayGrid(drawList, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         var markerMechanicSourceKeysWithVisibleBadges = GetReplayMarkerMechanicSourceKeysWithVisibleBadges(markerStates, actorStates);
         var mechanicScreenRegions = DrawReplayMechanics(drawList, mechanicStates, markerMechanicSourceKeysWithVisibleBadges, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-        DrawResolvedReplayMarkerMechanics(drawList, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         if (showTrails)
         {
             var visibleActorKeys = actorStates
@@ -7713,7 +7521,6 @@ public sealed class RecapWindow : Window, IDisposable
             DrawReplayActor(drawList, death, actor, markers ?? [], canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: false);
         }
 
-        DrawResolvedReplayMarkerBadges(drawList, death, resolvedMarkerStates, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, focusedActorKey, canvasInputHovered, replayModule);
         var focusedActor = actorStates.FirstOrDefault(actor => IsFocusedReplayActor(actor, focusedActorKey));
         if (focusedActor is not null)
         {
@@ -8176,30 +7983,6 @@ public sealed class RecapWindow : Window, IDisposable
         return screenRegions;
     }
 
-    private static void DrawResolvedReplayMarkerMechanics(
-        ImDrawListPtr drawList,
-        IReadOnlyList<ResolvedReplayMarkerState> resolvedMarkerStates,
-        Vector2 canvasStart,
-        Vector2 canvasSize,
-        float minX,
-        float maxX,
-        float minZ,
-        float maxZ,
-        float zoom,
-        Vector2 pan)
-    {
-        foreach (var state in resolvedMarkerStates)
-        {
-            if (state.Mechanic is null || state.Alpha <= 0.0f)
-            {
-                continue;
-            }
-
-            var center = ReplayWorldPointToScreen(state.Mechanic.X, state.Mechanic.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-            DrawReplayMechanic(drawList, state.Mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, state.Alpha, resolved: true, hideLabel: true);
-        }
-    }
-
     private static void DrawReplayMechanic(
         ImDrawListPtr drawList,
         ReplayMechanicSnapshot mechanic,
@@ -8213,7 +7996,6 @@ public sealed class RecapWindow : Window, IDisposable
         float zoom,
         Vector2 pan,
         float alpha = 1.0f,
-        bool resolved = false,
         bool hideLabel = false)
     {
         alpha = Math.Clamp(alpha, 0.0f, 1.0f);
@@ -8221,10 +8003,6 @@ public sealed class RecapWindow : Window, IDisposable
         var fill = color with { W = (mechanic.IsKnown ? 0.16f : 0.10f) * alpha };
         var border = color with { W = (mechanic.IsKnown ? 0.85f : 0.65f) * alpha };
         var radius = Math.Clamp(ReplayWorldLengthToScreenRadius(Math.Max(1.0f, mechanic.Radius), canvasSize, minX, maxX, minZ, maxZ, zoom), 10.0f, 160.0f);
-        if (resolved)
-        {
-            DrawResolvedReplayMechanicGlow(drawList, center, radius, border, alpha);
-        }
 
         switch (mechanic.Shape)
         {
@@ -8265,13 +8043,13 @@ public sealed class RecapWindow : Window, IDisposable
                 break;
         }
 
-        if (ShouldDrawReplayMechanicLabel(mechanic, resolved, alpha, hideLabel))
+        if (ShouldDrawReplayMechanicLabel(mechanic, hideLabel))
         {
             DrawReplayMechanicLabel(drawList, mechanic, center, border, alpha);
         }
     }
 
-    private static bool ShouldDrawReplayMechanicLabel(ReplayMechanicSnapshot mechanic, bool resolved, float alpha, bool hideLabel)
+    private static bool ShouldDrawReplayMechanicLabel(ReplayMechanicSnapshot mechanic, bool hideLabel)
     {
         if (hideLabel ||
             mechanic.Shape == ReplayMechanicShape.Tether)
@@ -8279,18 +8057,7 @@ public sealed class RecapWindow : Window, IDisposable
             return false;
         }
 
-        return !resolved || alpha > 0.22f;
-    }
-
-    private static void DrawResolvedReplayMechanicGlow(
-        ImDrawListPtr drawList,
-        Vector2 center,
-        float radius,
-        Vector4 color,
-        float alpha)
-    {
-        drawList.AddCircle(center, radius + 7.0f, ImGui.GetColorU32(color with { W = 0.30f * alpha }), 48, 3.0f);
-        drawList.AddCircle(center, radius + 13.0f, ImGui.GetColorU32(color with { W = 0.14f * alpha }), 48, 5.0f);
+        return true;
     }
 
     private static void DrawReplayDonutMechanic(
@@ -8641,7 +8408,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 DrawReplayMarkerIndicators(
                     drawList,
-                    markers.Select(marker => new ReplayMarkerBadgeDrawEntry(marker, 1.0f, false)),
+                    markers.Select(marker => new ReplayMarkerBadgeDrawEntry(marker, 1.0f)),
                     screenPosition,
                     radius,
                     canvasStart,
@@ -8697,70 +8464,6 @@ public sealed class RecapWindow : Window, IDisposable
         drawList.AddText(textPosition, ImGui.GetColorU32(LeadUpGoldColor), label);
     }
 
-    private static void DrawResolvedReplayMarkerBadges(
-        ImDrawListPtr drawList,
-        PartyDeathRecord death,
-        IReadOnlyList<ResolvedReplayMarkerState> resolvedMarkerStates,
-        Vector2 canvasStart,
-        Vector2 canvasSize,
-        float minX,
-        float maxX,
-        float minZ,
-        float maxZ,
-        float zoom,
-        Vector2 pan,
-        string? focusedActorKey,
-        bool canvasHovered,
-        IReplayEncounterModule replayModule)
-    {
-        foreach (var actorGroup in resolvedMarkerStates
-            .Where(state => state.Alpha > 0.0f)
-            .GroupBy(state => state.Marker.ActorKey, StringComparer.Ordinal))
-        {
-            var orderedStates = actorGroup
-                .OrderByDescending(state => state.Marker.SeenAtUtc)
-                .ThenBy(state => state.Marker.MarkerId)
-                .Take(MaxReplayMarkerBadgesPerActor)
-                .ToList();
-            if (orderedStates.Count == 0)
-            {
-                continue;
-            }
-
-            var anchorState = orderedStates[0];
-            var screenPosition = ReplayWorldToScreen(anchorState.Actor, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-            const float actorRadius = 5.0f;
-            var interactionRadius = GetReplayActorInteractionRadius(actorRadius, orderedStates.Count);
-            var hovered = canvasHovered && IsReplayActorHovered(screenPosition, interactionRadius);
-            var shouldReveal = IsReplayDeathTarget(death, anchorState.Actor) ||
-                IsFocusedReplayActor(anchorState.Actor, focusedActorKey) ||
-                hovered;
-            var badgeEntries = orderedStates.Select(state => new ReplayMarkerBadgeDrawEntry(state.Marker, state.Alpha, true));
-            if (shouldReveal)
-            {
-                DrawReplayMarkerBadgeColumn(
-                    drawList,
-                    badgeEntries,
-                    screenPosition,
-                    actorRadius,
-                    canvasStart,
-                    canvasSize,
-                    replayModule);
-            }
-            else
-            {
-                DrawReplayMarkerIndicators(
-                    drawList,
-                    badgeEntries,
-                    screenPosition,
-                    actorRadius,
-                    canvasStart,
-                    canvasSize,
-                    replayModule);
-            }
-        }
-    }
-
     private static void DrawReplayMarkerBadges(
         ImDrawListPtr drawList,
         IReadOnlyList<ReplayMarkerSnapshot> markers,
@@ -8772,7 +8475,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         DrawReplayMarkerBadgeColumn(
             drawList,
-            markers.Select(marker => new ReplayMarkerBadgeDrawEntry(marker, 1.0f, false)),
+            markers.Select(marker => new ReplayMarkerBadgeDrawEntry(marker, 1.0f)),
             actorScreenPosition,
             actorRadius,
             canvasStart,
@@ -8815,18 +8518,6 @@ public sealed class RecapWindow : Window, IDisposable
             Math.Clamp(actorScreenPosition.X - (rowWidth * 0.5f), minX, maxX),
             Math.Clamp(actorScreenPosition.Y - actorRadius - 10.0f - rowHeight, minY, maxY));
 
-        var resolvedEntry = entries.FirstOrDefault(entry => entry.Entry.Resolved);
-        if (resolvedEntry.Entry.Marker is not null)
-        {
-            var alpha = Math.Clamp(resolvedEntry.Entry.Alpha, 0.0f, 1.0f);
-            drawList.AddCircle(
-                actorScreenPosition,
-                actorRadius + 9.0f,
-                ImGui.GetColorU32(resolvedEntry.Display.Color with { W = 0.22f * alpha }),
-                24,
-                2.0f);
-        }
-
         for (var index = 0; index < entries.Count; index++)
         {
             var entry = entries[index];
@@ -8863,10 +8554,6 @@ public sealed class RecapWindow : Window, IDisposable
         var half = size * 0.5f;
 
         drawList.AddCircleFilled(center, half + 2.0f, ImGui.GetColorU32(shellColor), 16);
-        if (entry.Resolved)
-        {
-            drawList.AddCircle(center, half + 3.0f, ImGui.GetColorU32(color with { W = 0.30f * alpha }), 16, 1.4f);
-        }
 
         switch (shape)
         {
@@ -8945,9 +8632,7 @@ public sealed class RecapWindow : Window, IDisposable
                 entry.Entry,
                 entry.Display,
                 badgeStart,
-                entry.Size,
-                actorScreenPosition,
-                actorRadius);
+                entry.Size);
             currentY -= badgeGap;
         }
     }
@@ -8957,21 +8642,13 @@ public sealed class RecapWindow : Window, IDisposable
         ReplayMarkerBadgeDrawEntry entry,
         ReplayMarkerBadgeDisplay display,
         Vector2 badgeStart,
-        Vector2 badgeSize,
-        Vector2 actorScreenPosition,
-        float actorRadius)
+        Vector2 badgeSize)
     {
         var alpha = Math.Clamp(entry.Alpha, 0.0f, 1.0f);
         var badgeEnd = badgeStart + badgeSize;
         var borderColor = display.Color with { W = display.Color.W * alpha };
-        if (entry.Resolved)
-        {
-            drawList.AddCircle(actorScreenPosition, actorRadius + 10.0f, ImGui.GetColorU32(display.Color with { W = 0.24f * alpha }), 28, 2.4f);
-            drawList.AddRect(badgeStart - new Vector2(3.0f), badgeEnd + new Vector2(3.0f), ImGui.GetColorU32(display.Color with { W = 0.20f * alpha }), 5.0f, ImDrawFlags.None, 3.0f);
-        }
-
         drawList.AddRectFilled(badgeStart, badgeEnd, ImGui.GetColorU32(ModernPanelColor with { W = 0.92f * alpha }), 4.0f);
-        drawList.AddRect(badgeStart, badgeEnd, ImGui.GetColorU32(borderColor), 4.0f, ImDrawFlags.None, entry.Resolved ? 1.8f : 1.2f);
+        drawList.AddRect(badgeStart, badgeEnd, ImGui.GetColorU32(borderColor), 4.0f, ImDrawFlags.None, 1.2f);
         drawList.AddText(badgeStart + new Vector2(5.0f, 2.0f), ImGui.GetColorU32(borderColor), display.Text);
     }
 
@@ -11803,11 +11480,11 @@ public sealed class RecapWindow : Window, IDisposable
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         ImGui.SameLine();
-        ImGui.TextColored(LeadUpGoldColor, "[Recap Link]");
+        ImGui.TextColored(LeadUpGoldColor, "[Death Link]");
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         ImGui.SameLine();
-        ImGui.TextUnformatted("when deaths are captured");
+        ImGui.TextUnformatted("locally on captured death(s).");
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         if (postDeathRecapLinksLabelClicked)
@@ -11823,7 +11500,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         if (postDeathRecapLinksHovered)
         {
-            SetThemedTooltip("Opt-in. When enabled, Better Deaths posts a clickable recap link to chat after captured deaths. Manual chat posts still include their own recap link.");
+            DrawPostDeathRecapLinksTooltip();
         }
 
         var redactPlayerNames = configuration.RedactPlayerNames;
@@ -12771,6 +12448,18 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, TooltipWindowPadding);
         ImGui.SetTooltip(text);
         ImGui.PopStyleVar();
+    }
+
+    private static void DrawPostDeathRecapLinksTooltip()
+    {
+        BeginThemedTooltip();
+        ImGui.TextUnformatted("Posts a clickable death link locally in /echo after captured deaths.");
+        ImGui.TextUnformatted("Party members who share death information will still show a ");
+        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.TextColored(LeadUpGoldColor, "[ Pull Link ]");
+        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.TextUnformatted(" regardless of this toggle.");
+        EndThemedTooltip();
     }
 
     private static void BeginThemedTooltip()
@@ -14277,6 +13966,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.223");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Removed replay resolve fade effects so mechanics transition more cleanly.");
+        DrawWrappedBullet("Cleaned up death-chat HP wording and Death Link / Pull Link labels.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.222");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Reduced replay label clutter with compact mechanic indicators and hover/focus details.");
@@ -14581,7 +14277,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Recap popup opacity can now be adjusted in Customize.");
         DrawWrappedBullet("Health and hit tooltips are shorter.");
         DrawWrappedBullet("Chat recap messages send faster, with the link posted last.");
-        DrawWrappedBullet("The recap link setting now shows Post [Recap Link] when deaths are captured.");
+        DrawWrappedBullet("The recap link setting now shows Post [Death Link] locally on captured death(s).");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.110");
@@ -14793,7 +14489,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Long centered table text now wraps into centered lines instead of falling back to left-aligned wrapping.");
         DrawWrappedBullet("Notes feature bullets now wrap when the window is narrowed.");
         DrawWrappedBullet("Changelog bullets now wrap when the window is narrowed.");
-        DrawWrappedBullet("Detected shared recap links now show Pull link detected with a compact Open Recap link.");
+        DrawWrappedBullet("Detected shared recap links now show the player name with a compact Pull Link.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.73");

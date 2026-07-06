@@ -51,6 +51,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
     private const string SharedRecapPrefix = "Recap:";
+    private const string DeathRecapLinkLabel = "[ Death Link ]";
+    private const string PullRecapLinkLabel = "[ Pull Link ]";
     private const float SharedRecapMatchWindowSeconds = 5.0f;
     private const int RecentStatusHistorySeconds = 20;
     private const float StatusDeathRemainingWindowSeconds = 5.0f;
@@ -217,19 +219,19 @@ public sealed partial class Plugin : IDalamudPlugin
         PropertyNameCaseInsensitive = true,
     };
     private static readonly Regex SharedDamageDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\.(?:\s+HP before hit:\s+.+?\.)?(?:\s+Overkill:\s+(?:[\d,]+|-)\.)?$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\.(?:\s+(?:HP before hit|HP):\s+.+?\.)?(?:\s+Overkill:\s+(?:[\d,]+|-)\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedKnownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+from\s+(?<action>.+?)\s+by\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+from\s+(?<action>.+?)\s+by\s+(?<source>.+?)\.\s+(?:HP before hit|HP):\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedMultiHitDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\s+by\s+(?<hits>\d+)\s+hits\s+from\s+(?<source>.+?)\.\s+HP before hit:\s+.+\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<amount>[\d,]+)\s+damage\s+by\s+(?<hits>\d+)\s+hits\s+from\s+(?<source>.+?)\.\s+(?:HP before hit|HP):\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedStatusDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+HP before KO:\s+.+\.$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?<action>.+?)\s+from\s+(?<source>.+?)\.\s+(?:HP before KO|HP):\s+.+\.$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SharedUnknownDeathPostRegex = new(
-        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:Walled|(?:likely walled/)?non-hit KO)\.(?:\s+HP before KO:\s+.+\.)?$",
+        @"^(?:\[Better Deaths\]\s*)?Recap:\s*(?<timer>\d{2,}:\d{2})\s+(?<name>.+?)\s+\((?<job>[^)]*)\):\s+(?:Walled|(?:likely walled/)?non-hit KO)\.(?:\s+(?:HP before KO|HP):\s+.+\.)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly AddonEvent[] AddonInspectorLifecycleEvents =
     [
@@ -1933,7 +1935,7 @@ public sealed partial class Plugin : IDalamudPlugin
             RememberOwnSharedDeathPost(death);
             var hpSuffix = selection.Snapshot is null
                 ? string.Empty
-                : $" HP before KO: {FormatDeathChatHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
+                : $" HP: {FormatDeathChatHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
             var koLabel = death.EnvironmentalAssessment is { EnvironmentSourceDeath: true }
                 ? "Walled"
                 : "non-hit KO";
@@ -10272,9 +10274,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var hpText = FormatDeathChatHp(snapshot, cause);
         var hpSuffix = hpText is null
             ? string.Empty
-            : cause.Kind == DeathEventKind.Status
-                ? $" HP before KO: {hpText}."
-                : $" HP before hit: {hpText}.";
+            : $" HP: {hpText}.";
         var sourceName = FormatKnownPlayerName(cause.SourceName);
         return cause.Kind == DeathEventKind.Status
             ? $"{FormatActionNameForDisplay(cause)} from {sourceName}.{hpSuffix}"
@@ -10286,7 +10286,7 @@ public sealed partial class Plugin : IDalamudPlugin
         var hpDisplay = GetDeathChatHpDisplay(snapshot, damageEvents[0]);
         var hpSuffix = hpDisplay.Text is null
             ? string.Empty
-            : $" HP before hit: {hpDisplay.Text}.";
+            : $" HP: {hpDisplay.Text}.";
         var totalDamage = damageEvents.Aggregate(0UL, (sum, cause) => sum + cause.Amount);
         return $"{totalDamage:N0} damage.{hpSuffix} Overkill: {FormatDeathChatOverkill(totalDamage, hpDisplay.HpBeforeHit)}.";
     }
@@ -10780,14 +10780,14 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         QueueDeathRecapLinkMessage(
             death,
-            "Pull link detected",
-            "[ Open Recap ]",
+            FormatPlayerDisplayName(death),
+            PullRecapLinkLabel,
             DateTime.UtcNow.AddMilliseconds(DetectedSharedRecapLinkDelayMs));
     }
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel)
     {
-        PrintDeathRecapLink(death, batchLabel, "[ Open Recap ]");
+        PrintDeathRecapLink(death, batchLabel, DeathRecapLinkLabel);
     }
 
     private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel, string label)
@@ -10800,7 +10800,7 @@ public sealed partial class Plugin : IDalamudPlugin
         QueueDeathRecapLinkMessage(
             death,
             FormatPlayerDisplayName(death),
-            "[ Open Recap ]",
+            PullRecapLinkLabel,
             DateTime.MinValue);
     }
 
