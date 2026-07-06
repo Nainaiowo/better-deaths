@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.223";
+    private const string CurrentChangelogVersion = "0.1.0.224";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -11480,11 +11480,11 @@ public sealed class RecapWindow : Window, IDisposable
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         ImGui.SameLine();
-        ImGui.TextColored(LeadUpGoldColor, "[Death Link]");
+        ImGui.TextColored(LeadUpGoldColor, "[ Death Link ]");
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         ImGui.SameLine();
-        ImGui.TextUnformatted("locally on captured death(s).");
+        ImGui.TextUnformatted("as a system message on captured death(s).");
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         if (postDeathRecapLinksLabelClicked)
@@ -12453,7 +12453,11 @@ public sealed class RecapWindow : Window, IDisposable
     private static void DrawPostDeathRecapLinksTooltip()
     {
         BeginThemedTooltip();
-        ImGui.TextUnformatted("Posts a clickable death link locally in /echo after captured deaths.");
+        ImGui.TextUnformatted("Posts a clickable ");
+        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.TextColored(LeadUpGoldColor, "[ Death Link ]");
+        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.TextUnformatted(" as a system message after captured deaths.");
         ImGui.TextUnformatted("Party members who share death information will still show a ");
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.TextColored(LeadUpGoldColor, "[ Pull Link ]");
@@ -13966,6 +13970,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.224");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added System Message as a chat posting option.");
+        DrawWrappedBullet("Recap links now post as system messages instead of echo messages.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.223");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Removed replay resolve fade effects so mechanics transition more cleanly.");
@@ -14277,7 +14288,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Recap popup opacity can now be adjusted in Customize.");
         DrawWrappedBullet("Health and hit tooltips are shorter.");
         DrawWrappedBullet("Chat recap messages send faster, with the link posted last.");
-        DrawWrappedBullet("The recap link setting now shows Post [Death Link] locally on captured death(s).");
+        DrawWrappedBullet("The recap link setting now shows Post [ Death Link ] as a system message on captured death(s).");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.110");

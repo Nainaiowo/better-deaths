@@ -21,6 +21,7 @@ public enum DeathChatChannel
     CrossWorldLinkshell6,
     CrossWorldLinkshell7,
     CrossWorldLinkshell8,
+    SystemMessage,
 }
 
 public sealed record ChatChannelOption(DeathChatChannel Channel, string Label, string Command);

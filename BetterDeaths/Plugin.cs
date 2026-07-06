@@ -245,6 +245,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public static readonly IReadOnlyList<ChatChannelOption> ChatChannelOptions =
     [
+        new(DeathChatChannel.SystemMessage, "System Message", string.Empty),
         new(DeathChatChannel.Say, "Say", "/s"),
         new(DeathChatChannel.Party, "Party", "/p"),
         new(DeathChatChannel.Alliance, "Alliance", "/alliance"),
@@ -2764,7 +2765,7 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
         ChatGui.Print(new XivChatEntry
         {
-            Type = XivChatType.Echo,
+            Type = XivChatType.SystemMessage,
             Message = CreateGreenText("[Better Deaths] update available. Open the Dalamud plugin installer to update."),
         });
         return true;
@@ -10824,7 +10825,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         return new XivChatEntry
         {
-            Type = XivChatType.Echo,
+            Type = XivChatType.SystemMessage,
             Message = message,
         };
     }
@@ -10834,7 +10835,10 @@ public sealed partial class Plugin : IDalamudPlugin
         var effectiveChannel = GetChatChannelOption(channel).Channel;
         foreach (var line in SplitChatMessage(SanitizeChatText(message)))
         {
-            queuedChatMessages.Enqueue(QueuedChatMessage.Outgoing(effectiveChannel, line));
+            queuedChatMessages.Enqueue(
+                effectiveChannel == DeathChatChannel.SystemMessage
+                    ? QueuedChatMessage.Local(BuildSystemMessageEntry(line), DateTime.MinValue)
+                    : QueuedChatMessage.Outgoing(effectiveChannel, line));
         }
     }
 
@@ -10866,6 +10870,12 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static unsafe void SendChat(DeathChatChannel channel, string message)
     {
+        if (channel == DeathChatChannel.SystemMessage)
+        {
+            ChatGui.Print(BuildSystemMessageEntry(message));
+            return;
+        }
+
         try
         {
             var uiModule = UIModule.Instance();
@@ -10889,8 +10899,20 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private static ChatChannelOption GetChatChannelOption(DeathChatChannel channel)
     {
-        return ChatChannelOptions.FirstOrDefault(option => option.Channel == channel) ??
+        var normalizedChannel = channel == DeathChatChannel.Echo
+            ? DeathChatChannel.SystemMessage
+            : channel;
+        return ChatChannelOptions.FirstOrDefault(option => option.Channel == normalizedChannel) ??
             ChatChannelOptions.First(option => option.Channel == DeathChatChannel.Party);
+    }
+
+    private static XivChatEntry BuildSystemMessageEntry(string message)
+    {
+        return new XivChatEntry
+        {
+            Type = XivChatType.SystemMessage,
+            Message = new SeString(new TextPayload(message)),
+        };
     }
 
     private static IEnumerable<string> SplitChatMessage(string message)
