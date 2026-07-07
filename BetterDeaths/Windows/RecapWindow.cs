@@ -6344,6 +6344,43 @@ public sealed class RecapWindow : Window, IDisposable
             idSuffix,
             replayModule,
             showTrails);
+
+        DrawDeathReplayWorldMarkerOpacitySlider(idSuffix);
+    }
+
+    private void DrawDeathReplayWorldMarkerOpacitySlider(string idSuffix)
+    {
+        ImGui.Spacing();
+        const string label = "World marker opacity";
+        var style = ImGui.GetStyle();
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var labelWidth = ImGui.CalcTextSize(label).X;
+        var canFitInline = availableWidth - labelWidth - style.ItemInnerSpacing.X >= 160.0f;
+
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(label);
+        if (canFitInline)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(MathF.Min(360.0f, availableWidth - labelWidth - style.ItemInnerSpacing.X));
+        }
+        else
+        {
+            ImGui.SetNextItemWidth(MathF.Max(1.0f, availableWidth));
+        }
+
+        var replayWorldMarkerOpacity = GetReplayWorldMarkerOpacity();
+        if (ImGui.SliderFloat(
+            $"##DeathReplayWorldMarkerOpacity{idSuffix}",
+            ref replayWorldMarkerOpacity,
+            Plugin.MinReplayWorldMarkerOpacity,
+            Plugin.MaxReplayWorldMarkerOpacity,
+            "%.2f"))
+        {
+            plugin.SetReplayWorldMarkerOpacity(replayWorldMarkerOpacity);
+        }
+
+        DrawSettingsTooltip("Controls how visible A/B/C/D and 1/2/3/4 waymarks are inside Death Replay.");
     }
 
     private ReplayStaticDisplayCache GetReplayStaticDisplayCache(
@@ -11699,9 +11736,6 @@ public sealed class RecapWindow : Window, IDisposable
         DrawSettingsGroupHeader("Capture", "Who gets recorded and how timestamps display.");
         DrawCaptureSettingsGroup();
 
-        DrawSettingsGroupHeader("Replay", "Death Replay display controls.");
-        DrawReplaySettingsGroup();
-
         DrawSettingsGroupHeader("Appearance", "Window, icon, and theme styling.");
         DrawAppearanceSettingsGroup();
 
@@ -11779,20 +11813,38 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawDeathPopupSettingsGroup()
     {
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
+        var testButtonWidth = GetThemedActionButtonWidth("Test");
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var toggleWidth = ImGui.CalcTextSize("Show recap popup when you die").X +
+            ImGui.GetFrameHeight() +
+            (ImGui.GetStyle().ItemInnerSpacing.X * 2.0f);
+        var canFitTestInline = availableWidth - toggleWidth - ImGui.GetStyle().ItemSpacing.X >= testButtonWidth;
+
         if (DrawThemedCheckbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
             plugin.SetShowDeathRecapPopup(showDeathRecapPopup);
         }
 
-        DrawSettingsTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
-
-        var testDeathRecapPopup = plugin.IsDeathRecapPopupTestActive;
-        if (DrawThemedCheckbox("Test recap popup", ref testDeathRecapPopup))
+        var popupSettingHovered = ImGui.IsItemHovered();
+        if (canFitTestInline)
         {
-            plugin.SetDeathRecapPopupTestActive(testDeathRecapPopup);
+            ImGui.SameLine();
         }
 
-        DrawSettingsTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
+        if (DrawThemedActionButton("Test", "TestDeathRecapPopup", testButtonWidth))
+        {
+            plugin.SetDeathRecapPopupTestActive(true);
+        }
+
+        var testHovered = ImGui.IsItemHovered();
+        if (popupSettingHovered)
+        {
+            SetThemedTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
+        }
+        else if (testHovered)
+        {
+            SetThemedTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
+        }
     }
 
     private void DrawPrivacyChatSettingsGroup()
@@ -11883,22 +11935,6 @@ public sealed class RecapWindow : Window, IDisposable
             DrawClockDisplaySetting();
             ImGui.EndTable();
         }
-    }
-
-    private void DrawReplaySettingsGroup()
-    {
-        var replayWorldMarkerOpacity = GetReplayWorldMarkerOpacity();
-        if (ImGui.SliderFloat(
-            "World marker opacity",
-            ref replayWorldMarkerOpacity,
-            Plugin.MinReplayWorldMarkerOpacity,
-            Plugin.MaxReplayWorldMarkerOpacity,
-            "%.2f"))
-        {
-            plugin.SetReplayWorldMarkerOpacity(replayWorldMarkerOpacity);
-        }
-
-        DrawSettingsTooltip("Controls how visible A/B/C/D and 1/2/3/4 waymarks are inside Death Replay.");
     }
 
     private void DrawAppearanceSettingsGroup()
