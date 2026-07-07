@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.224";
+    private const string CurrentChangelogVersion = "0.1.0.225";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -137,6 +137,8 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayZoomOverlayPadding = 10.0f;
     private const float ReplayZoomOverlayHeight = 30.0f;
     private const float ReplayWheelScrollSinkHeight = 1.0f;
+    private const float ReplayWorldMarkerRadius = 9.0f;
+    private const float ReplayWorldMarkerSquareHalfSize = 8.0f;
     private const float LeadUpTableRightPadding = 10.0f;
     private const float TimelineLeadUpDropdownMinHeight = 64.0f;
     private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
@@ -259,7 +261,11 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMechanicSnapshot> MechanicReference,
         int MechanicCount,
         long FirstMechanicTicks,
-        long LastMechanicTicks);
+        long LastMechanicTicks,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> WorldMarkerReference,
+        int WorldMarkerCount,
+        long FirstWorldMarkerTicks,
+        long LastWorldMarkerTicks);
 
     private readonly record struct ReplayStaticDisplayCacheKey(
         long DeathSeenAtTicks,
@@ -287,7 +293,8 @@ public sealed class RecapWindow : Window, IDisposable
         ReplayFrameDisplayCacheKey Key,
         IReadOnlyList<ReplayPositionSnapshot> ActorStates,
         IReadOnlyList<ReplayMarkerSnapshot> MarkerStates,
-        IReadOnlyList<ReplayMechanicSnapshot> MechanicStates);
+        IReadOnlyList<ReplayMechanicSnapshot> MechanicStates,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> WorldMarkerStates);
 
     private readonly record struct StackedReviewLayout(
         float PullBrowserHeight,
@@ -4991,10 +4998,113 @@ public sealed class RecapWindow : Window, IDisposable
         return buttonMax;
     }
 
+    private void DrawDeathRecapLinkChannelSetting()
+    {
+        ImGui.Indent(ImGui.GetFrameHeightWithSpacing());
+        const string label = "Death Link channel";
+        var style = ImGui.GetStyle();
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var labelWidth = ImGui.CalcTextSize(label).X;
+        var canFitInline = availableWidth - labelWidth - style.ItemInnerSpacing.X >= 120.0f;
+
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(label);
+        if (canFitInline)
+        {
+            ImGui.SameLine();
+        }
+
+        DrawDeathRecapLinkChannelCombo("PostDeathRecapLink", 180.0f);
+        ImGui.Unindent(ImGui.GetFrameHeightWithSpacing());
+
+        DrawSettingsTooltip("Local-only. This does not post to party, say, linkshells, or other public chat.");
+    }
+
+    private Vector2 DrawDeathRecapLinkChannelCombo(string id, float width = 180.0f)
+    {
+        var effectiveChannel = Plugin.GetEffectiveDeathRecapLinkChannel(configuration.DeathRecapLinkChannel);
+        var buttonWidth = MathF.Min(width, MathF.Max(92.0f, ImGui.GetContentRegionAvail().X));
+        var popupId = $"DeathRecapLinkChannelPopup{id}";
+        var popupWidth = GetDeathRecapLinkChannelPopupWidth(buttonWidth);
+        var buttonLabel = Plugin.GetDeathRecapLinkChannelLabel(effectiveChannel);
+
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 8.0f);
+        ImGui.PushStyleColor(ImGuiCol.Button, GetChatChannelSelectorColor());
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, GetChatChannelSelectorHoveredColor());
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, GetChatChannelSelectorActiveColor());
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+        if (ImGui.Button($"{buttonLabel}##DeathRecapLinkChannel{id}", new Vector2(buttonWidth, ImGui.GetFrameHeight())))
+        {
+            ImGui.OpenPopup(popupId);
+        }
+
+        ImGui.PopStyleColor(4);
+        ImGui.PopStyleVar();
+
+        var buttonMin = ImGui.GetItemRectMin();
+        var buttonMax = ImGui.GetItemRectMax();
+        ImGui.GetWindowDrawList().AddRect(
+            buttonMin,
+            buttonMax,
+            ImGui.GetColorU32(GetChatChannelSelectorBorderColor()),
+            8.0f,
+            ImDrawFlags.None,
+            1.0f);
+        ImGui.SetNextWindowPos(new Vector2(buttonMin.X, buttonMax.Y + 2.0f), ImGuiCond.Appearing);
+
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(6.0f, 6.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4.0f, 4.0f));
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, GetChatChannelPopupColor());
+        ImGui.PushStyleColor(ImGuiCol.Border, GetChatChannelSelectorBorderColor());
+        ImGui.PushStyleColor(ImGuiCol.Header, ModernHeaderColor);
+        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ModernHeaderHoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.HeaderActive, ModernHeaderActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
+
+        if (!ImGui.BeginPopup(popupId))
+        {
+            ImGui.PopStyleColor(6);
+            ImGui.PopStyleVar(2);
+            return buttonMax;
+        }
+
+        foreach (var option in Plugin.DeathRecapLinkChannelOptions)
+        {
+            var selected = effectiveChannel == option.Channel;
+            var label = selected
+                ? $"> {option.Label}"
+                : $"  {option.Label}";
+            if (ImGui.Selectable($"{label}##DeathRecapLinkChannel{id}{option.Channel}", selected, ImGuiSelectableFlags.None, new Vector2(popupWidth, 0.0f)))
+            {
+                plugin.SetDeathRecapLinkChannel(option.Channel);
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndPopup();
+        ImGui.PopStyleColor(6);
+        ImGui.PopStyleVar(2);
+        return buttonMax;
+    }
+
     private static float GetDeathChatChannelPopupWidth(float minimumWidth)
     {
         var style = ImGui.GetStyle();
         var optionWidth = Plugin.ChatChannelOptions
+            .Select(option => ImGui.CalcTextSize($"> {option.Label}").X)
+            .DefaultIfEmpty(0.0f)
+            .Max();
+        return MathF.Max(minimumWidth, optionWidth + (style.FramePadding.X * 2.0f) + 8.0f);
+    }
+
+    private static float GetDeathRecapLinkChannelPopupWidth(float minimumWidth)
+    {
+        var style = ImGui.GetStyle();
+        var optionWidth = Plugin.DeathRecapLinkChannelOptions
             .Select(option => ImGui.CalcTextSize($"> {option.Label}").X)
             .DefaultIfEmpty(0.0f)
             .Max();
@@ -6187,7 +6297,7 @@ public sealed class RecapWindow : Window, IDisposable
         var replayDisplay = GetReplayStaticDisplayCache(idSuffix, death, resolved.TerritoryId, replayModule, showEarlierMarkers);
         var replayMechanics = replayDisplay.Mechanics;
 
-        if (positions.Count == 0 && replayMechanics.Count == 0)
+        if (positions.Count == 0 && replayMechanics.Count == 0 && death.ReplayWorldMarkers.Count == 0)
         {
             DrawMutedWrappedText("No replay position data was captured for this death.");
             return;
@@ -6222,6 +6332,8 @@ public sealed class RecapWindow : Window, IDisposable
             replayFrame.ActorStates,
             replayFrame.MarkerStates,
             replayFrame.MechanicStates,
+            death.ReplayWorldMarkers,
+            replayFrame.WorldMarkerStates,
             selectedAtUtc,
             idSuffix,
             replayModule,
@@ -6245,7 +6357,7 @@ public sealed class RecapWindow : Window, IDisposable
         var replayStartAtUtc = death.SeenAtUtc.AddSeconds(-DeathReplayLeadUpSeconds);
         var positionTracks = BuildReplayPositionTracks(death.ReplayPositions);
         var mechanics = GetReplayMechanicsForDisplay(death, replayModule, replayStartAtUtc, showEarlierMarkers);
-        GetReplayTimeBounds(death, death.ReplayPositions, mechanics, out var minOffset, out var maxOffset);
+        GetReplayTimeBounds(death, death.ReplayPositions, mechanics, death.ReplayWorldMarkers, out var minOffset, out var maxOffset);
         var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, positionTracks, mechanics, minOffset, maxOffset);
         replayStaticDisplayCacheByDeathId[idSuffix] = updated;
         replayFrameDisplayCacheByDeathId.Remove(idSuffix);
@@ -6270,7 +6382,8 @@ public sealed class RecapWindow : Window, IDisposable
         var actorStates = SelectReplayActorStates(replayDisplay.PositionTracks, selectedAtUtc);
         var markerStates = SelectReplayMarkerStates(death.ReplayMarkers, positions, selectedAtUtc, replayDisplay.ReplayStartAtUtc, showEarlierMarkers, replayModule);
         var mechanicStates = SelectReplayMechanicStates(replayDisplay.Mechanics, death.ReplayMarkers, positions, actorStates, selectedAtUtc, replayModule);
-        var updated = new ReplayFrameDisplayCache(key, actorStates, markerStates, mechanicStates);
+        var worldMarkerStates = SelectReplayWorldMarkerStates(death.ReplayWorldMarkers, selectedAtUtc);
+        var updated = new ReplayFrameDisplayCache(key, actorStates, markerStates, mechanicStates, worldMarkerStates);
         replayFrameDisplayCacheByDeathId[idSuffix] = updated;
         return updated;
     }
@@ -6318,6 +6431,7 @@ public sealed class RecapWindow : Window, IDisposable
         GetReplaySeenAtRange(death.ReplayPositions, out var firstPositionTicks, out var lastPositionTicks);
         GetReplaySeenAtRange(death.ReplayMarkers, out var firstMarkerTicks, out var lastMarkerTicks);
         GetReplaySeenAtRange(death.ReplayMechanics, out var firstMechanicTicks, out var lastMechanicTicks);
+        GetReplaySeenAtRange(death.ReplayWorldMarkers, out var firstWorldMarkerTicks, out var lastWorldMarkerTicks);
         return new ReplayDisplayDataSignature(
             death.ReplayPositions,
             death.ReplayPositions.Count,
@@ -6330,7 +6444,11 @@ public sealed class RecapWindow : Window, IDisposable
             death.ReplayMechanics,
             death.ReplayMechanics.Count,
             firstMechanicTicks,
-            lastMechanicTicks);
+            lastMechanicTicks,
+            death.ReplayWorldMarkers,
+            death.ReplayWorldMarkers.Count,
+            firstWorldMarkerTicks,
+            lastWorldMarkerTicks);
     }
 
     private static void GetReplaySeenAtRange(IReadOnlyList<ReplayPositionSnapshot> snapshots, out long firstTicks, out long lastTicks)
@@ -6360,6 +6478,19 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private static void GetReplaySeenAtRange(IReadOnlyList<ReplayMechanicSnapshot> snapshots, out long firstTicks, out long lastTicks)
+    {
+        if (snapshots.Count == 0)
+        {
+            firstTicks = 0L;
+            lastTicks = 0L;
+            return;
+        }
+
+        firstTicks = snapshots[0].SeenAtUtc.Ticks;
+        lastTicks = snapshots[^1].SeenAtUtc.Ticks;
+    }
+
+    private static void GetReplaySeenAtRange(IReadOnlyList<ReplayWorldMarkerSnapshot> snapshots, out long firstTicks, out long lastTicks)
     {
         if (snapshots.Count == 0)
         {
@@ -6556,6 +6687,7 @@ public sealed class RecapWindow : Window, IDisposable
         PartyDeathRecord death,
         IReadOnlyList<ReplayPositionSnapshot> positions,
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
         out float minOffset,
         out float maxOffset)
     {
@@ -6584,6 +6716,12 @@ public sealed class RecapWindow : Window, IDisposable
             var startOffset = (float)(mechanic.SeenAtUtc - death.SeenAtUtc).TotalSeconds;
             IncludeReplayTimeOffset(startOffset, ref hasOffset, ref minOffset, ref maxOffset);
             IncludeReplayTimeOffset(startOffset + MathF.Max(0.0f, mechanic.DurationSeconds), ref hasOffset, ref minOffset, ref maxOffset);
+        }
+
+        foreach (var marker in worldMarkers)
+        {
+            var markerOffset = (float)(marker.SeenAtUtc - death.SeenAtUtc).TotalSeconds;
+            IncludeReplayTimeOffset(markerOffset, ref hasOffset, ref minOffset, ref maxOffset);
         }
 
         if (!hasOffset)
@@ -6831,6 +6969,33 @@ public sealed class RecapWindow : Window, IDisposable
             .OrderBy(position => position.ActorKind)
             .ThenBy(position => position.PartyIndex)
             .ThenBy(position => position.ActorName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static IReadOnlyList<ReplayWorldMarkerSnapshot> SelectReplayWorldMarkerStates(
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
+        DateTime selectedAtUtc)
+    {
+        if (worldMarkers.Count == 0)
+        {
+            return [];
+        }
+
+        var latestByMarker = new Dictionary<int, ReplayWorldMarkerSnapshot>();
+        foreach (var marker in worldMarkers.OrderBy(marker => marker.SeenAtUtc).ThenBy(marker => marker.MarkerIndex))
+        {
+            if (marker.SeenAtUtc > selectedAtUtc)
+            {
+                break;
+            }
+
+            latestByMarker[marker.MarkerIndex] = marker;
+        }
+
+        return latestByMarker.Values
+            .Where(marker => marker.Active)
+            .Where(marker => float.IsFinite(marker.X) && float.IsFinite(marker.Z))
+            .OrderBy(marker => marker.MarkerIndex)
             .ToList();
     }
 
@@ -7435,6 +7600,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
         IReadOnlyList<ReplayMarkerSnapshot> markerStates,
         IReadOnlyList<ReplayMechanicSnapshot> mechanicStates,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> allWorldMarkers,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkerStates,
         DateTime selectedAtUtc,
         string idSuffix,
         IReplayEncounterModule replayModule,
@@ -7481,7 +7648,7 @@ public sealed class RecapWindow : Window, IDisposable
         var boundsMechanics = allPositions.Count == 0
             ? allMechanics
             : mechanicStates;
-        if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, out var minX, out var maxX, out var minZ, out var maxZ))
+        if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, allWorldMarkers, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
             AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
@@ -7495,6 +7662,7 @@ public sealed class RecapWindow : Window, IDisposable
             : null;
         ImGui.PushClipRect(canvasStart, canvasEnd, true);
         DrawReplayGrid(drawList, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        var worldMarkerScreenRegions = DrawReplayWorldMarkers(drawList, worldMarkerStates, GetReplayWorldMarkerOpacity(), canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         var markerMechanicSourceKeysWithVisibleBadges = GetReplayMarkerMechanicSourceKeysWithVisibleBadges(markerStates, actorStates);
         var mechanicScreenRegions = DrawReplayMechanics(drawList, mechanicStates, markerMechanicSourceKeysWithVisibleBadges, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         if (showTrails)
@@ -7553,6 +7721,17 @@ public sealed class RecapWindow : Window, IDisposable
                 if (hoveredMechanic.Mechanic is not null)
                 {
                     canvasTooltip = FormatReplayMechanicTooltip(hoveredMechanic.Mechanic, selectedAtUtc);
+                }
+                else
+                {
+                    var hoveredWorldMarker = worldMarkerScreenRegions
+                        .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius)
+                        .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
+                        .FirstOrDefault();
+                    if (hoveredWorldMarker.Marker is not null)
+                    {
+                        canvasTooltip = FormatReplayWorldMarkerTooltip(hoveredWorldMarker.Marker);
+                    }
                 }
             }
         }
@@ -7781,6 +7960,7 @@ public sealed class RecapWindow : Window, IDisposable
         IReplayEncounterModule replayModule,
         IReadOnlyList<ReplayPositionSnapshot> positions,
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
         out float minX,
         out float maxX,
         out float minZ,
@@ -7792,7 +7972,7 @@ public sealed class RecapWindow : Window, IDisposable
             return true;
         }
 
-        return TryGetInferredReplayBounds(positions, mechanics, out minX, out maxX, out minZ, out maxZ);
+        return TryGetInferredReplayBounds(positions, mechanics, worldMarkers, out minX, out maxX, out minZ, out maxZ);
     }
 
     private static bool TryGetKnownReplayArenaBounds(
@@ -7821,6 +8001,7 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool TryGetInferredReplayBounds(
         IReadOnlyList<ReplayPositionSnapshot> positions,
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
         out float minX,
         out float maxX,
         out float minZ,
@@ -7847,6 +8028,18 @@ public sealed class RecapWindow : Window, IDisposable
 
             var radius = GetReplayMechanicBoundsRadius(mechanic);
             IncludeReplayBounds(mechanic.X - radius, mechanic.X + radius, mechanic.Z - radius, mechanic.Z + radius, ref hasBounds, ref minX, ref maxX, ref minZ, ref maxZ);
+        }
+
+        foreach (var marker in worldMarkers)
+        {
+            if (!marker.Active ||
+                !float.IsFinite(marker.X) ||
+                !float.IsFinite(marker.Z))
+            {
+                continue;
+            }
+
+            IncludeReplayBounds(marker.X, marker.X, marker.Z, marker.Z, ref hasBounds, ref minX, ref maxX, ref minZ, ref maxZ);
         }
 
         if (!hasBounds)
@@ -7956,6 +8149,75 @@ public sealed class RecapWindow : Window, IDisposable
                 gridColor,
                 1.0f);
         }
+    }
+
+    private static IReadOnlyList<(ReplayWorldMarkerSnapshot Marker, Vector2 ScreenPosition, float Radius)> DrawReplayWorldMarkers(
+        ImDrawListPtr drawList,
+        IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
+        float opacity,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        float zoom,
+        Vector2 pan)
+    {
+        opacity = Math.Clamp(opacity, Plugin.MinReplayWorldMarkerOpacity, Plugin.MaxReplayWorldMarkerOpacity);
+        var screenRegions = new List<(ReplayWorldMarkerSnapshot Marker, Vector2 ScreenPosition, float Radius)>(worldMarkers.Count);
+        foreach (var marker in worldMarkers)
+        {
+            var center = ReplayWorldPointToScreen(marker.X, marker.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+            var color = GetReplayWorldMarkerColor(marker.MarkerIndex);
+            var fill = color with { W = (ActiveThemeUsesLightPanels() ? 0.24f : 0.16f) * opacity };
+            var border = color with { W = (ActiveThemeUsesLightPanels() ? 0.82f : 0.72f) * opacity };
+            var textColor = BlendColors(color, ModernTextColor, ActiveThemeUsesLightPanels() ? 0.28f : 0.16f) with { W = 0.96f * opacity };
+            var markerRadius = marker.MarkerIndex < 4
+                ? ReplayWorldMarkerRadius
+                : ReplayWorldMarkerSquareHalfSize * MathF.Sqrt(2.0f);
+            screenRegions.Add((marker, center, markerRadius + 2.0f));
+
+            if (marker.MarkerIndex < 4)
+            {
+                drawList.AddCircleFilled(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(fill), 24);
+                drawList.AddCircle(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(border), 24, 1.4f);
+            }
+            else
+            {
+                var start = center - new Vector2(ReplayWorldMarkerSquareHalfSize);
+                var end = center + new Vector2(ReplayWorldMarkerSquareHalfSize);
+                drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 2.0f);
+                drawList.AddRect(start, end, ImGui.GetColorU32(border), 2.0f, ImDrawFlags.None, 1.4f);
+            }
+
+            DrawReplayWorldMarkerLabel(drawList, marker.Label, center, textColor);
+        }
+
+        return screenRegions;
+    }
+
+    private static void DrawReplayWorldMarkerLabel(ImDrawListPtr drawList, string label, Vector2 center, Vector4 color)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        var textSize = ImGui.CalcTextSize(label);
+        drawList.AddText(center - (textSize * 0.5f), ImGui.GetColorU32(color), label);
+    }
+
+    private static Vector4 GetReplayWorldMarkerColor(int markerIndex)
+    {
+        return markerIndex switch
+        {
+            0 or 4 => new Vector4(0.43f, 0.43f, 1.0f, 1.0f),
+            1 or 5 => new Vector4(0.45f, 0.95f, 0.92f, 1.0f),
+            2 or 6 => new Vector4(1.0f, 0.86f, 0.38f, 1.0f),
+            3 or 7 => new Vector4(1.0f, 0.46f, 0.78f, 1.0f),
+            _ => ModernAccentColor,
+        };
     }
 
     private static IReadOnlyList<(ReplayMechanicSnapshot Mechanic, Vector2 ScreenPosition, float Radius)> DrawReplayMechanics(
@@ -8909,6 +9171,11 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return $"{label}\nSource: {mechanic.SourceName}\nShape: {mechanic.Shape}\nSample: {offset} from replay time\nRaw: {mechanic.RawEventKind} {mechanic.RawEventId} / {mechanic.RawState}";
+    }
+
+    private static string FormatReplayWorldMarkerTooltip(ReplayWorldMarkerSnapshot marker)
+    {
+        return $"Waymark {marker.Label}\nPosition: {marker.X:0.0}, {marker.Z:0.0}";
     }
 
     private static ReplayMarkerBadgeDisplay GetReplayMarkerBadgeDisplay(
@@ -11414,6 +11681,51 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawSettingsTab()
     {
+        DrawSettingsGroupHeader("General", "Window behavior and saved review defaults.", first: true);
+        DrawGeneralSettingsGroup();
+
+        DrawSettingsGroupHeader("Death Popup", "Quick local access after your own death.");
+        DrawDeathPopupSettingsGroup();
+
+        DrawSettingsGroupHeader("Privacy & Chat", "Local links, redaction, and shared chat cleanup.");
+        DrawPrivacyChatSettingsGroup();
+
+        DrawSettingsGroupHeader("Capture", "Who gets recorded and how timestamps display.");
+        DrawCaptureSettingsGroup();
+
+        DrawSettingsGroupHeader("Replay", "Death Replay display controls.");
+        DrawReplaySettingsGroup();
+
+        DrawSettingsGroupHeader("Appearance", "Window, icon, and theme styling.");
+        DrawAppearanceSettingsGroup();
+
+        DrawReviewPaneBottomPadding();
+    }
+
+    private static void DrawSettingsGroupHeader(string title, string subtitle, bool first = false)
+    {
+        if (!first)
+        {
+            ImGui.Spacing();
+            DrawSubtleSeparator();
+        }
+
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var titleWidth = ImGui.CalcTextSize(title).X;
+        var subtitleWidth = ImGui.CalcTextSize(subtitle).X;
+        var canFitInline = availableWidth - titleWidth - ImGui.GetStyle().ItemInnerSpacing.X >= subtitleWidth;
+
+        ImGui.TextUnformatted(title);
+        if (canFitInline)
+        {
+            ImGui.SameLine();
+        }
+
+        ImGui.TextDisabled(subtitle);
+    }
+
+    private void DrawGeneralSettingsGroup()
+    {
         var showWindow = configuration.ShowWindow;
         if (DrawThemedCheckbox("Show Better Deaths window on plugin load", ref showWindow))
         {
@@ -11434,19 +11746,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Removes the Example tab from the top navigation. This does not change real pull capture or saved review data.");
 
-        var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
-        if (ImGui.SliderFloat(
-            "Better Deaths window opacity",
-            ref mainWindowBackgroundOpacity,
-            Plugin.MainWindowMinBackgroundOpacity,
-            Plugin.MainWindowMaxBackgroundOpacity,
-            "%.2f"))
-        {
-            plugin.SetMainWindowBackgroundOpacity(mainWindowBackgroundOpacity);
-        }
-
-        DrawSettingsTooltip("Controls the main Better Deaths window background opacity. Lower values make it easier to see combat behind the review window.");
-
         var showScrollbars = configuration.ShowScrollbars;
         if (DrawThemedCheckbox("Enable scrollbars", ref showScrollbars))
         {
@@ -11455,6 +11754,24 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Mouse-wheel scrolling still works when this is off. This option is for users whose mouse scrolling is broken or malfunctioning.");
 
+        var maxPulls = pendingMaxRecordedPulls ?? configuration.MaxRecordedPulls;
+        if (ImGui.SliderInt("Recorded pulls kept", ref maxPulls, 1, 100))
+        {
+            pendingMaxRecordedPulls = maxPulls;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit() && pendingMaxRecordedPulls is { } committedMaxPulls)
+        {
+            maxPulls = committedMaxPulls;
+            pendingMaxRecordedPulls = null;
+            plugin.SetMaxRecordedPulls(maxPulls);
+        }
+
+        DrawSettingsTooltip("Controls how many completed pull recaps are saved locally and shown in Recorded pulls. Older pulls are removed after this limit.");
+    }
+
+    private void DrawDeathPopupSettingsGroup()
+    {
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
         if (DrawThemedCheckbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
@@ -11470,7 +11787,10 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
+    }
 
+    private void DrawPrivacyChatSettingsGroup()
+    {
         var postDeathRecapLinksOnDeath = configuration.PostDeathRecapLinksOnDeath;
         var postDeathRecapLinksChanged = DrawThemedCheckbox("##PostDeathRecapLinksOnDeath", ref postDeathRecapLinksOnDeath);
         var postDeathRecapLinksHovered = ImGui.IsItemHovered();
@@ -11484,7 +11804,7 @@ public sealed class RecapWindow : Window, IDisposable
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         ImGui.SameLine();
-        ImGui.TextUnformatted("as a system message on captured death(s).");
+        ImGui.TextUnformatted("on captured death(s).");
         postDeathRecapLinksHovered |= ImGui.IsItemHovered();
         postDeathRecapLinksLabelClicked |= ImGui.IsItemClicked();
         if (postDeathRecapLinksLabelClicked)
@@ -11503,6 +11823,8 @@ public sealed class RecapWindow : Window, IDisposable
             DrawPostDeathRecapLinksTooltip();
         }
 
+        DrawDeathRecapLinkChannelSetting();
+
         var redactPlayerNames = configuration.RedactPlayerNames;
         if (DrawThemedCheckbox("Name Redaction", ref redactPlayerNames))
         {
@@ -11518,10 +11840,10 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip(";( sadge, you hate me..");
+    }
 
-        ImGui.Separator();
-        ImGui.TextUnformatted("Capture Settings");
-
+    private void DrawCaptureSettingsGroup()
+    {
         if (ImGui.BeginTable("##CaptureClockSettings", 2, ImGuiTableFlags.SizingStretchProp))
         {
             ImGui.TableSetupColumn("Capture", ImGuiTableColumnFlags.WidthStretch, 1.0f);
@@ -11555,21 +11877,38 @@ public sealed class RecapWindow : Window, IDisposable
             DrawClockDisplaySetting();
             ImGui.EndTable();
         }
+    }
 
-        var maxPulls = pendingMaxRecordedPulls ?? configuration.MaxRecordedPulls;
-        if (ImGui.SliderInt("Recorded pulls kept", ref maxPulls, 1, 100))
+    private void DrawReplaySettingsGroup()
+    {
+        var replayWorldMarkerOpacity = GetReplayWorldMarkerOpacity();
+        if (ImGui.SliderFloat(
+            "World marker opacity",
+            ref replayWorldMarkerOpacity,
+            Plugin.MinReplayWorldMarkerOpacity,
+            Plugin.MaxReplayWorldMarkerOpacity,
+            "%.2f"))
         {
-            pendingMaxRecordedPulls = maxPulls;
+            plugin.SetReplayWorldMarkerOpacity(replayWorldMarkerOpacity);
         }
 
-        if (ImGui.IsItemDeactivatedAfterEdit() && pendingMaxRecordedPulls is { } committedMaxPulls)
+        DrawSettingsTooltip("Controls how visible A/B/C/D and 1/2/3/4 waymarks are inside Death Replay.");
+    }
+
+    private void DrawAppearanceSettingsGroup()
+    {
+        var mainWindowBackgroundOpacity = GetMainWindowBackgroundOpacity();
+        if (ImGui.SliderFloat(
+            "Better Deaths window opacity",
+            ref mainWindowBackgroundOpacity,
+            Plugin.MainWindowMinBackgroundOpacity,
+            Plugin.MainWindowMaxBackgroundOpacity,
+            "%.2f"))
         {
-            maxPulls = committedMaxPulls;
-            pendingMaxRecordedPulls = null;
-            plugin.SetMaxRecordedPulls(maxPulls);
+            plugin.SetMainWindowBackgroundOpacity(mainWindowBackgroundOpacity);
         }
 
-        DrawSettingsTooltip("Controls how many completed pull recaps are saved locally and shown in Recorded pulls. Older pulls are removed after this limit.");
+        DrawSettingsTooltip("Controls the main Better Deaths window background opacity. Lower values make it easier to see combat behind the review window.");
 
         var iconSize = MathF.Max(configuration.ActionIconSize, configuration.StatusIconSize);
         if (ImGui.SliderFloat("Icon size", ref iconSize, 12.0f, 48.0f, "%.0f px"))
@@ -11579,9 +11918,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Controls non-widget action and status icons in death timelines, details, examples, and Better Deaths lead-up tables. Use the Widget tab for Current Pull widget icons.");
 
-        ImGui.Separator();
         DrawThemeSetting();
-        DrawReviewPaneBottomPadding();
     }
 
     private void DrawThemeSetting()
@@ -12313,6 +12650,16 @@ public sealed class RecapWindow : Window, IDisposable
             Plugin.MainWindowMaxBackgroundOpacity);
     }
 
+    private float GetReplayWorldMarkerOpacity()
+    {
+        return Math.Clamp(
+            configuration.ReplayWorldMarkerOpacity <= 0.0f
+                ? Plugin.DefaultReplayWorldMarkerOpacity
+                : configuration.ReplayWorldMarkerOpacity,
+            Plugin.MinReplayWorldMarkerOpacity,
+            Plugin.MaxReplayWorldMarkerOpacity);
+    }
+
     private static Vector4 WithBackgroundOpacity(Vector4 color, float opacity)
     {
         return color with
@@ -12457,7 +12804,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.TextColored(LeadUpGoldColor, "[ Death Link ]");
         ImGui.SameLine(0.0f, 0.0f);
-        ImGui.TextUnformatted(" as a system message after captured deaths.");
+        ImGui.TextUnformatted(" in the selected local chat channel after captured deaths.");
         ImGui.TextUnformatted("Party members who share death information will still show a ");
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.TextColored(LeadUpGoldColor, "[ Pull Link ]");
@@ -13970,6 +14317,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.225");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Death Replay now captures and shows placed world markers.");
+        DrawWrappedBullet("Added a world marker opacity slider for Death Replay.");
+        DrawWrappedBullet("Added local-channel choices for automatic Death Links.");
+        DrawWrappedBullet("Reorganized Customize settings into compact groups.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.224");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added System Message as a chat posting option.");

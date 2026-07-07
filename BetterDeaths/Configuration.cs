@@ -26,6 +26,18 @@ public enum DeathChatChannel
 
 public sealed record ChatChannelOption(DeathChatChannel Channel, string Label, string Command);
 
+public enum DeathRecapLinkChannel
+{
+    SystemMessage,
+    Echo,
+    Notice,
+    Urgent,
+    ErrorMessage,
+    SystemError,
+}
+
+public sealed record DeathRecapLinkChannelOption(DeathRecapLinkChannel Channel, string Label);
+
 public enum WidgetDisplayMode
 {
     Normal,
@@ -276,6 +288,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool PostDeathRecapLinksOnDeath { get; set; }
 
+    public DeathRecapLinkChannel DeathRecapLinkChannel { get; set; } = DeathRecapLinkChannel.SystemMessage;
+
     public bool RedactPlayerNames { get; set; }
 
     public bool ShowDeathRecapPopup { get; set; } = true;
@@ -312,6 +326,8 @@ public sealed class Configuration : IPluginConfiguration
     public bool ShowLeadUpTimelineMitigationTimers { get; set; } = true;
 
     public bool ShowReplayTrails { get; set; } = true;
+
+    public float ReplayWorldMarkerOpacity { get; set; } = 0.75f;
 
     public bool ShowDebugTab { get; set; }
 

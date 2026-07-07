@@ -136,6 +136,16 @@ public sealed record ReplayMechanicSnapshot(
     uint RawState,
     bool IsKnown);
 
+public sealed record ReplayWorldMarkerSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    int MarkerIndex,
+    string Label,
+    bool Active,
+    float X,
+    float Y,
+    float Z);
+
 public enum EnvironmentalDeathKind
 {
     PossibleEnvironmental,
@@ -297,6 +307,8 @@ public sealed record PartyDeathRecord(
     public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];
 
     public IReadOnlyList<ReplayMechanicSnapshot> ReplayMechanics { get; init; } = [];
+
+    public IReadOnlyList<ReplayWorldMarkerSnapshot> ReplayWorldMarkers { get; init; } = [];
 }
 
 public sealed record PullDeathSnapshot(

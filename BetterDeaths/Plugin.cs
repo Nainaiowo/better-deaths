@@ -17,6 +17,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
@@ -175,6 +176,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxCombatLogEventsPerMember = 80;
     private const int MaxRecentReplayMarkersPerActor = 64;
     private const int MaxRecentReplayMechanicsPerSource = 96;
+    private const int ReplayWorldMarkerCount = 8;
     private const uint ActorControlDeathCategory = 0x6;
     private const uint ActorControlGainEffectCategory = 0x14;
     private const uint ActorControlLoseEffectCategory = 0x15;
@@ -193,6 +195,9 @@ public sealed partial class Plugin : IDalamudPlugin
     public const float DefaultMainWindowBackgroundOpacity = 0.85f;
     public const float MinWidgetIconSize = 12.0f;
     public const float MaxWidgetIconSize = 32.0f;
+    public const float MinReplayWorldMarkerOpacity = 0.15f;
+    public const float MaxReplayWorldMarkerOpacity = 1.0f;
+    public const float DefaultReplayWorldMarkerOpacity = 0.75f;
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan FatalSequenceEndBuffer = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan EffectResultActionMatchWindow = TimeSpan.FromSeconds(2);
@@ -260,6 +265,16 @@ public sealed partial class Plugin : IDalamudPlugin
         new(DeathChatChannel.CrossWorldLinkshell8, "Cross-world Linkshell 8", "/cwl8"),
     ];
 
+    public static readonly IReadOnlyList<DeathRecapLinkChannelOption> DeathRecapLinkChannelOptions =
+    [
+        new(DeathRecapLinkChannel.SystemMessage, "System Message"),
+        new(DeathRecapLinkChannel.Echo, "Echo"),
+        new(DeathRecapLinkChannel.Notice, "Notice"),
+        new(DeathRecapLinkChannel.Urgent, "Urgent"),
+        new(DeathRecapLinkChannel.ErrorMessage, "Error Message"),
+        new(DeathRecapLinkChannel.SystemError, "System Error"),
+    ];
+
     private enum RepositoryMigrationResult
     {
         NotFound,
@@ -316,6 +331,12 @@ public sealed partial class Plugin : IDalamudPlugin
         uint ClassJobId,
         string ClassJobName,
         DateTime SeenAtUtc);
+
+    private readonly record struct ReplayWorldMarkerState(
+        bool Active,
+        int RawX,
+        int RawY,
+        int RawZ);
 
     private sealed record DebugCaptureFileRecord(
         DateTime SeenAtUtc,
@@ -583,6 +604,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<ReplayPositionSnapshot>> recentReplayPositionsByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMechanicSnapshot>> recentReplayMechanicsBySource = new(StringComparer.Ordinal);
+    private readonly List<ReplayWorldMarkerSnapshot> recentReplayWorldMarkers = [];
+    private readonly ReplayWorldMarkerState?[] lastReplayWorldMarkerStates = new ReplayWorldMarkerState?[ReplayWorldMarkerCount];
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
@@ -1088,6 +1111,12 @@ public sealed partial class Plugin : IDalamudPlugin
     public void SetPostDeathRecapLinksOnDeath(bool enabled)
     {
         Configuration.PostDeathRecapLinksOnDeath = enabled;
+        SaveConfiguration();
+    }
+
+    public void SetDeathRecapLinkChannel(DeathRecapLinkChannel channel)
+    {
+        Configuration.DeathRecapLinkChannel = GetDeathRecapLinkChannelOption(channel).Channel;
         SaveConfiguration();
     }
 
@@ -1866,6 +1895,15 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetReplayWorldMarkerOpacity(float opacity)
+    {
+        Configuration.ReplayWorldMarkerOpacity = Math.Clamp(
+            opacity,
+            MinReplayWorldMarkerOpacity,
+            MaxReplayWorldMarkerOpacity);
+        SaveConfiguration();
+    }
+
     public void SetWidgetIconSize(float size)
     {
         Configuration.WidgetIconSize = Math.Clamp(size, MinWidgetIconSize, MaxWidgetIconSize);
@@ -1982,6 +2020,16 @@ public sealed partial class Plugin : IDalamudPlugin
     public static DeathChatChannel GetEffectiveChatChannel(DeathChatChannel channel)
     {
         return GetChatChannelOption(channel).Channel;
+    }
+
+    public static string GetDeathRecapLinkChannelLabel(DeathRecapLinkChannel channel)
+    {
+        return GetDeathRecapLinkChannelOption(channel).Label;
+    }
+
+    public static DeathRecapLinkChannel GetEffectiveDeathRecapLinkChannel(DeathRecapLinkChannel channel)
+    {
+        return GetDeathRecapLinkChannelOption(channel).Channel;
     }
 
     private static string FormatDeathStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
@@ -2473,6 +2521,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.DeathChatChannel))
         {
             Configuration.DeathChatChannel = DeathChatChannel.Party;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.DeathRecapLinkChannel))
+        {
+            Configuration.DeathRecapLinkChannel = DeathRecapLinkChannel.SystemMessage;
             changed = true;
         }
 
@@ -6516,6 +6570,7 @@ public sealed partial class Plugin : IDalamudPlugin
             ReplayMechanics = GetRecentReplayMechanics(
                 deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
                 deathSeenAtUtc),
+            ReplayWorldMarkers = GetReplayWorldMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
         };
     }
 
@@ -7273,6 +7328,73 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             AddRecentReplayMechanicSnapshot(mechanic);
         }
+
+        TrackRecentReplayWorldMarkers(now);
+    }
+
+    private void TrackRecentReplayWorldMarkers(DateTime now)
+    {
+        unsafe
+        {
+            var controller = MarkingController.Instance();
+            if (controller == null)
+            {
+                return;
+            }
+
+            var markers = controller->FieldMarkers;
+            var markerCount = Math.Min(ReplayWorldMarkerCount, markers.Length);
+            for (var markerIndex = 0; markerIndex < markerCount; markerIndex++)
+            {
+                var marker = markers[markerIndex];
+                var current = marker.Active
+                    ? new ReplayWorldMarkerState(true, marker.X, marker.Y, marker.Z)
+                    : new ReplayWorldMarkerState(false, 0, 0, 0);
+                var previous = lastReplayWorldMarkerStates[markerIndex];
+                if (previous is not null && previous.Value.Equals(current))
+                {
+                    continue;
+                }
+
+                lastReplayWorldMarkerStates[markerIndex] = current;
+                if (previous is null && !current.Active)
+                {
+                    continue;
+                }
+
+                var seenAtUtc = previous is null && current.Active && pullStartedAtUtc is { } pullStarted
+                    ? pullStarted
+                    : now;
+                var snapshotRawX = current.Active ? current.RawX : previous?.RawX ?? 0;
+                var snapshotRawY = current.Active ? current.RawY : previous?.RawY ?? 0;
+                var snapshotRawZ = current.Active ? current.RawZ : previous?.RawZ ?? 0;
+                recentReplayWorldMarkers.Add(new ReplayWorldMarkerSnapshot(
+                    seenAtUtc,
+                    CalculatePullElapsed(seenAtUtc),
+                    markerIndex,
+                    GetReplayWorldMarkerLabel(markerIndex),
+                    current.Active,
+                    snapshotRawX / 1000.0f,
+                    snapshotRawY / 1000.0f,
+                    snapshotRawZ / 1000.0f));
+            }
+        }
+    }
+
+    private static string GetReplayWorldMarkerLabel(int markerIndex)
+    {
+        return markerIndex switch
+        {
+            0 => "A",
+            1 => "B",
+            2 => "C",
+            3 => "D",
+            4 => "1",
+            5 => "2",
+            6 => "3",
+            7 => "4",
+            _ => "?",
+        };
     }
 
     private TimeSpan GetReplayPositionSampleInterval(DateTime now)
@@ -8322,12 +8444,36 @@ public sealed partial class Plugin : IDalamudPlugin
             .ToList();
     }
 
+    private IReadOnlyList<ReplayWorldMarkerSnapshot> GetReplayWorldMarkersForDeath(DateTime deathSeenAtUtc, DateTime endAtUtc)
+    {
+        var fallbackStartAtUtc = deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5);
+        var startAtUtc = pullStartedAtUtc is { } pullStarted
+            ? pullStarted
+            : fallbackStartAtUtc;
+        return GetRecentReplayWorldMarkers(startAtUtc, endAtUtc);
+    }
+
+    private IReadOnlyList<ReplayWorldMarkerSnapshot> GetRecentReplayWorldMarkers(DateTime startAtUtc, DateTime endAtUtc)
+    {
+        if (recentReplayWorldMarkers.Count == 0 || endAtUtc < startAtUtc)
+        {
+            return [];
+        }
+
+        return recentReplayWorldMarkers
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= endAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.MarkerIndex)
+            .ToList();
+    }
+
     private void UpdateCurrentDeathReplayPositions(DateTime now)
     {
         if (currentDeaths.Count == 0 ||
             recentReplayPositionsByActor.Count == 0 &&
             recentReplayMarkersByActor.Count == 0 &&
-            recentReplayMechanicsBySource.Count == 0)
+            recentReplayMechanicsBySource.Count == 0 &&
+            recentReplayWorldMarkers.Count == 0)
         {
             return;
         }
@@ -8361,9 +8507,13 @@ public sealed partial class Plugin : IDalamudPlugin
                 : GetRecentReplayMechanics(
                     death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
                     replayEndAtUtc);
+            var replayWorldMarkers = recentReplayWorldMarkers.Count == 0
+                ? death.ReplayWorldMarkers
+                : GetReplayWorldMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
             if (replayPositions.Count <= death.ReplayPositions.Count &&
                 replayMarkers.Count <= death.ReplayMarkers.Count &&
-                replayMechanics.Count <= death.ReplayMechanics.Count)
+                replayMechanics.Count <= death.ReplayMechanics.Count &&
+                replayWorldMarkers.Count <= death.ReplayWorldMarkers.Count)
             {
                 continue;
             }
@@ -8373,6 +8523,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 ReplayPositions = replayPositions,
                 ReplayMarkers = replayMarkers,
                 ReplayMechanics = replayMechanics,
+                ReplayWorldMarkers = replayWorldMarkers,
             };
         }
     }
@@ -8427,6 +8578,7 @@ public sealed partial class Plugin : IDalamudPlugin
         PruneRecentReplayPositions(now);
         PruneRecentReplayMarkers(now);
         PruneRecentReplayMechanics(now);
+        PruneRecentReplayWorldMarkers(now);
         PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }
@@ -8520,6 +8672,17 @@ public sealed partial class Plugin : IDalamudPlugin
                 recentReplayMechanicsBySource.Remove(sourceKey);
             }
         }
+    }
+
+    private void PruneRecentReplayWorldMarkers(DateTime now)
+    {
+        if (recentReplayWorldMarkers.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = pullStartedAtUtc ?? now - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5);
+        recentReplayWorldMarkers.RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
     }
 
     private void PruneRecentSourceMitigationHistory(DateTime now)
@@ -8698,6 +8861,8 @@ public sealed partial class Plugin : IDalamudPlugin
         recentReplayPositionsByActor.Clear();
         recentReplayMarkersByActor.Clear();
         recentReplayMechanicsBySource.Clear();
+        recentReplayWorldMarkers.Clear();
+        Array.Fill(lastReplayWorldMarkerStates, null);
         activeDmuP2PathOfLightTowersByIndex.Clear();
         activeReplayMechanicsByKey.Clear();
         recentSourceMitigationHistoryBySource.Clear();
@@ -10825,7 +10990,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         return new XivChatEntry
         {
-            Type = XivChatType.SystemMessage,
+            Type = GetDeathRecapLinkChatType(Configuration.DeathRecapLinkChannel),
             Message = message,
         };
     }
@@ -10904,6 +11069,25 @@ public sealed partial class Plugin : IDalamudPlugin
             : channel;
         return ChatChannelOptions.FirstOrDefault(option => option.Channel == normalizedChannel) ??
             ChatChannelOptions.First(option => option.Channel == DeathChatChannel.Party);
+    }
+
+    private static DeathRecapLinkChannelOption GetDeathRecapLinkChannelOption(DeathRecapLinkChannel channel)
+    {
+        return DeathRecapLinkChannelOptions.FirstOrDefault(option => option.Channel == channel) ??
+            DeathRecapLinkChannelOptions.First(option => option.Channel == DeathRecapLinkChannel.SystemMessage);
+    }
+
+    private static XivChatType GetDeathRecapLinkChatType(DeathRecapLinkChannel channel)
+    {
+        return GetDeathRecapLinkChannelOption(channel).Channel switch
+        {
+            DeathRecapLinkChannel.Echo => XivChatType.Echo,
+            DeathRecapLinkChannel.Notice => XivChatType.Notice,
+            DeathRecapLinkChannel.Urgent => XivChatType.Urgent,
+            DeathRecapLinkChannel.ErrorMessage => XivChatType.ErrorMessage,
+            DeathRecapLinkChannel.SystemError => XivChatType.SystemError,
+            _ => XivChatType.SystemMessage,
+        };
     }
 
     private static XivChatEntry BuildSystemMessageEntry(string message)
