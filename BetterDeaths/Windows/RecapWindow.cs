@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.231";
+    private const string CurrentChangelogVersion = "0.1.0.232";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -14590,6 +14590,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.232");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added same-duty pull grouping to the Pulls list, with colored indicators across collapsed, expanded, and stacked views.");
+        DrawHighlightedChangelogBullet("Added customizable pull group colors in Customize.");
+        DrawHighlightedChangelogBullet("Improved theme readability across all built-in themes, including button text, status text, warning/gold text, and HP/shield labels.");
+        DrawWrappedBullet("Added saved pull group data so recorded pulls keep their duty-instance color after restart.");
+        DrawWrappedBullet("Added extra padding to short-width expanded pull cells so the content does not sit against the window edge.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.231");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added same-duty pull grouping to the Pulls list, with colored indicators across collapsed, expanded, and stacked views.");
