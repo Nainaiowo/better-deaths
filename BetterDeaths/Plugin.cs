@@ -74,6 +74,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int RecordedPullIndexSchemaVersion = 4;
     private const int CurrentConfigurationVersion = 4;
     internal const int PullGroupColorPaletteSize = 8;
+    private static readonly TimeSpan RecentPullGroupRestoreWindow = TimeSpan.FromHours(3);
     private const int RecordedPullHistoryRollingBackupCount = 5;
     private const int RecordedPullIndexRollingBackupCount = 3;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
@@ -2930,7 +2931,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
             currentMembers.Clear();
             ClearPostResetDeathSuppression();
-            ClearCurrentDutyInstancePullGroup();
             return;
         }
 
@@ -9203,19 +9203,108 @@ public sealed partial class Plugin : IDalamudPlugin
             return;
         }
 
+        if (TryRestoreCurrentDutyInstancePullGroup())
+        {
+            return;
+        }
+
+        if (recordedPullHistoryLoading)
+        {
+            return;
+        }
+
         StartNewDutyInstancePullGroup();
+    }
+
+    private bool TryRestoreCurrentDutyInstancePullGroup()
+    {
+        var territoryId = currentTerritoryId == 0 ? ClientState.TerritoryType : currentTerritoryId;
+        if (territoryId == 0)
+        {
+            return false;
+        }
+
+        if (Configuration.ActiveDutyInstancePullGroupTerritoryId == territoryId &&
+            !string.IsNullOrWhiteSpace(Configuration.ActiveDutyInstancePullGroupId) &&
+            Configuration.ActiveDutyInstancePullGroupColorIndex >= 0 &&
+            Configuration.ActiveDutyInstancePullGroupColorIndex < PullGroupColorPaletteSize)
+        {
+            currentDutyInstancePullGroupId = Configuration.ActiveDutyInstancePullGroupId;
+            currentDutyInstancePullGroupColorIndex = Configuration.ActiveDutyInstancePullGroupColorIndex;
+            return true;
+        }
+
+        var now = DateTime.UtcNow;
+        RecordedPullSummary? latestMatchingPull = null;
+        lock (recordedPullLock)
+        {
+            latestMatchingPull = recordedPulls
+                .Select(state => state.Summary)
+                .Where(summary =>
+                    summary.TerritoryId == territoryId &&
+                    !string.IsNullOrWhiteSpace(summary.PullGroupId) &&
+                    summary.PullGroupColorIndex >= 0 &&
+                    summary.PullGroupColorIndex < PullGroupColorPaletteSize &&
+                    summary.CapturedAtUtc > Configuration.ActiveDutyInstancePullGroupClearedAtUtc &&
+                    now - summary.CapturedAtUtc <= RecentPullGroupRestoreWindow)
+                .OrderByDescending(summary => summary.CapturedAtUtc)
+                .FirstOrDefault();
+        }
+
+        if (latestMatchingPull is null)
+        {
+            return false;
+        }
+
+        currentDutyInstancePullGroupId = latestMatchingPull.PullGroupId;
+        currentDutyInstancePullGroupColorIndex = latestMatchingPull.PullGroupColorIndex;
+        PersistCurrentDutyInstancePullGroup();
+        return true;
     }
 
     private void StartNewDutyInstancePullGroup()
     {
         currentDutyInstancePullGroupId = Guid.NewGuid().ToString("N");
         currentDutyInstancePullGroupColorIndex = GetNextDutyInstancePullGroupColorIndex();
+        PersistCurrentDutyInstancePullGroup();
     }
 
     private void ClearCurrentDutyInstancePullGroup()
     {
         currentDutyInstancePullGroupId = string.Empty;
         currentDutyInstancePullGroupColorIndex = -1;
+        if (!string.IsNullOrWhiteSpace(Configuration.ActiveDutyInstancePullGroupId) ||
+            Configuration.ActiveDutyInstancePullGroupColorIndex != -1 ||
+            Configuration.ActiveDutyInstancePullGroupTerritoryId != 0)
+        {
+            Configuration.ActiveDutyInstancePullGroupId = string.Empty;
+            Configuration.ActiveDutyInstancePullGroupColorIndex = -1;
+            Configuration.ActiveDutyInstancePullGroupTerritoryId = 0;
+            Configuration.ActiveDutyInstancePullGroupClearedAtUtc = DateTime.UtcNow;
+            SaveConfiguration();
+        }
+    }
+
+    private void PersistCurrentDutyInstancePullGroup()
+    {
+        var territoryId = currentTerritoryId == 0 ? ClientState.TerritoryType : currentTerritoryId;
+        if (territoryId == 0 || string.IsNullOrWhiteSpace(currentDutyInstancePullGroupId) || currentDutyInstancePullGroupColorIndex < 0)
+        {
+            return;
+        }
+
+        if (Configuration.ActiveDutyInstancePullGroupId == currentDutyInstancePullGroupId &&
+            Configuration.ActiveDutyInstancePullGroupColorIndex == currentDutyInstancePullGroupColorIndex &&
+            Configuration.ActiveDutyInstancePullGroupTerritoryId == territoryId)
+        {
+            return;
+        }
+
+        Configuration.ActiveDutyInstancePullGroupId = currentDutyInstancePullGroupId;
+        Configuration.ActiveDutyInstancePullGroupColorIndex = currentDutyInstancePullGroupColorIndex;
+        Configuration.ActiveDutyInstancePullGroupTerritoryId = territoryId;
+        Configuration.ActiveDutyInstancePullGroupClearedAtUtc = DateTime.MinValue;
+        SaveConfiguration();
     }
 
     private int GetNextDutyInstancePullGroupColorIndex()

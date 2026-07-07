@@ -339,6 +339,14 @@ public sealed class Configuration : IPluginConfiguration
 
     public List<ThemeColorValue> PullGroupColors { get; set; } = [];
 
+    public string ActiveDutyInstancePullGroupId { get; set; } = string.Empty;
+
+    public int ActiveDutyInstancePullGroupColorIndex { get; set; } = -1;
+
+    public uint ActiveDutyInstancePullGroupTerritoryId { get; set; }
+
+    public DateTime ActiveDutyInstancePullGroupClearedAtUtc { get; set; } = DateTime.MinValue;
+
     public bool ShowDebugTab { get; set; }
 
     public bool DebugLogEnabled { get; set; }
