@@ -8869,7 +8869,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
-        StartNewDutyInstancePullGroup();
+        EnsureCurrentDutyInstancePullGroup();
     }
 
     private void ArchiveCurrentPullForReview(string reason, bool suppressResetStateDeaths = true)
