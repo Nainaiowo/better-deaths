@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.226";
+    private const string CurrentChangelogVersion = "0.1.0.229";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -6783,12 +6783,25 @@ public sealed class RecapWindow : Window, IDisposable
         var minimumVisibleOffset = GetReplayMinimumVisibleOffset(death);
         if (positions.Count > 0)
         {
-            var latestPositionOffset = positions
+            var latestReplayOffset = positions
                 .Select(position => (float)(position.SeenAtUtc - death.SeenAtUtc).TotalSeconds)
                 .DefaultIfEmpty(0.0f)
                 .Max();
+            foreach (var mechanic in mechanics)
+            {
+                var mechanicEndOffset = (float)(mechanic.SeenAtUtc - death.SeenAtUtc).TotalSeconds +
+                    MathF.Max(0.0f, mechanic.DurationSeconds);
+                latestReplayOffset = MathF.Max(latestReplayOffset, mechanicEndOffset);
+            }
+
+            foreach (var marker in worldMarkers)
+            {
+                var markerOffset = (float)(marker.SeenAtUtc - death.SeenAtUtc).TotalSeconds;
+                latestReplayOffset = MathF.Max(latestReplayOffset, markerOffset);
+            }
+
             minOffset = minimumVisibleOffset;
-            maxOffset = MathF.Min(MathF.Max(0.0f, latestPositionOffset), DeathReplayMaxPostDeathSeconds);
+            maxOffset = MathF.Min(MathF.Max(0.0f, latestReplayOffset), DeathReplayMaxPostDeathSeconds);
             if (maxOffset - minOffset < 0.05f)
             {
                 maxOffset = MathF.Min(DeathReplayMaxPostDeathSeconds, minOffset + 0.5f);
@@ -14339,6 +14352,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.229");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Improved Death Replay timing, waymark capture, and mechanic cleanup reliability.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.226");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Death Replay now pauses when you scrub the playback timeline.");

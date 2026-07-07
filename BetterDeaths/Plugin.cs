@@ -206,6 +206,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayTetherPositionSampleInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan ReplayWorldMarkerSampleInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan ReplayTetherActiveGrace = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan DeathActorControlLateMatchWindow = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan HpHistoryDuplicateWindow = TimeSpan.FromMilliseconds(50);
@@ -611,6 +612,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private DateTime lastReplayPositionSampleAtUtc = DateTime.MinValue;
+    private DateTime lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
     private DateTime lastCurrentDeathReplayUpdateAtUtc = DateTime.MinValue;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
@@ -5061,12 +5063,25 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         foreach (var entry in activeReplayMechanicsByKey.Values
-            .Where(active => active.ResolveActionId != 0 && active.ResolveActionId == packet.ActionId)
+            .Where(active => ReplayActiveMechanicMatchesResolveAction(active, packet))
             .ToList())
         {
             ClampRecentReplayMechanicEnd(entry.SourceKey, packet.SeenAtUtc);
             activeReplayMechanicsByKey.Remove(entry.ActiveKey);
         }
+    }
+
+    private static bool ReplayActiveMechanicMatchesResolveAction(ActiveReplayMechanic active, RawActionEffectPacket packet)
+    {
+        if (active.ResolveActionId == 0 ||
+            active.ResolveActionId != packet.ActionId)
+        {
+            return false;
+        }
+
+        return active.SourceEntityId == 0 ||
+            packet.CasterEntityId == 0 ||
+            active.SourceEntityId == packet.CasterEntityId;
     }
 
     private void UpdateActiveReplayMechanicLifetimes(
@@ -7339,6 +7354,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void TrackRecentReplayPositions(IReadOnlyList<PartyMemberSnapshot> members, DateTime now)
     {
+        TrackRecentReplayWorldMarkers(now);
+
         var sampleInterval = GetReplayPositionSampleInterval(now);
         if (Duration(now, lastReplayPositionSampleAtUtc) < sampleInterval)
         {
@@ -7351,7 +7368,7 @@ public sealed partial class Plugin : IDalamudPlugin
             AddRecentReplayPositionSnapshot(CreatePlayerReplayPositionSnapshot(member, now));
         }
 
-        var (enemySnapshots, mechanicSnapshots) = CaptureReplayObjectSnapshots(now);
+        var (enemySnapshots, mechanicSnapshots) = CaptureReplayObjectSnapshots(now, sampleInterval);
         foreach (var enemy in enemySnapshots)
         {
             AddRecentReplayPositionSnapshot(enemy);
@@ -7361,12 +7378,16 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             AddRecentReplayMechanicSnapshot(mechanic);
         }
-
-        TrackRecentReplayWorldMarkers(now);
     }
 
     private void TrackRecentReplayWorldMarkers(DateTime now)
     {
+        if (Duration(now, lastReplayWorldMarkerSampleAtUtc) < ReplayWorldMarkerSampleInterval)
+        {
+            return;
+        }
+
+        lastReplayWorldMarkerSampleAtUtc = now;
         unsafe
         {
             var controller = MarkingController.Instance();
@@ -7537,7 +7558,7 @@ public sealed partial class Plugin : IDalamudPlugin
             true);
     }
 
-    private (IReadOnlyList<ReplayPositionSnapshot> EnemySnapshots, IReadOnlyList<ReplayMechanicSnapshot> MechanicSnapshots) CaptureReplayObjectSnapshots(DateTime seenAtUtc)
+    private (IReadOnlyList<ReplayPositionSnapshot> EnemySnapshots, IReadOnlyList<ReplayMechanicSnapshot> MechanicSnapshots) CaptureReplayObjectSnapshots(DateTime seenAtUtc, TimeSpan sampleInterval)
     {
         var enemySnapshots = new List<ReplayPositionSnapshot>();
         var mechanicSnapshots = new List<ReplayMechanicSnapshot>();
@@ -7591,7 +7612,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     battleNpc.BaseId,
                     battleNpc.EntityId,
                     true));
-                CaptureReplayBlackHoleTethers(battleNpc, seenAtUtc, mechanicSnapshots);
+                CaptureReplayBlackHoleTethers(battleNpc, seenAtUtc, sampleInterval, mechanicSnapshots);
             }
 
             if (battleNpc.BattleNpcKind != Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant ||
@@ -7622,7 +7643,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         UpdateActiveReplayMechanicLifetimes(seenAtUtc, seenEntityIds, castingActionByEntityId);
-        CaptureReplayDmuTethersFromPlayers(seenAtUtc, mechanicSnapshots);
+        CaptureReplayDmuTethersFromPlayers(seenAtUtc, sampleInterval, mechanicSnapshots);
 
         return (
             enemySnapshots
@@ -7679,6 +7700,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private unsafe void CaptureReplayBlackHoleTethers(
         Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
         DateTime seenAtUtc,
+        TimeSpan sampleInterval,
         List<ReplayMechanicSnapshot> mechanicSnapshots)
     {
         if (!IsDmuReplayCaptureContext() ||
@@ -7716,6 +7738,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     "black-hole-tether",
                     DmuBlackHoleTetherId,
                     "Tether",
+                    sampleInterval,
                     mechanicSnapshots);
             }
         }
@@ -7727,6 +7750,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private unsafe void CaptureReplayDmuTethersFromPlayers(
         DateTime seenAtUtc,
+        TimeSpan sampleInterval,
         List<ReplayMechanicSnapshot> mechanicSnapshots)
     {
         if (!IsDmuReplayCaptureContext())
@@ -7768,6 +7792,7 @@ public sealed partial class Plugin : IDalamudPlugin
                             "black-hole-tether",
                             DmuBlackHoleTetherId,
                             "Tether",
+                            sampleInterval,
                             mechanicSnapshots);
                         continue;
                     }
@@ -7784,6 +7809,7 @@ public sealed partial class Plugin : IDalamudPlugin
                             "graven-image-tether",
                             DmuGravenImageTetherId,
                             "Tether",
+                            sampleInterval,
                             mechanicSnapshots);
                     }
                 }
@@ -7804,6 +7830,7 @@ public sealed partial class Plugin : IDalamudPlugin
         string rawEventKind,
         uint rawEventId,
         string label,
+        TimeSpan sampleInterval,
         List<ReplayMechanicSnapshot> mechanicSnapshots)
     {
         var source = sourcePosition;
@@ -7830,7 +7857,7 @@ public sealed partial class Plugin : IDalamudPlugin
         mechanicSnapshots.Add(new ReplayMechanicSnapshot(
             seenAtUtc,
             CalculatePullElapsed(seenAtUtc),
-            (float)ReplayPositionSampleInterval.TotalSeconds * 1.5f,
+            (float)sampleInterval.TotalSeconds * 1.5f,
             $"{rawEventKind}:{sourceEntityId:X8}:{targetMember.EntityId:X8}",
             $"{capturedSourceName} -> {targetMember.MemberName}",
             ReplayMechanicShape.Tether,
@@ -8543,10 +8570,10 @@ public sealed partial class Plugin : IDalamudPlugin
             var replayWorldMarkers = recentReplayWorldMarkers.Count == 0
                 ? death.ReplayWorldMarkers
                 : GetReplayWorldMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
-            if (replayPositions.Count <= death.ReplayPositions.Count &&
-                replayMarkers.Count <= death.ReplayMarkers.Count &&
-                replayMechanics.Count <= death.ReplayMechanics.Count &&
-                replayWorldMarkers.Count <= death.ReplayWorldMarkers.Count)
+            if (ReplaySnapshotsEqual(replayPositions, death.ReplayPositions) &&
+                ReplaySnapshotsEqual(replayMarkers, death.ReplayMarkers) &&
+                ReplaySnapshotsEqual(replayMechanics, death.ReplayMechanics) &&
+                ReplaySnapshotsEqual(replayWorldMarkers, death.ReplayWorldMarkers))
             {
                 continue;
             }
@@ -8559,6 +8586,17 @@ public sealed partial class Plugin : IDalamudPlugin
                 ReplayWorldMarkers = replayWorldMarkers,
             };
         }
+    }
+
+    private static bool ReplaySnapshotsEqual<T>(IReadOnlyList<T> left, IReadOnlyList<T> right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        return left.Count == right.Count &&
+            left.SequenceEqual(right);
     }
 
     private IReadOnlyList<CombatEventRecord> GetRecentEvents(string memberKey, DateTime endAtUtc, int seconds)
