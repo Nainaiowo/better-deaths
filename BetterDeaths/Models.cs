@@ -322,6 +322,10 @@ public sealed record PullDeathSnapshot(
     public long PullNumber { get; init; }
 
     public string CapturedPluginVersion { get; init; } = string.Empty;
+
+    public string PullGroupId { get; init; } = string.Empty;
+
+    public int PullGroupColorIndex { get; init; } = -1;
 }
 
 public sealed record RecordedPullSummary(
@@ -335,6 +339,10 @@ public sealed record RecordedPullSummary(
     public long PullNumber { get; init; }
 
     public string CapturedPluginVersion { get; init; } = string.Empty;
+
+    public string PullGroupId { get; init; } = string.Empty;
+
+    public int PullGroupColorIndex { get; init; } = -1;
 }
 
 public sealed record DebugLogEntry(

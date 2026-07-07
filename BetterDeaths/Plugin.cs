@@ -73,6 +73,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int RecordedPullHistorySchemaVersion = 3;
     private const int RecordedPullIndexSchemaVersion = 4;
     private const int CurrentConfigurationVersion = 4;
+    internal const int PullGroupColorPaletteSize = 8;
     private const int RecordedPullHistoryRollingBackupCount = 5;
     private const int RecordedPullIndexRollingBackupCount = 3;
     private const string RecordedPullHistoryRollingBackupSearchPattern = "recorded-pulls.backup.*.json";
@@ -300,6 +301,10 @@ public sealed partial class Plugin : IDalamudPlugin
         string DetailFileName)
     {
         public string CapturedPluginVersion { get; init; } = string.Empty;
+
+        public string PullGroupId { get; init; } = string.Empty;
+
+        public int PullGroupColorIndex { get; init; } = -1;
     }
 
     private sealed class RecordedPullState
@@ -739,6 +744,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private string currentTerritoryName = "Unknown territory";
     private uint currentPullTerritoryId;
     private string currentPullTerritoryName = "Unknown territory";
+    private string currentDutyInstancePullGroupId = string.Empty;
+    private int currentDutyInstancePullGroupColorIndex = -1;
     private bool disposing;
 
     public Configuration Configuration { get; }
@@ -842,6 +849,10 @@ public sealed partial class Plugin : IDalamudPlugin
     public string CurrentPullTerritoryName => currentPullTerritoryId == 0
         ? currentTerritoryName
         : currentPullTerritoryName;
+
+    public string CurrentDutyInstancePullGroupId => currentDutyInstancePullGroupId;
+
+    public int CurrentDutyInstancePullGroupColorIndex => currentDutyInstancePullGroupColorIndex;
 
     public bool CurrentPullClosedForReview => currentPullClosedForReview;
 
@@ -2547,6 +2558,29 @@ public sealed partial class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        if (Configuration.PullGroupColors is null)
+        {
+            Configuration.PullGroupColors = [];
+            changed = true;
+        }
+        else
+        {
+            while (Configuration.PullGroupColors.Count > PullGroupColorPaletteSize)
+            {
+                Configuration.PullGroupColors.RemoveAt(Configuration.PullGroupColors.Count - 1);
+                changed = true;
+            }
+
+            for (var i = 0; i < Configuration.PullGroupColors.Count; i++)
+            {
+                if (Configuration.PullGroupColors[i] is null)
+                {
+                    Configuration.PullGroupColors[i] = new ThemeColorValue();
+                    changed = true;
+                }
+            }
+        }
+
         if (!Configuration.HasChangedTheme && Configuration.Theme != BetterDeathsTheme.Classic)
         {
             Configuration.HasChangedTheme = true;
@@ -2875,12 +2909,14 @@ public sealed partial class Plugin : IDalamudPlugin
             ArchiveCurrentPullForReview("Left territory", suppressResetStateDeaths: false);
             currentTerritoryId = territoryId;
             currentTerritoryName = GetTerritoryName(territoryId);
+            ClearCurrentDutyInstancePullGroup();
         }
 
         if (IsPvPCaptureBlocked())
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
             currentMembers.Clear();
+            ClearCurrentDutyInstancePullGroup();
             return;
         }
 
@@ -2894,8 +2930,11 @@ public sealed partial class Plugin : IDalamudPlugin
 
             currentMembers.Clear();
             ClearPostResetDeathSuppression();
+            ClearCurrentDutyInstancePullGroup();
             return;
         }
+
+        EnsureCurrentDutyInstancePullGroup();
 
         var nextMembers = BuildTrackedCharacterSnapshots();
         currentMembers.Clear();
@@ -8817,6 +8856,7 @@ public sealed partial class Plugin : IDalamudPlugin
             currentMembers.Clear();
             currentTerritoryId = ClientState.TerritoryType;
             currentTerritoryName = GetTerritoryName(currentTerritoryId);
+            ClearCurrentDutyInstancePullGroup();
             return;
         }
 
@@ -8829,6 +8869,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
+        StartNewDutyInstancePullGroup();
     }
 
     private void ArchiveCurrentPullForReview(string reason, bool suppressResetStateDeaths = true)
@@ -8854,6 +8895,7 @@ public sealed partial class Plugin : IDalamudPlugin
         }
 
         WaitForRecordedPullHistoryLoadForMutation();
+        EnsureCurrentDutyInstancePullGroup();
         var pullNumber = GetNextRecordedPullNumber();
         var snapshot = new PullDeathSnapshot(
             DateTime.UtcNow,
@@ -8865,6 +8907,8 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             PullNumber = pullNumber,
             CapturedPluginVersion = GetCurrentPluginVersionForSavedData(),
+            PullGroupId = currentDutyInstancePullGroupId,
+            PullGroupColorIndex = currentDutyInstancePullGroupColorIndex,
         };
 
         lock (recordedPullLock)
@@ -9150,6 +9194,43 @@ public sealed partial class Plugin : IDalamudPlugin
         return pullStartedAtUtc is null
             ? lastKnownPullElapsedSeconds
             : (float)Math.Max(0.0, (now - pullStartedAtUtc.Value).TotalSeconds);
+    }
+
+    private void EnsureCurrentDutyInstancePullGroup()
+    {
+        if (!string.IsNullOrWhiteSpace(currentDutyInstancePullGroupId) || !IsDutyCaptureActive())
+        {
+            return;
+        }
+
+        StartNewDutyInstancePullGroup();
+    }
+
+    private void StartNewDutyInstancePullGroup()
+    {
+        currentDutyInstancePullGroupId = Guid.NewGuid().ToString("N");
+        currentDutyInstancePullGroupColorIndex = GetNextDutyInstancePullGroupColorIndex();
+    }
+
+    private void ClearCurrentDutyInstancePullGroup()
+    {
+        currentDutyInstancePullGroupId = string.Empty;
+        currentDutyInstancePullGroupColorIndex = -1;
+    }
+
+    private int GetNextDutyInstancePullGroupColorIndex()
+    {
+        lock (recordedPullLock)
+        {
+            var previousColorIndex = recordedPulls
+                .Select(state => state.Summary.PullGroupColorIndex)
+                .Where(colorIndex => colorIndex >= 0)
+                .Cast<int?>()
+                .LastOrDefault();
+            return previousColorIndex is { } colorIndex
+                ? (colorIndex + 1) % PullGroupColorPaletteSize
+                : 0;
+        }
     }
 
     private void TrimRecordedPullsLocked()
@@ -9477,6 +9558,8 @@ public sealed partial class Plugin : IDalamudPlugin
                     {
                         PullNumber = entry.PullNumber,
                         CapturedPluginVersion = entry.CapturedPluginVersion ?? string.Empty,
+                        PullGroupId = entry.PullGroupId ?? string.Empty,
+                        PullGroupColorIndex = entry.PullGroupColorIndex,
                     };
                     return new RecordedPullState(summary, entry.DetailFileName, null, detailDirty: false);
                 })
@@ -9565,6 +9648,8 @@ public sealed partial class Plugin : IDalamudPlugin
                     state.DetailFileName)
                 {
                     CapturedPluginVersion = state.Summary.CapturedPluginVersion ?? string.Empty,
+                    PullGroupId = state.Summary.PullGroupId ?? string.Empty,
+                    PullGroupColorIndex = state.Summary.PullGroupColorIndex,
                 })
                 .ToList());
         var indexJson = JsonSerializer.Serialize(index, RecordedPullHistoryJsonOptions);
@@ -9719,6 +9804,8 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             PullNumber = pull.PullNumber,
             CapturedPluginVersion = pull.CapturedPluginVersion ?? string.Empty,
+            PullGroupId = pull.PullGroupId ?? string.Empty,
+            PullGroupColorIndex = pull.PullGroupColorIndex,
         };
         return new RecordedPullState(summary, BuildRecordedPullDetailFileName(pull), pull, detailDirty);
     }

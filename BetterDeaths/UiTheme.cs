@@ -189,7 +189,7 @@ internal static class BetterDeathsThemeCatalog
         ModernNavButtonSelectedHoveredColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
         ModernNavButtonActiveColor = new Vector4(0.12f, 0.44f, 0.40f, 1.0f),
         ModernButtonTextColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-        ModernSelectedButtonTextColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
+        ModernSelectedButtonTextColor = new Vector4(0.98f, 0.98f, 0.96f, 1.0f),
         ModernPopupBgColor = new Vector4(0.085f, 0.092f, 0.104f, 0.98f),
         ModernCheckMarkColor = new Vector4(0.36f, 0.92f, 0.82f, 1.0f),
         CheckboxFrameColor = BlendColors(new Vector4(0.11f, 0.118f, 0.132f, 0.90f), new Vector4(0.22f, 0.25f, 0.28f, 0.95f), 0.42f) with { W = 0.96f },
@@ -747,7 +747,7 @@ internal static class BetterDeathsThemeCatalog
         navButton: new Vector4(0.84f, 0.66f, 0.48f, 0.98f),
         navButtonHovered: new Vector4(0.74f, 0.52f, 0.34f, 1.0f),
         navButtonSelected: new Vector4(0.78f, 0.42f, 0.18f, 0.98f),
-        navButtonSelectedHovered: new Vector4(0.68f, 0.32f, 0.12f, 1.0f),
+        navButtonSelectedHovered: new Vector4(0.72f, 0.38f, 0.16f, 1.0f),
         frameBorderSize: 1.0f,
         divider: new Vector4(0.28f, 0.12f, 0.06f, 0.18f),
         barBackground: new Vector4(0.80f, 0.66f, 0.52f, 1.0f),
@@ -1046,6 +1046,94 @@ internal static class BetterDeathsThemeCatalog
         return (color.X * 0.2126f) + (color.Y * 0.7152f) + (color.Z * 0.0722f);
     }
 
+    private static float GetContrastChannel(float channel)
+    {
+        return channel <= 0.03928f
+            ? channel / 12.92f
+            : MathF.Pow((channel + 0.055f) / 1.055f, 2.4f);
+    }
+
+    private static float GetContrastLuminance(Vector4 color)
+    {
+        return (GetContrastChannel(color.X) * 0.2126f) +
+            (GetContrastChannel(color.Y) * 0.7152f) +
+            (GetContrastChannel(color.Z) * 0.0722f);
+    }
+
+    private static float GetColorContrast(Vector4 first, Vector4 second)
+    {
+        var firstLuminance = GetContrastLuminance(first);
+        var secondLuminance = GetContrastLuminance(second);
+        return (MathF.Max(firstLuminance, secondLuminance) + 0.05f) /
+            (MathF.Min(firstLuminance, secondLuminance) + 0.05f);
+    }
+
+    private static float GetMinimumColorContrast(Vector4 color, params Vector4[] backgrounds)
+    {
+        if (backgrounds.Length == 0)
+        {
+            return float.MaxValue;
+        }
+
+        var minimumContrast = float.MaxValue;
+        foreach (var background in backgrounds)
+        {
+            minimumContrast = MathF.Min(minimumContrast, GetColorContrast(color, background));
+        }
+
+        return minimumContrast;
+    }
+
+    private static bool MeetsMinimumContrast(Vector4 color, float minimumContrast, params Vector4[] backgrounds)
+    {
+        return GetMinimumColorContrast(color, backgrounds) >= minimumContrast;
+    }
+
+    private static Vector4 EnsureReadableTextColor(Vector4 desired, float minimumContrast, params Vector4[] backgrounds)
+    {
+        if (MeetsMinimumContrast(desired, minimumContrast, backgrounds))
+        {
+            return desired;
+        }
+
+        var averageLuminance = 0.0f;
+        foreach (var background in backgrounds)
+        {
+            averageLuminance += GetColorLuminance(background);
+        }
+
+        averageLuminance /= MathF.Max(1.0f, backgrounds.Length);
+        var primaryTarget = averageLuminance >= 0.55f
+            ? new Vector4(0.0f, 0.0f, 0.0f, desired.W)
+            : new Vector4(0.98f, 0.98f, 0.96f, desired.W);
+        var secondaryTarget = averageLuminance >= 0.55f
+            ? new Vector4(0.98f, 0.98f, 0.96f, desired.W)
+            : new Vector4(0.0f, 0.0f, 0.0f, desired.W);
+        var best = desired;
+        var bestContrast = GetMinimumColorContrast(best, backgrounds);
+
+        foreach (var target in new[] { primaryTarget, secondaryTarget })
+        {
+            for (var step = 1; step <= 20; step++)
+            {
+                var candidate = BlendColors(desired, target, step / 20.0f) with { W = desired.W };
+                var candidateContrast = GetMinimumColorContrast(candidate, backgrounds);
+                if (candidateContrast >= minimumContrast)
+                {
+                    return candidate;
+                }
+
+                if (candidateContrast > bestContrast)
+                {
+                    best = candidate;
+                    bestContrast = candidateContrast;
+                }
+            }
+        }
+
+        return best;
+    }
+
     private static Vector4 BlendColors(Vector4 first, Vector4 second, float amount)
     {
         var clampedAmount = Math.Clamp(amount, 0.0f, 1.0f);
@@ -1089,11 +1177,15 @@ internal static class BetterDeathsThemeCatalog
         var frameColor = frame ?? panelAlt;
         var frameHoveredColor = frameHovered ?? panelAlt with { W = 1.0f };
         var popupBgColor = popup ?? panel with { W = 0.98f };
-        var navButtonColor = navButton ?? panelAlt with { W = 0.96f };
-        var navButtonHoveredColor = navButtonHovered ?? border with { W = 1.0f };
-        var navButtonSelectedColor = navButtonSelected ?? accentSoft with { W = 0.95f };
-        var navButtonSelectedHoveredColor = navButtonSelectedHovered ?? accentSoft with { W = 1.0f };
         var lightPanels = GetColorLuminance(panel) >= 0.55f;
+        var navButtonColor = navButton ?? panelAlt with { W = 0.96f };
+        var navButtonHoveredColor = navButtonHovered ?? (lightPanels
+            ? BlendColors(panelAlt, border, 0.10f) with { W = 1.0f }
+            : border with { W = 1.0f });
+        var navButtonSelectedColor = navButtonSelected ?? accentSoft with { W = 0.95f };
+        var navButtonSelectedHoveredColor = navButtonSelectedHovered ?? (lightPanels
+            ? BlendColors(accentSoft, panelAlt, 0.56f) with { W = 1.0f }
+            : accentSoft with { W = 1.0f });
         var selectedButtonTextColor = lightPanels
             ? textColor
             : accent;
@@ -1124,16 +1216,60 @@ internal static class BetterDeathsThemeCatalog
             : BlendColors(border, accent, 0.40f) with { W = 0.78f };
         var scrollbarGrabHoveredColor = BlendColors(scrollbarGrabColor, accent, 0.34f) with { W = 0.94f };
         var scrollbarGrabActiveColor = BlendColors(accent, textColor, lightPanels ? 0.08f : 0.04f) with { W = 1.0f };
+        var modernButtonHoveredColor = lightPanels
+            ? BlendColors(panelAlt, border, 0.10f) with { W = 1.0f }
+            : border with { W = 1.0f };
+        var timelineSelectedRowColor = accentSoft with { W = 0.48f };
+        var timelinePressedRowColor = accentSoft with { W = 0.72f };
+        var textSurfaces = new[]
+        {
+            shell,
+            panel,
+            panelAlt,
+            frameColor,
+            frameHoveredColor,
+            popupBgColor,
+            tableRowAltColor,
+            focusedRowColor,
+            timelineSelectedRowColor,
+            timelinePressedRowColor,
+        };
+        var navButtonTextColor = EnsureReadableTextColor(
+            textColor,
+            4.5f,
+            navButtonColor,
+            navButtonHoveredColor,
+            modernButtonHoveredColor,
+            frameColor,
+            frameHoveredColor);
+        var navSelectedTextColor = EnsureReadableTextColor(
+            selectedButtonTextColor,
+            4.5f,
+            navButtonSelectedColor,
+            navButtonSelectedHoveredColor,
+            navButtonActive ?? navButtonSelectedHoveredColor);
+        var warningBaseColor = lightPanels
+            ? new Vector4(0.52f, 0.28f, 0.0f, 1.0f)
+            : new Vector4(1.0f, 0.68f, 0.28f, 1.0f);
+        var disabledBaseColor = lightPanels
+            ? BlendColors(textColor, panel, 0.34f) with { W = 1.0f }
+            : new Vector4(0.64f, 0.64f, 0.64f, 1.0f);
+        var damageColor = EnsureReadableTextColor(damage ?? new Vector4(1.0f, 0.36f, 0.26f, 1.0f), 3.0f, textSurfaces);
+        var healColor = EnsureReadableTextColor(heal ?? new Vector4(0.27f, 0.88f, 0.45f, 1.0f), 3.0f, textSurfaces);
+        var warningColor = EnsureReadableTextColor(warningBaseColor, 3.0f, textSurfaces);
+        var leadUpGoldColor = EnsureReadableTextColor(highlight, 3.0f, textSurfaces);
+        var dangerTextColor = EnsureReadableTextColor(dangerColor, 3.0f, textSurfaces);
+        var disabledColor = EnsureReadableTextColor(disabledBaseColor, 3.0f, textSurfaces);
         return new BetterDeathsUiTheme
         {
             Id = id,
             Label = label,
-            DamageColor = damage ?? new Vector4(1.0f, 0.36f, 0.26f, 1.0f),
-            HealColor = heal ?? new Vector4(0.27f, 0.88f, 0.45f, 1.0f),
-            WarningColor = new Vector4(1.0f, 0.68f, 0.28f, 1.0f),
-            LeadUpGoldColor = highlight,
-            SpamWarningColor = dangerColor,
-            DisabledColor = new Vector4(0.64f, 0.64f, 0.64f, 1.0f),
+            DamageColor = damageColor,
+            HealColor = healColor,
+            WarningColor = warningColor,
+            LeadUpGoldColor = leadUpGoldColor,
+            SpamWarningColor = dangerTextColor,
+            DisabledColor = disabledColor,
             UpdateBannerBgColor = new Vector4(0.14f, 0.22f, 0.12f, 0.95f),
             UpdateBannerTextColor = new Vector4(0.45f, 1.0f, 0.52f, 1.0f),
             NoticeBorderColor = accent,
@@ -1144,7 +1280,7 @@ internal static class BetterDeathsThemeCatalog
             ShieldBarColor = highlight,
             BarBackgroundColor = barBackground ?? new Vector4(0.17f, 0.17f, 0.17f, 1.0f),
             BarBorderColor = barBorder ?? new Vector4(0.47f, 0.44f, 0.41f, 1.0f),
-            OverkillColor = dangerColor,
+            OverkillColor = dangerTextColor,
             ModernShellColor = shell,
             ModernPanelColor = panel,
             ModernPanelAltColor = panelAlt,
@@ -1156,14 +1292,14 @@ internal static class BetterDeathsThemeCatalog
             ModernDividerColor = divider ?? new Vector4(1.0f, 1.0f, 1.0f, 0.10f),
             ModernFrameColor = frameColor,
             ModernFrameHoveredColor = frameHoveredColor,
-            ModernButtonHoveredColor = border with { W = 1.0f },
+            ModernButtonHoveredColor = modernButtonHoveredColor,
             ModernNavButtonColor = navButtonColor,
             ModernNavButtonHoveredColor = navButtonHoveredColor,
             ModernNavButtonSelectedColor = navButtonSelectedColor,
             ModernNavButtonSelectedHoveredColor = navButtonSelectedHoveredColor,
             ModernNavButtonActiveColor = navButtonActive ?? navButtonSelectedHoveredColor,
-            ModernButtonTextColor = textColor,
-            ModernSelectedButtonTextColor = selectedButtonTextColor,
+            ModernButtonTextColor = navButtonTextColor,
+            ModernSelectedButtonTextColor = navSelectedTextColor,
             ModernPopupBgColor = popupBgColor,
             ModernCheckMarkColor = accent,
             CheckboxFrameColor = checkboxFrameColor,
@@ -1179,8 +1315,8 @@ internal static class BetterDeathsThemeCatalog
             FocusedRowColor = focusedRowColor,
             FocusedRowAccentColor = focusedRowAccentColor,
             ModernFrameBorderSize = frameBorderSize,
-            TimelineSelectedRowColor = accentSoft with { W = 0.48f },
-            TimelinePressedRowColor = accentSoft with { W = 0.72f },
+            TimelineSelectedRowColor = timelineSelectedRowColor,
+            TimelinePressedRowColor = timelinePressedRowColor,
             ScrollbarBackgroundColor = scrollbarBackgroundColor,
             ScrollbarGrabColor = scrollbarGrabColor,
             ScrollbarGrabHoveredColor = scrollbarGrabHoveredColor,

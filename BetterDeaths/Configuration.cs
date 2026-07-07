@@ -335,6 +335,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public float ReplayWorldMarkerOpacity { get; set; } = 0.75f;
 
+    public bool UseCustomPullGroupColors { get; set; }
+
+    public List<ThemeColorValue> PullGroupColors { get; set; } = [];
+
     public bool ShowDebugTab { get; set; }
 
     public bool DebugLogEnabled { get; set; }

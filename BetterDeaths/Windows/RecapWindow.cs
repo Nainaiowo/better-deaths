@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.230";
+    private const string CurrentChangelogVersion = "0.1.0.231";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -172,6 +172,9 @@ public sealed class RecapWindow : Window, IDisposable
     private const float PullBrowserHeaderButtonInset = 6.0f;
     private const float PullCellHeight = 58.0f;
     private const float CollapsedPullCellHeight = 30.0f;
+    private const float PullGroupIndicatorThickness = 3.0f;
+    private const float PullGroupTopDashWidth = 24.0f;
+    private const float StackedPullCellRightPadding = 8.0f;
     private const float StackedCollapsedPullBrowserHeight = 88.0f;
     private const float StackedReviewSplitterHeight = 9.0f;
     private const float StackedExpandedPullBrowserMinHeight = 150.0f;
@@ -200,6 +203,17 @@ public sealed class RecapWindow : Window, IDisposable
         BetterDeathsTheme.Cotton,
         BetterDeathsTheme.Banana,
         BetterDeathsTheme.Hamtaro,
+    ];
+    private static readonly Vector4[] BasePullGroupPalette =
+    [
+        new(0.20f, 0.74f, 0.88f, 1.0f),
+        new(0.34f, 0.52f, 0.96f, 1.0f),
+        new(0.62f, 0.46f, 0.94f, 1.0f),
+        new(0.92f, 0.40f, 0.74f, 1.0f),
+        new(0.88f, 0.34f, 0.44f, 1.0f),
+        new(0.26f, 0.78f, 0.50f, 1.0f),
+        new(0.24f, 0.66f, 0.62f, 1.0f),
+        new(0.76f, 0.82f, 0.92f, 1.0f),
     ];
     private static readonly TimeSpan LeadUpStatusMergeWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LeadUpEventHpSampleWindow = TimeSpan.FromMilliseconds(75);
@@ -400,6 +414,8 @@ public sealed class RecapWindow : Window, IDisposable
         string TerritoryName,
         float PullElapsedSeconds,
         int DeathCount,
+        string PullGroupId,
+        int PullGroupColorIndex,
         IReadOnlyList<PartyDeathRecord> Deaths,
         DeathSelectionSource Source,
         RecordedPullSummary? RecordedPull);
@@ -1033,6 +1049,8 @@ public sealed class RecapWindow : Window, IDisposable
                 "Sigmascape V4.0",
                 293.0f,
                 deaths.Count,
+                string.Empty,
+                -1,
                 deaths,
                 DeathSelectionSource.Example,
                 null),
@@ -1059,6 +1077,8 @@ public sealed class RecapWindow : Window, IDisposable
                 plugin.CurrentPullTerritoryName,
                 plugin.CurrentPullElapsedSeconds,
                 plugin.CurrentDeaths.Count,
+                plugin.CurrentDutyInstancePullGroupId,
+                plugin.CurrentDutyInstancePullGroupColorIndex,
                 plugin.CurrentDeaths,
                 DeathSelectionSource.Current,
                 null));
@@ -1087,6 +1107,8 @@ public sealed class RecapWindow : Window, IDisposable
                 summary.TerritoryName,
                 summary.PullElapsedSeconds,
                 detail?.Deaths.Count ?? summary.DeathCount,
+                summary.PullGroupId,
+                summary.PullGroupColorIndex,
                 deaths,
                 DeathSelectionSource.Recorded,
                 summary));
@@ -1634,7 +1656,7 @@ public sealed class RecapWindow : Window, IDisposable
                 var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
                 var rowId = $"PullRow{idPrefix}{pull.Key}";
                 var clicked = usePullCells
-                    ? DrawExpandedPullCell(pull, rowId, selected)
+                    ? DrawExpandedPullCell(pull, rowId, selected, StackedPullCellRightPadding)
                     : DrawWidePullListItem(pull, rowId, selected);
                 if (clicked)
                 {
@@ -1773,6 +1795,7 @@ public sealed class RecapWindow : Window, IDisposable
     private bool DrawWidePullListItem(ReviewPull pull, string id, bool selected)
     {
         var clicked = ImGui.Selectable($"{GetPullCellTitle(pull)}###{id}", selected);
+        DrawPullGroupRightDashForLastItem(pull);
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip(FormatExpandedPullTooltip(pull));
@@ -1789,15 +1812,84 @@ public sealed class RecapWindow : Window, IDisposable
         return clicked;
     }
 
-    private bool DrawExpandedPullCell(ReviewPull pull, string id, bool selected)
+    private Vector4? GetPullGroupColor(ReviewPull pull)
+    {
+        if (string.IsNullOrWhiteSpace(pull.PullGroupId) || pull.PullGroupColorIndex < 0)
+        {
+            return null;
+        }
+
+        return GetPullGroupColor(pull.PullGroupColorIndex);
+    }
+
+    private Vector4 GetPullGroupColor(int colorIndex)
+    {
+        var normalizedIndex = Mod(colorIndex, Plugin.PullGroupColorPaletteSize);
+        if (configuration.UseCustomPullGroupColors &&
+            configuration.PullGroupColors is { Count: > 0 } customColors &&
+            normalizedIndex < customColors.Count &&
+            customColors[normalizedIndex] is { } customColor)
+        {
+            return ToVector4(customColor) with { W = Math.Clamp(customColor.A <= 0.0f ? 0.86f : customColor.A, 0.25f, 1.0f) };
+        }
+
+        return GetDefaultPullGroupColor(normalizedIndex);
+    }
+
+    private static Vector4 GetDefaultPullGroupColor(int colorIndex)
+    {
+        var baseColor = BasePullGroupPalette[Mod(colorIndex, BasePullGroupPalette.Length)];
+        var color = ActiveThemeUsesLightPanels()
+            ? BlendColors(baseColor, ModernTextColor, 0.20f)
+            : BlendColors(baseColor, ModernAccentColor, 0.12f);
+        return color with { W = ActiveThemeUsesLightPanels() ? 0.82f : 0.88f };
+    }
+
+    private void DrawPullGroupRightDashForLastItem(ReviewPull pull)
+    {
+        if (GetPullGroupColor(pull) is not { } color)
+        {
+            return;
+        }
+
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+        var centerY = (min.Y + max.Y) * 0.5f;
+        var dashWidth = MathF.Min(26.0f, MathF.Max(12.0f, (max.X - min.X) * 0.18f));
+        var dashMin = new Vector2(max.X - dashWidth - 4.0f, centerY - (PullGroupIndicatorThickness * 0.5f));
+        var dashMax = new Vector2(max.X - 4.0f, centerY + (PullGroupIndicatorThickness * 0.5f));
+        ImGui.GetWindowDrawList().AddRectFilled(dashMin, dashMax, ImGui.GetColorU32(color), 2.0f);
+    }
+
+    private static void DrawPullGroupTopDash(ImDrawListPtr drawList, Vector2 start, Vector2 end, Vector4 color)
+    {
+        var width = MathF.Min(PullGroupTopDashWidth, MathF.Max(8.0f, (end.X - start.X) - 18.0f));
+        var dashMin = new Vector2(start.X + MathF.Max(0.0f, ((end.X - start.X) - width) * 0.5f), start.Y + 5.0f);
+        var dashMax = new Vector2(dashMin.X + width, dashMin.Y + PullGroupIndicatorThickness);
+        drawList.AddRectFilled(dashMin, dashMax, ImGui.GetColorU32(color), 2.0f);
+    }
+
+    private static int Mod(int value, int modulus)
+    {
+        if (modulus <= 0)
+        {
+            return 0;
+        }
+
+        var result = value % modulus;
+        return result < 0 ? result + modulus : result;
+    }
+
+    private bool DrawExpandedPullCell(ReviewPull pull, string id, bool selected, float rightPadding = 0.0f)
     {
         var start = ImGui.GetCursorScreenPos();
-        var width = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var width = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X - MathF.Max(0.0f, rightPadding));
         var size = new Vector2(width, PullCellHeight);
         var clicked = ImGui.InvisibleButton($"##{id}", size);
         var hovered = ImGui.IsItemHovered();
         var end = start + size;
         var drawList = ImGui.GetWindowDrawList();
+        var groupColor = GetPullGroupColor(pull);
         var fill = selected
             ? BlendColors(ModernAccentSoftColor, ModernPanelAltColor, 0.34f)
             : hovered
@@ -1817,7 +1909,12 @@ public sealed class RecapWindow : Window, IDisposable
                 3.0f);
         }
 
-        var textStart = start + new Vector2(12.0f, 8.0f);
+        if (groupColor is { } color)
+        {
+            DrawPullGroupTopDash(drawList, start, end, color);
+        }
+
+        var textStart = start + new Vector2(12.0f, groupColor is null ? 8.0f : 15.0f);
         var clipMin = start + new Vector2(8.0f, 4.0f);
         var clipMax = end - new Vector2(8.0f, 4.0f);
         ImGui.PushClipRect(clipMin, clipMax, true);
@@ -1878,7 +1975,7 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.SameLine(0.0f, spacing);
             }
 
-            if (DrawCollapsedPullButton(label, $"StackedCollapsedPull{idPrefix}{pull.Key}", selected, width))
+            if (DrawCollapsedPullButton(label, $"StackedCollapsedPull{idPrefix}{pull.Key}", selected, width, GetPullGroupColor(pull)))
             {
                 selection.PullKey = pull.Key;
                 ClearSelectedDeath(selection);
@@ -1965,7 +2062,7 @@ public sealed class RecapWindow : Window, IDisposable
                 {
                     var selected = string.Equals(selection.PullKey, pull.Key, StringComparison.Ordinal);
                     var pullLabel = GetCollapsedPullLabel(pull);
-                    if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedPullRail{id}{pull.Key}", selected))
+                    if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedPullRail{id}{pull.Key}", selected, GetPullGroupColor(pull)))
                     {
                         selection.PullKey = pull.Key;
                         ClearSelectedDeath(selection);
@@ -1997,7 +2094,12 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SameLine(0.0f, 0.0f);
     }
 
-    private bool DrawCollapsedPullButton(string label, string id, bool selected, float widthOverride = 0.0f)
+    private bool DrawCollapsedPullButton(
+        string label,
+        string id,
+        bool selected,
+        float widthOverride = 0.0f,
+        Vector4? groupColor = null)
     {
         var start = ImGui.GetCursorScreenPos();
         var width = widthOverride > 0.0f
@@ -2018,11 +2120,17 @@ public sealed class RecapWindow : Window, IDisposable
         var drawList = ImGui.GetWindowDrawList();
         drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 5.0f);
         drawList.AddRect(start, end, ImGui.GetColorU32(border), 5.0f, ImDrawFlags.None, selected ? 1.3f : 1.0f);
+        if (groupColor is { } color)
+        {
+            DrawPullGroupTopDash(drawList, start, end, color);
+        }
 
         var textSize = ImGui.CalcTextSize(label);
         var textPosition = new Vector2(
             start.X + MathF.Max(0.0f, (width - textSize.X) * 0.5f),
-            start.Y + MathF.Max(0.0f, (height - textSize.Y) * 0.5f));
+            groupColor is null
+                ? start.Y + MathF.Max(0.0f, (height - textSize.Y) * 0.5f)
+                : start.Y + MathF.Max(0.0f, height - textSize.Y - 3.0f));
         drawList.AddText(
             textPosition,
             selected ? ImGui.GetColorU32(LeadUpGoldColor) : ImGui.GetColorU32(ModernTextColor),
@@ -2031,7 +2139,7 @@ public sealed class RecapWindow : Window, IDisposable
         return clicked;
     }
 
-    private static bool DrawCollapsedPullRailItem(string label, string id, bool selected)
+    private static bool DrawCollapsedPullRailItem(string label, string id, bool selected, Vector4? groupColor)
     {
         var start = ImGui.GetCursorScreenPos();
         var width = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
@@ -2053,6 +2161,13 @@ public sealed class RecapWindow : Window, IDisposable
                 new Vector2(lineX, end.Y - 5.0f),
                 ImGui.GetColorU32(accent),
                 selected ? 2.0f : 1.0f);
+        }
+
+        if (groupColor is { } color)
+        {
+            var stripMin = new Vector2(end.X - PullGroupIndicatorThickness - 5.0f, start.Y + 5.0f);
+            var stripMax = new Vector2(end.X - 5.0f, end.Y - 5.0f);
+            drawList.AddRectFilled(stripMin, stripMax, ImGui.GetColorU32(color), 2.0f);
         }
 
         var textSize = ImGui.CalcTextSize(label);
@@ -11953,7 +12068,121 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawSettingsTooltip("Controls non-widget action and status icons in death timelines, details, examples, and Better Deaths lead-up tables. Use the Widget tab for Current Pull widget icons.");
 
+        DrawPullGroupColorSetting();
         DrawThemeSetting();
+    }
+
+    private void DrawPullGroupColorSetting()
+    {
+        var useCustomPullGroupColors = configuration.UseCustomPullGroupColors;
+        if (DrawThemedCheckbox("Customize pull group colors", ref useCustomPullGroupColors))
+        {
+            configuration.UseCustomPullGroupColors = useCustomPullGroupColors;
+            if (useCustomPullGroupColors)
+            {
+                EnsureCustomPullGroupColorsInitialized();
+            }
+
+            plugin.SaveConfiguration();
+        }
+
+        DrawSettingsTooltip("Controls the same-duty-instance color markers shown in the Pulls list.");
+
+        if (!useCustomPullGroupColors)
+        {
+            return;
+        }
+
+        if (EnsureCustomPullGroupColorsInitialized())
+        {
+            plugin.SaveConfiguration();
+        }
+
+        var resetLabel = "Reset pull colors";
+        var resetWidth = GetThemedActionButtonWidth(resetLabel);
+        if (DrawThemedActionButton(resetLabel, "ResetPullGroupColors", MathF.Min(resetWidth, ImGui.GetContentRegionAvail().X)))
+        {
+            ResetCustomPullGroupColorsFromTheme();
+        }
+
+        ImGui.TextColored(ModernMutedTextColor, "Pull group palette");
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var columnCount = availableWidth >= 560.0f ? 2 : 1;
+        if (!ImGui.BeginTable("##PullGroupColorPalette", columnCount, ImGuiTableFlags.SizingStretchSame))
+        {
+            return;
+        }
+
+        for (var i = 0; i < configuration.PullGroupColors.Count; i++)
+        {
+            ImGui.TableNextColumn();
+            DrawPullGroupColorEdit(i);
+        }
+
+        ImGui.EndTable();
+        ImGui.Spacing();
+    }
+
+    private void DrawPullGroupColorEdit(int index)
+    {
+        var color = configuration.PullGroupColors[index];
+        var vector = ToVector4(color);
+        ImGui.SetNextItemWidth(MathF.Min(150.0f, ImGui.GetContentRegionAvail().X * 0.55f));
+        if (ImGui.ColorEdit4($"##PullGroupColor{index}", ref vector, ImGuiColorEditFlags.AlphaPreviewHalf))
+        {
+            SetThemeColorValue(color, vector);
+        }
+
+        var hovered = ImGui.IsItemHovered();
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.SameLine();
+        ImGui.TextWrapped($"Group {index + 1}");
+        hovered |= ImGui.IsItemHovered();
+        if (hovered)
+        {
+            SetThemedTooltip("Used for pulls captured in the same duty instance.");
+        }
+    }
+
+    private bool EnsureCustomPullGroupColorsInitialized()
+    {
+        var changed = false;
+        configuration.PullGroupColors ??= [];
+        while (configuration.PullGroupColors.Count < Plugin.PullGroupColorPaletteSize)
+        {
+            configuration.PullGroupColors.Add(ToThemeColorValue(GetDefaultPullGroupColor(configuration.PullGroupColors.Count)));
+            changed = true;
+        }
+
+        for (var i = 0; i < configuration.PullGroupColors.Count; i++)
+        {
+            if (configuration.PullGroupColors[i] is null)
+            {
+                configuration.PullGroupColors[i] = ToThemeColorValue(GetDefaultPullGroupColor(i));
+                changed = true;
+            }
+        }
+
+        while (configuration.PullGroupColors.Count > Plugin.PullGroupColorPaletteSize)
+        {
+            configuration.PullGroupColors.RemoveAt(configuration.PullGroupColors.Count - 1);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private void ResetCustomPullGroupColorsFromTheme()
+    {
+        configuration.PullGroupColors = Enumerable
+            .Range(0, Plugin.PullGroupColorPaletteSize)
+            .Select(index => ToThemeColorValue(GetDefaultPullGroupColor(index)))
+            .ToList();
+        plugin.SaveConfiguration();
     }
 
     private void DrawThemeSetting()
@@ -12189,6 +12418,15 @@ public sealed class RecapWindow : Window, IDisposable
             Math.Clamp(color.G, 0.0f, 1.0f),
             Math.Clamp(color.B, 0.0f, 1.0f),
             Math.Clamp(color.A, 0.0f, 1.0f));
+    }
+
+    private static ThemeColorValue ToThemeColorValue(Vector4 color)
+    {
+        return new ThemeColorValue(
+            Math.Clamp(color.X, 0.0f, 1.0f),
+            Math.Clamp(color.Y, 0.0f, 1.0f),
+            Math.Clamp(color.Z, 0.0f, 1.0f),
+            Math.Clamp(color.W, 0.0f, 1.0f));
     }
 
     private static void SetThemeColorValue(ThemeColorValue color, Vector4 value)
@@ -14352,6 +14590,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.231");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added same-duty pull grouping to the Pulls list, with colored indicators across collapsed, expanded, and stacked views.");
+        DrawHighlightedChangelogBullet("Added customizable pull group colors in Customize.");
+        DrawHighlightedChangelogBullet("Improved theme readability across all built-in themes, including button text, status text, warning/gold text, and HP/shield labels.");
+        DrawWrappedBullet("Added saved pull group data so recorded pulls keep their duty-instance color after restart.");
+        DrawWrappedBullet("Added extra padding to short-width expanded pull cells so the content does not sit against the window edge.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.230");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Improved Death Replay timing, waymark capture, and mechanic cleanup reliability.");
@@ -15268,18 +15516,18 @@ public sealed class RecapWindow : Window, IDisposable
         var desired = selected
             ? ModernSelectedButtonTextColor
             : ModernButtonTextColor;
-        return GetColorContrast(background, desired) >= 2.2f
+        return GetColorContrast(background, desired) >= 4.5f
             ? desired
-            : GetReadableTextColorForBackground(background);
+            : GetReadableTextColorForBackground(background, 4.5f);
     }
 
-    private static Vector4 GetReadableTextColorForBackground(Vector4 background)
+    private static Vector4 GetReadableTextColorForBackground(Vector4 background, float minimumContrast = 3.0f)
     {
-        var darkText = new Vector4(0.035f, 0.045f, 0.055f, 1.0f);
+        var darkText = new Vector4(0.0f, 0.0f, 0.0f, 1.0f);
         var lightText = new Vector4(0.98f, 0.98f, 0.96f, 1.0f);
         var themeText = ModernTextColor with { W = 1.0f };
 
-        if (GetColorContrast(background, themeText) >= 3.0f)
+        if (GetColorContrast(background, themeText) >= minimumContrast)
         {
             return themeText;
         }
@@ -15291,10 +15539,24 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static float GetColorContrast(Vector4 first, Vector4 second)
     {
-        var firstLuminance = GetColorLuminance(first);
-        var secondLuminance = GetColorLuminance(second);
+        var firstLuminance = GetContrastLuminance(first);
+        var secondLuminance = GetContrastLuminance(second);
         return (MathF.Max(firstLuminance, secondLuminance) + 0.05f) /
             (MathF.Min(firstLuminance, secondLuminance) + 0.05f);
+    }
+
+    private static float GetContrastChannel(float channel)
+    {
+        return channel <= 0.03928f
+            ? channel / 12.92f
+            : MathF.Pow((channel + 0.055f) / 1.055f, 2.4f);
+    }
+
+    private static float GetContrastLuminance(Vector4 color)
+    {
+        return (GetContrastChannel(color.X) * 0.2126f) +
+            (GetContrastChannel(color.Y) * 0.7152f) +
+            (GetContrastChannel(color.Z) * 0.0722f);
     }
 
     private static float GetColorLuminance(Vector4 color)
@@ -16512,23 +16774,45 @@ public sealed class RecapWindow : Window, IDisposable
         return BlendColors(HpBarColor, lightGreen, 0.62f) with { W = 1.0f };
     }
 
-    private static Vector4 GetHpBarLabelColor(bool lethalHit, bool clearlyUnsurvivable)
+    private static Vector4 GetHpBarLabelColor(
+        float labelCenterOffset,
+        float hpWidth,
+        float shieldWidth,
+        float overflowShieldWidth)
     {
-        if (clearlyUnsurvivable)
-        {
-            return OverkillColor;
-        }
-
-        return lethalHit
-            ? GetLethalHitBarTextColor()
-            : ModernTextColor;
+        var backdrop = GetHpBarLabelBackdropColor(labelCenterOffset, hpWidth, shieldWidth, overflowShieldWidth);
+        return GetReadableTextColorForBackground(backdrop, 4.5f);
     }
 
-    private static Vector4 GetLethalHitBarTextColor()
+    private static Vector4 GetHpBarLabelBackdropColor(
+        float labelCenterOffset,
+        float hpWidth,
+        float shieldWidth,
+        float overflowShieldWidth)
     {
-        return ActiveThemeUsesLightPanels()
-            ? new Vector4(0.72f, 0.36f, 0.00f, 1.0f)
-            : new Vector4(1.0f, 0.86f, 0.34f, 1.0f);
+        if (overflowShieldWidth > 0.0f && labelCenterOffset <= overflowShieldWidth)
+        {
+            return ShieldBarColor;
+        }
+
+        if (hpWidth > 0.0f && labelCenterOffset <= hpWidth)
+        {
+            return HpBarColor;
+        }
+
+        if (shieldWidth > 0.0f && labelCenterOffset <= hpWidth + shieldWidth)
+        {
+            return ShieldBarColor;
+        }
+
+        return BarBackgroundColor;
+    }
+
+    private static Vector4 GetHpBarLabelShadowColor(Vector4 labelColor)
+    {
+        return GetColorLuminance(labelColor) >= 0.50f
+            ? new Vector4(0.02f, 0.025f, 0.03f, 0.62f)
+            : new Vector4(1.0f, 1.0f, 0.96f, 0.34f);
     }
 
     private static string FormatEnemyHpPercent(EnemyHpSnapshot enemy)
@@ -16601,9 +16885,6 @@ public sealed class RecapWindow : Window, IDisposable
         var shieldWidth = (float)(size.X * shieldRatio);
         var overflowShieldWidth = (float)(size.X * overflowShieldRatio);
         var damageAmount = incomingDamage.GetValueOrDefault();
-        var lethalHit = incomingDamage is not null &&
-            currentHp > 0 &&
-            damageAmount >= currentHp;
         var clearlyUnsurvivable = incomingDamage is not null &&
             damageAmount >= (ulong)maxHp + ClearlyUnsurvivableOverMaxHp;
 
@@ -16651,8 +16932,12 @@ public sealed class RecapWindow : Window, IDisposable
         var textPosition = new Vector2(
             centerLabel ? position.X + MathF.Max(4.0f, (size.X - textSize.X) * 0.5f) : position.X + 4.0f,
             position.Y + MathF.Max(1.0f, (size.Y - textSize.Y) * 0.5f));
+        var labelCenterOffset = Math.Clamp((textPosition.X - position.X) + (textSize.X * 0.5f), 0.0f, size.X);
+        var labelColor = GetHpBarLabelColor(labelCenterOffset, hpWidth, shieldWidth, overflowShieldWidth);
+        var shadowColor = GetHpBarLabelShadowColor(labelColor);
         ImGui.PushClipRect(position, barEnd, true);
-        drawList.AddText(textPosition, ImGui.GetColorU32(GetHpBarLabelColor(lethalHit, clearlyUnsurvivable)), label);
+        drawList.AddText(textPosition + new Vector2(1.0f, 1.0f), ImGui.GetColorU32(shadowColor), label);
+        drawList.AddText(textPosition, ImGui.GetColorU32(labelColor), label);
         ImGui.PopClipRect();
 
         if (ImGui.IsItemHovered())
@@ -16667,7 +16952,7 @@ public sealed class RecapWindow : Window, IDisposable
 
             if (!valueOnlyTooltip && clearlyUnsurvivable)
             {
-                tooltip += "\nRed text means a likely failed mechanic or vastly insufficient mitigation related death.";
+                tooltip += "\nLikely failed mechanic or vastly insufficient mitigation related death.";
             }
 
             SetThemedTooltip(tooltip);
