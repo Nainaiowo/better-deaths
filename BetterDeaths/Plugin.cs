@@ -1895,6 +1895,39 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetShowReplayPlayerNames(bool show)
+    {
+        if (Configuration.ShowReplayPlayerNames == show)
+        {
+            return;
+        }
+
+        Configuration.ShowReplayPlayerNames = show;
+        SaveConfiguration();
+    }
+
+    public void SetShowReplayPlayerJobs(bool show)
+    {
+        if (Configuration.ShowReplayPlayerJobs == show)
+        {
+            return;
+        }
+
+        Configuration.ShowReplayPlayerJobs = show;
+        SaveConfiguration();
+    }
+
+    public void SetShowReplayPlayerHp(bool show)
+    {
+        if (Configuration.ShowReplayPlayerHp == show)
+        {
+            return;
+        }
+
+        Configuration.ShowReplayPlayerHp = show;
+        SaveConfiguration();
+    }
+
     public void SetReplayWorldMarkerOpacity(float opacity)
     {
         Configuration.ReplayWorldMarkerOpacity = Math.Clamp(

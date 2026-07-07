@@ -6345,7 +6345,53 @@ public sealed class RecapWindow : Window, IDisposable
             replayModule,
             showTrails);
 
+        DrawDeathReplayDisplaySettings(idSuffix);
+    }
+
+    private void DrawDeathReplayDisplaySettings(string idSuffix)
+    {
+        ImGui.Spacing();
+        var showReplayPlayerNames = configuration.ShowReplayPlayerNames;
+        if (DrawThemedCheckbox($"Show names##DeathReplayShowNames{idSuffix}", ref showReplayPlayerNames))
+        {
+            plugin.SetShowReplayPlayerNames(showReplayPlayerNames);
+        }
+
+        DrawSettingsTooltip("Shows player names on the replay canvas. Name Redaction still hides real names.");
+
+        var style = ImGui.GetStyle();
+        if (CanFitInlineReplayCheckbox("Show classes", style))
+        {
+            ImGui.SameLine();
+        }
+
+        var showReplayPlayerJobs = configuration.ShowReplayPlayerJobs;
+        if (DrawThemedCheckbox($"Show classes##DeathReplayShowJobs{idSuffix}", ref showReplayPlayerJobs))
+        {
+            plugin.SetShowReplayPlayerJobs(showReplayPlayerJobs);
+        }
+
+        DrawSettingsTooltip("Shows class/job abbreviations on the replay canvas.");
+
+        if (CanFitInlineReplayCheckbox("Show HP", style))
+        {
+            ImGui.SameLine();
+        }
+
+        var showReplayPlayerHp = configuration.ShowReplayPlayerHp;
+        if (DrawThemedCheckbox($"Show HP##DeathReplayShowHp{idSuffix}", ref showReplayPlayerHp))
+        {
+            plugin.SetShowReplayPlayerHp(showReplayPlayerHp);
+        }
+
+        DrawSettingsTooltip("Shows compact HP and shield percentages on the replay canvas.");
         DrawDeathReplayWorldMarkerOpacitySlider(idSuffix);
+    }
+
+    private static bool CanFitInlineReplayCheckbox(string label, ImGuiStylePtr style)
+    {
+        var labelWidth = ImGui.CalcTextSize(label).X + ImGui.GetFrameHeight() + (style.ItemInnerSpacing.X * 2.0f);
+        return ImGui.GetContentRegionAvail().X >= labelWidth + style.ItemSpacing.X;
     }
 
     private void DrawDeathReplayWorldMarkerOpacitySlider(string idSuffix)
@@ -7705,9 +7751,9 @@ public sealed class RecapWindow : Window, IDisposable
             : null;
         ImGui.PushClipRect(canvasStart, canvasEnd, true);
         DrawReplayGrid(drawList, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-        var worldMarkerScreenRegions = DrawReplayWorldMarkers(drawList, worldMarkerStates, GetReplayWorldMarkerOpacity(), canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        DrawReplayWorldMarkers(drawList, worldMarkerStates, GetReplayWorldMarkerOpacity(), canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         var markerMechanicSourceKeysWithVisibleBadges = GetReplayMarkerMechanicSourceKeysWithVisibleBadges(markerStates, actorStates);
-        var mechanicScreenRegions = DrawReplayMechanics(drawList, mechanicStates, markerMechanicSourceKeysWithVisibleBadges, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        DrawReplayMechanics(drawList, mechanicStates, markerMechanicSourceKeysWithVisibleBadges, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
         if (showTrails)
         {
             var visibleActorKeys = actorStates
@@ -7743,48 +7789,8 @@ public sealed class RecapWindow : Window, IDisposable
         DrawDeathReplayZoomOverlay(idSuffix, canvasStart, canvasSize);
         HandleReplayCanvasFocus(idSuffix, canvasInputHovered, actorScreenPositions);
 
-        string? canvasTooltip = null;
-        if (canvasInputHovered)
-        {
-            var mouse = ImGui.GetIO().MousePos;
-            var hovered = actorScreenPositions
-                .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.InteractionRadius)
-                .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
-                .FirstOrDefault();
-            if (hovered is not null)
-            {
-                canvasTooltip = FormatReplayActorTooltip(hovered.Actor, hovered.Markers, selectedAtUtc, replayModule);
-            }
-            else
-            {
-                var hoveredMechanic = mechanicScreenRegions
-                    .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius)
-                    .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
-                    .FirstOrDefault();
-                if (hoveredMechanic.Mechanic is not null)
-                {
-                    canvasTooltip = FormatReplayMechanicTooltip(hoveredMechanic.Mechanic, selectedAtUtc);
-                }
-                else
-                {
-                    var hoveredWorldMarker = worldMarkerScreenRegions
-                        .Where(entry => Vector2.Distance(mouse, entry.ScreenPosition) <= entry.Radius)
-                        .OrderBy(entry => Vector2.Distance(mouse, entry.ScreenPosition))
-                        .FirstOrDefault();
-                    if (hoveredWorldMarker.Marker is not null)
-                    {
-                        canvasTooltip = FormatReplayWorldMarkerTooltip(hoveredWorldMarker.Marker);
-                    }
-                }
-            }
-        }
-
         AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
         ImGui.EndChild();
-        if (canvasTooltip is not null)
-        {
-            SetThemedTooltip(canvasTooltip);
-        }
 
         RestoreCursorAfterReplayCanvas(cursorStart);
     }
@@ -8194,7 +8200,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static IReadOnlyList<(ReplayWorldMarkerSnapshot Marker, Vector2 ScreenPosition, float Radius)> DrawReplayWorldMarkers(
+    private static void DrawReplayWorldMarkers(
         ImDrawListPtr drawList,
         IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkers,
         float opacity,
@@ -8208,7 +8214,6 @@ public sealed class RecapWindow : Window, IDisposable
         Vector2 pan)
     {
         opacity = Math.Clamp(opacity, Plugin.MinReplayWorldMarkerOpacity, Plugin.MaxReplayWorldMarkerOpacity);
-        var screenRegions = new List<(ReplayWorldMarkerSnapshot Marker, Vector2 ScreenPosition, float Radius)>(worldMarkers.Count);
         foreach (var marker in worldMarkers)
         {
             var center = ReplayWorldPointToScreen(marker.X, marker.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
@@ -8216,10 +8221,6 @@ public sealed class RecapWindow : Window, IDisposable
             var fill = color with { W = (ActiveThemeUsesLightPanels() ? 0.24f : 0.16f) * opacity };
             var border = color with { W = (ActiveThemeUsesLightPanels() ? 0.82f : 0.72f) * opacity };
             var textColor = BlendColors(color, ModernTextColor, ActiveThemeUsesLightPanels() ? 0.28f : 0.16f) with { W = 0.96f * opacity };
-            var markerRadius = marker.MarkerIndex < 4
-                ? ReplayWorldMarkerRadius
-                : ReplayWorldMarkerSquareHalfSize * MathF.Sqrt(2.0f);
-            screenRegions.Add((marker, center, markerRadius + 2.0f));
 
             if (marker.MarkerIndex < 4)
             {
@@ -8236,8 +8237,6 @@ public sealed class RecapWindow : Window, IDisposable
 
             DrawReplayWorldMarkerLabel(drawList, marker.Label, center, textColor);
         }
-
-        return screenRegions;
     }
 
     private static void DrawReplayWorldMarkerLabel(ImDrawListPtr drawList, string label, Vector2 center, Vector4 color)
@@ -8263,7 +8262,7 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
-    private static IReadOnlyList<(ReplayMechanicSnapshot Mechanic, Vector2 ScreenPosition, float Radius)> DrawReplayMechanics(
+    private static void DrawReplayMechanics(
         ImDrawListPtr drawList,
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
         IReadOnlySet<string> hiddenLabelMechanicSourceKeys,
@@ -8276,16 +8275,11 @@ public sealed class RecapWindow : Window, IDisposable
         float zoom,
         Vector2 pan)
     {
-        var screenRegions = new List<(ReplayMechanicSnapshot Mechanic, Vector2 ScreenPosition, float Radius)>(mechanics.Count);
         foreach (var mechanic in mechanics)
         {
             var center = ReplayWorldPointToScreen(mechanic.X, mechanic.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
-            var radius = Math.Clamp(ReplayWorldLengthToScreenRadius(GetReplayMechanicBoundsRadius(mechanic), canvasSize, minX, maxX, minZ, maxZ, zoom), 10.0f, 180.0f);
-            screenRegions.Add((mechanic, center, radius));
             DrawReplayMechanic(drawList, mechanic, center, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, hideLabel: hiddenLabelMechanicSourceKeys.Contains(mechanic.SourceKey));
         }
-
-        return screenRegions;
     }
 
     private static void DrawReplayMechanic(
@@ -8685,27 +8679,40 @@ public sealed class RecapWindow : Window, IDisposable
             drawList.AddCircle(screenPosition, radius + 4.0f, ImGui.GetColorU32(ModernMutedTextColor with { W = 0.55f }), 18, 1.0f);
         }
 
-        var shouldDrawFullLabel = actor.ActorKind == ReplayActorKind.Enemy || focused || isDeathTarget || hovered;
+        var hoverRevealsPlayerName = hovered && !configuration.ShowReplayPlayerNames;
+        var forcePlayerName = focused || isDeathTarget || hoverRevealsPlayerName;
+        var forcePlayerHp = focused || isDeathTarget || hoverRevealsPlayerName;
+        var shouldDrawPlayerInfoLabel = actor.ActorKind == ReplayActorKind.Player &&
+            (configuration.ShowReplayPlayerNames || configuration.ShowReplayPlayerJobs || configuration.ShowReplayPlayerHp);
+        var shouldDrawFullLabel = actor.ActorKind == ReplayActorKind.Enemy || forcePlayerName || shouldDrawPlayerInfoLabel;
         if (shouldDrawFullLabel)
         {
-            var label = FormatReplayActorLabel(actor);
-            var labelYOffset = actor.ActorKind == ReplayActorKind.Player
-                ? radius + 6.0f
-                : -ImGui.GetTextLineHeight() * 0.5f;
-            var textPosition = screenPosition + new Vector2(radius + 5.0f, labelYOffset);
-            if (focused)
+            var label = FormatReplayActorLabel(actor, forcePlayerName, forcePlayerHp);
+            if (!string.IsNullOrWhiteSpace(label))
             {
-                DrawFocusedReplayActorLabel(drawList, label, textPosition);
-            }
-            else
-            {
-                drawList.AddText(textPosition, ImGui.GetColorU32(isDeathTarget ? LeadUpGoldColor : ModernTextColor), label);
+                var labelYOffset = actor.ActorKind == ReplayActorKind.Player
+                    ? radius + 6.0f
+                    : -ImGui.GetTextLineHeight() * 0.5f;
+                var textPosition = screenPosition + new Vector2(radius + 5.0f, labelYOffset);
+                var labelColor = actor.ActorKind == ReplayActorKind.Player && actor.IsDead
+                    ? DamageColor
+                    : focused || isDeathTarget
+                        ? LeadUpGoldColor
+                        : ModernTextColor;
+                if (focused)
+                {
+                    DrawFocusedReplayActorLabel(drawList, label, textPosition, labelColor);
+                }
+                else
+                {
+                    drawList.AddText(textPosition, ImGui.GetColorU32(labelColor), label);
+                }
             }
         }
 
         if (markers.Count > 0)
         {
-            if (focused || isDeathTarget || hovered)
+            if (focused || isDeathTarget || hoverRevealsPlayerName)
             {
                 DrawReplayMarkerBadges(drawList, markers, screenPosition, radius, canvasStart, canvasSize, replayModule);
             }
@@ -8758,15 +8765,15 @@ public sealed class RecapWindow : Window, IDisposable
         drawList.AddLine(secondStart, secondEnd, ImGui.GetColorU32(markerColor), strokeWidth);
     }
 
-    private static void DrawFocusedReplayActorLabel(ImDrawListPtr drawList, string label, Vector2 textPosition)
+    private static void DrawFocusedReplayActorLabel(ImDrawListPtr drawList, string label, Vector2 textPosition, Vector4 textColor)
     {
         var padding = new Vector2(6.0f, 3.0f);
         var textSize = ImGui.CalcTextSize(label);
         var labelStart = textPosition - padding;
         var labelEnd = textPosition + textSize + padding;
         drawList.AddRectFilled(labelStart, labelEnd, ImGui.GetColorU32(ModernPanelColor with { W = 0.90f }), 5.0f);
-        drawList.AddRect(labelStart, labelEnd, ImGui.GetColorU32(LeadUpGoldColor with { W = 0.95f }), 5.0f, ImDrawFlags.None, 1.4f);
-        drawList.AddText(textPosition, ImGui.GetColorU32(LeadUpGoldColor), label);
+        drawList.AddRect(labelStart, labelEnd, ImGui.GetColorU32(textColor with { W = 0.95f }), 5.0f, ImDrawFlags.None, 1.4f);
+        drawList.AddText(textPosition, ImGui.GetColorU32(textColor), label);
     }
 
     private static void DrawReplayMarkerBadges(
@@ -9062,27 +9069,80 @@ public sealed class RecapWindow : Window, IDisposable
         };
     }
 
-    private string FormatReplayActorLabel(ReplayPositionSnapshot actor)
+    private string FormatReplayActorLabel(ReplayPositionSnapshot actor, bool forcePlayerName = false, bool forcePlayerHp = false)
     {
         if (actor.ActorKind == ReplayActorKind.Enemy)
         {
             return actor.ActorName;
         }
 
+        var showName = forcePlayerName || configuration.ShowReplayPlayerNames;
+        var showJob = configuration.ShowReplayPlayerJobs && !string.IsNullOrWhiteSpace(actor.ClassJobName);
+        var showHp = forcePlayerHp || configuration.ShowReplayPlayerHp;
+        if (!showName && !showJob && !showHp)
+        {
+            return string.Empty;
+        }
+
+        string? name = null;
         if (configuration.RedactPlayerNames)
         {
             var slot = actor.PartyIndex >= 0 && actor.PartyIndex < 1000
                 ? actor.PartyIndex + 1
                 : actor.PartyIndex;
-            return string.IsNullOrWhiteSpace(actor.ClassJobName)
-                ? $"Party {slot}"
-                : $"Party {slot} ({actor.ClassJobName})";
+            name = $"Party {slot}";
+        }
+        else
+        {
+            name = FormatKnownPlayerName(actor.ActorName);
         }
 
-        var name = FormatKnownPlayerName(actor.ActorName);
-        return string.IsNullOrWhiteSpace(actor.ClassJobName)
-            ? name
-            : $"{name} ({actor.ClassJobName})";
+        var identityText = (showName, showJob) switch
+        {
+            (true, true) => $"{name} ({actor.ClassJobName})",
+            (true, false) => name,
+            (false, true) => actor.ClassJobName,
+            _ => string.Empty,
+        };
+        var hpText = showHp
+            ? FormatReplayActorHpLabel(actor)
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(identityText))
+        {
+            return hpText;
+        }
+
+        return string.IsNullOrWhiteSpace(hpText)
+            ? identityText
+            : $"{identityText} {hpText}";
+    }
+
+    private static string FormatReplayActorHpLabel(ReplayPositionSnapshot actor)
+    {
+        if (actor.MaxHp == 0)
+        {
+            return string.Empty;
+        }
+
+        var currentPercent = actor.IsDead
+            ? 0
+            : FormatReplayHpPercent(actor.CurrentHp, actor.MaxHp);
+        var shieldText = actor.ShieldHp > 0
+            ? $" +{FormatReplayHpPercent(actor.ShieldHp, actor.MaxHp)}%"
+            : string.Empty;
+        return $"{currentPercent}%{shieldText}";
+    }
+
+    private static int FormatReplayHpPercent(uint amount, uint maxHp)
+    {
+        if (maxHp == 0 || amount == 0)
+        {
+            return 0;
+        }
+
+        var percent = (int)MathF.Round((float)amount / maxHp * 100.0f);
+        return Math.Clamp(Math.Max(1, percent), 0, 999);
     }
 
     private string FormatReplayMarkerActorLabel(ReplayMarkerSnapshot marker)
@@ -9166,59 +9226,6 @@ public sealed class RecapWindow : Window, IDisposable
     private static string NormalizeReplayJob(string classJobName)
     {
         return new string(classJobName.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
-    }
-
-    private string FormatReplayActorTooltip(
-        ReplayPositionSnapshot actor,
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        DateTime selectedAtUtc,
-        IReplayEncounterModule replayModule)
-    {
-        var hpText = actor.MaxHp == 0
-            ? "HP: -"
-            : $"HP: {actor.CurrentHp:N0}{(actor.ShieldHp > 0 ? $" + {actor.ShieldHp:N0} shield" : string.Empty)} / {actor.MaxHp:N0}";
-        var targetableText = actor.ActorKind == ReplayActorKind.Enemy
-            ? $"\n{(actor.IsTargetable ? "Targetable" : "Not targetable")}"
-            : string.Empty;
-        var markerText = FormatReplayActorMarkerTooltipText(markers, replayModule);
-        return $"{FormatReplayActorLabel(actor)}\n{hpText}\nPosition: {actor.X:0.0}, {actor.Z:0.0}\nSample: {FormatReplayOffset((float)(actor.SeenAtUtc - selectedAtUtc).TotalSeconds)} from replay time{targetableText}{markerText}";
-    }
-
-    private static string FormatReplayActorMarkerTooltipText(
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        IReplayEncounterModule replayModule)
-    {
-        return markers.Count switch
-        {
-            0 => string.Empty,
-            1 => $"\nMarker: {FormatReplayMarkerTooltipLabel(markers[0], replayModule)}",
-            _ => "\nMarkers:" + string.Concat(markers.Select(marker => $"\n- {FormatReplayMarkerTooltipLabel(marker, replayModule)}")),
-        };
-    }
-
-    private static string FormatReplayMechanicTooltip(ReplayMechanicSnapshot mechanic, DateTime selectedAtUtc)
-    {
-        var offset = FormatReplayOffset((float)(mechanic.SeenAtUtc - selectedAtUtc).TotalSeconds);
-        var label = string.IsNullOrWhiteSpace(mechanic.Label)
-            ? mechanic.Shape.ToString()
-            : mechanic.Label;
-        if (string.Equals(mechanic.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"{label}\nSource: {mechanic.SourceName}\nDamage: {mechanic.RawState:N0}\nSample: {offset} from replay time\nAction: Nothingness ({mechanic.RawEventId})";
-        }
-
-        if (string.Equals(mechanic.RawEventKind, "black-hole-tether", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(mechanic.RawEventKind, "graven-image-tether", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"{label}\nSource: {mechanic.SourceName}\nTether ID: {mechanic.RawEventId}\nSample: {offset} from replay time";
-        }
-
-        return $"{label}\nSource: {mechanic.SourceName}\nShape: {mechanic.Shape}\nSample: {offset} from replay time\nRaw: {mechanic.RawEventKind} {mechanic.RawEventId} / {mechanic.RawState}";
-    }
-
-    private static string FormatReplayWorldMarkerTooltip(ReplayWorldMarkerSnapshot marker)
-    {
-        return $"Waymark {marker.Label}\nPosition: {marker.X:0.0}, {marker.Z:0.0}";
     }
 
     private static ReplayMarkerBadgeDisplay GetReplayMarkerBadgeDisplay(
@@ -9326,33 +9333,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         return FormatReplayMarkerSummaryLabel(marker, replayModule);
-    }
-
-    private static string FormatReplayMarkerTooltipLabel(ReplayMarkerSnapshot marker, IReplayEncounterModule replayModule)
-    {
-        var idText = FormatReplayMarkerIdText(marker);
-        return replayModule.TryGetMarkerInfo(marker.MarkerId, out var info)
-            ? $"{info.Description} ({idText})"
-            : $"Marker {idText}";
-    }
-
-    private static string FormatReplayMarkerTooltipLabel(
-        ReplayMarkerSnapshot marker,
-        IReadOnlyList<ReplayMarkerSnapshot> markers,
-        IReplayEncounterModule replayModule)
-    {
-        if (ReplayEncounterModules.IsDmuP4RealityTellMarker(marker.MarkerId) &&
-            ReplayEncounterModules.TryGetDmuP4RealityTell(marker.RawMarkerId, out var realityLabel, out _))
-        {
-            return $"{realityLabel} P4 real/fake boss tell ({FormatReplayMarkerIdText(marker)})";
-        }
-
-        if (TryFormatDmuP4AssignmentMarker(marker, markers, replayModule, out var assignmentText))
-        {
-            return assignmentText;
-        }
-
-        return FormatReplayMarkerTooltipLabel(marker, replayModule);
     }
 
     private static bool TryFormatDmuP4AssignmentMarker(

@@ -327,6 +327,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowReplayTrails { get; set; } = true;
 
+    public bool ShowReplayPlayerNames { get; set; }
+
+    public bool ShowReplayPlayerJobs { get; set; } = true;
+
+    public bool ShowReplayPlayerHp { get; set; }
+
     public float ReplayWorldMarkerOpacity { get; set; } = 0.75f;
 
     public bool ShowDebugTab { get; set; }
