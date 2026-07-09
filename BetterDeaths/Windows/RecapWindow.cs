@@ -4806,13 +4806,14 @@ public sealed class RecapWindow : Window, IDisposable
         if (DrawThemedActionButton(
                 postInformationLabel,
                 $"PostInfo{buttonId}",
-                canFitPostInformationInline ? postInformationWidth : MathF.Min(postInformationWidth, ImGui.GetContentRegionAvail().X)))
+                canFitPostInformationInline ? postInformationWidth : MathF.Min(postInformationWidth, ImGui.GetContentRegionAvail().X)) &&
+            ImGui.GetIO().KeyCtrl)
         {
             plugin.PrintDeathInformationToChat(death);
         }
         if (ImGui.IsItemHovered())
         {
-            SetThemedTooltip("Other Better Deaths users present will see a link to this pull.");
+            SetThemedTooltip("Ctrl+click to post. Other Better Deaths users present will see a link to this pull.");
         }
 
         DrawFatalEventRow(death, causeEvents);
@@ -5778,9 +5779,14 @@ public sealed class RecapWindow : Window, IDisposable
         var canFitTwoButtons = availableWidth >= availableButtonWidth + outcomeButtonWidth + spacing;
 
         ImGui.BeginDisabled(options.Count == 0);
-        if (DrawThemedActionButton("Send available mits", $"WhatIfAvailableMits{controlId}", canFitTwoButtons ? availableButtonWidth : availableWidth))
+        if (DrawThemedActionButton("Send available mits", $"WhatIfAvailableMits{controlId}", canFitTwoButtons ? availableButtonWidth : availableWidth) &&
+            ImGui.GetIO().KeyCtrl)
         {
             QueueWhatIfMitigationChat("Available mits", options);
+        }
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Ctrl+click to send available mits to chat.");
         }
 
         ImGui.EndDisabled();
@@ -5791,13 +5797,18 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.BeginDisabled(selectedOptions.Count == 0 || observedDamage is null || damageEvents.Count == 0);
-        if (DrawThemedActionButton("Send outcome", $"WhatIfSelectedMits{controlId}", canFitTwoButtons ? outcomeButtonWidth : availableWidth))
+        if (DrawThemedActionButton("Send outcome", $"WhatIfSelectedMits{controlId}", canFitTwoButtons ? outcomeButtonWidth : availableWidth) &&
+            ImGui.GetIO().KeyCtrl)
         {
             QueueWhatIfSelectedMitigationOutcomeChat(
                 selectedOptions,
                 damageEvents,
                 observedDamage,
                 hpDisplay);
+        }
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Ctrl+click to send the selected outcome to chat.");
         }
 
         ImGui.EndDisabled();
