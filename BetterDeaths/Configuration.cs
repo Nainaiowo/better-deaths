@@ -50,6 +50,12 @@ public enum ReviewDisplayMode
     Focused,
 }
 
+public enum LeadUpTimelineOrder
+{
+    Oldest,
+    Newest,
+}
+
 public enum ClockDisplayMode
 {
     TwentyFourHour,
@@ -283,6 +289,8 @@ public sealed class Configuration : IPluginConfiguration
     public WidgetDisplayMode WidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;
 
     public ReviewDisplayMode ReviewDisplayMode { get; set; } = ReviewDisplayMode.Detailed;
+
+    public LeadUpTimelineOrder LeadUpTimelineOrder { get; set; } = LeadUpTimelineOrder.Oldest;
 
     public bool RemoveChatBranding { get; set; }
 

@@ -1898,6 +1898,14 @@ public sealed partial class Plugin : IDalamudPlugin
         SaveConfiguration();
     }
 
+    public void SetLeadUpTimelineOrder(LeadUpTimelineOrder order)
+    {
+        Configuration.LeadUpTimelineOrder = Enum.IsDefined(order)
+            ? order
+            : LeadUpTimelineOrder.Oldest;
+        SaveConfiguration();
+    }
+
     public void SetShowReplayTrails(bool show)
     {
         if (Configuration.ShowReplayTrails == show)
@@ -2533,6 +2541,12 @@ public sealed partial class Plugin : IDalamudPlugin
         if (!Enum.IsDefined(Configuration.ReviewDisplayMode))
         {
             Configuration.ReviewDisplayMode = ReviewDisplayMode.Detailed;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.LeadUpTimelineOrder))
+        {
+            Configuration.LeadUpTimelineOrder = LeadUpTimelineOrder.Oldest;
             changed = true;
         }
 

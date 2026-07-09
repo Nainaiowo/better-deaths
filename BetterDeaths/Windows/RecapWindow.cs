@@ -2529,9 +2529,7 @@ public sealed class RecapWindow : Window, IDisposable
         ref float pendingScrollHandoff)
     {
         var resolved = ResolveDeathDisplay(death, territoryId);
-        var rows = IsFocusedReviewMode()
-            ? GetFocusedLeadUpTimelineRows(resolved.TimelineRows)
-            : resolved.TimelineRows;
+        var rows = GetDisplayLeadUpTimelineRows(resolved.TimelineRows);
         var panelHeight = GetTimelineLeadUpDropdownHeight(rows.Count);
         var panelWidth = MathF.Max(1.0f, GetRightPaddedTableSize(LeadUpTableRightPadding).X);
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
@@ -3086,17 +3084,26 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, title);
         var afterTitleCursor = ImGui.GetCursorPos();
         var titleWidth = ImGui.CalcTextSize(title).X;
-        var toggleWidth = GetReviewDisplayModeToggleWidth();
+        var displayModeToggleWidth = GetReviewDisplayModeToggleWidth();
+        var orderToggleWidth = GetLeadUpTimelineOrderToggleWidth();
+        var controlWidth = MathF.Max(displayModeToggleWidth, orderToggleWidth);
         var helpMarkerWidth = 24.0f;
         var toggleX = startCursor.X + MathF.Max(
             0.0f,
-            availableWidth - SectionHelpMarkerRightInset - helpMarkerWidth - style.ItemSpacing.X - toggleWidth);
+            availableWidth - SectionHelpMarkerRightInset - helpMarkerWidth - style.ItemSpacing.X - controlWidth);
+        var subtitleWidth = string.IsNullOrWhiteSpace(subtitle)
+            ? 0.0f
+            : ImGui.CalcTextSize(subtitle).X;
+        var hasSubtitleRowSpace = subtitleWidth <= MathF.Max(0.0f, toggleX - startCursor.X - style.ItemSpacing.X);
         var toggleDrawn = false;
-        if (toggleX >= startCursor.X + titleWidth + style.ItemSpacing.X)
+        if (toggleX >= startCursor.X + titleWidth + style.ItemSpacing.X &&
+            hasSubtitleRowSpace)
         {
             var restoreCursor = ImGui.GetCursorPos();
             ImGui.SetCursorPos(new Vector2(toggleX, startCursor.Y - 2.0f));
             DrawReviewDisplayModeToggle(idSuffix);
+            ImGui.SetCursorPos(new Vector2(toggleX, afterTitleCursor.Y));
+            DrawLeadUpTimelineOrderToggle(idSuffix);
             ImGui.SetCursorPos(restoreCursor);
             toggleDrawn = true;
         }
@@ -3112,10 +3119,15 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.TextDisabled(subtitle);
         }
+        else if (toggleDrawn)
+        {
+            ImGui.Dummy(new Vector2(0.0f, ImGui.GetTextLineHeight()));
+        }
 
         if (!toggleDrawn)
         {
             DrawReviewDisplayModeToggle(idSuffix);
+            DrawLeadUpTimelineOrderToggle(idSuffix);
         }
     }
 
@@ -3154,6 +3166,44 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ReviewDisplayMode.Focused => "Focused",
             _ => "Detailed",
+        };
+    }
+
+    private void DrawLeadUpTimelineOrderToggle(string idSuffix)
+    {
+        DrawLeadUpTimelineOrderButton(LeadUpTimelineOrder.Newest, idSuffix);
+        DrawTextSelectorSeparator();
+        DrawLeadUpTimelineOrderButton(LeadUpTimelineOrder.Oldest, idSuffix);
+    }
+
+    private void DrawLeadUpTimelineOrderButton(LeadUpTimelineOrder order, string idSuffix)
+    {
+        var selected = configuration.LeadUpTimelineOrder == order;
+        if (DrawTextSelectorOption(GetLeadUpTimelineOrderLabel(order), $"LeadUpTimelineOrder{order}{idSuffix}", selected) &&
+            !selected)
+        {
+            plugin.SetLeadUpTimelineOrder(order);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(order == LeadUpTimelineOrder.Newest
+                ? "Shows the closest events to death first."
+                : "Shows the start of the 10-second lead-up first.");
+        }
+    }
+
+    private static float GetLeadUpTimelineOrderToggleWidth()
+    {
+        return GetTextSelectorWidth("Newest", "Oldest");
+    }
+
+    private static string GetLeadUpTimelineOrderLabel(LeadUpTimelineOrder order)
+    {
+        return order switch
+        {
+            LeadUpTimelineOrder.Newest => "Newest",
+            _ => "Oldest",
         };
     }
 
@@ -9554,9 +9604,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var displayAnchorSeenAtUtc = GetLeadUpDisplayAnchorSeenAtUtc(death);
-        var rows = IsFocusedReviewMode()
-            ? GetFocusedLeadUpTimelineRows(resolved.TimelineRows)
-            : resolved.TimelineRows;
+        var rows = GetDisplayLeadUpTimelineRows(resolved.TimelineRows);
 
         if (rows.Count == 0)
         {
@@ -9627,6 +9675,16 @@ public sealed class RecapWindow : Window, IDisposable
     private bool IsFocusedReviewMode()
     {
         return configuration.ReviewDisplayMode == ReviewDisplayMode.Focused;
+    }
+
+    private IReadOnlyList<LeadUpTimelineRow> GetDisplayLeadUpTimelineRows(IReadOnlyList<LeadUpTimelineRow> rows)
+    {
+        var displayRows = IsFocusedReviewMode()
+            ? GetFocusedLeadUpTimelineRows(rows)
+            : rows;
+        return configuration.LeadUpTimelineOrder == LeadUpTimelineOrder.Newest
+            ? displayRows.OrderByDescending(row => row.SeenAtUtc).ToList()
+            : displayRows;
     }
 
     private static IReadOnlyList<LeadUpTimelineRow> GetFocusedLeadUpTimelineRows(IReadOnlyList<LeadUpTimelineRow> rows)
