@@ -290,7 +290,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public ReviewDisplayMode ReviewDisplayMode { get; set; } = ReviewDisplayMode.Detailed;
 
-    public LeadUpTimelineOrder LeadUpTimelineOrder { get; set; } = LeadUpTimelineOrder.Oldest;
+    public LeadUpTimelineOrder LeadUpTimelineOrder { get; set; } = LeadUpTimelineOrder.Newest;
 
     public bool RemoveChatBranding { get; set; }
 

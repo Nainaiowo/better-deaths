@@ -1902,7 +1902,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         Configuration.LeadUpTimelineOrder = Enum.IsDefined(order)
             ? order
-            : LeadUpTimelineOrder.Oldest;
+            : LeadUpTimelineOrder.Newest;
         SaveConfiguration();
     }
 
@@ -2546,7 +2546,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
         if (!Enum.IsDefined(Configuration.LeadUpTimelineOrder))
         {
-            Configuration.LeadUpTimelineOrder = LeadUpTimelineOrder.Oldest;
+            Configuration.LeadUpTimelineOrder = LeadUpTimelineOrder.Newest;
             changed = true;
         }
 
