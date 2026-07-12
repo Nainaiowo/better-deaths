@@ -41,6 +41,16 @@ public enum ReplayActorKind
     Enemy,
 }
 
+public enum ReplayPositionSampleSource
+{
+    Unknown,
+    PeriodicPlayer,
+    PeriodicEnemyObject,
+    ActionEffectSource,
+    ActionEffectTarget,
+    MarkerMechanic,
+}
+
 public enum ReplayMechanicShape
 {
     Circle,
@@ -97,7 +107,10 @@ public sealed record ReplayPositionSnapshot(
     uint ShieldHp,
     uint MaxHp,
     bool IsDead,
-    bool IsTargetable);
+    bool IsTargetable)
+{
+    public ReplayPositionSampleSource SampleSource { get; init; } = ReplayPositionSampleSource.Unknown;
+}
 
 public sealed record ReplayMarkerSnapshot(
     DateTime SeenAtUtc,

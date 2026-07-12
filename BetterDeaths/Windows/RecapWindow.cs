@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.235";
+    private const string CurrentChangelogVersion = "0.1.0.239";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -125,6 +125,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayP4AssignmentSharedResolveWindowSeconds = 0.75f;
     private const float ReplayPathOfLightMinimumResolveDurationSeconds = 6.0f;
     private const float ReplayPathOfLightFallbackDurationSeconds = 10.4f;
+    private const float ReplayActionEffectSampleSnapWindowSeconds = 0.075f;
     private const float ReplayUntargetableStationaryHideSeconds = 15.0f;
     private const float ReplayPositionMovementEpsilon = 0.05f;
     private const float ReplayStationaryMaxSampleGapSeconds = 2.0f;
@@ -139,6 +140,8 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayWheelScrollSinkHeight = 1.0f;
     private const float ReplayWorldMarkerRadius = 9.0f;
     private const float ReplayWorldMarkerSquareHalfSize = 8.0f;
+    private const float ReplayFacingChevronLength = 7.0f;
+    private const float ReplayFacingChevronHalfWidth = 3.4f;
     private const float LeadUpTableRightPadding = 10.0f;
     private const float TimelineLeadUpDropdownMinHeight = 64.0f;
     private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
@@ -7349,6 +7352,10 @@ public sealed class RecapWindow : Window, IDisposable
         var next = nextIndex >= 0 && nextIndex < actorPositions.Count
             ? actorPositions[nextIndex]
             : null;
+        if (TrySelectNearbyActionEffectReplayPosition(actorPositions, selectedAtUtc, previousIndex, nextIndex, out var actionEffectPosition))
+        {
+            return actionEffectPosition;
+        }
 
         if (previous is null)
         {
@@ -7381,6 +7388,52 @@ public sealed class RecapWindow : Window, IDisposable
             Z = previous.Z + ((next.Z - previous.Z) * t),
             Rotation = LerpAngle(previous.Rotation, next.Rotation, t),
         };
+    }
+
+    private static bool TrySelectNearbyActionEffectReplayPosition(
+        IReadOnlyList<ReplayPositionSnapshot> actorPositions,
+        DateTime selectedAtUtc,
+        int previousIndex,
+        int nextIndex,
+        out ReplayPositionSnapshot position)
+    {
+        position = default!;
+        ReplayPositionSnapshot? best = null;
+        var bestDistance = TimeSpan.MaxValue;
+        var startIndex = Math.Max(0, Math.Min(previousIndex, nextIndex) - 2);
+        var endIndex = Math.Min(actorPositions.Count - 1, Math.Max(previousIndex, nextIndex) + 2);
+        for (var index = startIndex; index <= endIndex; index++)
+        {
+            var candidate = actorPositions[index];
+            if (!IsActionEffectReplayPositionSample(candidate))
+            {
+                continue;
+            }
+
+            var distance = Duration(candidate.SeenAtUtc, selectedAtUtc);
+            if (distance.TotalSeconds > ReplayActionEffectSampleSnapWindowSeconds ||
+                distance >= bestDistance)
+            {
+                continue;
+            }
+
+            best = candidate;
+            bestDistance = distance;
+        }
+
+        if (best is null)
+        {
+            return false;
+        }
+
+        position = best;
+        return true;
+    }
+
+    private static bool IsActionEffectReplayPositionSample(ReplayPositionSnapshot position)
+    {
+        return position.SampleSource is ReplayPositionSampleSource.ActionEffectSource or
+            ReplayPositionSampleSource.ActionEffectTarget;
     }
 
     private static float LerpAngle(float from, float to, float t)
@@ -8387,6 +8440,42 @@ public sealed class RecapWindow : Window, IDisposable
                 gridColor,
                 1.0f);
         }
+
+        DrawReplayCardinalLabels(drawList, arenaCenter, screenRadius);
+    }
+
+    private static void DrawReplayCardinalLabels(ImDrawListPtr drawList, Vector2 arenaCenter, float screenRadius)
+    {
+        if (!float.IsFinite(screenRadius) || screenRadius <= 16.0f)
+        {
+            return;
+        }
+
+        var inset = Math.Clamp(screenRadius * 0.08f, 8.0f, 18.0f);
+        var color = ActiveThemeUsesLightPanels()
+            ? ModernMutedTextColor with { W = 0.82f }
+            : ModernTextColor with { W = 0.80f };
+        var shadow = ActiveThemeUsesLightPanels()
+            ? ModernPanelColor with { W = 0.80f }
+            : ModernShellColor with { W = 0.78f };
+
+        DrawReplayCardinalLabel(drawList, "N", arenaCenter + new Vector2(0.0f, -screenRadius + inset), color, shadow);
+        DrawReplayCardinalLabel(drawList, "E", arenaCenter + new Vector2(screenRadius - inset, 0.0f), color, shadow);
+        DrawReplayCardinalLabel(drawList, "S", arenaCenter + new Vector2(0.0f, screenRadius - inset), color, shadow);
+        DrawReplayCardinalLabel(drawList, "W", arenaCenter + new Vector2(-screenRadius + inset, 0.0f), color, shadow);
+    }
+
+    private static void DrawReplayCardinalLabel(
+        ImDrawListPtr drawList,
+        string label,
+        Vector2 center,
+        Vector4 color,
+        Vector4 shadow)
+    {
+        var textSize = ImGui.CalcTextSize(label);
+        var position = center - (textSize * 0.5f);
+        drawList.AddText(position + new Vector2(1.0f, 1.0f), ImGui.GetColorU32(shadow), label);
+        drawList.AddText(position, ImGui.GetColorU32(color), label);
     }
 
     private static void DrawReplayWorldMarkers(
@@ -8858,6 +8947,11 @@ public sealed class RecapWindow : Window, IDisposable
 
         drawList.AddCircleFilled(screenPosition, radius, ImGui.GetColorU32(color), 22);
         drawList.AddCircle(screenPosition, radius + 1.5f, ImGui.GetColorU32(focused || isDeathTarget ? LeadUpGoldColor : ModernPanelBorderColor), 22, focused ? 2.0f : 1.3f);
+        if (actor.ActorKind == ReplayActorKind.Player)
+        {
+            DrawReplayFacingChevron(drawList, actor, screenPosition, radius, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        }
+
         if (actor.ActorKind == ReplayActorKind.Player && actor.IsDead)
         {
             DrawReplayDeadActorMarker(drawList, screenPosition, radius);
@@ -8919,6 +9013,61 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         actorScreenPositions.Add(new ReplayActorScreenState(actor, markers, screenPosition, radius, interactionRadius));
+    }
+
+    private static void DrawReplayFacingChevron(
+        ImDrawListPtr drawList,
+        ReplayPositionSnapshot actor,
+        Vector2 screenPosition,
+        float actorRadius,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        float zoom,
+        Vector2 pan)
+    {
+        if (!float.IsFinite(actor.Rotation))
+        {
+            return;
+        }
+
+        var facingPoint = ReplayWorldPointToScreen(
+            actor.X + MathF.Cos(actor.Rotation),
+            actor.Z + MathF.Sin(actor.Rotation),
+            canvasStart,
+            canvasSize,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            zoom,
+            pan);
+        var direction = facingPoint - screenPosition;
+        if (direction.LengthSquared() <= 0.001f)
+        {
+            return;
+        }
+
+        direction = Vector2.Normalize(direction);
+        var perpendicular = new Vector2(-direction.Y, direction.X);
+        var tip = screenPosition + (direction * (actorRadius + ReplayFacingChevronLength));
+        var baseCenter = screenPosition + (direction * MathF.Max(0.0f, actorRadius - 1.0f));
+        var left = baseCenter + (perpendicular * ReplayFacingChevronHalfWidth);
+        var right = baseCenter - (perpendicular * ReplayFacingChevronHalfWidth);
+        var shellColor = ActiveThemeUsesLightPanels()
+            ? ModernPanelColor with { W = 0.95f }
+            : ModernShellColor with { W = 0.95f };
+        var chevronColor = ActiveThemeUsesLightPanels()
+            ? ModernTextColor with { W = 0.96f }
+            : new Vector4(1.0f, 1.0f, 0.96f, 0.96f);
+
+        drawList.AddLine(tip, left, ImGui.GetColorU32(shellColor), 3.3f);
+        drawList.AddLine(tip, right, ImGui.GetColorU32(shellColor), 3.3f);
+        drawList.AddLine(tip, left, ImGui.GetColorU32(chevronColor), 1.7f);
+        drawList.AddLine(tip, right, ImGui.GetColorU32(chevronColor), 1.7f);
     }
 
     private static float GetReplayActorInteractionRadius(float actorRadius, int markerCount)
@@ -14659,6 +14808,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.239");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added N/E/S/W labels to Death Replay for clearer arena orientation.");
+        DrawHighlightedChangelogBullet("Added facing indicators to party member replay markers.");
+        DrawHighlightedChangelogBullet("Improved Death Replay position syncing around captured action effects.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.235");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Fixed current pull grouping colors.");
