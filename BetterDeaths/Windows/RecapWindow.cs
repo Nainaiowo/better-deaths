@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.241";
+    private const string CurrentChangelogVersion = "0.1.0.242";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -335,12 +335,17 @@ public sealed class RecapWindow : Window, IDisposable
         bool? IsReal,
         string? Resolution);
 
+    private readonly record struct StatusDisplayKey(uint Id, uint IconId, uint SourceId, string Name);
+
+    private sealed record BossStatusDisplayEntry(StatusSnapshot Status, string SourceName);
+
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
         HpHistoryDisplayRow Row,
         HpHistorySnapshot HpSnapshot,
         IReadOnlyList<CombatEventRecord> Events,
-        IReadOnlyList<StatusSnapshot> SourceStatuses);
+        IReadOnlyList<StatusSnapshot> SourceStatuses,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> SourceStatusNames);
 
     private sealed record ResolvedDeathDisplay(
         uint TerritoryId,
@@ -351,6 +356,7 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<LeadUpTimelineRow> TimelineRows,
         LeadUpSummaryRow? SummaryRow,
         IReadOnlyList<StatusSnapshot> SummaryMitigationDebuffStatuses,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> SummaryMitigationDebuffStatusSources,
         IReadOnlyList<StatusSnapshot> SelectedMitigationDebuffStatuses);
 
     private sealed record EventHpDisplay(
@@ -376,6 +382,7 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<StatusSnapshot> Statuses,
         IReadOnlyList<StatusSnapshot> NearbyHpStatuses,
         IReadOnlyList<StatusSnapshot> SourceStatuses,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> SourceStatusNames,
         CombatEventRecord? Event,
         string? HpTooltipDetail,
         HpBarHealChange? HealChange,
@@ -4734,6 +4741,8 @@ public sealed class RecapWindow : Window, IDisposable
         var summaryMitigationDebuffStatuses = summaryRow is not null
             ? GetLeadUpSummaryMitigationDebuffStatuses(summaryRow, out _)
             : GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
+        var summaryMitigationDebuffStatusSources = summaryRow?.SourceStatusNames ??
+            GetEventSourceMitigationStatusSourceNames(death, selection.Events, leadUpEvents);
         var selectedMitigationDebuffStatuses = GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
 
         return new ResolvedDeathDisplay(
@@ -4745,6 +4754,7 @@ public sealed class RecapWindow : Window, IDisposable
             timelineRows,
             summaryRow,
             summaryMitigationDebuffStatuses,
+            summaryMitigationDebuffStatusSources,
             selectedMitigationDebuffStatuses);
     }
 
@@ -4823,7 +4833,8 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Separator();
         DrawStatusSnapshot(
             resolved.SummaryMitigationDebuffStatuses,
-            $"{death.MemberKey}{death.SeenAtUtc.Ticks}SummaryAtDeath");
+            $"{death.MemberKey}{death.SeenAtUtc.Ticks}SummaryAtDeath",
+            resolved.SummaryMitigationDebuffStatusSources);
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnFatalHit(resolved, $"{death.MemberKey}{death.SeenAtUtc.Ticks}Summary");
     }
@@ -5603,7 +5614,10 @@ public sealed class RecapWindow : Window, IDisposable
         var sourceStatuses = events.Count > 0
             ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
             : GetActiveSourceMitigationStatuses(death, row.LastSnapshot.SeenAtUtc, null, leadUpEvents);
-        return new LeadUpSummaryRow(anchorSeenAtUtc, row, selection.Snapshot, events, sourceStatuses);
+        var sourceStatusNames = events.Count > 0
+            ? GetEventSourceMitigationStatusSourceNames(death, events, leadUpEvents)
+            : GetActiveSourceMitigationStatusSourceNames(death, row.LastSnapshot.SeenAtUtc, null, leadUpEvents);
+        return new LeadUpSummaryRow(anchorSeenAtUtc, row, selection.Snapshot, events, sourceStatuses, sourceStatusNames);
     }
 
     private LeadUpSummaryRow CreateLeadUpSummaryRowFromTimelineRow(
@@ -5630,12 +5644,18 @@ public sealed class RecapWindow : Window, IDisposable
         var matchedSourceStatuses = matchedRows
             .SelectMany(row => row.SourceStatuses)
             .ToList();
+        var matchedSourceStatusNames = MergeBossStatusSourceNames(matchedRows.Select(row => row.SourceStatusNames));
         var sourceStatuses = matchedSourceStatuses.Count > 0
             ? matchedSourceStatuses
             : events.Count > 0
                 ? events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)).ToList()
                 : GetActiveSourceMitigationStatuses(death, timelineRow.SeenAtUtc, null, leadUpEvents);
-        return new LeadUpSummaryRow(anchorSeenAtUtc, row, summarySnapshot ?? snapshot, events, sourceStatuses);
+        var sourceStatusNames = matchedSourceStatuses.Count > 0
+            ? matchedSourceStatusNames
+            : events.Count > 0
+                ? GetEventSourceMitigationStatusSourceNames(death, events, leadUpEvents)
+                : GetActiveSourceMitigationStatusSourceNames(death, timelineRow.SeenAtUtc, null, leadUpEvents);
+        return new LeadUpSummaryRow(anchorSeenAtUtc, row, summarySnapshot ?? snapshot, events, sourceStatuses, sourceStatusNames);
     }
 
     private static IReadOnlyList<LeadUpTimelineRow> GetTimelineRowsForFatalEvents(
@@ -5691,7 +5711,8 @@ public sealed class RecapWindow : Window, IDisposable
         using var sectionIndent = new ImGuiIndentScope(SectionBodyIndent);
         DrawStatusSnapshot(
             resolved.SummaryMitigationDebuffStatuses,
-            $"{idSuffix}AtDeath");
+            $"{idSuffix}AtDeath",
+            resolved.SummaryMitigationDebuffStatusSources);
         ImGui.Separator();
         DrawEarlierBossDebuffsNotOnFatalHit(resolved, idSuffix);
     }
@@ -9951,11 +9972,14 @@ public sealed class RecapWindow : Window, IDisposable
             if (shouldTakeHistory)
             {
                 var snapshot = displayHistory[historyIndex++];
+                var activeSourceStatuses = GetActiveSourceMitigationStatuses(death, snapshot.SeenAtUtc, null, events);
+                var activeSourceStatusNames = GetActiveSourceMitigationStatusSourceNames(death, snapshot.SeenAtUtc, null, events);
                 var timelineRow = CreateHpSampleTimelineRow(
                     snapshot,
                     pendingDerivedHp,
                     displayAnchorSeenAtUtc,
-                    GetActiveSourceMitigationStatuses(death, snapshot.SeenAtUtc, null, events));
+                    activeSourceStatuses,
+                    activeSourceStatusNames);
                 AddLeadUpTimelineRow(rows, timelineRow);
 
                 if (pendingDerivedHp is not null &&
@@ -9970,6 +9994,8 @@ public sealed class RecapWindow : Window, IDisposable
 
             var combatEvent = events[eventIndex++];
             var (hpDisplay, healChange, damageChange) = GetTimelineEventHpDisplay(death, combatEvent, history, events);
+            var eventSourceStatuses = GetEventSourceMitigationStatuses(death, combatEvent, events);
+            var eventSourceStatusNames = GetEventSourceMitigationStatusSourceNames(death, combatEvent, events);
             if (ShouldKeepLethalDerivedHp(combatEvent.SeenAtUtc, pendingDerivedHp))
             {
                 hpDisplay = CreateLethalDerivedHpDisplay(pendingDerivedHp!, hpDisplay.MaxHp);
@@ -9985,7 +10011,8 @@ public sealed class RecapWindow : Window, IDisposable
                 hpDisplay.MaxHp,
                 combatEvent.Statuses,
                 GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
-                GetEventSourceMitigationStatuses(death, combatEvent, events),
+                eventSourceStatuses,
+                eventSourceStatusNames,
                 combatEvent,
                 hpDisplay.TooltipDetail,
                 healChange,
@@ -10207,14 +10234,16 @@ public sealed class RecapWindow : Window, IDisposable
             string.Equals(previous.HpTooltipDetail, next.HpTooltipDetail, StringComparison.Ordinal) &&
             StatusListsMatchForHistoryMerge(previous.Statuses, next.Statuses) &&
             StatusListsMatchForHistoryMerge(previous.NearbyHpStatuses, next.NearbyHpStatuses) &&
-            StatusListsMatchForHistoryMerge(previous.SourceStatuses, next.SourceStatuses);
+            StatusListsMatchForHistoryMerge(previous.SourceStatuses, next.SourceStatuses) &&
+            BossStatusSourceNamesMatch(previous.SourceStatusNames, next.SourceStatusNames);
     }
 
     private LeadUpTimelineRow CreateHpSampleTimelineRow(
         HpHistorySnapshot snapshot,
         DerivedHpState? pendingDerivedHp,
         DateTime displayAnchorSeenAtUtc,
-        IReadOnlyList<StatusSnapshot> sourceStatuses)
+        IReadOnlyList<StatusSnapshot> sourceStatuses,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> sourceStatusNames)
     {
         if (pendingDerivedHp is not null &&
             snapshot.SeenAtUtc > pendingDerivedHp.EventSeenAtUtc &&
@@ -10238,6 +10267,7 @@ public sealed class RecapWindow : Window, IDisposable
                 snapshot.Statuses,
                 snapshot.Statuses,
                 sourceStatuses,
+                sourceStatusNames,
                 null,
                 tooltip,
                 null,
@@ -10253,6 +10283,7 @@ public sealed class RecapWindow : Window, IDisposable
             snapshot.Statuses,
             snapshot.Statuses,
             sourceStatuses,
+            sourceStatusNames,
             null,
             null,
             null,
@@ -10489,7 +10520,8 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawStatusSnapshot(
         IReadOnlyList<StatusSnapshot> statuses,
-        string idSuffix)
+        string idSuffix,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>? bossSourceNamesByStatus = null)
     {
         DrawLeadUpLabel("Active mitigations/debuffs at death");
         if (statuses.Count == 0)
@@ -10501,7 +10533,7 @@ public sealed class RecapWindow : Window, IDisposable
         var focused = IsFocusedReviewMode();
         if (focused)
         {
-            DrawFocusedStatusSnapshotList(statuses);
+            DrawFocusedStatusSnapshotList(statuses, bossSourceNamesByStatus);
             DrawMitigationTotal(statuses);
             return;
         }
@@ -10522,7 +10554,7 @@ public sealed class RecapWindow : Window, IDisposable
             var displayInfo = Plugin.GetMitigationDisplayInfo(status);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawStatusSnapshotAbility(status, ImGui.GetContentRegionAvail().X);
+            DrawStatusSnapshotAbility(status, ImGui.GetContentRegionAvail().X, bossSourceNamesByStatus);
             ImGui.TableNextColumn();
             DrawMitigationTypeCell(displayInfo.Types);
             ImGui.TableNextColumn();
@@ -10535,13 +10567,25 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMitigationTotal(statuses);
     }
 
-    private void DrawStatusSnapshotAbility(StatusSnapshot status, float width)
+    private void DrawStatusSnapshotAbility(
+        StatusSnapshot status,
+        float width,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>? bossSourceNamesByStatus)
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
-        DrawIconTextWrapped(status.IconId, iconSize, status.Name, status.Name, MathF.Max(24.0f, width));
+        var bossSourceNames = GetBossSourceNamesForStatus(status, bossSourceNamesByStatus);
+        DrawIconTextWrapped(
+            status.IconId,
+            iconSize,
+            FormatStatusSourceTooltip(status.Name, bossSourceNames),
+            status.Name,
+            MathF.Max(24.0f, width),
+            bossSourceNames is { Count: > 0 } ? ModernAccentColor : null);
     }
 
-    private void DrawFocusedStatusSnapshotList(IReadOnlyList<StatusSnapshot> statuses)
+    private void DrawFocusedStatusSnapshotList(
+        IReadOnlyList<StatusSnapshot> statuses,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>? bossSourceNamesByStatus)
     {
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
@@ -10568,10 +10612,12 @@ public sealed class RecapWindow : Window, IDisposable
             var rowHeight = MathF.Max(iconSize, MathF.Max(abilityHeight, typeHeight)) + (FocusedDataRowPaddingY * 2.0f);
             var rowStart = ImGui.GetCursorScreenPos();
             DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, rowIndex);
+            var bossSourceNames = GetBossSourceNamesForStatus(status, bossSourceNamesByStatus);
 
             var contentY = rowStart.Y + FocusedDataRowPaddingY;
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX, contentY));
-            DrawGameIcon(status.IconId, iconSize, status.Name);
+            DrawGameIcon(status.IconId, iconSize, FormatStatusSourceTooltip(status.Name, bossSourceNames));
+            DrawBossStatusIconBorderIfNeeded(bossSourceNames);
 
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX + iconColumnWidth + spacing, contentY));
             DrawWrappedTextLines(status.Name, abilityColumnWidth);
@@ -11084,7 +11130,13 @@ public sealed class RecapWindow : Window, IDisposable
         return MathF.Max(iconSize, GetWrappedTextHeight(text, textWidth));
     }
 
-    private static void DrawIconTextWrapped(uint iconId, float iconSize, string tooltip, string text, float width)
+    private static void DrawIconTextWrapped(
+        uint iconId,
+        float iconSize,
+        string tooltip,
+        string text,
+        float width,
+        Vector4? iconBorderColor = null)
     {
         if (iconId == 0)
         {
@@ -11096,8 +11148,30 @@ public sealed class RecapWindow : Window, IDisposable
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var clampedIconSize = Math.Clamp(iconSize, 12.0f, 48.0f);
         DrawGameIcon(iconId, clampedIconSize, tooltip);
+        DrawIconBorderIfNeeded(iconBorderColor);
         ImGui.SetCursorScreenPos(new Vector2(rowStart.X + clampedIconSize + spacing, rowStart.Y));
         DrawWrappedTextLines(text, MathF.Max(24.0f, width - clampedIconSize - spacing));
+    }
+
+    private static void DrawBossStatusIconBorderIfNeeded(IReadOnlyList<string>? bossSourceNames)
+    {
+        DrawIconBorderIfNeeded(bossSourceNames is { Count: > 0 } ? ModernAccentColor : null);
+    }
+
+    private static void DrawIconBorderIfNeeded(Vector4? borderColor)
+    {
+        if (borderColor is not { } color)
+        {
+            return;
+        }
+
+        ImGui.GetWindowDrawList().AddRect(
+            ImGui.GetItemRectMin() - new Vector2(1.0f),
+            ImGui.GetItemRectMax() + new Vector2(1.0f),
+            ImGui.GetColorU32(color),
+            3.0f,
+            ImDrawFlags.None,
+            1.8f);
     }
 
     private static void DrawMutedWrappedText(string text)
@@ -11682,7 +11756,8 @@ public sealed class RecapWindow : Window, IDisposable
             true,
             status => bossStatusKeys.Contains(GetStatusKey(status)) ||
                 Plugin.ShouldShowPlayerStatusTimerForDisplay(status),
-            true);
+            true,
+            bossSourceNamesByStatus: summary.SourceStatusNames);
     }
 
     private void DrawMitigationDebuffSummaryCell(LeadUpTimelineRow row, bool showTimers)
@@ -11690,6 +11765,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawCombinedMitigationDebuffCell(
             row.Statuses.Concat(row.NearbyHpStatuses),
             row.SourceStatuses,
+            row.SourceStatusNames,
             showTimers,
             maxStatusesPerRow: 4);
     }
@@ -11705,6 +11781,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawCombinedMitigationDebuffCell(
         IEnumerable<StatusSnapshot> playerStatusSource,
         IEnumerable<StatusSnapshot> bossStatusSource,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> bossSourceNamesByStatus,
         bool showTimers = true,
         int? maxStatusesPerRow = null)
     {
@@ -11718,12 +11795,13 @@ public sealed class RecapWindow : Window, IDisposable
                     Plugin.ShouldShowPlayerStatusTimerForDisplay(status)
                 : _ => false,
             true,
-            maxStatusesPerRow);
+            maxStatusesPerRow,
+            bossSourceNamesByStatus);
     }
 
     private IReadOnlyList<StatusSnapshot> GetLeadUpSummaryMitigationDebuffStatuses(
         LeadUpSummaryRow summary,
-        out HashSet<(uint Id, uint IconId, uint SourceId, string Name)> bossStatusKeys)
+        out HashSet<StatusDisplayKey> bossStatusKeys)
     {
         return GetCombinedMitigationDebuffStatuses(
             GetLeadUpSummaryPlayerStatusSource(summary),
@@ -11754,12 +11832,56 @@ public sealed class RecapWindow : Window, IDisposable
         CombatEventRecord combatEvent,
         IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
-        return combatEvent.SourceStatuses
-            .Concat(GetActiveSourceMitigationStatuses(death, combatEvent.SeenAtUtc, combatEvent.SourceEntityId, leadUpEvents))
-            .GroupBy(GetStatusKey)
+        return GetEventSourceMitigationStatusEntries(death, combatEvent, leadUpEvents)
+            .Select(entry => entry.Status)
+            .ToList();
+    }
+
+    private static IReadOnlyList<BossStatusDisplayEntry> GetEventSourceMitigationStatusEntries(
+        PartyDeathRecord death,
+        CombatEventRecord combatEvent,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        return SelectBossStatusDisplayEntries(combatEvent.SourceStatuses
+            .Select(status => new BossStatusDisplayEntry(status, combatEvent.SourceName))
+            .Concat(GetActiveSourceMitigationStatusEntries(death, combatEvent.SeenAtUtc, combatEvent.SourceEntityId, leadUpEvents)));
+    }
+
+    private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> GetEventSourceMitigationStatusSourceNames(
+        PartyDeathRecord death,
+        CombatEventRecord combatEvent,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        return BuildBossStatusSourceNames(GetEventSourceMitigationStatusEntries(death, combatEvent, leadUpEvents));
+    }
+
+    private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> GetEventSourceMitigationStatusSourceNames(
+        PartyDeathRecord death,
+        IEnumerable<CombatEventRecord> combatEvents,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        return MergeBossStatusSourceNames(combatEvents
+            .Select(combatEvent => GetEventSourceMitigationStatusSourceNames(death, combatEvent, leadUpEvents)));
+    }
+
+    private static IReadOnlyList<BossStatusDisplayEntry> SelectBossStatusDisplayEntries(IEnumerable<BossStatusDisplayEntry> entries)
+    {
+        var entryList = entries.ToList();
+        if (entryList.Count == 0)
+        {
+            return [];
+        }
+
+        var bossStatusKeys = Plugin
+            .GetBossMitigationStatusesForDisplay(entryList.Select(entry => entry.Status))
+            .Select(GetStatusKey)
+            .ToHashSet();
+        return entryList
+            .Where(entry => bossStatusKeys.Contains(GetStatusKey(entry.Status)))
+            .GroupBy(entry => (entry.SourceName, StatusKey: GetStatusKey(entry.Status)))
             .Select(group => group
-                .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
-                .ThenBy(status => status.StackCount)
+                .OrderBy(entry => entry.Status.RemainingTime <= 0.0f ? float.MaxValue : entry.Status.RemainingTime)
+                .ThenBy(entry => entry.Status.StackCount)
                 .First())
             .ToList();
     }
@@ -11773,6 +11895,28 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private static IReadOnlyList<StatusSnapshot> GetActiveSourceMitigationStatuses(
+        PartyDeathRecord death,
+        DateTime seenAtUtc,
+        uint? sourceEntityId,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        return GetActiveSourceMitigationStatusEntries(death, seenAtUtc, sourceEntityId, leadUpEvents)
+            .Select(entry => entry.Status)
+            .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(status => status.Id)
+            .ToList();
+    }
+
+    private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> GetActiveSourceMitigationStatusSourceNames(
+        PartyDeathRecord death,
+        DateTime seenAtUtc,
+        uint? sourceEntityId,
+        IReadOnlyList<CombatEventRecord> leadUpEvents)
+    {
+        return BuildBossStatusSourceNames(GetActiveSourceMitigationStatusEntries(death, seenAtUtc, sourceEntityId, leadUpEvents));
+    }
+
+    private static IReadOnlyList<BossStatusDisplayEntry> GetActiveSourceMitigationStatusEntries(
         PartyDeathRecord death,
         DateTime seenAtUtc,
         uint? sourceEntityId,
@@ -11794,14 +11938,8 @@ public sealed class RecapWindow : Window, IDisposable
                 .ThenBy(entry => entry.Status.RemainingTime)
                 .First())
             .ToList();
-        var includeSourceNames = sourceEntityId is null &&
-            activeEntries.Select(entry => entry.SourceEntityId).Distinct().Skip(1).Any();
         return activeEntries
-            .Select(entry => includeSourceNames
-                ? FormatSourceMitigationStatusForDisplay(entry.Status, entry.SourceName)
-                : entry.Status)
-            .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(status => status.Id)
+            .Select(entry => new BossStatusDisplayEntry(entry.Status, entry.SourceName))
             .ToList();
     }
 
@@ -11855,12 +11993,73 @@ public sealed class RecapWindow : Window, IDisposable
         }
     }
 
-    private static StatusSnapshot FormatSourceMitigationStatusForDisplay(StatusSnapshot status, string sourceName)
+    private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> BuildBossStatusSourceNames(
+        IEnumerable<BossStatusDisplayEntry> entries)
     {
-        return string.IsNullOrWhiteSpace(sourceName) ||
-            status.Name.Contains(':', StringComparison.Ordinal)
-            ? status
-            : status with { Name = $"{sourceName}: {status.Name}" };
+        return entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.SourceName))
+            .GroupBy(entry => GetStatusKey(entry.Status))
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(entry => entry.SourceName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(sourceName => sourceName, StringComparer.OrdinalIgnoreCase)
+                    .ToList());
+    }
+
+    private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> MergeBossStatusSourceNames(
+        IEnumerable<IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>> sourceMaps)
+    {
+        var merged = new Dictionary<StatusDisplayKey, List<string>>();
+        foreach (var sourceMap in sourceMaps)
+        {
+            foreach (var (key, sourceNames) in sourceMap)
+            {
+                if (!merged.TryGetValue(key, out var mergedNames))
+                {
+                    mergedNames = [];
+                    merged[key] = mergedNames;
+                }
+
+                foreach (var sourceName in sourceNames)
+                {
+                    if (!string.IsNullOrWhiteSpace(sourceName) &&
+                        !mergedNames.Contains(sourceName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        mergedNames.Add(sourceName);
+                    }
+                }
+            }
+        }
+
+        return merged.ToDictionary(
+            entry => entry.Key,
+            entry => (IReadOnlyList<string>)entry.Value
+                .OrderBy(sourceName => sourceName, StringComparer.OrdinalIgnoreCase)
+                .ToList());
+    }
+
+    private static bool BossStatusSourceNamesMatch(
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> first,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        foreach (var (key, firstNames) in first)
+        {
+            if (!second.TryGetValue(key, out var secondNames) ||
+                firstNames.Count != secondNames.Count ||
+                !firstNames.SequenceEqual(secondNames, StringComparer.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private IReadOnlyList<StatusSnapshot> GetSelectedMitigationDebuffStatuses(PartyDeathRecord death)
@@ -11883,7 +12082,7 @@ public sealed class RecapWindow : Window, IDisposable
     private IReadOnlyList<StatusSnapshot> GetCombinedMitigationDebuffStatuses(
         IEnumerable<StatusSnapshot> playerStatusSource,
         IEnumerable<StatusSnapshot> bossStatusSource,
-        out HashSet<(uint Id, uint IconId, uint SourceId, string Name)> bossStatusKeys)
+        out HashSet<StatusDisplayKey> bossStatusKeys)
     {
         var playerStatuses = plugin
             .GetRelevantPlayerStatusesForDisplay(playerStatusSource)
@@ -11905,9 +12104,9 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private static (uint Id, uint IconId, uint SourceId, string Name) GetStatusKey(StatusSnapshot status)
+    private static StatusDisplayKey GetStatusKey(StatusSnapshot status)
     {
-        return (status.Id, status.IconId, status.SourceId, status.Name);
+        return new StatusDisplayKey(status.Id, status.IconId, status.SourceId, status.Name);
     }
 
     private void DrawStatusSummaryCell(
@@ -11915,7 +12114,8 @@ public sealed class RecapWindow : Window, IDisposable
         bool showTenthsOverTenSeconds = false,
         Func<StatusSnapshot, bool>? shouldShowTimer = null,
         bool centerContent = false,
-        int? maxStatusesPerRow = null)
+        int? maxStatusesPerRow = null,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>? bossSourceNamesByStatus = null)
     {
         if (statuses.Count == 0)
         {
@@ -11991,7 +12191,15 @@ public sealed class RecapWindow : Window, IDisposable
                     ImGui.SameLine();
                 }
 
-                DrawStatusIconStack(row[statusIndex].Status, configuration.StatusIconSize, showTenthsOverTenSeconds, row[statusIndex].ShowTimer);
+                var status = row[statusIndex].Status;
+                IReadOnlyList<string>? bossSourceNames = null;
+                bossSourceNamesByStatus?.TryGetValue(GetStatusKey(status), out bossSourceNames);
+                DrawStatusIconStack(
+                    status,
+                    configuration.StatusIconSize,
+                    showTenthsOverTenSeconds,
+                    row[statusIndex].ShowTimer,
+                    bossSourceNames);
             }
         }
     }
@@ -12017,21 +12225,27 @@ public sealed class RecapWindow : Window, IDisposable
         StatusSnapshot status,
         float configuredIconSize,
         bool showTenthsOverTenSeconds = false,
-        bool showTimer = true)
+        bool showTimer = true,
+        IReadOnlyList<string>? bossSourceNames = null)
     {
         var iconSize = Math.Clamp(configuredIconSize, 12.0f, 32.0f);
         var timerText = FormatStatusDuration(status, showTenthsOverTenSeconds, showTimer);
         var timerWidth = string.IsNullOrEmpty(timerText) ? 0.0f : ImGui.CalcTextSize(timerText).X;
         var groupWidth = GetStatusIconStackWidth(status, configuredIconSize, showTenthsOverTenSeconds, showTimer);
         var startX = ImGui.GetCursorPosX();
-        var tooltip = FormatStatusCompact(status, showTenthsOverTenSeconds, showTimer);
+        var hasBossSourceNames = bossSourceNames is { Count: > 0 };
+        var tooltip = FormatStatusSourceTooltip(
+            FormatStatusCompact(status, showTenthsOverTenSeconds, showTimer),
+            bossSourceNames);
         var hovered = false;
 
         ImGui.BeginGroup();
         ImGui.SetCursorPosX(startX + MathF.Max(0.0f, (groupWidth - iconSize) * 0.5f));
+        var iconStart = ImGui.GetCursorScreenPos();
         if (status.IconId == 0)
         {
             ImGui.Dummy(new Vector2(iconSize));
+            hovered |= ImGui.IsItemHovered();
         }
         else
         {
@@ -12040,12 +12254,24 @@ public sealed class RecapWindow : Window, IDisposable
             if (wrap is null)
             {
                 ImGui.Dummy(new Vector2(iconSize));
+                hovered |= ImGui.IsItemHovered();
             }
             else
             {
                 ImGui.Image(wrap.Handle, new Vector2(iconSize));
                 hovered |= ImGui.IsItemHovered();
             }
+        }
+
+        if (hasBossSourceNames)
+        {
+            ImGui.GetWindowDrawList().AddRect(
+                iconStart - new Vector2(1.0f),
+                iconStart + new Vector2(iconSize) + new Vector2(1.0f),
+                ImGui.GetColorU32(ModernAccentColor),
+                3.0f,
+                ImDrawFlags.None,
+                1.8f);
         }
 
         if (!string.IsNullOrEmpty(timerText))
@@ -12061,6 +12287,29 @@ public sealed class RecapWindow : Window, IDisposable
         {
             SetThemedTooltip(tooltip);
         }
+    }
+
+    private static string FormatBossStatusSourceTooltip(IReadOnlyList<string> sourceNames)
+    {
+        return string.Join(", ", sourceNames);
+    }
+
+    private static IReadOnlyList<string>? GetBossSourceNamesForStatus(
+        StatusSnapshot status,
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>>? bossSourceNamesByStatus)
+    {
+        return bossSourceNamesByStatus is not null &&
+            bossSourceNamesByStatus.TryGetValue(GetStatusKey(status), out var sourceNames) &&
+            sourceNames.Count > 0
+            ? sourceNames
+            : null;
+    }
+
+    private static string FormatStatusSourceTooltip(string statusTooltip, IReadOnlyList<string>? bossSourceNames)
+    {
+        return bossSourceNames is { Count: > 0 }
+            ? $"{statusTooltip}\n{FormatBossStatusSourceTooltip(bossSourceNames)}"
+            : statusTooltip;
     }
 
     private void DrawSettingsTab()
@@ -14823,6 +15072,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.242");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Improved boss-side mitigation/debuff display clarity.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.241");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Improved multi-boss mitigation/debuff context in the 10s lead-up.");
