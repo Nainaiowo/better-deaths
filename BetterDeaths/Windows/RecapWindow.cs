@@ -109,7 +109,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.240";
+    private const string CurrentChangelogVersion = "0.1.0.241";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -11723,7 +11723,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<StatusSnapshot> GetLeadUpSummaryMitigationDebuffStatuses(
         LeadUpSummaryRow summary,
-        out HashSet<(uint Id, uint IconId, uint SourceId)> bossStatusKeys)
+        out HashSet<(uint Id, uint IconId, uint SourceId, string Name)> bossStatusKeys)
     {
         return GetCombinedMitigationDebuffStatuses(
             GetLeadUpSummaryPlayerStatusSource(summary),
@@ -11784,7 +11784,7 @@ public sealed class RecapWindow : Window, IDisposable
             return [];
         }
 
-        return sourceMitigationHistory
+        var activeEntries = sourceMitigationHistory
             .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
             .Where(snapshot => sourceEntityId is null || snapshot.SourceEntityId == sourceEntityId.Value)
             .SelectMany(snapshot => GetActiveSourceMitigationStatuses(snapshot, seenAtUtc))
@@ -11792,8 +11792,14 @@ public sealed class RecapWindow : Window, IDisposable
             .Select(group => group
                 .OrderByDescending(entry => entry.SeenAtUtc)
                 .ThenBy(entry => entry.Status.RemainingTime)
-                .First()
-                .Status)
+                .First())
+            .ToList();
+        var includeSourceNames = sourceEntityId is null &&
+            activeEntries.Select(entry => entry.SourceEntityId).Distinct().Skip(1).Any();
+        return activeEntries
+            .Select(entry => includeSourceNames
+                ? FormatSourceMitigationStatusForDisplay(entry.Status, entry.SourceName)
+                : entry.Status)
             .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(status => status.Id)
             .ToList();
@@ -11828,7 +11834,7 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private static IEnumerable<(uint SourceEntityId, DateTime SeenAtUtc, StatusSnapshot Status)> GetActiveSourceMitigationStatuses(
+    private static IEnumerable<(uint SourceEntityId, string SourceName, DateTime SeenAtUtc, StatusSnapshot Status)> GetActiveSourceMitigationStatuses(
         SourceMitigationSnapshot snapshot,
         DateTime seenAtUtc)
     {
@@ -11843,9 +11849,18 @@ public sealed class RecapWindow : Window, IDisposable
 
             yield return (
                 snapshot.SourceEntityId,
+                snapshot.SourceName,
                 snapshot.SeenAtUtc,
                 status with { RemainingTime = remainingTime });
         }
+    }
+
+    private static StatusSnapshot FormatSourceMitigationStatusForDisplay(StatusSnapshot status, string sourceName)
+    {
+        return string.IsNullOrWhiteSpace(sourceName) ||
+            status.Name.Contains(':', StringComparison.Ordinal)
+            ? status
+            : status with { Name = $"{sourceName}: {status.Name}" };
     }
 
     private IReadOnlyList<StatusSnapshot> GetSelectedMitigationDebuffStatuses(PartyDeathRecord death)
@@ -11868,7 +11883,7 @@ public sealed class RecapWindow : Window, IDisposable
     private IReadOnlyList<StatusSnapshot> GetCombinedMitigationDebuffStatuses(
         IEnumerable<StatusSnapshot> playerStatusSource,
         IEnumerable<StatusSnapshot> bossStatusSource,
-        out HashSet<(uint Id, uint IconId, uint SourceId)> bossStatusKeys)
+        out HashSet<(uint Id, uint IconId, uint SourceId, string Name)> bossStatusKeys)
     {
         var playerStatuses = plugin
             .GetRelevantPlayerStatusesForDisplay(playerStatusSource)
@@ -11890,9 +11905,9 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
     }
 
-    private static (uint Id, uint IconId, uint SourceId) GetStatusKey(StatusSnapshot status)
+    private static (uint Id, uint IconId, uint SourceId, string Name) GetStatusKey(StatusSnapshot status)
     {
-        return (status.Id, status.IconId, status.SourceId);
+        return (status.Id, status.IconId, status.SourceId, status.Name);
     }
 
     private void DrawStatusSummaryCell(
@@ -14808,6 +14823,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.241");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Improved multi-boss mitigation/debuff context in the 10s lead-up.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.240");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added N/E/S/W labels to Death Replay for clearer arena orientation.");

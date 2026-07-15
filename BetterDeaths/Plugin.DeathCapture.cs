@@ -780,6 +780,10 @@ public sealed partial class Plugin
             CaptureActorControlHotEvent(packet, member);
             CaptureActorControlDotEvent(packet, member);
         }
+        else
+        {
+            CaptureActorControlSourceMitigationStatusChange(packet);
+        }
 
         if (packet.Category == ActorControlDeathCategory && member is not null)
         {
@@ -1267,6 +1271,32 @@ public sealed partial class Plugin
 
     }
 
+    private void CaptureActorControlSourceMitigationStatusChange(RawActorControlPacket packet)
+    {
+        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlUpdateEffectCategory)
+        {
+            return;
+        }
+
+        if (!TryGetSourceMitigationActor(packet.EntityId, out var sourceName))
+        {
+            return;
+        }
+
+        var sourceStatuses = BuildSourceStatusSnapshots(packet.EntityId);
+        if (!TryCreateActorControlStatusSnapshot(packet, sourceStatuses, out var status) ||
+            !IsBossMitigationStatus(status))
+        {
+            return;
+        }
+
+        TrackRecentSourceMitigationSnapshot(
+            packet.EntityId,
+            sourceName,
+            packet.SeenAtUtc,
+            sourceStatuses.Append(status));
+    }
+
     private void CaptureReplayOverheadStatus(RawActorControlPacket packet, PartyMemberSnapshot member, StatusSnapshot status)
     {
         if (packet.Category is not ActorControlGainEffectCategory and not ActorControlUpdateEffectCategory ||
@@ -1640,8 +1670,12 @@ public sealed partial class Plugin
     {
         var events = GetRecentEvents(member.MemberKey, deathSeenAtUtc, Math.Max(Configuration.RecentEventSeconds, BetterDeathsLeadUpCaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, deathSeenAtUtc, BetterDeathsLeadUpCaptureSeconds);
+        var enemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc);
+        CaptureSourceMitigationSnapshotsForActiveEnemies(enemyHpAtDeath, deathSeenAtUtc);
         var sourceMitigationHistory = GetRecentSourceMitigationHistory(
-            events.Select(combatEvent => combatEvent.SourceEntityId),
+            events
+                .Select(combatEvent => combatEvent.SourceEntityId)
+                .Concat(enemyHpAtDeath.Select(enemy => enemy.EntityId)),
             deathSeenAtUtc,
             BetterDeathsLeadUpCaptureSeconds);
         var fatalSequence = CreateFatalSequence(member.MemberKey, deathSeenAtUtc, events, hpHistory);
@@ -1697,7 +1731,7 @@ public sealed partial class Plugin
         {
             FatalSequence = fatalSequence,
             SourceMitigationHistory = sourceMitigationHistory,
-            EnemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc),
+            EnemyHpAtDeath = enemyHpAtDeath,
             PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
             EnvironmentalAssessment = environmentalAssessment,
             ReplayPositions = replayPositions,
@@ -2426,6 +2460,98 @@ public sealed partial class Plugin
         }
     }
 
+    private void TrackActiveSourceMitigationHistory(DateTime seenAtUtc)
+    {
+        if (!ShouldCaptureLiveCombat(seenAtUtc))
+        {
+            return;
+        }
+
+        foreach (var gameObject in ObjectTable)
+        {
+            if (gameObject is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                !IsSourceMitigationActor(battleNpc))
+            {
+                continue;
+            }
+
+            TrackRecentSourceMitigationSnapshot(
+                battleNpc.EntityId,
+                battleNpc.Name.TextValue,
+                seenAtUtc,
+                BuildStatusSnapshots(battleNpc.StatusList));
+        }
+    }
+
+    private void CaptureSourceMitigationSnapshotsForActiveEnemies(
+        IEnumerable<EnemyHpSnapshot> enemies,
+        DateTime seenAtUtc)
+    {
+        foreach (var enemy in enemies)
+        {
+            if (enemy.EntityId == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (ObjectTable.SearchByEntityId(enemy.EntityId) is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                    !IsSourceMitigationActor(battleNpc))
+                {
+                    continue;
+                }
+
+                TrackRecentSourceMitigationSnapshot(
+                    battleNpc.EntityId,
+                    battleNpc.Name.TextValue,
+                    seenAtUtc,
+                    BuildStatusSnapshots(battleNpc.StatusList));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not snapshot active source mitigation for {SourceEntityId:X8}.", enemy.EntityId);
+            }
+        }
+    }
+
+    private static bool IsSourceMitigationActor(Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc)
+    {
+        return battleNpc.BattleNpcKind == Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant &&
+            battleNpc.EntityId != 0 &&
+            battleNpc.EntityId != InvalidActorEntityId &&
+            battleNpc.MaxHp > 0 &&
+            battleNpc.CurrentHp > 0 &&
+            battleNpc.IsTargetable &&
+            !string.IsNullOrWhiteSpace(battleNpc.Name.TextValue);
+    }
+
+    private bool TryGetSourceMitigationActor(uint entityId, out string sourceName)
+    {
+        sourceName = string.Empty;
+        if (entityId == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (ObjectTable.SearchByEntityId(entityId) is not Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc ||
+                !IsSourceMitigationActor(battleNpc))
+            {
+                return false;
+            }
+
+            sourceName = battleNpc.Name.TextValue;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not inspect source mitigation actor {SourceEntityId:X8}.", entityId);
+            return false;
+        }
+    }
+
     private IReadOnlyList<SourceMitigationSnapshot> GetRecentSourceMitigationHistory(
         IEnumerable<uint> sourceEntityIds,
         DateTime seenAtUtc,
@@ -2509,6 +2635,7 @@ public sealed partial class Plugin
         }
 
         nextLiveCapturePruneAtUtc = now + LiveCapturePruneInterval;
+        TrackActiveSourceMitigationHistory(now);
         PruneRecentEvents(now);
         PruneRecentCombatLogEvents(now);
         PruneRecentStatuses(now);
