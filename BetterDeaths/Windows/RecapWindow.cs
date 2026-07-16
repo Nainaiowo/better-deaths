@@ -442,7 +442,9 @@ public sealed class RecapWindow : Window, IDisposable
         string Label,
         MainPage Page,
         bool Highlight = false,
-        string? BadgeText = null);
+        string? BadgeText = null,
+        bool Enabled = true,
+        string? DisabledTooltip = null);
 
     private readonly record struct DeathDetailNavigationItem(
         string Label,
@@ -673,9 +675,14 @@ public sealed class RecapWindow : Window, IDisposable
 
     private MainPage GetExampleSelectionPage()
     {
-        return configuration.HideExampleTab
-            ? MainPage.Review
-            : MainPage.Example;
+        return ShouldShowExamplePage()
+            ? MainPage.Example
+            : MainPage.Review;
+    }
+
+    private bool ShouldShowExamplePage()
+    {
+        return !plugin.RecordedPullHistoryLoading && plugin.RecordedPulls.Count == 0;
     }
 
     private void DrawModernShell()
@@ -765,24 +772,25 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernNavigation()
     {
-        if (configuration.HideExampleTab && currentMainPage == MainPage.Example)
+        var enableExamplePage = ShouldShowExamplePage();
+        if (!enableExamplePage && currentMainPage == MainPage.Example)
         {
             currentMainPage = MainPage.Review;
         }
+        var exampleDisabledTooltip = plugin.RecordedPullHistoryLoading
+            ? "Checking saved pulls before enabling Example."
+            : "Example is disabled once saved pulls exist.";
 
         var items = new List<MainNavigationItem>
         {
             new("Review", MainPage.Review),
+            new("Example", MainPage.Example, Enabled: enableExamplePage, DisabledTooltip: exampleDisabledTooltip),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
             new("Feedback", MainPage.Feedback),
             new("Updates", MainPage.Updates, ShouldHighlightChangelogTab()),
         };
-        if (!configuration.HideExampleTab)
-        {
-            items.Insert(1, new MainNavigationItem("Example", MainPage.Example));
-        }
 
         if (showDebugTab)
         {
@@ -823,7 +831,7 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.SameLine(0.0f, spacing);
             }
 
-            DrawModernNavButton(item.Label, item.Page, item.Highlight, item.BadgeText, buttonWidth);
+            DrawModernNavButton(item.Label, item.Page, item.Highlight, item.BadgeText, buttonWidth, item.Enabled, item.DisabledTooltip);
             if (item.Page == MainPage.Customize && item.Highlight && !useCompactWidths)
             {
                 DrawFloatingNewBadgeOverLastItem();
@@ -856,9 +864,19 @@ public sealed class RecapWindow : Window, IDisposable
                 : item.Highlight
                     ? $"{item.Label}  new"
                     : item.Label;
-            if (ImGui.Selectable(label, selected))
+            ImGui.BeginDisabled(!item.Enabled);
+            var clicked = ImGui.Selectable(label, selected);
+            ImGui.EndDisabled();
+            if (clicked && item.Enabled)
             {
                 currentMainPage = item.Page;
+            }
+
+            if (!item.Enabled &&
+                !string.IsNullOrWhiteSpace(item.DisabledTooltip) &&
+                ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                SetThemedTooltip(item.DisabledTooltip);
             }
 
             if (selected)
@@ -953,7 +971,9 @@ public sealed class RecapWindow : Window, IDisposable
         MainPage page,
         bool highlight = false,
         string? badgeText = null,
-        float width = MainNavigationButtonWidth)
+        float width = MainNavigationButtonWidth,
+        bool enabled = true,
+        string? disabledTooltip = null)
     {
         var selected = currentMainPage == page;
         var buttonColor = selected
@@ -970,7 +990,10 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        if (ImGui.Button($"{label}##MainNav{page}", new Vector2(width, 30.0f)))
+        ImGui.BeginDisabled(!enabled);
+        var clicked = ImGui.Button($"{label}##MainNav{page}", new Vector2(width, 30.0f));
+        ImGui.EndDisabled();
+        if (clicked && enabled)
         {
             currentMainPage = page;
         }
@@ -984,6 +1007,13 @@ public sealed class RecapWindow : Window, IDisposable
         if (highlight)
         {
             DrawChangelogTabHighlightBorder();
+        }
+
+        if (!enabled &&
+            !string.IsNullOrWhiteSpace(disabledTooltip) &&
+            ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+        {
+            SetThemedTooltip(disabledTooltip);
         }
 
         ImGui.PopStyleColor(4);
@@ -12877,18 +12907,6 @@ public sealed class RecapWindow : Window, IDisposable
 
         DrawInlineDebugTabButton();
 
-        var hideExampleTab = configuration.HideExampleTab;
-        if (DrawThemedCheckbox("Hide Example tab", ref hideExampleTab))
-        {
-            plugin.SetHideExampleTab(hideExampleTab);
-            if (hideExampleTab && currentMainPage == MainPage.Example)
-            {
-                currentMainPage = MainPage.Review;
-            }
-        }
-
-        DrawSettingsTooltip("Removes the Example tab from the top navigation. This does not change real pull capture or saved review data.");
-
         var showScrollbars = configuration.ShowScrollbars;
         if (DrawThemedCheckbox("Enable scrollbars", ref showScrollbars))
         {
@@ -15212,7 +15230,7 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        return ContainsDeath(GetExampleDeaths(), deathSeenAtTicks, memberKeyHash)
+        return ShouldShowExamplePage() && ContainsDeath(GetExampleDeaths(), deathSeenAtTicks, memberKeyHash)
             ? new DeathSelectionTarget(deathSeenAtTicks, memberKeyHash, DeathSelectionSource.Example, null, null, null)
             : null;
     }

@@ -51,12 +51,6 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
-    public void SetHideExampleTab(bool hide)
-    {
-        Configuration.HideExampleTab = hide;
-        SaveConfiguration();
-    }
-
     public void SetShowCurrentPullWidget(bool open)
     {
         Configuration.ShowCurrentPullWidget = open;

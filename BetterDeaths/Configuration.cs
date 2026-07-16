@@ -264,8 +264,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowWindow { get; set; } = true;
 
-    public bool HideExampleTab { get; set; }
-
     public bool ApplyWideDefaultWindowSizeOnNextOpen { get; set; }
 
     public float MainWindowBackgroundOpacity { get; set; } = 0.85f;
