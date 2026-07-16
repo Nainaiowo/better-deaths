@@ -178,7 +178,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const float DmuArenaCenterZ = 100.0f;
     private const float DmuP2PathOfLightTowerDistance = 8.0f;
     private const float DmuP2PathOfLightTowerRadius = 4.0f;
-    private const float DmuP2PathOfLightTowerFallbackDurationSeconds = 10.4f;
+    private const float DmuP2PathOfLightTowerFallbackDurationSeconds = 10.2f;
     private const float DmuP2PathOfLightTowerMinResolveMatchSeconds = 6.0f;
     private const float DmuP2PathOfLightTowerMaxMatchSeconds = 14.0f;
     private const float DmuP2PathOfLightTowerResolveMatchDistance = 7.0f;

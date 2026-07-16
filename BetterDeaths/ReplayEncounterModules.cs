@@ -69,6 +69,14 @@ internal interface IReplayEncounterModule
 
 internal static class ReplayEncounterModules
 {
+    private const uint DmuP1FireSpreadMarkerId = 127;
+    private const uint DmuP1FireStackMarkerId = 128;
+    private const uint DmuP1MysteryMagicFireLieMarkerId = 673;
+    private const uint DmuP1MysteryMagicFireTruthMarkerId = 674;
+    private const uint DmuP1MysteryMagicIceLieMarkerId = 675;
+    private const uint DmuP1MysteryMagicIceTruthMarkerId = 676;
+    private const uint DmuP1MysteryMagicThunderLieMarkerId = 677;
+    private const uint DmuP1MysteryMagicThunderTruthMarkerId = 678;
     private const uint DmuP4RealityTellStatusId = 2056;
     private const uint DmuP3EntropyStatusId = 1600;
     private const uint DmuP3DynamicFluidStatusId = 1601;
@@ -120,6 +128,83 @@ internal static class ReplayEncounterModules
             DmuP4AccelerationBombStatusId or
             DmuP4EntropyStatusId or
             DmuP4DynamicFluidStatusId;
+    }
+
+    public static bool TryResolveDmuP1FireMarkerInfo(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        ReplayMarkerInfo baseInfo,
+        out ReplayMarkerInfo resolvedInfo)
+    {
+        resolvedInfo = baseInfo;
+        if (!IsDmuP1FireMarker(marker.MarkerId) ||
+            !TryFindNearestDmuP1FireTell(marker, markers, out var tell) ||
+            !TryGetDmuP1FireTell(tell.MarkerId, out var isTruth))
+        {
+            return false;
+        }
+
+        var displayedSpread = marker.MarkerId == DmuP1FireSpreadMarkerId;
+        var resolvedSpread = isTruth ? displayedSpread : !displayedSpread;
+        var displayedText = displayedSpread ? "spread" : "stack";
+        var resolvedText = resolvedSpread ? "spread" : "stack";
+        resolvedInfo = baseInfo with
+        {
+            ShortLabel = resolvedSpread ? "Spread" : "Stack",
+            Description = isTruth
+                ? $"Fire {resolvedText}"
+                : $"Fire {resolvedText} (fake {displayedText})",
+            Shape = resolvedSpread ? ReplayMechanicShape.Spread : ReplayMechanicShape.Stack,
+            Radius = resolvedSpread ? 5.0f : 6.0f,
+            DurationSeconds = 5.8f,
+        };
+        return true;
+    }
+
+    public static bool IsDmuP1FireMarker(uint markerId)
+    {
+        return markerId is DmuP1FireSpreadMarkerId or DmuP1FireStackMarkerId;
+    }
+
+    public static bool IsDmuP1MysteryMagicMarker(uint markerId)
+    {
+        return markerId is DmuP1MysteryMagicFireLieMarkerId or
+            DmuP1MysteryMagicFireTruthMarkerId or
+            DmuP1MysteryMagicIceLieMarkerId or
+            DmuP1MysteryMagicIceTruthMarkerId or
+            DmuP1MysteryMagicThunderLieMarkerId or
+            DmuP1MysteryMagicThunderTruthMarkerId;
+    }
+
+    private static bool TryFindNearestDmuP1FireTell(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        out ReplayMarkerSnapshot tell)
+    {
+        tell = markers
+            .Where(candidate => candidate.ActorKind == ReplayActorKind.Enemy &&
+                TryGetDmuP1FireTell(candidate.MarkerId, out _) &&
+                candidate.SeenAtUtc >= marker.SeenAtUtc.AddSeconds(-8.0) &&
+                candidate.SeenAtUtc <= marker.SeenAtUtc.AddSeconds(8.0))
+            .OrderBy(candidate => Math.Abs((candidate.SeenAtUtc - marker.SeenAtUtc).TotalSeconds))
+            .FirstOrDefault()!;
+        return tell is not null;
+    }
+
+    private static bool TryGetDmuP1FireTell(uint markerId, out bool isTruth)
+    {
+        switch (markerId)
+        {
+            case DmuP1MysteryMagicFireLieMarkerId:
+                isTruth = false;
+                return true;
+            case DmuP1MysteryMagicFireTruthMarkerId:
+                isTruth = true;
+                return true;
+            default:
+                isTruth = false;
+                return false;
+        }
     }
 
     public static bool TryGetDmuP4RealityTell(uint rawMarkerId, out string label, out bool isReal)
@@ -256,8 +341,14 @@ internal static class ReplayEncounterModules
         {
             info = markerId switch
             {
-                127 => new ReplayMarkerInfo("Spread", "Fire spread", ReplayMechanicShape.Spread, Radius: 5.0f),
-                128 => new ReplayMarkerInfo("Stack", "Fire stack", ReplayMechanicShape.Stack, Radius: 5.0f),
+                DmuP1FireSpreadMarkerId => new ReplayMarkerInfo("Spread", "Fire spread", ReplayMechanicShape.Spread, Radius: 5.0f, DurationSeconds: 5.8f),
+                DmuP1FireStackMarkerId => new ReplayMarkerInfo("Stack", "Fire stack", ReplayMechanicShape.Stack, Radius: 6.0f, DurationSeconds: 5.8f),
+                DmuP1MysteryMagicFireLieMarkerId => new ReplayMarkerInfo("Fake Fire", "Mystery Magic fire lie", DurationSeconds: 5.8f),
+                DmuP1MysteryMagicFireTruthMarkerId => new ReplayMarkerInfo("Real Fire", "Mystery Magic fire truth", DurationSeconds: 5.8f),
+                DmuP1MysteryMagicIceLieMarkerId => new ReplayMarkerInfo("Fake Ice", "Mystery Magic ice lie"),
+                DmuP1MysteryMagicIceTruthMarkerId => new ReplayMarkerInfo("Real Ice", "Mystery Magic ice truth"),
+                DmuP1MysteryMagicThunderLieMarkerId => new ReplayMarkerInfo("Fake Thunder", "Mystery Magic thunder lie"),
+                DmuP1MysteryMagicThunderTruthMarkerId => new ReplayMarkerInfo("Real Thunder", "Mystery Magic thunder truth"),
                 161 => new ReplayMarkerInfo("Stack", "Final stack", ReplayMechanicShape.Stack, Radius: 5.0f, DurationSeconds: 10.0f),
                 715 => new ReplayMarkerInfo("Stack", "Forsaken stack", ReplayMechanicShape.Stack, Radius: 5.0f),
                 716 => new ReplayMarkerInfo("Spread", "Forsaken spread", ReplayMechanicShape.Spread, Radius: 5.0f),

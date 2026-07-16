@@ -145,8 +145,8 @@ public sealed partial class Plugin
 
         var angleDegrees = 180.0f - ((packet.Index - 1) * 45.0f);
         var angleRadians = angleDegrees * MathF.PI / 180.0f;
-        var x = DmuArenaCenterX + MathF.Cos(angleRadians) * DmuP2PathOfLightTowerDistance;
-        var z = DmuArenaCenterZ + MathF.Sin(angleRadians) * DmuP2PathOfLightTowerDistance;
+        var x = DmuArenaCenterX + MathF.Sin(angleRadians) * DmuP2PathOfLightTowerDistance;
+        var z = DmuArenaCenterZ + MathF.Cos(angleRadians) * DmuP2PathOfLightTowerDistance;
         var position = new Vector3(x, 0.0f, z);
         var sourceKey = $"dmu-p2-path-of-light:{packet.Index}:{packet.Sequence}";
         PruneActiveDmuP2PathOfLightTowers(packet.SeenAtUtc);
