@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.248";
+    private const string CurrentChangelogVersion = "0.1.0.249";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -16230,6 +16230,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.249");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Reduced stale untargetable boss clutter in new Death Replay captures.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.248");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Fixed Death Replay facing indicators and rotation-based mechanic draws.");

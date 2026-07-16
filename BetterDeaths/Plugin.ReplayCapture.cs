@@ -1736,7 +1736,8 @@ public sealed partial class Plugin
         var addedKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var pose in packet.ReplayPoses)
         {
-            if (!TryCreateReplayPositionSnapshot(pose, out var snapshot) ||
+            if (!ShouldSaveActionEffectReplayPose(pose) ||
+                !TryCreateReplayPositionSnapshot(pose, out var snapshot) ||
                 !addedKeys.Add($"{snapshot.SampleSource}:{snapshot.ActorKey}"))
             {
                 continue;
@@ -1744,6 +1745,23 @@ public sealed partial class Plugin
 
             AddRecentReplayPositionSnapshot(snapshot);
         }
+    }
+
+    private static bool ShouldSaveActionEffectReplayPose(RawActorPoseSnapshot pose)
+    {
+        if (pose.ActorKind != ReplayActorKind.Enemy)
+        {
+            return true;
+        }
+
+        if (pose.IsTargetable)
+        {
+            return true;
+        }
+
+        // Untargetable action-effect enemies are usually mechanic anchors or transient clones.
+        // The mechanic draw path captures those shapes separately; periodic object sampling owns visible NPC presence.
+        return false;
     }
 
     private bool TryCreateReplayPositionSnapshot(RawActorPoseSnapshot pose, out ReplayPositionSnapshot snapshot)
