@@ -1276,7 +1276,7 @@ public sealed partial class Plugin
         float remainingCastSeconds,
         DateTime castStartedAtUtc)
     {
-        var forward = new Vector2(MathF.Cos(battleNpc.Rotation), MathF.Sin(battleNpc.Rotation));
+        var forward = ReplayDirectionFromRotation(battleNpc.Rotation);
         var side = useLeftHand
             ? RotateReplayVectorLeft(forward)
             : RotateReplayVectorRight(forward);
@@ -1342,7 +1342,7 @@ public sealed partial class Plugin
         float remainingCastSeconds,
         DateTime castStartedAtUtc)
     {
-        var forward = new Vector2(MathF.Cos(battleNpc.Rotation), MathF.Sin(battleNpc.Rotation));
+        var forward = ReplayDirectionFromRotation(battleNpc.Rotation);
         var offsets = new[]
         {
             RotateReplayVectorRight(forward) * 10.0f,
@@ -1392,10 +1392,11 @@ public sealed partial class Plugin
         string variant,
         float durationSeconds)
     {
+        var direction = ReplayDirectionFromRotation(battleNpc.Rotation);
         var center = new Vector3(
-            battleNpc.Position.X + (MathF.Cos(battleNpc.Rotation) * length * 0.5f),
+            battleNpc.Position.X + (direction.X * length * 0.5f),
             battleNpc.Position.Y,
-            battleNpc.Position.Z + (MathF.Sin(battleNpc.Rotation) * length * 0.5f));
+            battleNpc.Position.Z + (direction.Y * length * 0.5f));
         return CreateDmuSourcePredictionSnapshot(
             seenAtUtc,
             battleNpc,
@@ -1582,10 +1583,11 @@ public sealed partial class Plugin
             return;
         }
 
+        var direction = ReplayDirectionFromRotation(rotation);
         var center = new Vector3(
-            position.X + (MathF.Cos(rotation) * length * 0.5f),
+            position.X + (direction.X * length * 0.5f),
             position.Y,
-            position.Z + (MathF.Sin(rotation) * length * 0.5f));
+            position.Z + (direction.Y * length * 0.5f));
 
         AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
             packet.SeenAtUtc,
@@ -1871,14 +1873,24 @@ public sealed partial class Plugin
         return seenAtUtc.AddSeconds(-MathF.Max(0.0f, battleChara.CurrentCastTime));
     }
 
+    private static Vector2 ReplayDirectionFromRotation(float rotation)
+    {
+        return new Vector2(MathF.Sin(rotation), MathF.Cos(rotation));
+    }
+
+    private static float ReplayRotationFromDirection(float x, float z)
+    {
+        return MathF.Atan2(x, z);
+    }
+
     private static Vector2 RotateReplayVectorLeft(Vector2 vector)
     {
-        return new Vector2(-vector.Y, vector.X);
+        return new Vector2(vector.Y, -vector.X);
     }
 
     private static Vector2 RotateReplayVectorRight(Vector2 vector)
     {
-        return new Vector2(vector.Y, -vector.X);
+        return new Vector2(-vector.Y, vector.X);
     }
 
     private static Vector3 OffsetReplayPosition(Vector3 position, Vector2 offset)
@@ -2637,7 +2649,7 @@ public sealed partial class Plugin
             source.X + (dx * 0.5f),
             (source.Y + target.Y) * 0.5f,
             source.Z + (dz * 0.5f),
-            MathF.Atan2(dz, dx),
+            ReplayRotationFromDirection(dx, dz),
             0.0f,
             distance,
             0.35f,

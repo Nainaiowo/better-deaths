@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.247";
+    private const string CurrentChangelogVersion = "0.1.0.248";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -8493,6 +8493,16 @@ public sealed class RecapWindow : Window, IDisposable
         return from + (delta * t);
     }
 
+    private static Vector2 ReplayDirectionFromRotation(float rotation)
+    {
+        return new Vector2(MathF.Sin(rotation), MathF.Cos(rotation));
+    }
+
+    private static float ReplayRotationFromDirection(float x, float z)
+    {
+        return MathF.Atan2(x, z);
+    }
+
     private static IReadOnlyList<ReplayMarkerSnapshot> SelectReplayMarkerStates(
         IReadOnlyList<ReplayMarkerSnapshot> markers,
         IReadOnlyList<ReplayPositionSnapshot> positions,
@@ -8761,7 +8771,7 @@ public sealed class RecapWindow : Window, IDisposable
             markerInfo.ConeBaitsClosestPlayer &&
             TryFindClosestReplayPlayer(sourceActor, actorStates, out var targetActor))
         {
-            rotation = MathF.Atan2(targetActor.Z - sourceActor.Z, targetActor.X - sourceActor.X);
+            rotation = ReplayRotationFromDirection(targetActor.X - sourceActor.X, targetActor.Z - sourceActor.Z);
         }
 
         return mechanic with
@@ -8810,7 +8820,7 @@ public sealed class RecapWindow : Window, IDisposable
             X = source.X + (dx * 0.5f),
             Y = (source.Y + target.Y) * 0.5f,
             Z = source.Z + (dz * 0.5f),
-            Rotation = MathF.Atan2(dz, dx),
+            Rotation = ReplayRotationFromDirection(dx, dz),
             Length = distance,
         };
     }
@@ -8842,19 +8852,21 @@ public sealed class RecapWindow : Window, IDisposable
     private static Vector3 GetReplayTetherStart(ReplayMechanicSnapshot mechanic)
     {
         var halfLength = Math.Max(0.1f, mechanic.Length) * 0.5f;
+        var direction = ReplayDirectionFromRotation(mechanic.Rotation);
         return new Vector3(
-            mechanic.X - (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.X - (direction.X * halfLength),
             mechanic.Y,
-            mechanic.Z - (MathF.Sin(mechanic.Rotation) * halfLength));
+            mechanic.Z - (direction.Y * halfLength));
     }
 
     private static Vector3 GetReplayTetherEnd(ReplayMechanicSnapshot mechanic)
     {
         var halfLength = Math.Max(0.1f, mechanic.Length) * 0.5f;
+        var direction = ReplayDirectionFromRotation(mechanic.Rotation);
         return new Vector3(
-            mechanic.X + (MathF.Cos(mechanic.Rotation) * halfLength),
+            mechanic.X + (direction.X * halfLength),
             mechanic.Y,
-            mechanic.Z + (MathF.Sin(mechanic.Rotation) * halfLength));
+            mechanic.Z + (direction.Y * halfLength));
     }
 
     private static bool IsReplayTetherMechanic(ReplayMechanicSnapshot mechanic)
@@ -9811,9 +9823,11 @@ public sealed class RecapWindow : Window, IDisposable
         var length = Math.Max(2.0f, mechanic.Length > 0.0f ? mechanic.Length : mechanic.Radius);
         var halfAngle = MathF.Max(5.0f, mechanic.AngleDegrees <= 0.0f ? 45.0f : mechanic.AngleDegrees * 0.5f) * MathF.PI / 180.0f;
         var center = ReplayWorldPointToScreen(mechanic.X, mechanic.Z, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
+        var leftDirection = ReplayDirectionFromRotation(mechanic.Rotation - halfAngle);
+        var rightDirection = ReplayDirectionFromRotation(mechanic.Rotation + halfAngle);
         var left = ReplayWorldPointToScreen(
-            mechanic.X + (MathF.Cos(mechanic.Rotation - halfAngle) * length),
-            mechanic.Z + (MathF.Sin(mechanic.Rotation - halfAngle) * length),
+            mechanic.X + (leftDirection.X * length),
+            mechanic.Z + (leftDirection.Y * length),
             canvasStart,
             canvasSize,
             minX,
@@ -9823,8 +9837,8 @@ public sealed class RecapWindow : Window, IDisposable
             zoom,
             pan);
         var right = ReplayWorldPointToScreen(
-            mechanic.X + (MathF.Cos(mechanic.Rotation + halfAngle) * length),
-            mechanic.Z + (MathF.Sin(mechanic.Rotation + halfAngle) * length),
+            mechanic.X + (rightDirection.X * length),
+            mechanic.Z + (rightDirection.Y * length),
             canvasStart,
             canvasSize,
             minX,
@@ -9853,9 +9867,10 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var length = Math.Max(2.0f, mechanic.Length);
         var halfLength = length * 0.5f;
+        var direction = ReplayDirectionFromRotation(mechanic.Rotation);
         var start = ReplayWorldPointToScreen(
-            mechanic.X - (MathF.Cos(mechanic.Rotation) * halfLength),
-            mechanic.Z - (MathF.Sin(mechanic.Rotation) * halfLength),
+            mechanic.X - (direction.X * halfLength),
+            mechanic.Z - (direction.Y * halfLength),
             canvasStart,
             canvasSize,
             minX,
@@ -9865,8 +9880,8 @@ public sealed class RecapWindow : Window, IDisposable
             zoom,
             pan);
         var end = ReplayWorldPointToScreen(
-            mechanic.X + (MathF.Cos(mechanic.Rotation) * halfLength),
-            mechanic.Z + (MathF.Sin(mechanic.Rotation) * halfLength),
+            mechanic.X + (direction.X * halfLength),
+            mechanic.Z + (direction.Y * halfLength),
             canvasStart,
             canvasSize,
             minX,
@@ -9895,9 +9910,10 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var length = Math.Max(0.1f, mechanic.Length);
         var halfLength = length * 0.5f;
+        var direction = ReplayDirectionFromRotation(mechanic.Rotation);
         var start = ReplayWorldPointToScreen(
-            mechanic.X - (MathF.Cos(mechanic.Rotation) * halfLength),
-            mechanic.Z - (MathF.Sin(mechanic.Rotation) * halfLength),
+            mechanic.X - (direction.X * halfLength),
+            mechanic.Z - (direction.Y * halfLength),
             canvasStart,
             canvasSize,
             minX,
@@ -9907,8 +9923,8 @@ public sealed class RecapWindow : Window, IDisposable
             zoom,
             pan);
         var end = ReplayWorldPointToScreen(
-            mechanic.X + (MathF.Cos(mechanic.Rotation) * halfLength),
-            mechanic.Z + (MathF.Sin(mechanic.Rotation) * halfLength),
+            mechanic.X + (direction.X * halfLength),
+            mechanic.Z + (direction.Y * halfLength),
             canvasStart,
             canvasSize,
             minX,
@@ -10163,18 +10179,14 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var facingPoint = ReplayWorldPointToScreen(
-            actor.X + MathF.Cos(actor.Rotation),
-            actor.Z + MathF.Sin(actor.Rotation),
-            canvasStart,
+        var direction = ReplayWorldDirectionToScreenDirection(
+            ReplayDirectionFromRotation(actor.Rotation),
             canvasSize,
             minX,
             maxX,
             minZ,
             maxZ,
-            zoom,
-            pan);
-        var direction = facingPoint - screenPosition;
+            zoom);
         if (direction.LengthSquared() <= 0.001f)
         {
             return;
@@ -10489,6 +10501,24 @@ public sealed class RecapWindow : Window, IDisposable
         var xScale = innerWidth / MathF.Max(1.0f, maxX - minX);
         var zScale = innerHeight / MathF.Max(1.0f, maxZ - minZ);
         return MathF.Max(1.0f, worldLength) * MathF.Min(xScale, zScale) * Math.Clamp(zoom, ReplayMinZoom, ReplayMaxZoom);
+    }
+
+    private static Vector2 ReplayWorldDirectionToScreenDirection(
+        Vector2 worldDirection,
+        Vector2 canvasSize,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        float zoom = ReplayMinZoom)
+    {
+        const float padding = 30.0f;
+        var innerWidth = MathF.Max(1.0f, canvasSize.X - (padding * 2.0f));
+        var innerHeight = MathF.Max(1.0f, canvasSize.Y - (padding * 2.0f));
+        var xScale = innerWidth / MathF.Max(1.0f, maxX - minX);
+        var zScale = innerHeight / MathF.Max(1.0f, maxZ - minZ);
+        var clampedZoom = Math.Clamp(zoom, ReplayMinZoom, ReplayMaxZoom);
+        return new Vector2(worldDirection.X * xScale * clampedZoom, worldDirection.Y * zScale * clampedZoom);
     }
 
     private static float GetReplayMechanicBoundsRadius(ReplayMechanicSnapshot mechanic)
@@ -16200,6 +16230,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.248");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Fixed Death Replay facing indicators and rotation-based mechanic draws.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.247");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Improved Death Replay mechanic cleanup and moved death markers onto the replay timeline.");
@@ -17446,6 +17482,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 var angle = ((MathF.PI * 2.0f) / players.Count) * player.PartyIndex + (phase * 0.07f);
                 var spread = player.PartyIndex < 4 ? 13.0f : 18.0f;
+                var direction = ReplayDirectionFromRotation(angle);
                 var isFocus = string.Equals(player.Key, focusPlayer.Key, StringComparison.Ordinal);
                 var isDead = isFocus && elapsed >= deathElapsed;
                 var currentHp = isDead
@@ -17462,9 +17499,9 @@ public sealed class RecapWindow : Window, IDisposable
                     (uint)(10_000 + player.PartyIndex),
                     player.ClassJobId,
                     player.Job,
-                    MathF.Cos(angle) * spread,
+                    direction.X * spread,
                     0.0f,
-                    MathF.Sin(angle) * spread,
+                    direction.Y * spread,
                     angle,
                     currentHp,
                     0,
