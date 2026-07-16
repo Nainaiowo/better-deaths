@@ -111,7 +111,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.242";
+    private const string CurrentChangelogVersion = "0.1.0.246";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -15586,6 +15586,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.246");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added DMU P4 and P5 replay draw support with cleaner mechanic cleanup.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.245");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added new soda-inspired themes: Dr Pepper, Sprite, Mountain Dew, Coke, Fanta, Ginger Ale, and Pepsi.");

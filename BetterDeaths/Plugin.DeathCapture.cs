@@ -336,6 +336,8 @@ public sealed partial class Plugin
         ResolveActiveReplayMechanicsForAction(packet);
         CaptureReplayDmuP2ForsakenAction(packet);
         CaptureReplayDmuP3Action(packet);
+        CaptureReplayDmuP4Action(packet);
+        CaptureReplayDmuP5Action(packet);
 
         string? actionName = null;
         uint? actionIconId = null;

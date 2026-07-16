@@ -456,6 +456,263 @@ public sealed partial class Plugin
         }
     }
 
+    private void CaptureReplayDmuP4Action(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        switch (packet.ActionId)
+        {
+            case DmuP4GrandCrossActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    100.0f,
+                    "Grand Cross",
+                    "dmu-p4-grand-cross",
+                    1.2f);
+                break;
+            case DmuP4InfernoHitActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    100.0f,
+                    "Inferno",
+                    "dmu-p4-inferno",
+                    1.2f);
+                break;
+            case DmuP4TsunamiHitActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    100.0f,
+                    "Tsunami",
+                    "dmu-p4-tsunami",
+                    1.2f);
+                break;
+            case DmuP4DeathBoltNormalActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    8.0f,
+                    "Death Bolt",
+                    "dmu-p4-death-bolt",
+                    1.6f);
+                break;
+            case DmuP4DeathBoltInvertedActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    8.0f,
+                    "Death Bolt",
+                    "dmu-p4-death-bolt-inverted",
+                    1.6f);
+                break;
+            case DmuP4DeathWaveNormalActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    8.0f,
+                    "Death Wave",
+                    "dmu-p4-death-wave",
+                    1.6f);
+                break;
+            case DmuP4DeathWaveInvertedActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    8.0f,
+                    "Death Wave",
+                    "dmu-p4-death-wave-inverted",
+                    1.6f);
+                break;
+            case DmuP4StrayFlamesNormalActionId:
+                CaptureReplayDmuSourceAnchoredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    6.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Stray Flames",
+                    "dmu-p4-stray-flames",
+                    1.6f);
+                break;
+            case DmuP4StrayFlamesInvertedActionId:
+                CaptureReplayDmuSourceAnchoredMechanic(
+                    packet,
+                    ReplayMechanicShape.Donut,
+                    40.0f,
+                    0.0f,
+                    6.0f,
+                    0.0f,
+                    "Stray Flames",
+                    "dmu-p4-stray-flames-inverted",
+                    1.6f);
+                break;
+            case DmuP4StraySprayNormalActionId:
+                CaptureReplayDmuSourceAnchoredMechanic(
+                    packet,
+                    ReplayMechanicShape.Donut,
+                    40.0f,
+                    0.0f,
+                    6.0f,
+                    0.0f,
+                    "Stray Spray",
+                    "dmu-p4-stray-spray",
+                    1.6f);
+                break;
+            case DmuP4StraySprayInvertedActionId:
+                CaptureReplayDmuSourceAnchoredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    6.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Stray Spray",
+                    "dmu-p4-stray-spray-inverted",
+                    1.6f);
+                break;
+            case DmuP4WhiteAntilightActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    47.0f,
+                    21.0f,
+                    "White Antilight",
+                    "dmu-p4-white-antilight",
+                    1.6f);
+                break;
+            case DmuP4BlackAntilightActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    47.0f,
+                    21.0f,
+                    "Black Antilight",
+                    "dmu-p4-black-antilight",
+                    1.6f);
+                break;
+            case DmuP4EdgeOfDeathActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    48.0f,
+                    2.0f,
+                    "Edge of Death",
+                    "dmu-p4-edge-of-death",
+                    1.6f);
+                break;
+            case DmuP4UltimaUpsurgeActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    100.0f,
+                    "Ultima Upsurge",
+                    "dmu-p4-ultima-upsurge",
+                    1.2f);
+                break;
+        }
+    }
+
+    private void CaptureReplayDmuP5Action(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext())
+        {
+            return;
+        }
+
+        switch (packet.ActionId)
+        {
+            case DmuP5UltimaRepeaterHitActionId:
+                CaptureReplayDmuSourceCircle(
+                    packet,
+                    100.0f,
+                    "Ultima Repeater",
+                    "dmu-p5-ultima-repeater",
+                    0.9f);
+                break;
+            case DmuP5FellForcesTankActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    3.0f,
+                    "Fell Forces",
+                    "dmu-p5-fell-forces-tank",
+                    1.4f);
+                break;
+            case DmuP5FellForcesHealerActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    5.0f,
+                    "Fell Forces",
+                    "dmu-p5-fell-forces-healer",
+                    1.4f);
+                break;
+            case DmuP5FellForcesDpsActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    5.0f,
+                    "Fell Forces",
+                    "dmu-p5-fell-forces-dps",
+                    1.4f);
+                break;
+            case DmuP5FloodLineActionId:
+                CaptureReplayDmuSourceLine(
+                    packet,
+                    40.0f,
+                    10.0f,
+                    "Flood",
+                    "dmu-p5-flood",
+                    1.4f);
+                break;
+            case DmuP5ChaoticFloodActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    6.0f,
+                    "Chaotic Flood",
+                    "dmu-p5-chaotic-flood",
+                    1.4f);
+                break;
+            case DmuP5FlareActionId:
+            case DmuP5HolyActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Spread,
+                    5.0f,
+                    "Maddening Orchestra",
+                    "dmu-p5-maddening-orchestra-spread",
+                    1.4f);
+                break;
+            case DmuP5ChaoticFlareActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Stack,
+                    5.0f,
+                    "Chaotic Flare",
+                    "dmu-p5-chaotic-flare",
+                    1.4f);
+                break;
+            case DmuP5FlareDiffusionActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    25.0f,
+                    "Surprise Flare",
+                    "dmu-p5-surprise-flare",
+                    1.4f);
+                break;
+            case DmuP5ChaoticHolyActionId:
+                CaptureReplayDmuPacketCenteredMechanic(
+                    packet,
+                    ReplayMechanicShape.Circle,
+                    6.0f,
+                    "Surprise Holy",
+                    "dmu-p5-surprise-holy",
+                    1.4f);
+                break;
+        }
+    }
+
     private void CaptureReplayDmuP3CastPrediction(
         Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
         string name,
@@ -628,6 +885,344 @@ public sealed partial class Plugin
                     castStartedAtUtc);
                 break;
         }
+    }
+
+    private void CaptureReplayDmuP4P5CastPrediction(
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        DateTime seenAtUtc,
+        List<ReplayMechanicSnapshot> mechanicSnapshots)
+    {
+        if (!IsDmuReplayCaptureContext() ||
+            battleNpc is not Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara ||
+            !battleChara.IsCasting ||
+            battleChara.CastActionId == 0)
+        {
+            return;
+        }
+
+        var castActionId = battleChara.CastActionId;
+        var remainingCastSeconds = GetRemainingReplayCastSeconds(battleChara);
+        var castStartedAtUtc = GetReplayCastStartedAtUtc(seenAtUtc, battleChara);
+        switch (castActionId)
+        {
+            case DmuP4GrandCrossActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    100.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Grand Cross",
+                    "dmu-p4-grand-cross-predicted",
+                    castActionId,
+                    DmuP4GrandCrossActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4InfernoCastActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    100.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Inferno",
+                    "dmu-p4-inferno-predicted",
+                    castActionId,
+                    DmuP4InfernoHitActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: false,
+                    castStartedAtUtc);
+                break;
+            case DmuP4TsunamiCastActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    100.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Tsunami",
+                    "dmu-p4-tsunami-predicted",
+                    castActionId,
+                    DmuP4TsunamiHitActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: false,
+                    castStartedAtUtc);
+                break;
+            case DmuP4StrayFlamesNormalActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    6.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Stray Flames",
+                    "dmu-p4-stray-flames-predicted",
+                    castActionId,
+                    DmuP4StrayFlamesNormalActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4StrayFlamesInvertedActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Donut,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    40.0f,
+                    0.0f,
+                    6.0f,
+                    0.0f,
+                    "Stray Flames",
+                    "dmu-p4-stray-flames-inverted-predicted",
+                    castActionId,
+                    DmuP4StrayFlamesInvertedActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4StraySprayNormalActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Donut,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    40.0f,
+                    0.0f,
+                    6.0f,
+                    0.0f,
+                    "Stray Spray",
+                    "dmu-p4-stray-spray-predicted",
+                    castActionId,
+                    DmuP4StraySprayNormalActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4StraySprayInvertedActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    6.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Stray Spray",
+                    "dmu-p4-stray-spray-inverted-predicted",
+                    castActionId,
+                    DmuP4StraySprayInvertedActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4WhiteAntilightActionId:
+                RegisterReplayForwardLinePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    47.0f,
+                    21.0f,
+                    "White Antilight",
+                    "dmu-p4-white-antilight-predicted",
+                    castActionId,
+                    DmuP4WhiteAntilightActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4BlackAntilightActionId:
+                RegisterReplayForwardLinePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    47.0f,
+                    21.0f,
+                    "Black Antilight",
+                    "dmu-p4-black-antilight-predicted",
+                    castActionId,
+                    DmuP4BlackAntilightActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4EdgeOfDeathActionId:
+                RegisterReplayForwardLinePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    48.0f,
+                    2.0f,
+                    "Edge of Death",
+                    "dmu-p4-edge-of-death-predicted",
+                    castActionId,
+                    DmuP4EdgeOfDeathActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP4UltimaUpsurgeActionId:
+                RegisterReplaySourcePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    ReplayMechanicShape.Circle,
+                    battleNpc.Position,
+                    battleNpc.Rotation,
+                    100.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    "Ultima Upsurge",
+                    "dmu-p4-ultima-upsurge-predicted",
+                    castActionId,
+                    DmuP4UltimaUpsurgeActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+            case DmuP5FloodRectCastActionId:
+                RegisterReplayForwardLinePrediction(
+                    mechanicSnapshots,
+                    seenAtUtc,
+                    battleNpc,
+                    name,
+                    40.0f,
+                    10.0f,
+                    "Flood",
+                    "dmu-p5-flood-predicted",
+                    castActionId,
+                    DmuP5FloodLineActionId,
+                    remainingCastSeconds + DmuReplayPredictionFallbackGraceSeconds,
+                    endsWhenSourceStopsCasting: true,
+                    castStartedAtUtc);
+                break;
+        }
+    }
+
+    private void RegisterReplayForwardLinePrediction(
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        DateTime seenAtUtc,
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        float length,
+        float width,
+        string label,
+        string rawEventKind,
+        uint castActionId,
+        uint resolveActionId,
+        float durationSeconds,
+        bool endsWhenSourceStopsCasting,
+        DateTime castStartedAtUtc)
+    {
+        RegisterActiveReplayMechanicSnapshot(
+            mechanicSnapshots,
+            CreateDmuForwardLinePredictionSnapshot(
+                seenAtUtc,
+                battleNpc,
+                name,
+                length,
+                width,
+                label,
+                rawEventKind,
+                castActionId,
+                "main",
+                durationSeconds),
+            BuildActiveReplayMechanicKey(rawEventKind, battleNpc.EntityId, castActionId, "main"),
+            battleNpc.EntityId,
+            castActionId,
+            resolveActionId,
+            true,
+            endsWhenSourceStopsCasting,
+            castStartedAtUtc);
+    }
+
+    private void RegisterReplaySourcePrediction(
+        List<ReplayMechanicSnapshot> mechanicSnapshots,
+        DateTime seenAtUtc,
+        Dalamud.Game.ClientState.Objects.Types.IBattleNpc battleNpc,
+        string name,
+        ReplayMechanicShape shape,
+        Vector3 position,
+        float rotation,
+        float radius,
+        float length,
+        float width,
+        float angleDegrees,
+        string label,
+        string rawEventKind,
+        uint castActionId,
+        uint resolveActionId,
+        float durationSeconds,
+        bool endsWhenSourceStopsCasting,
+        DateTime castStartedAtUtc)
+    {
+        RegisterActiveReplayMechanicSnapshot(
+            mechanicSnapshots,
+            CreateDmuSourcePredictionSnapshot(
+                seenAtUtc,
+                battleNpc,
+                name,
+                shape,
+                position,
+                rotation,
+                radius,
+                length,
+                width,
+                angleDegrees,
+                label,
+                rawEventKind,
+                castActionId,
+                "main",
+                durationSeconds),
+            BuildActiveReplayMechanicKey(rawEventKind, battleNpc.EntityId, castActionId, "main"),
+            battleNpc.EntityId,
+            castActionId,
+            resolveActionId,
+            true,
+            endsWhenSourceStopsCasting,
+            castStartedAtUtc);
     }
 
     private void CaptureReplayDmuP3LatLongPrediction(
@@ -1429,7 +2024,20 @@ public sealed partial class Plugin
             DmuP3LookUponMeAndDespairActionId or
             DmuP3BlizzardIIIActionId or
             DmuP3StompAMoleActionId or
-            DmuP3BigBangActionId;
+            DmuP3BigBangActionId or
+            DmuP4GrandCrossActionId or
+            DmuP4InfernoHitActionId or
+            DmuP4TsunamiHitActionId or
+            DmuP4StrayFlamesNormalActionId or
+            DmuP4StrayFlamesInvertedActionId or
+            DmuP4StraySprayNormalActionId or
+            DmuP4StraySprayInvertedActionId or
+            DmuP4WhiteAntilightActionId or
+            DmuP4BlackAntilightActionId or
+            DmuP4EdgeOfDeathActionId or
+            DmuP4UltimaUpsurgeActionId or
+            DmuP5UltimaRepeaterHitActionId or
+            DmuP5FloodLineActionId;
     }
 
     private bool TryGetReplayPacketMechanicCenter(RawActionEffectPacket packet, out Vector3 center)
@@ -1750,6 +2358,7 @@ public sealed partial class Plugin
 
             CaptureReplayDmuP4RealityTellMarker(battleNpc, name, seenAtUtc);
             CaptureReplayDmuP3CastPrediction(battleNpc, name, seenAtUtc, mechanicSnapshots);
+            CaptureReplayDmuP4P5CastPrediction(battleNpc, name, seenAtUtc, mechanicSnapshots);
 
             if (string.Equals(name, "Black Hole", StringComparison.OrdinalIgnoreCase))
             {
