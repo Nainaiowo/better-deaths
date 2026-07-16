@@ -207,6 +207,13 @@ public sealed class RecapWindow : Window, IDisposable
         BetterDeathsTheme.Cotton,
         BetterDeathsTheme.Banana,
         BetterDeathsTheme.Hamtaro,
+        BetterDeathsTheme.DrPepper,
+        BetterDeathsTheme.Sprite,
+        BetterDeathsTheme.MountainDew,
+        BetterDeathsTheme.Coke,
+        BetterDeathsTheme.Fanta,
+        BetterDeathsTheme.GingerAle,
+        BetterDeathsTheme.Pepsi,
     ];
     private static readonly Vector4[] BasePullGroupPalette =
     [
@@ -442,9 +449,7 @@ public sealed class RecapWindow : Window, IDisposable
         string Label,
         MainPage Page,
         bool Highlight = false,
-        string? BadgeText = null,
-        bool Enabled = true,
-        string? DisabledTooltip = null);
+        string? BadgeText = null);
 
     private readonly record struct DeathDetailNavigationItem(
         string Label,
@@ -772,25 +777,25 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernNavigation()
     {
-        var enableExamplePage = ShouldShowExamplePage();
-        if (!enableExamplePage && currentMainPage == MainPage.Example)
+        var showExamplePage = ShouldShowExamplePage();
+        if (!showExamplePage && currentMainPage == MainPage.Example)
         {
             currentMainPage = MainPage.Review;
         }
-        var exampleDisabledTooltip = plugin.RecordedPullHistoryLoading
-            ? "Checking saved pulls before enabling Example."
-            : "Example is disabled once saved pulls exist.";
 
         var items = new List<MainNavigationItem>
         {
             new("Review", MainPage.Review),
-            new("Example", MainPage.Example, Enabled: enableExamplePage, DisabledTooltip: exampleDisabledTooltip),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
             new("Feedback", MainPage.Feedback),
             new("Updates", MainPage.Updates, ShouldHighlightChangelogTab()),
         };
+        if (showExamplePage)
+        {
+            items.Insert(1, new MainNavigationItem("Example", MainPage.Example));
+        }
 
         if (showDebugTab)
         {
@@ -831,7 +836,7 @@ public sealed class RecapWindow : Window, IDisposable
                 ImGui.SameLine(0.0f, spacing);
             }
 
-            DrawModernNavButton(item.Label, item.Page, item.Highlight, item.BadgeText, buttonWidth, item.Enabled, item.DisabledTooltip);
+            DrawModernNavButton(item.Label, item.Page, item.Highlight, item.BadgeText, buttonWidth);
             if (item.Page == MainPage.Customize && item.Highlight && !useCompactWidths)
             {
                 DrawFloatingNewBadgeOverLastItem();
@@ -864,19 +869,9 @@ public sealed class RecapWindow : Window, IDisposable
                 : item.Highlight
                     ? $"{item.Label}  new"
                     : item.Label;
-            ImGui.BeginDisabled(!item.Enabled);
-            var clicked = ImGui.Selectable(label, selected);
-            ImGui.EndDisabled();
-            if (clicked && item.Enabled)
+            if (ImGui.Selectable(label, selected))
             {
                 currentMainPage = item.Page;
-            }
-
-            if (!item.Enabled &&
-                !string.IsNullOrWhiteSpace(item.DisabledTooltip) &&
-                ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            {
-                SetThemedTooltip(item.DisabledTooltip);
             }
 
             if (selected)
@@ -971,9 +966,7 @@ public sealed class RecapWindow : Window, IDisposable
         MainPage page,
         bool highlight = false,
         string? badgeText = null,
-        float width = MainNavigationButtonWidth,
-        bool enabled = true,
-        string? disabledTooltip = null)
+        float width = MainNavigationButtonWidth)
     {
         var selected = currentMainPage == page;
         var buttonColor = selected
@@ -990,10 +983,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
         ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-        ImGui.BeginDisabled(!enabled);
-        var clicked = ImGui.Button($"{label}##MainNav{page}", new Vector2(width, 30.0f));
-        ImGui.EndDisabled();
-        if (clicked && enabled)
+        if (ImGui.Button($"{label}##MainNav{page}", new Vector2(width, 30.0f)))
         {
             currentMainPage = page;
         }
@@ -1007,13 +997,6 @@ public sealed class RecapWindow : Window, IDisposable
         if (highlight)
         {
             DrawChangelogTabHighlightBorder();
-        }
-
-        if (!enabled &&
-            !string.IsNullOrWhiteSpace(disabledTooltip) &&
-            ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-        {
-            SetThemedTooltip(disabledTooltip);
         }
 
         ImGui.PopStyleColor(4);
@@ -15603,6 +15586,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.245");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added new soda-inspired themes: Dr Pepper, Sprite, Mountain Dew, Coke, Fanta, Ginger Ale, and Pepsi.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.243");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Moved Death Replay into its own Replay tab with full-pull replay review for saved death pulls.");

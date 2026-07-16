@@ -255,6 +255,13 @@ public enum BetterDeathsTheme
     Cotton,
     Banana,
     Hamtaro,
+    DrPepper,
+    Sprite,
+    MountainDew,
+    Coke,
+    Fanta,
+    GingerAle,
+    Pepsi,
 }
 
 [Serializable]
