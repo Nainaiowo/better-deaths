@@ -65,8 +65,6 @@ internal interface IReplayEncounterModule
         IReadOnlyList<ReplayMarkerSnapshot> markers,
         IReadOnlyList<ReplayPositionSnapshot> positions,
         DateTime selectedAtUtc);
-
-    IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death);
 }
 
 internal static class ReplayEncounterModules
@@ -202,10 +200,6 @@ internal static class ReplayEncounterModules
             IReadOnlyList<ReplayPositionSnapshot> positions,
             DateTime selectedAtUtc) => true;
 
-        public IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death)
-        {
-            return death.ReplayMechanics;
-        }
     }
 
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
@@ -315,11 +309,6 @@ internal static class ReplayEncounterModules
 
             var initialBatchEnd = relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
             return marker.SeenAtUtc > initialBatchEnd;
-        }
-
-        public IReadOnlyList<ReplayMechanicSnapshot> GetReplayMechanics(PartyDeathRecord death)
-        {
-            return death.ReplayMechanics;
         }
 
         public bool ShouldDisplayReplayMarker(

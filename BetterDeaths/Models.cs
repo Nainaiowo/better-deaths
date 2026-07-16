@@ -339,6 +339,14 @@ public sealed record PullDeathSnapshot(
     public string PullGroupId { get; init; } = string.Empty;
 
     public int PullGroupColorIndex { get; init; } = -1;
+
+    public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
+
+    public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];
+
+    public IReadOnlyList<ReplayMechanicSnapshot> ReplayMechanics { get; init; } = [];
+
+    public IReadOnlyList<ReplayWorldMarkerSnapshot> ReplayWorldMarkers { get; init; } = [];
 }
 
 public sealed record RecordedPullSummary(

@@ -134,7 +134,6 @@ public sealed partial class Plugin
             TryCaptureDeath(member, now, "Framework");
         }
 
-        UpdateCurrentDeathReplayPositions(now);
     }
 
     private List<PartyMemberSnapshot> BuildTrackedCharacterSnapshots()
@@ -1734,12 +1733,6 @@ public sealed partial class Plugin
             EnemyHpAtDeath = enemyHpAtDeath,
             PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
             EnvironmentalAssessment = environmentalAssessment,
-            ReplayPositions = replayPositions,
-            ReplayMarkers = GetReplayMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
-            ReplayMechanics = GetRecentReplayMechanics(
-                deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
-                deathSeenAtUtc),
-            ReplayWorldMarkers = GetReplayWorldMarkersForDeath(deathSeenAtUtc, deathSeenAtUtc),
         };
     }
 

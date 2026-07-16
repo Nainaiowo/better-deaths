@@ -86,14 +86,18 @@ public sealed partial class Plugin
 
     private bool CaptureCurrentPullSnapshot(string reason)
     {
-        if (currentDeaths.Count == 0 || currentPullSnapshotCaptured)
+        if (currentPullSnapshotCaptured ||
+            currentDeaths.Count == 0)
         {
             return false;
         }
 
         var now = DateTime.UtcNow;
         ResolveRawCombatQueues(now);
-        UpdateCurrentDeathReplayPositions(now, force: true);
+        var replayPositions = GetCurrentPullReplayPositions(now);
+        var replayMarkers = GetCurrentPullReplayMarkers(now);
+        var replayMechanics = GetCurrentPullReplayMechanics(now);
+        var replayWorldMarkers = GetCurrentPullReplayWorldMarkers(now);
         WaitForRecordedPullHistoryLoadForMutation();
         EnsureCurrentDutyInstancePullGroup();
         var pullNumber = GetNextRecordedPullNumber();
@@ -109,6 +113,10 @@ public sealed partial class Plugin
             CapturedPluginVersion = GetCurrentPluginVersionForSavedData(),
             PullGroupId = currentDutyInstancePullGroupId,
             PullGroupColorIndex = currentDutyInstancePullGroupColorIndex,
+            ReplayPositions = replayPositions,
+            ReplayMarkers = replayMarkers,
+            ReplayMechanics = replayMechanics,
+            ReplayWorldMarkers = replayWorldMarkers,
         };
 
         lock (recordedPullLock)
@@ -186,7 +194,6 @@ public sealed partial class Plugin
         lastHpHistorySampleByMember.Clear();
         lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
         lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
-        lastCurrentDeathReplayUpdateAtUtc = DateTime.MinValue;
         lock (rawCombatQueueLock)
         {
             rawActionEffectPackets.Clear();

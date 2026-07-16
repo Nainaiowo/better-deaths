@@ -88,9 +88,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int BetterDeathsLeadUpSeconds = 10;
     private const int BetterDeathsLeadUpCaptureSeconds = BetterDeathsLeadUpSeconds + 10;
     private const int DeathReplayLeadUpSeconds = 30;
-    private const int DeathReplayPostDeathSeconds = 10;
-    private const int DeathReplayMarkerCarryInSeconds = 30;
-    private const int DeathReplayRetentionSeconds = DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5;
+    private const int FullReplayMaxRetentionSeconds = 30 * 60;
     private const float EnvironmentalDeathMinimumConfidence = 0.35f;
     private const float EnvironmentalFallYDropThreshold = 2.5f;
     private const float EnvironmentalStrongFallYDropThreshold = 5.0f;
@@ -213,6 +211,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan ReplayPlayerPositionSampleInterval = TimeSpan.FromMilliseconds(66);
     private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayPositionDuplicateWindow = TimeSpan.FromMilliseconds(25);
+    private static readonly TimeSpan ReplayStationaryPositionDuplicateWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ReplayTetherPositionSampleInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan ReplayWorldMarkerSampleInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan ReplayTetherActiveGrace = TimeSpan.FromMilliseconds(250);
@@ -294,7 +293,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private DateTime lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
-    private DateTime lastCurrentDeathReplayUpdateAtUtc = DateTime.MinValue;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);

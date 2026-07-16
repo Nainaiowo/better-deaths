@@ -2115,7 +2115,7 @@ public sealed partial class Plugin
         for (var index = history.Count - 1; index >= 0 && index >= history.Count - 8; index--)
         {
             var existing = history[index];
-            if (!ReplayPositionSnapshotsDuplicate(existing, snapshot))
+            if (!ReplayPositionSnapshotsDuplicate(existing, snapshot, GetReplayPositionDuplicateWindow(snapshot)))
             {
                 continue;
             }
@@ -2131,9 +2131,19 @@ public sealed partial class Plugin
         history.Add(snapshot);
     }
 
-    private static bool ReplayPositionSnapshotsDuplicate(ReplayPositionSnapshot existing, ReplayPositionSnapshot snapshot)
+    private static TimeSpan GetReplayPositionDuplicateWindow(ReplayPositionSnapshot snapshot)
     {
-        return Duration(existing.SeenAtUtc, snapshot.SeenAtUtc) <= ReplayPositionDuplicateWindow &&
+        return snapshot.SampleSource is ReplayPositionSampleSource.PeriodicPlayer or ReplayPositionSampleSource.PeriodicEnemyObject
+            ? ReplayStationaryPositionDuplicateWindow
+            : ReplayPositionDuplicateWindow;
+    }
+
+    private static bool ReplayPositionSnapshotsDuplicate(
+        ReplayPositionSnapshot existing,
+        ReplayPositionSnapshot snapshot,
+        TimeSpan duplicateWindow)
+    {
+        return Duration(existing.SeenAtUtc, snapshot.SeenAtUtc) <= duplicateWindow &&
             existing.CurrentHp == snapshot.CurrentHp &&
             existing.ShieldHp == snapshot.ShieldHp &&
             existing.MaxHp == snapshot.MaxHp &&
@@ -2221,13 +2231,9 @@ public sealed partial class Plugin
             .ToList();
     }
 
-    private IReadOnlyList<ReplayMarkerSnapshot> GetReplayMarkersForDeath(DateTime deathSeenAtUtc, DateTime endAtUtc)
+    private IReadOnlyList<ReplayPositionSnapshot> GetCurrentPullReplayPositions(DateTime endAtUtc)
     {
-        var fallbackStartAtUtc = deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayMarkerCarryInSeconds);
-        var startAtUtc = pullStartedAtUtc is { } pullStarted
-            ? pullStarted
-            : fallbackStartAtUtc;
-        return GetRecentReplayMarkers(startAtUtc, endAtUtc);
+        return GetRecentReplayPositions(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
     }
 
     private IReadOnlyList<ReplayMarkerSnapshot> GetRecentReplayMarkers(DateTime startAtUtc, DateTime endAtUtc)
@@ -2247,6 +2253,16 @@ public sealed partial class Plugin
             .ToList();
     }
 
+    private IReadOnlyList<ReplayMarkerSnapshot> GetCurrentPullReplayMarkers(DateTime endAtUtc)
+    {
+        return GetRecentReplayMarkers(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
+    }
+
+    public IReadOnlyList<ReplayMarkerSnapshot> GetCurrentPullReplayMarkersForReview()
+    {
+        return GetCurrentPullReplayMarkers(DateTime.UtcNow);
+    }
+
     private IReadOnlyList<ReplayMechanicSnapshot> GetRecentReplayMechanics(DateTime startAtUtc, DateTime endAtUtc)
     {
         if (recentReplayMechanicsBySource.Count == 0 || endAtUtc < startAtUtc)
@@ -2264,13 +2280,9 @@ public sealed partial class Plugin
             .ToList();
     }
 
-    private IReadOnlyList<ReplayWorldMarkerSnapshot> GetReplayWorldMarkersForDeath(DateTime deathSeenAtUtc, DateTime endAtUtc)
+    private IReadOnlyList<ReplayMechanicSnapshot> GetCurrentPullReplayMechanics(DateTime endAtUtc)
     {
-        var fallbackStartAtUtc = deathSeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5);
-        var startAtUtc = pullStartedAtUtc is { } pullStarted
-            ? pullStarted
-            : fallbackStartAtUtc;
-        return GetRecentReplayWorldMarkers(startAtUtc, endAtUtc);
+        return GetRecentReplayMechanics(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
     }
 
     private IReadOnlyList<ReplayWorldMarkerSnapshot> GetRecentReplayWorldMarkers(DateTime startAtUtc, DateTime endAtUtc)
@@ -2287,76 +2299,22 @@ public sealed partial class Plugin
             .ToList();
     }
 
-    private void UpdateCurrentDeathReplayPositions(DateTime now, bool force = false)
+    private IReadOnlyList<ReplayWorldMarkerSnapshot> GetCurrentPullReplayWorldMarkers(DateTime endAtUtc)
     {
-        if (currentDeaths.Count == 0 ||
-            recentReplayPositionsByActor.Count == 0 &&
-            recentReplayMarkersByActor.Count == 0 &&
-            recentReplayMechanicsBySource.Count == 0 &&
-            recentReplayWorldMarkers.Count == 0)
-        {
-            return;
-        }
-
-        if (!force && Duration(now, lastCurrentDeathReplayUpdateAtUtc) < ReplayPositionSampleInterval)
-        {
-            return;
-        }
-
-        lastCurrentDeathReplayUpdateAtUtc = now;
-        for (var index = 0; index < currentDeaths.Count; index++)
-        {
-            var death = currentDeaths[index];
-            var endAtUtc = death.SeenAtUtc + TimeSpan.FromSeconds(DeathReplayPostDeathSeconds);
-            if (now < death.SeenAtUtc || !force && now > endAtUtc + ReplayPositionSampleInterval)
-            {
-                continue;
-            }
-
-            var replayEndAtUtc = now <= endAtUtc ? now : endAtUtc;
-            var replayPositions = recentReplayPositionsByActor.Count == 0
-                ? death.ReplayPositions
-                : GetRecentReplayPositions(
-                    death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
-                    replayEndAtUtc);
-            var replayMarkers = recentReplayMarkersByActor.Count == 0
-                ? death.ReplayMarkers
-                : GetReplayMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
-            var replayMechanics = recentReplayMechanicsBySource.Count == 0
-                ? death.ReplayMechanics
-                : GetRecentReplayMechanics(
-                    death.SeenAtUtc - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds),
-                    replayEndAtUtc);
-            var replayWorldMarkers = recentReplayWorldMarkers.Count == 0
-                ? death.ReplayWorldMarkers
-                : GetReplayWorldMarkersForDeath(death.SeenAtUtc, replayEndAtUtc);
-            if (ReplaySnapshotsEqual(replayPositions, death.ReplayPositions) &&
-                ReplaySnapshotsEqual(replayMarkers, death.ReplayMarkers) &&
-                ReplaySnapshotsEqual(replayMechanics, death.ReplayMechanics) &&
-                ReplaySnapshotsEqual(replayWorldMarkers, death.ReplayWorldMarkers))
-            {
-                continue;
-            }
-
-            currentDeaths[index] = death with
-            {
-                ReplayPositions = replayPositions,
-                ReplayMarkers = replayMarkers,
-                ReplayMechanics = replayMechanics,
-                ReplayWorldMarkers = replayWorldMarkers,
-            };
-        }
+        return GetRecentReplayWorldMarkers(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
     }
 
-    private static bool ReplaySnapshotsEqual<T>(IReadOnlyList<T> left, IReadOnlyList<T> right)
+    private DateTime GetCurrentPullReplayStartAtUtc(DateTime now)
     {
-        if (ReferenceEquals(left, right))
+        var safetyCutoff = now - TimeSpan.FromSeconds(FullReplayMaxRetentionSeconds);
+        if (pullStartedAtUtc is { } pullStarted)
         {
-            return true;
+            return pullStarted >= safetyCutoff
+                ? pullStarted
+                : safetyCutoff;
         }
 
-        return left.Count == right.Count &&
-            left.SequenceEqual(right);
+        return now - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds);
     }
 
     private void PruneRecentReplayPositions(DateTime now)
@@ -2366,7 +2324,7 @@ public sealed partial class Plugin
             return;
         }
 
-        var cutoff = now - TimeSpan.FromSeconds(DeathReplayRetentionSeconds);
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
         foreach (var actorKey in recentReplayPositionsByActor.Keys.ToList())
         {
             recentReplayPositionsByActor[actorKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
@@ -2384,7 +2342,7 @@ public sealed partial class Plugin
             return;
         }
 
-        var cutoff = pullStartedAtUtc ?? now - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayMarkerCarryInSeconds + DeathReplayPostDeathSeconds + 5);
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
         foreach (var actorKey in recentReplayMarkersByActor.Keys.ToList())
         {
             recentReplayMarkersByActor[actorKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
@@ -2402,7 +2360,7 @@ public sealed partial class Plugin
             return;
         }
 
-        var cutoff = now - TimeSpan.FromSeconds(DeathReplayRetentionSeconds);
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
         foreach (var sourceKey in recentReplayMechanicsBySource.Keys.ToList())
         {
             recentReplayMechanicsBySource[sourceKey].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
@@ -2420,7 +2378,7 @@ public sealed partial class Plugin
             return;
         }
 
-        var cutoff = pullStartedAtUtc ?? now - TimeSpan.FromSeconds(DeathReplayLeadUpSeconds + DeathReplayPostDeathSeconds + 5);
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
         recentReplayWorldMarkers.RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
     }
 }
