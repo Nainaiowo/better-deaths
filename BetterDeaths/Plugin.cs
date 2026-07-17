@@ -75,7 +75,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string RecordedPullDetailCompressedExtension = ".json.gz";
     private const string RecordedPullDetailMigrationTempSuffix = ".migration.tmp";
     private const int RecordedPullHistorySchemaVersion = 3;
-    private const int RecordedPullIndexSchemaVersion = 4;
+    private const int RecordedPullIndexSchemaVersion = 6;
     private const int CurrentConfigurationVersion = 4;
     internal const int PullGroupColorPaletteSize = 8;
     private static readonly TimeSpan RecentPullGroupRestoreWindow = TimeSpan.FromHours(3);
@@ -236,6 +236,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan EffectResultActionMatchWindow = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RecordedPullIndexBackfillInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan HpHistorySampleInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReplayPlayerPositionSampleInterval = TimeSpan.FromMilliseconds(66);
     private static readonly TimeSpan ReplayPositionSampleInterval = TimeSpan.FromMilliseconds(500);
@@ -314,7 +315,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMechanicSnapshot>> recentReplayMechanicsBySource = new(StringComparer.Ordinal);
     private readonly List<ReplayWorldMarkerSnapshot> recentReplayWorldMarkers = [];
-    private readonly ReplayWorldMarkerState?[] lastReplayWorldMarkerStates = new ReplayWorldMarkerState?[ReplayWorldMarkerCount];
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
@@ -322,6 +322,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private DateTime lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
+    private bool replayWorldMarkersCapturedForPull;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);
@@ -361,6 +362,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private string? pendingUpdateNoticeKey;
     private CancellationTokenSource? recordedPullHistoryLoadCts;
     private Task? recordedPullHistoryLoadTask;
+    private Task? recordedPullIndexBackfillTask;
     private string? recordedPullHistoryLoadError;
     private bool recordedPullHistoryLoading;
     private bool recordedPullStorageDirty;
@@ -372,6 +374,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool debugCaptureFrozen;
     private bool addonInspectorLifecycleRegistered;
     private DateTime lastDebugCaptureFlushAtUtc = DateTime.MinValue;
+    private DateTime nextRecordedPullIndexBackfillAtUtc = DateTime.MinValue;
     private static readonly string[] EncounterDebuffNameFragments =
     [
         "accretion",
@@ -615,6 +618,15 @@ public sealed partial class Plugin : IDalamudPlugin
             Log.Warning(ex, "Better Deaths recorded pull history load did not finish before disposal.");
         }
 
+        try
+        {
+            recordedPullIndexBackfillTask?.Wait(TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex) when (ex is AggregateException or OperationCanceledException)
+        {
+            Log.Warning(ex, "Better Deaths recorded pull index backfill did not finish before disposal.");
+        }
+
         recordedPullHistoryLoadCts?.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= OpenMainUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
@@ -673,6 +685,7 @@ public sealed partial class Plugin : IDalamudPlugin
             FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
+            MaybeBackfillRecordedPullDeathMemberNames(now);
         }
         catch (Exception ex)
         {

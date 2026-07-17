@@ -670,20 +670,84 @@ public sealed partial class Plugin
 
     private PartyDeathRecord? FindSharedDeathPost(SharedDeathPost post)
     {
-        var candidates = currentDeaths
-            .Concat(GetRecordedPullDetailsForSearch().SelectMany(pull => pull.Deaths))
+        var currentCandidates = currentDeaths
             .Where(death => IsSharedDeathCandidate(death, post))
             .OrderBy(death => MathF.Abs(GetSharedPostElapsedSeconds(death) - post.ElapsedSeconds))
             .ThenByDescending(death => death.SeenAtUtc)
             .ToList();
-
-        var exactMatch = candidates.FirstOrDefault(death => DeathCauseMatchesSharedPost(death, post));
-        if (exactMatch is not null)
+        if (TrySelectExactSharedDeathPostMatch(currentCandidates, post, out var currentMatch))
         {
-            return exactMatch;
+            return currentMatch;
         }
 
-        return candidates.Count == 1 ? candidates[0] : null;
+        PartyDeathRecord? fallbackMatch = currentCandidates.Count == 1 ? currentCandidates[0] : null;
+        foreach (var pull in GetRecordedPullDetailsForSharedPostSearch(post))
+        {
+            var candidates = pull.Deaths
+                .Where(death => IsSharedDeathCandidate(death, post))
+                .OrderBy(death => MathF.Abs(GetSharedPostElapsedSeconds(death) - post.ElapsedSeconds))
+                .ThenByDescending(death => death.SeenAtUtc)
+                .ToList();
+            if (TrySelectExactSharedDeathPostMatch(candidates, post, out var recordedMatch))
+            {
+                return recordedMatch;
+            }
+
+            fallbackMatch ??= candidates.Count == 1 ? candidates[0] : null;
+        }
+
+        return fallbackMatch;
+    }
+
+    private IEnumerable<PullDeathSnapshot> GetRecordedPullDetailsForSharedPostSearch(SharedDeathPost post)
+    {
+        return RecordedPulls
+            .Where(summary => RecordedPullMayContainSharedPost(summary, post))
+            .OrderByDescending(summary => summary.PullNumber)
+            .ThenByDescending(summary => summary.CapturedAtUtc)
+            .Select(GetRecordedPullDetailsForTransientSearch)
+            .Where(detail => detail is not null)
+            .Cast<PullDeathSnapshot>();
+    }
+
+    private bool RecordedPullMayContainSharedPost(RecordedPullSummary summary, SharedDeathPost post)
+    {
+        if (post.ElapsedSeconds > summary.PullElapsedSeconds + SharedRecapMatchWindowSeconds)
+        {
+            return false;
+        }
+
+        if (!summary.DeathMemberNamesIndexed ||
+            IsRedactedSharedPostMemberName(post.MemberName))
+        {
+            return true;
+        }
+
+        return summary.DeathMemberNames.Any(name =>
+            string.Equals(name, post.MemberName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsRedactedSharedPostMemberName(string memberName)
+    {
+        var separatorIndex = memberName.LastIndexOf(' ');
+        if (separatorIndex <= 0 || separatorIndex >= memberName.Length - 1)
+        {
+            return false;
+        }
+
+        var role = memberName[..separatorIndex];
+        var indexText = memberName[(separatorIndex + 1)..];
+        return int.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out _) &&
+            role is "Tank" or "Healer" or "DPS" or "Player";
+    }
+
+    private static bool TrySelectExactSharedDeathPostMatch(
+        IReadOnlyList<PartyDeathRecord> candidates,
+        SharedDeathPost post,
+        out PartyDeathRecord? match)
+    {
+        match = candidates.FirstOrDefault(death => DeathCauseMatchesSharedPost(death, post));
+        return match is not null;
     }
 
     private bool IsSharedDeathCandidate(PartyDeathRecord death, SharedDeathPost post)

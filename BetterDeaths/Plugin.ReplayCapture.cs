@@ -45,12 +45,6 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
-    private readonly record struct ReplayWorldMarkerState(
-        bool Active,
-        int RawX,
-        int RawY,
-        int RawZ);
-
     private sealed record ActiveDmuP2PathOfLightTower(
         uint Index,
         string SourceKey,
@@ -2178,57 +2172,58 @@ public sealed partial class Plugin
 
     private void TrackRecentReplayWorldMarkers(DateTime now)
     {
+        if (replayWorldMarkersCapturedForPull)
+        {
+            return;
+        }
+
         if (Duration(now, lastReplayWorldMarkerSampleAtUtc) < ReplayWorldMarkerSampleInterval)
         {
             return;
         }
 
         lastReplayWorldMarkerSampleAtUtc = now;
-        unsafe
+        replayWorldMarkersCapturedForPull = TryCaptureInitialReplayWorldMarkers(now);
+    }
+
+    private unsafe bool TryCaptureInitialReplayWorldMarkers(DateTime now)
+    {
+        var controller = MarkingController.Instance();
+        if (controller == null)
         {
-            var controller = MarkingController.Instance();
-            if (controller == null)
-            {
-                return;
-            }
-
-            var markers = controller->FieldMarkers;
-            var markerCount = Math.Min(ReplayWorldMarkerCount, markers.Length);
-            for (var markerIndex = 0; markerIndex < markerCount; markerIndex++)
-            {
-                var marker = markers[markerIndex];
-                var current = marker.Active
-                    ? new ReplayWorldMarkerState(true, marker.X, marker.Y, marker.Z)
-                    : new ReplayWorldMarkerState(false, 0, 0, 0);
-                var previous = lastReplayWorldMarkerStates[markerIndex];
-                if (previous is not null && previous.Value.Equals(current))
-                {
-                    continue;
-                }
-
-                lastReplayWorldMarkerStates[markerIndex] = current;
-                if (previous is null && !current.Active)
-                {
-                    continue;
-                }
-
-                var seenAtUtc = previous is null && current.Active && pullStartedAtUtc is { } pullStarted
-                    ? pullStarted
-                    : now;
-                var snapshotRawX = current.Active ? current.RawX : previous?.RawX ?? 0;
-                var snapshotRawY = current.Active ? current.RawY : previous?.RawY ?? 0;
-                var snapshotRawZ = current.Active ? current.RawZ : previous?.RawZ ?? 0;
-                recentReplayWorldMarkers.Add(new ReplayWorldMarkerSnapshot(
-                    seenAtUtc,
-                    CalculatePullElapsed(seenAtUtc),
-                    markerIndex,
-                    GetReplayWorldMarkerLabel(markerIndex),
-                    current.Active,
-                    snapshotRawX / 1000.0f,
-                    snapshotRawY / 1000.0f,
-                    snapshotRawZ / 1000.0f));
-            }
+            return false;
         }
+
+        var markers = controller->FieldMarkers;
+        var markerCount = Math.Min(ReplayWorldMarkerCount, markers.Length);
+        if (markerCount == 0)
+        {
+            return false;
+        }
+
+        for (var markerIndex = 0; markerIndex < markerCount; markerIndex++)
+        {
+            var marker = markers[markerIndex];
+            if (!marker.Active)
+            {
+                continue;
+            }
+
+            var seenAtUtc = pullStartedAtUtc is { } pullStarted
+                ? pullStarted
+                : now;
+            recentReplayWorldMarkers.Add(new ReplayWorldMarkerSnapshot(
+                seenAtUtc,
+                CalculatePullElapsed(seenAtUtc),
+                markerIndex,
+                GetReplayWorldMarkerLabel(markerIndex),
+                true,
+                marker.X / 1000.0f,
+                marker.Y / 1000.0f,
+                marker.Z / 1000.0f));
+        }
+
+        return true;
     }
 
     private static string GetReplayWorldMarkerLabel(int markerIndex)
@@ -3013,6 +3008,12 @@ public sealed partial class Plugin
     private void PruneRecentReplayWorldMarkers(DateTime now)
     {
         if (recentReplayWorldMarkers.Count == 0)
+        {
+            return;
+        }
+
+        // Waymarks are stable during combat and only produce up to eight snapshots.
+        if (replayWorldMarkersCapturedForPull)
         {
             return;
         }

@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.249";
+    private const string CurrentChangelogVersion = "0.1.0.250";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1097,6 +1097,7 @@ public sealed class RecapWindow : Window, IDisposable
             "DeathRecap",
             showPullBrowser: true,
             recapReviewSelection);
+        ReleaseInactiveRecordedPullDetailsForReview(pulls, recapReviewSelection);
     }
 
     private void DrawReplayPage()
@@ -1136,6 +1137,8 @@ public sealed class RecapWindow : Window, IDisposable
                 {
                     selectedEntry = visiblePulls[0];
                 }
+
+                plugin.RetainLoadedRecordedPullDetails(selectedEntry.Summary);
 
                 var available = ImGui.GetContentRegionAvail();
                 if (available.X >= 860.0f)
@@ -1179,6 +1182,16 @@ public sealed class RecapWindow : Window, IDisposable
 
         selectedReplayPullKey = BuildRecordedPullKey(visiblePulls[0].Summary);
         replayFocusDeathSelection = null;
+    }
+
+    private void ReleaseInactiveRecordedPullDetailsForReview(
+        IReadOnlyList<ReviewPull> pulls,
+        ReviewSelectionState selection)
+    {
+        var selectedPull = pulls.Count == 0
+            ? null
+            : GetSelectedReviewPull(pulls, selection.PullKey) ?? pulls[0];
+        plugin.RetainLoadedRecordedPullDetails(selectedPull?.RecordedPull);
     }
 
     private void DrawReplayPullBrowser(
@@ -2435,35 +2448,47 @@ public sealed class RecapWindow : Window, IDisposable
 
     private ReviewPull? TryGetPullBrowserSearchMatch(ReviewPull pull, string search)
     {
-        var deaths = pull.Deaths;
-        var hydratedDetails = false;
-        if (deaths.Count == 0 &&
-            pull.RecordedPull is not null &&
-            pull.DeathCount > 0 &&
-            plugin.GetRecordedPullDetails(pull.RecordedPull) is { } detail)
+        if (pull.Deaths.Count > 0)
         {
-            deaths = detail.Deaths;
-            hydratedDetails = true;
+            return pull.Deaths.Any(death => PullDeathMatchesPlayerSearch(death, search))
+                ? pull
+                : null;
         }
 
-        if (!deaths.Any(death => PullDeathMatchesPlayerSearch(death, search)))
+        if (pull.RecordedPull is null || pull.DeathCount <= 0)
         {
             return null;
         }
 
-        return hydratedDetails
-            ? pull with
-            {
-                Deaths = deaths,
-                DeathCount = deaths.Count,
-            }
-            : pull;
+        if (pull.RecordedPull.DeathMemberNamesIndexed)
+        {
+            return pull.RecordedPull.DeathMemberNames.Any(name => PlayerNameMatchesSearch(name, search))
+                ? pull
+                : null;
+        }
+
+        if (plugin.GetLoadedRecordedPullDetails(pull.RecordedPull) is not { } detail ||
+            !detail.Deaths.Any(death => PullDeathMatchesPlayerSearch(death, search)))
+        {
+            return null;
+        }
+
+        return pull with
+        {
+            Deaths = detail.Deaths,
+            DeathCount = detail.Deaths.Count,
+        };
     }
 
     private static bool PullDeathMatchesPlayerSearch(PartyDeathRecord death, string search)
     {
-        return !string.IsNullOrWhiteSpace(death.MemberName) &&
-            death.MemberName.Contains(search, StringComparison.OrdinalIgnoreCase);
+        return PlayerNameMatchesSearch(death.MemberName, search);
+    }
+
+    private static bool PlayerNameMatchesSearch(string memberName, string search)
+    {
+        return !string.IsNullOrWhiteSpace(memberName) &&
+            memberName.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizePullBrowserPlayerSearch(string search)
@@ -16230,6 +16255,18 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.250");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Moved Death Replay into its own Replay tab with full-pull replay review for saved death pulls.");
+        DrawHighlightedChangelogBullet("Added DMU P4 and P5 replay draw support with cleaner mechanic cleanup.");
+        DrawHighlightedChangelogBullet("Improved multi-boss mitigation/debuff context in the 10s lead-up.");
+        DrawHighlightedChangelogBullet("Improved boss-side mitigation/debuff display clarity.");
+        DrawHighlightedChangelogBullet("Added new soda-inspired themes: Dr Pepper, Sprite, Mountain Dew, Coke, Fanta, Ginger Ale, and Pepsi.");
+        DrawWrappedBullet("Fixed Death Replay facing indicators, rotation-based mechanic draws, and stale untargetable boss clutter.");
+        DrawWrappedBullet("Improved saved pull search and replay loading performance for large pull histories.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.249");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Reduced stale untargetable boss clutter in new Death Replay captures.");

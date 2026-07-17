@@ -185,7 +185,7 @@ public sealed partial class Plugin
         recentReplayMarkersByActor.Clear();
         recentReplayMechanicsBySource.Clear();
         recentReplayWorldMarkers.Clear();
-        Array.Fill(lastReplayWorldMarkerStates, null);
+        replayWorldMarkersCapturedForPull = false;
         activeDmuP2PathOfLightTowersByIndex.Clear();
         activeReplayMechanicsByKey.Clear();
         recentSourceMitigationHistoryBySource.Clear();
@@ -194,6 +194,7 @@ public sealed partial class Plugin
         lastHpHistorySampleByMember.Clear();
         lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
         lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
+        lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
         lock (rawCombatQueueLock)
         {
             rawActionEffectPackets.Clear();

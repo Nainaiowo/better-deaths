@@ -364,6 +364,10 @@ public sealed record RecordedPullSummary(
     public string PullGroupId { get; init; } = string.Empty;
 
     public int PullGroupColorIndex { get; init; } = -1;
+
+    public IReadOnlyList<string> DeathMemberNames { get; init; } = [];
+
+    public bool DeathMemberNamesIndexed { get; init; }
 }
 
 public sealed record DebugLogEntry(

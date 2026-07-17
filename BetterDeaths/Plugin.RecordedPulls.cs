@@ -64,7 +64,16 @@ public sealed partial class Plugin
         public string PullGroupId { get; init; } = string.Empty;
 
         public int PullGroupColorIndex { get; init; } = -1;
+
+        public IReadOnlyList<string> DeathMemberNames { get; init; } = [];
+
+        public bool DeathMemberNamesIndexed { get; init; }
     }
+
+    private readonly record struct RecordedPullIndexBackfillCandidate(
+        long PullNumber,
+        long CapturedAtUtcTicks,
+        string DetailFileName);
 
     private sealed class RecordedPullState
     {
@@ -428,6 +437,7 @@ public sealed partial class Plugin
                 .Where(entry => entry.DeathCount > 0 && !string.IsNullOrWhiteSpace(entry.DetailFileName))
                 .Select(entry =>
                 {
+                    var deathMemberNames = NormalizeRecordedPullDeathMemberNames(entry.DeathMemberNames);
                     var summary = new RecordedPullSummary(
                         entry.CapturedAtUtc,
                         entry.Reason,
@@ -440,6 +450,8 @@ public sealed partial class Plugin
                         CapturedPluginVersion = entry.CapturedPluginVersion ?? string.Empty,
                         PullGroupId = entry.PullGroupId ?? string.Empty,
                         PullGroupColorIndex = entry.PullGroupColorIndex,
+                        DeathMemberNames = deathMemberNames,
+                        DeathMemberNamesIndexed = entry.DeathMemberNamesIndexed || deathMemberNames.Count > 0,
                     };
                     return new RecordedPullState(summary, entry.DetailFileName, null, detailDirty: false);
                 })
@@ -530,6 +542,8 @@ public sealed partial class Plugin
                     CapturedPluginVersion = state.Summary.CapturedPluginVersion ?? string.Empty,
                     PullGroupId = state.Summary.PullGroupId ?? string.Empty,
                     PullGroupColorIndex = state.Summary.PullGroupColorIndex,
+                    DeathMemberNames = NormalizeRecordedPullDeathMemberNames(state.Summary.DeathMemberNames),
+                    DeathMemberNamesIndexed = state.Summary.DeathMemberNamesIndexed,
                 })
                 .ToList());
         var indexJson = JsonSerializer.Serialize(index, RecordedPullHistoryJsonOptions);
@@ -610,6 +624,17 @@ public sealed partial class Plugin
 
             state.Detail = detail;
             state.DetailDirty = false;
+            if (state.Summary.DeathMemberNames.Count == 0 && detail.Deaths.Count > 0)
+            {
+                state.Summary = state.Summary with
+                {
+                    DeathMemberNames = BuildRecordedPullDeathMemberNames(detail.Deaths),
+                    DeathMemberNamesIndexed = true,
+                };
+                UpdateRecordedPullSummariesLocked();
+                recordedPullStorageDirty = true;
+            }
+
             if (!string.IsNullOrWhiteSpace(resolvedDetailPath))
             {
                 state.DetailFileName = Path.GetFileName(resolvedDetailPath);
@@ -627,6 +652,46 @@ public sealed partial class Plugin
         }
     }
 
+    private PullDeathSnapshot? GetRecordedPullDetailsForTransientSearch(RecordedPullSummary summary)
+    {
+        string detailFileName;
+        lock (recordedPullLock)
+        {
+            var state = FindRecordedPullStateLocked(summary);
+            if (state?.Detail is not null)
+            {
+                return state.Detail;
+            }
+
+            if (state is null)
+            {
+                return null;
+            }
+
+            detailFileName = state.DetailFileName;
+        }
+
+        return TryReadRecordedPullDetailFile(GetRecordedPullDetailPath(detailFileName));
+    }
+
+    public void RetainLoadedRecordedPullDetails(RecordedPullSummary? activeSummary)
+    {
+        lock (recordedPullLock)
+        {
+            foreach (var state in recordedPulls)
+            {
+                if (state.Detail is null ||
+                    state.DetailDirty ||
+                    RecordedPullSummariesMatch(state.Summary, activeSummary))
+                {
+                    continue;
+                }
+
+                state.Detail = null;
+            }
+        }
+    }
+
     private List<PullDeathSnapshot> GetLoadedRecordedPullDetails()
     {
         lock (recordedPullLock)
@@ -639,21 +704,16 @@ public sealed partial class Plugin
         }
     }
 
-    private List<PullDeathSnapshot> GetRecordedPullDetailsForSearch()
-    {
-        return RecordedPulls
-            .Reverse()
-            .Select(GetRecordedPullDetails)
-            .Where(detail => detail is not null)
-            .Cast<PullDeathSnapshot>()
-            .ToList();
-    }
-
     private RecordedPullState? FindRecordedPullStateLocked(RecordedPullSummary summary)
     {
+        return FindRecordedPullStateLocked(summary.PullNumber, summary.CapturedAtUtc.Ticks);
+    }
+
+    private RecordedPullState? FindRecordedPullStateLocked(long pullNumber, long capturedAtUtcTicks)
+    {
         return recordedPulls.FirstOrDefault(state =>
-            state.Summary.PullNumber == summary.PullNumber &&
-            state.Summary.CapturedAtUtc.Ticks == summary.CapturedAtUtc.Ticks);
+            state.Summary.PullNumber == pullNumber &&
+            state.Summary.CapturedAtUtc.Ticks == capturedAtUtcTicks);
     }
 
     private static PullDeathSnapshot? TryReadRecordedPullDetailFile(string path)
@@ -739,8 +799,133 @@ public sealed partial class Plugin
             CapturedPluginVersion = pull.CapturedPluginVersion ?? string.Empty,
             PullGroupId = pull.PullGroupId ?? string.Empty,
             PullGroupColorIndex = pull.PullGroupColorIndex,
+            DeathMemberNames = BuildRecordedPullDeathMemberNames(pull.Deaths),
+            DeathMemberNamesIndexed = true,
         };
         return new RecordedPullState(summary, BuildRecordedPullDetailFileName(pull), pull, detailDirty);
+    }
+
+    private void MaybeBackfillRecordedPullDeathMemberNames(DateTime now)
+    {
+        if (disposing ||
+            recordedPullHistoryLoading ||
+            Condition[ConditionFlag.InCombat] ||
+            now < nextRecordedPullIndexBackfillAtUtc ||
+            recordedPullIndexBackfillTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        recordedPullIndexBackfillTask = null;
+        if (!TryGetRecordedPullDeathMemberNameBackfillCandidate(out var candidate))
+        {
+            return;
+        }
+
+        nextRecordedPullIndexBackfillAtUtc = now + RecordedPullIndexBackfillInterval;
+        recordedPullIndexBackfillTask = Task.Run(() => BackfillRecordedPullDeathMemberNames(candidate));
+    }
+
+    private bool TryGetRecordedPullDeathMemberNameBackfillCandidate(out RecordedPullIndexBackfillCandidate candidate)
+    {
+        lock (recordedPullLock)
+        {
+            var state = recordedPulls
+                .Where(state => state.Summary.DeathCount > 0 &&
+                    !state.Summary.DeathMemberNamesIndexed &&
+                    !string.IsNullOrWhiteSpace(state.DetailFileName))
+                .OrderByDescending(state => state.Summary.PullNumber)
+                .ThenByDescending(state => state.Summary.CapturedAtUtc)
+                .FirstOrDefault();
+            if (state is not null)
+            {
+                candidate = new RecordedPullIndexBackfillCandidate(
+                    state.Summary.PullNumber,
+                    state.Summary.CapturedAtUtc.Ticks,
+                    state.DetailFileName);
+                return true;
+            }
+        }
+
+        candidate = default;
+        return false;
+    }
+
+    private void BackfillRecordedPullDeathMemberNames(RecordedPullIndexBackfillCandidate candidate)
+    {
+        try
+        {
+            var detail = TryReadRecordedPullDetailFile(GetRecordedPullDetailPath(candidate.DetailFileName), out var resolvedDetailPath);
+            IReadOnlyList<string> deathMemberNames = detail is null
+                ? []
+                : BuildRecordedPullDeathMemberNames(detail.Deaths);
+            lock (recordedPullLock)
+            {
+                if (disposing ||
+                    FindRecordedPullStateLocked(candidate.PullNumber, candidate.CapturedAtUtcTicks) is not { } state ||
+                    state.Summary.DeathMemberNamesIndexed)
+                {
+                    return;
+                }
+
+                state.Summary = state.Summary with
+                {
+                    DeathMemberNames = deathMemberNames,
+                    DeathMemberNamesIndexed = true,
+                };
+                if (!string.IsNullOrWhiteSpace(resolvedDetailPath))
+                {
+                    state.DetailFileName = Path.GetFileName(resolvedDetailPath);
+                }
+
+                UpdateRecordedPullSummariesLocked();
+                recordedPullStorageDirty = true;
+            }
+
+            SaveRecordedPullHistory();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not backfill Better Deaths recorded pull death names.");
+        }
+    }
+
+    private static bool RecordedPullSummariesMatch(RecordedPullSummary summary, RecordedPullSummary? activeSummary)
+    {
+        return activeSummary is not null &&
+            summary.PullNumber == activeSummary.PullNumber &&
+            summary.CapturedAtUtc.Ticks == activeSummary.CapturedAtUtc.Ticks;
+    }
+
+    private static IReadOnlyList<string> BuildRecordedPullDeathMemberNames(IReadOnlyList<PartyDeathRecord> deaths)
+    {
+        if (deaths.Count == 0)
+        {
+            return [];
+        }
+
+        return deaths
+            .Select(death => death.MemberName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> NormalizeRecordedPullDeathMemberNames(IReadOnlyList<string>? names)
+    {
+        if (names is null || names.Count == 0)
+        {
+            return [];
+        }
+
+        return names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static string BuildRecordedPullDetailFileName(PullDeathSnapshot pull)
