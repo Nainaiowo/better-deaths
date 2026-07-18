@@ -112,7 +112,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.250";
+    private const string CurrentChangelogVersion = "0.1.0.251";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -147,6 +147,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayFacingChevronLength = 7.0f;
     private const float ReplayFacingChevronHalfWidth = 3.4f;
     private const float ReplayTimelineBarHeight = 28.0f;
+    private const float ReplayTimelineHorizontalInset = 12.0f;
     private const float ReplayDeathMarkerHoverRadius = 10.0f;
     private const float ReplayDeathMarkerOverlapRadius = 18.0f;
     private const float LeadUpTableRightPadding = 10.0f;
@@ -1500,9 +1501,19 @@ public sealed class RecapWindow : Window, IDisposable
         PartyDeathRecord? focusDeath,
         string idSuffix)
     {
-        var availableWidth = MathF.Max(180.0f, ImGui.GetContentRegionAvail().X);
+        var contentWidth = MathF.Max(180.0f, ImGui.GetContentRegionAvail().X);
+        var horizontalInset = MathF.Min(
+            ReplayTimelineHorizontalInset,
+            MathF.Max(0.0f, contentWidth - 180.0f) * 0.5f);
+        var availableWidth = MathF.Max(180.0f, contentWidth - (horizontalInset * 2.0f));
         const float markerRadius = 6.0f;
         const float focusedMarkerRadius = 7.0f;
+        var rowStart = ImGui.GetCursorScreenPos();
+        if (horizontalInset > 0.0f)
+        {
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + horizontalInset, rowStart.Y));
+        }
+
         var start = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton($"##FullReplayScrubTimeline{idSuffix}", new Vector2(availableWidth, ReplayTimelineBarHeight));
         var hovered = ImGui.IsItemHovered();
@@ -16255,6 +16266,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.251");
+        ImGui.TextDisabled("Stable update.");
+        DrawWrappedBullet("Fitting timeline for replays within the window.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.250");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Moved Death Replay into its own Replay tab with full-pull replay review for saved death pulls.");
