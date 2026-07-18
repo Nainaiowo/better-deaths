@@ -56,6 +56,12 @@ public enum LeadUpTimelineOrder
     Newest,
 }
 
+public enum ReplayOverlayDockSide
+{
+    Left,
+    Right,
+}
+
 public enum ClockDisplayMode
 {
     TwentyFourHour,
@@ -345,6 +351,14 @@ public sealed class Configuration : IPluginConfiguration
     public bool ShowReplayPlayerJobs { get; set; } = true;
 
     public bool ShowReplayPlayerHp { get; set; }
+
+    public float ReplayCanvasSide { get; set; }
+
+    public ReplayOverlayDockSide ReplayMitigationOverlayDockSide { get; set; } = ReplayOverlayDockSide.Right;
+
+    public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;
+
+    public float ReplayMitigationOverlayHeight { get; set; } = 156.0f;
 
     public float ReplayWorldMarkerOpacity { get; set; } = 0.75f;
 

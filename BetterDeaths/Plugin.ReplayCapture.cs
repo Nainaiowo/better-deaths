@@ -2938,6 +2938,28 @@ public sealed partial class Plugin
         return GetRecentReplayWorldMarkers(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
     }
 
+    private IReadOnlyList<ReplayMitigationSnapshot> GetRecentReplayMitigations(DateTime startAtUtc, DateTime endAtUtc)
+    {
+        if (recentReplayMitigations.Count == 0 || endAtUtc < startAtUtc)
+        {
+            return [];
+        }
+
+        return recentReplayMitigations
+            .Where(snapshot => snapshot.SeenAtUtc <= endAtUtc &&
+                snapshot.SeenAtUtc.AddSeconds(Math.Max(0.05f, snapshot.DurationSeconds)) >= startAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.PartyIndex)
+            .ThenBy(snapshot => snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(snapshot => snapshot.ActionName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private IReadOnlyList<ReplayMitigationSnapshot> GetCurrentPullReplayMitigations(DateTime endAtUtc)
+    {
+        return GetRecentReplayMitigations(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
+    }
+
     private DateTime GetCurrentPullReplayStartAtUtc(DateTime now)
     {
         var safetyCutoff = now - TimeSpan.FromSeconds(FullReplayMaxRetentionSeconds);
@@ -3020,5 +3042,17 @@ public sealed partial class Plugin
 
         var cutoff = GetCurrentPullReplayStartAtUtc(now);
         recentReplayWorldMarkers.RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
+    }
+
+    private void PruneRecentReplayMitigations(DateTime now)
+    {
+        if (recentReplayMitigations.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
+        recentReplayMitigations.RemoveAll(snapshot =>
+            snapshot.SeenAtUtc.AddSeconds(Math.Max(0.05f, snapshot.DurationSeconds)) < cutoff);
     }
 }

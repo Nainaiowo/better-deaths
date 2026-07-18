@@ -159,6 +159,21 @@ public sealed record ReplayWorldMarkerSnapshot(
     float Y,
     float Z);
 
+public sealed record ReplayMitigationSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string MemberKey,
+    string MemberName,
+    int PartyIndex,
+    uint ClassJobId,
+    string ClassJobName,
+    uint ActionId,
+    string ActionName,
+    uint ActionIconId,
+    PossibleMitigationScope Scope,
+    float DurationSeconds,
+    IReadOnlyList<StatusSnapshot> Statuses);
+
 public enum EnvironmentalDeathKind
 {
     PossibleEnvironmental,
@@ -347,6 +362,8 @@ public sealed record PullDeathSnapshot(
     public IReadOnlyList<ReplayMechanicSnapshot> ReplayMechanics { get; init; } = [];
 
     public IReadOnlyList<ReplayWorldMarkerSnapshot> ReplayWorldMarkers { get; init; } = [];
+
+    public IReadOnlyList<ReplayMitigationSnapshot> ReplayMitigations { get; init; } = [];
 }
 
 public sealed record RecordedPullSummary(

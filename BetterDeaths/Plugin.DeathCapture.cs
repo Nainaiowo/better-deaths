@@ -2639,6 +2639,7 @@ public sealed partial class Plugin
         PruneRecentReplayMarkers(now);
         PruneRecentReplayMechanics(now);
         PruneRecentReplayWorldMarkers(now);
+        PruneRecentReplayMitigations(now);
         PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }

@@ -98,6 +98,7 @@ public sealed partial class Plugin
         var replayMarkers = GetCurrentPullReplayMarkers(now);
         var replayMechanics = GetCurrentPullReplayMechanics(now);
         var replayWorldMarkers = GetCurrentPullReplayWorldMarkers(now);
+        var replayMitigations = GetCurrentPullReplayMitigations(now);
         WaitForRecordedPullHistoryLoadForMutation();
         EnsureCurrentDutyInstancePullGroup();
         var pullNumber = GetNextRecordedPullNumber();
@@ -117,6 +118,7 @@ public sealed partial class Plugin
             ReplayMarkers = replayMarkers,
             ReplayMechanics = replayMechanics,
             ReplayWorldMarkers = replayWorldMarkers,
+            ReplayMitigations = replayMitigations,
         };
 
         lock (recordedPullLock)
@@ -185,6 +187,7 @@ public sealed partial class Plugin
         recentReplayMarkersByActor.Clear();
         recentReplayMechanicsBySource.Clear();
         recentReplayWorldMarkers.Clear();
+        recentReplayMitigations.Clear();
         replayWorldMarkersCapturedForPull = false;
         activeDmuP2PathOfLightTowersByIndex.Clear();
         activeReplayMechanicsByKey.Clear();

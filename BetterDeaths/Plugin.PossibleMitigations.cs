@@ -109,13 +109,58 @@ public sealed partial class Plugin
 
         foreach (var definition in definitions)
         {
-            memberUses[definition.Key] = new TrackedPossibleMitigationUse(
+            var use = new TrackedPossibleMitigationUse(
                 packet.SeenAtUtc,
                 pullStartedAtUtc is null ? 0.0f : CalculatePullElapsed(packet.SeenAtUtc),
                 packet.ActionId,
                 actionName,
                 GetActionIconId(packet.ActionId));
+            memberUses[definition.Key] = use;
+            TrackReplayMitigationUse(member, definition, use);
         }
+    }
+
+    private void TrackReplayMitigationUse(
+        PartyMemberSnapshot member,
+        PossibleMitigationDefinition definition,
+        TrackedPossibleMitigationUse use)
+    {
+        if (pullStartedAtUtc is null ||
+            !DefinitionHasReplayMitigationDisplay(definition))
+        {
+            return;
+        }
+
+        if (recentReplayMitigations.Any(snapshot =>
+                string.Equals(snapshot.MemberKey, member.MemberKey, StringComparison.Ordinal) &&
+                snapshot.ActionId == use.ActionId &&
+                Duration(snapshot.SeenAtUtc, use.SeenAtUtc) <= TimeSpan.FromMilliseconds(250)))
+        {
+            return;
+        }
+
+        var statuses = definition.Statuses
+            .Select(status => CreatePossibleMitigationStatusSnapshot(status, definition.DurationSeconds, member.EntityId, use.ActionIconId))
+            .ToList();
+        if (statuses.Count == 0)
+        {
+            return;
+        }
+
+        recentReplayMitigations.Add(new ReplayMitigationSnapshot(
+            use.SeenAtUtc,
+            use.PullElapsedSeconds,
+            member.MemberKey,
+            member.MemberName,
+            member.PartyIndex,
+            member.ClassJobId,
+            member.ClassJobName,
+            use.ActionId,
+            use.ActionName,
+            use.ActionIconId,
+            definition.Scope,
+            definition.DurationSeconds,
+            statuses));
     }
 
     private IReadOnlyList<PossibleMitigationSnapshot> BuildPossibleMitigationSnapshotsForDeath(
@@ -260,6 +305,17 @@ public sealed partial class Plugin
         {
             var displayInfo = GetMitigationDisplayInfo(new StatusSnapshot(status.StatusId, status.Name, 0, 0, 0, status.DurationSeconds ?? definition.DurationSeconds));
             return displayInfo.MitigationPercents.Count > 0;
+        });
+    }
+
+    private static bool DefinitionHasReplayMitigationDisplay(PossibleMitigationDefinition definition)
+    {
+        return definition.Statuses.Any(status =>
+        {
+            var displayInfo = GetMitigationDisplayInfo(new StatusSnapshot(status.StatusId, status.Name, 0, 0, 0, status.DurationSeconds ?? definition.DurationSeconds));
+            return displayInfo.Types.Any(type => !string.Equals(type.Label, "Debuff", StringComparison.OrdinalIgnoreCase)) ||
+                displayInfo.MitigationPercents.Count > 0 ||
+                displayInfo.InducedStatuses.Count > 0;
         });
     }
 

@@ -315,6 +315,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMechanicSnapshot>> recentReplayMechanicsBySource = new(StringComparer.Ordinal);
     private readonly List<ReplayWorldMarkerSnapshot> recentReplayWorldMarkers = [];
+    private readonly List<ReplayMitigationSnapshot> recentReplayMitigations = [];
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);

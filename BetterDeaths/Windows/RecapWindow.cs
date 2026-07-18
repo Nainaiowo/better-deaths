@@ -28,6 +28,10 @@ public sealed class RecapWindow : Window, IDisposable
     private bool reviewTimelineSplitterDragging;
     private string? stackedReviewSplitterDraggingId;
     private bool deathTimelineLeadUpResizeDragging;
+    private bool replayCanvasResizeDragging;
+    private string? replayMitigationOverlayDraggingId;
+    private string? replayMitigationOverlayResizeDraggingId;
+    private Vector2 replayMitigationOverlayDragOffset;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
     private string addonInspectorEventFilter = string.Empty;
@@ -51,6 +55,7 @@ public sealed class RecapWindow : Window, IDisposable
     private readonly Dictionary<string, ReplayStaticDisplayCache> replayStaticDisplayCacheByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReplayFrameDisplayCache> replayFrameDisplayCacheByDeathId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReplayPullTimingCache> replayPullTimingCacheByDeathId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, float> replayMitigationOverlayAnimatedXByDeathId = new(StringComparer.Ordinal);
     private readonly HashSet<string> replayCanvasPressedByDeathId = new(StringComparer.Ordinal);
     private readonly HashSet<string> replayCanvasDraggedByDeathId = new(StringComparer.Ordinal);
     private readonly HashSet<string> replayScrubStartedOnDeathMarkerByDeathId = new(StringComparer.Ordinal);
@@ -112,7 +117,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.251";
+    private const string CurrentChangelogVersion = "0.1.0.252";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -138,18 +143,35 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayMinZoom = 1.0f;
     private const float ReplayMaxZoom = 4.0f;
     private const float ReplayCanvasHorizontalGutter = 20.0f;
+    private const float ReplayCanvasResizeHandleSize = 24.0f;
+    private const float ReplayCanvasResizeKnobInset = 8.0f;
+    private const float ReplayCanvasResizeKnobRadius = 4.0f;
+    private const float ReplayMitigationOverlayPadding = 8.0f;
+    private const float ReplayMitigationOverlayWidthMin = 218.0f;
+    private const float ReplayMitigationOverlayWidthMax = 340.0f;
+    private const float ReplayMitigationOverlayMinHeight = 86.0f;
+    private const float ReplayMitigationOverlayMaxHeight = 300.0f;
+    private const float ReplayMitigationOverlayHeaderHeight = 22.0f;
+    private const float ReplayMitigationOverlayResizeHandleHeight = 10.0f;
+    private const float ReplayMitigationOverlayRowGap = 5.0f;
+    private const float ReplayMitigationOverlayIconSize = 20.0f;
+    private const float ReplayMitigationOverlaySnapAnimationSpeed = 16.0f;
     private const float ReplayZoomSliderWidth = 220.0f;
     private const float ReplayZoomOverlayPadding = 10.0f;
     private const float ReplayZoomOverlayHeight = 30.0f;
     private const float ReplayWheelScrollSinkHeight = 1.0f;
-    private const float ReplayWorldMarkerRadius = 9.0f;
-    private const float ReplayWorldMarkerSquareHalfSize = 8.0f;
+    private const float ReplayWorldMarkerRadius = 18.0f;
+    private const float ReplayWorldMarkerSquareHalfSize = 16.0f;
+    private const float ReplayWorldMarkerLabelScale = 2.0f;
+    private const float ReplayWorldMarkerBorderThickness = 2.8f;
     private const float ReplayFacingChevronLength = 7.0f;
     private const float ReplayFacingChevronHalfWidth = 3.4f;
     private const float ReplayTimelineBarHeight = 28.0f;
     private const float ReplayTimelineHorizontalInset = 12.0f;
     private const float ReplayDeathMarkerHoverRadius = 10.0f;
     private const float ReplayDeathMarkerOverlapRadius = 18.0f;
+    private const float ReplayDeathMarkerCountGap = 4.0f;
+    private const float ReplayDeathMarkerCountEdgePadding = 8.0f;
     private const float LeadUpTableRightPadding = 10.0f;
     private const float TimelineLeadUpDropdownMinHeight = 64.0f;
     private const float TimelineLeadUpDropdownMaxHeight = 560.0f;
@@ -286,6 +308,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private readonly record struct ReplayCanvasInputState(bool Hovered, bool Active);
 
+    private readonly record struct ReplayCanvasResizeState(bool Hovered, bool Active);
+
+    private readonly record struct ReplayMitigationOverlayInputState(
+        bool Visible,
+        bool Hovered,
+        bool Active,
+        Vector2 Start,
+        Vector2 Size);
+
     private readonly record struct ReplayDisplayDataSignature(
         IReadOnlyList<ReplayPositionSnapshot> PositionReference,
         int PositionCount,
@@ -342,6 +373,11 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<PartyDeathRecord> Deaths,
         float X);
 
+    private sealed record ReplayMitigationOverlayEntry(
+        ReplayMitigationSnapshot Snapshot,
+        float RemainingSeconds,
+        string ChildText);
+
     private readonly record struct StackedReviewLayout(
         float PullBrowserHeight,
         float PullBrowserMinHeight,
@@ -356,6 +392,14 @@ public sealed class RecapWindow : Window, IDisposable
         PullBrowser,
         CollapsedPullBrowser,
         Timeline,
+    }
+
+    private enum ReplayCanvasResizeCorner
+    {
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight,
     }
 
     private sealed record DmuP4AssignmentSummaryStatus(
@@ -1295,6 +1339,7 @@ public sealed class RecapWindow : Window, IDisposable
         var markers = pull.ReplayMarkers;
         var rawMechanics = pull.ReplayMechanics;
         var worldMarkers = pull.ReplayWorldMarkers;
+        var mitigations = pull.ReplayMitigations;
         var replayModule = ReplayEncounterModules.Get(pull.TerritoryId);
         if (positions.Count == 0 && markers.Count == 0 && rawMechanics.Count == 0 && worldMarkers.Count == 0)
         {
@@ -1367,6 +1412,8 @@ public sealed class RecapWindow : Window, IDisposable
             replayFrame.MechanicStates,
             worldMarkers,
             replayFrame.WorldMarkerStates,
+            mitigations,
+            scrubSeconds,
             selectedAtUtc,
             idSuffix,
             replayModule,
@@ -1642,11 +1689,7 @@ public sealed class RecapWindow : Window, IDisposable
             if (group.Deaths.Count > 1)
             {
                 var countText = $"x{group.Deaths.Count}";
-                var countSize = ImGui.CalcTextSize(countText);
-                var countPos = new Vector2(
-                    MathF.Min(end.X - countSize.X - 4.0f, markerCenter.X + radius + 3.0f),
-                    markerCenter.Y - (countSize.Y * 0.5f));
-                drawList.AddText(countPos, ImGui.GetColorU32(markerColor), countText);
+                DrawReplayDeathMarkerCountLabel(drawList, countText, markerCenter, radius, start, end, markerColor);
             }
         }
 
@@ -1657,6 +1700,48 @@ public sealed class RecapWindow : Window, IDisposable
                 .ThenBy(death => FormatPlayerName(death, pull.Deaths), StringComparer.OrdinalIgnoreCase)
                 .Select(death => FormatPlayerName(death, pull.Deaths))));
         }
+    }
+
+    private static void DrawReplayDeathMarkerCountLabel(
+        ImDrawListPtr drawList,
+        string text,
+        Vector2 markerCenter,
+        float markerRadius,
+        Vector2 timelineStart,
+        Vector2 timelineEnd,
+        Vector4 color)
+    {
+        var textSize = ImGui.CalcTextSize(text);
+        var minTextX = timelineStart.X + ReplayDeathMarkerCountEdgePadding;
+        var maxTextX = MathF.Max(
+            minTextX,
+            timelineEnd.X - ReplayDeathMarkerCountEdgePadding - textSize.X);
+        var rightTextX = markerCenter.X + markerRadius + ReplayDeathMarkerCountGap;
+        var leftTextX = markerCenter.X - markerRadius - ReplayDeathMarkerCountGap - textSize.X;
+        var rightFits = rightTextX <= maxTextX;
+        var leftFits = leftTextX >= minTextX;
+        var textX = rightFits
+            ? rightTextX
+            : leftFits
+                ? leftTextX
+                : ChooseReplayDeathMarkerFallbackCountX(markerCenter, markerRadius, minTextX, maxTextX, rightTextX, leftTextX);
+        textX = Math.Clamp(textX, minTextX, maxTextX);
+
+        var textPosition = new Vector2(textX, markerCenter.Y - (textSize.Y * 0.5f));
+        drawList.AddText(textPosition, ImGui.GetColorU32(color), text);
+    }
+
+    private static float ChooseReplayDeathMarkerFallbackCountX(
+        Vector2 markerCenter,
+        float markerRadius,
+        float minTextX,
+        float maxTextX,
+        float rightTextX,
+        float leftTextX)
+    {
+        var usableRightSpace = maxTextX - (markerCenter.X + markerRadius + ReplayDeathMarkerCountGap);
+        var usableLeftSpace = (markerCenter.X - markerRadius - ReplayDeathMarkerCountGap) - minTextX;
+        return usableLeftSpace > usableRightSpace ? leftTextX : rightTextX;
     }
 
     private static IReadOnlyList<ReplayDeathMarkerDisplayGroup> BuildReplayDeathMarkerGroups(
@@ -7415,6 +7500,7 @@ public sealed class RecapWindow : Window, IDisposable
         KeepOnlyActiveReplayDisplayCacheEntry(replayStaticDisplayCacheByDeathId, activeDeathId);
         KeepOnlyActiveReplayDisplayCacheEntry(replayFrameDisplayCacheByDeathId, activeDeathId);
         KeepOnlyActiveReplayDisplayCacheEntry(replayPullTimingCacheByDeathId, activeDeathId);
+        KeepOnlyActiveReplayDisplayCacheEntry(replayMitigationOverlayAnimatedXByDeathId, activeDeathId);
     }
 
     private static void KeepOnlyActiveReplayDisplayCacheEntry<T>(Dictionary<string, T> cache, string activeDeathId)
@@ -9108,6 +9194,8 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMechanicSnapshot> mechanicStates,
         IReadOnlyList<ReplayWorldMarkerSnapshot> allWorldMarkers,
         IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkerStates,
+        IReadOnlyList<ReplayMitigationSnapshot> mitigations,
+        float scrubSeconds,
         DateTime selectedAtUtc,
         string idSuffix,
         IReplayEncounterModule replayModule,
@@ -9115,10 +9203,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var cursorStart = ImGui.GetCursorScreenPos();
         var availableWidth = MathF.Max(ReplayCanvasMinSide, ImGui.GetContentRegionAvail().X);
-        var horizontalGutter = MathF.Min(
-            ReplayCanvasHorizontalGutter,
-            MathF.Max(0.0f, availableWidth - ReplayCanvasMinSide) * 0.5f);
-        var canvasSide = MathF.Min(availableWidth - (horizontalGutter * 2.0f), ReplayCanvasMaxSide);
+        var canvasSide = GetReplayCanvasSide(availableWidth);
         var canvasX = cursorStart.X + MathF.Max(0.0f, (availableWidth - canvasSide) * 0.5f);
 
         var canvasSize = new Vector2(canvasSide, canvasSide);
@@ -9141,9 +9226,22 @@ public sealed class RecapWindow : Window, IDisposable
         var canvasWindowHovered = ImGui.IsWindowHovered();
         var zoomOverlayHovered = canvasWindowHovered && IsMouseInsideRect(zoomOverlayRect.Start, zoomOverlayRect.Size);
         var canvasHovered = canvasWindowHovered && IsMouseInsideRect(canvasStart, canvasSize);
-        var canvasInputState = DrawReplayCanvasInputRegions(idSuffix, canvasStart, canvasSize, zoomOverlayRect);
+        var resizeState = SubmitReplayCanvasResizeHandles(idSuffix, canvasStart, canvasSize, availableWidth);
+        var mitigationOverlayEntries = BuildReplayMitigationOverlayEntries(mitigations, scrubSeconds);
+        var mitigationOverlayState = SubmitReplayMitigationOverlayInput(idSuffix, mitigationOverlayEntries, canvasStart, canvasSize);
+        var excludedCanvasInputRects = new List<(Vector2 Start, Vector2 Size)> { zoomOverlayRect };
+        if (mitigationOverlayState.Visible)
+        {
+            excludedCanvasInputRects.Add((mitigationOverlayState.Start, mitigationOverlayState.Size));
+        }
+
+        var resizeBlocksCanvasInput = resizeState.Hovered || resizeState.Active;
+        var overlayBlocksCanvasInput = mitigationOverlayState.Hovered || mitigationOverlayState.Active;
+        var canvasInputState = resizeBlocksCanvasInput || overlayBlocksCanvasInput
+            ? new ReplayCanvasInputState(false, false)
+            : DrawReplayCanvasInputRegions(idSuffix, canvasStart, canvasSize, excludedCanvasInputRects);
         var canvasInputHovered = canvasInputState.Hovered && !zoomOverlayHovered;
-        HandleReplayCanvasWheelZoom(idSuffix, canvasHovered, canvasStart, canvasSize, ref zoom, ref pan);
+        HandleReplayCanvasWheelZoom(idSuffix, canvasHovered && !resizeBlocksCanvasInput && !overlayBlocksCanvasInput, canvasStart, canvasSize, ref zoom, ref pan);
         HandleReplayCanvasPan(idSuffix, canvasInputState.Active, zoom, canvasSize, ref pan);
 
         var drawList = ImGui.GetWindowDrawList();
@@ -9157,6 +9255,8 @@ public sealed class RecapWindow : Window, IDisposable
         if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, allWorldMarkers, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
+            DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+            DrawReplayCanvasResizeHandleVisuals(drawList, canvasStart, canvasSize, resizeState);
             AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
             ImGui.EndChild();
             RestoreCursorAfterReplayCanvas(cursorStart);
@@ -9204,12 +9304,585 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.PopClipRect();
         DrawDeathReplayZoomOverlay(idSuffix, canvasStart, canvasSize);
+        DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+        DrawReplayCanvasResizeHandleVisuals(drawList, canvasStart, canvasSize, resizeState);
         HandleReplayCanvasFocus(idSuffix, canvasInputHovered, actorScreenPositions);
 
         AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
         ImGui.EndChild();
 
         RestoreCursorAfterReplayCanvas(cursorStart);
+    }
+
+    private float GetReplayCanvasSide(float availableWidth)
+    {
+        var maxSide = GetReplayCanvasMaxSide(availableWidth);
+        var defaultSide = maxSide;
+        var configuredSide = IsUsableReplayCanvasSide(configuration.ReplayCanvasSide)
+            ? configuration.ReplayCanvasSide
+            : defaultSide;
+        return Math.Clamp(configuredSide, ReplayCanvasMinSide, maxSide);
+    }
+
+    private static float GetReplayCanvasMaxSide(float availableWidth)
+    {
+        var horizontalGutter = MathF.Min(
+            ReplayCanvasHorizontalGutter,
+            MathF.Max(0.0f, availableWidth - ReplayCanvasMinSide) * 0.5f);
+        return MathF.Max(
+            ReplayCanvasMinSide,
+            MathF.Min(availableWidth - (horizontalGutter * 2.0f), ReplayCanvasMaxSide));
+    }
+
+    private static bool IsUsableReplayCanvasSide(float side)
+    {
+        return !float.IsNaN(side) && !float.IsInfinity(side) && side > 0.0f;
+    }
+
+    private IReadOnlyList<ReplayMitigationOverlayEntry> BuildReplayMitigationOverlayEntries(
+        IReadOnlyList<ReplayMitigationSnapshot> mitigations,
+        float scrubSeconds)
+    {
+        if (mitigations.Count == 0)
+        {
+            return [];
+        }
+
+        return mitigations
+            .Select(snapshot => new ReplayMitigationOverlayEntry(
+                snapshot,
+                (snapshot.PullElapsedSeconds + Math.Max(0.05f, snapshot.DurationSeconds)) - scrubSeconds,
+                BuildReplayMitigationChildText(snapshot)))
+            .Where(entry => entry.RemainingSeconds > 0.05f && entry.Snapshot.PullElapsedSeconds <= scrubSeconds + 0.001f)
+            .OrderBy(entry => entry.RemainingSeconds)
+            .ThenBy(entry => entry.Snapshot.PartyIndex)
+            .ThenBy(entry => entry.Snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entry => entry.Snapshot.ActionName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string BuildReplayMitigationChildText(ReplayMitigationSnapshot snapshot)
+    {
+        var parts = new List<string>();
+        foreach (var status in snapshot.Statuses)
+        {
+            if (!StatusNameMatchesActionName(status.Name, snapshot.ActionName))
+            {
+                parts.Add(status.Name);
+            }
+
+            parts.AddRange(Plugin.GetMitigationDisplayInfo(status).InducedStatuses.Select(status => status.Name));
+        }
+
+        return string.Join(" + ", parts
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static bool StatusNameMatchesActionName(string statusName, string actionName)
+    {
+        return string.Equals(statusName, actionName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(statusName.Replace("'", string.Empty, StringComparison.Ordinal), actionName.Replace("'", string.Empty, StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase) ||
+            actionName.Contains(statusName, StringComparison.OrdinalIgnoreCase) ||
+            statusName.Contains(actionName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private ReplayMitigationOverlayInputState SubmitReplayMitigationOverlayInput(
+        string idSuffix,
+        IReadOnlyList<ReplayMitigationOverlayEntry> entries,
+        Vector2 canvasStart,
+        Vector2 canvasSize)
+    {
+        if (entries.Count == 0)
+        {
+            if ((string.Equals(replayMitigationOverlayDraggingId, idSuffix, StringComparison.Ordinal) ||
+                    string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal)) &&
+                !ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                replayMitigationOverlayDraggingId = null;
+                replayMitigationOverlayResizeDraggingId = null;
+            }
+
+            return default;
+        }
+
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        var overlaySize = GetReplayMitigationOverlaySize(canvasSize);
+        var overlayStart = GetReplayMitigationOverlayStart(idSuffix, canvasStart, canvasSize, overlaySize);
+        var hovered = IsMouseInsideRect(overlayStart, overlaySize);
+        var active = false;
+
+        ImGui.SetCursorScreenPos(overlayStart);
+        ImGui.InvisibleButton($"##ReplayMitigationOverlayDrag{idSuffix}", new Vector2(overlaySize.X, ReplayMitigationOverlayHeaderHeight));
+        var headerHovered = ImGui.IsItemHovered();
+        var headerActive = ImGui.IsItemActive();
+        hovered |= headerHovered;
+        active |= headerActive;
+        if (headerHovered || headerActive)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+        }
+
+        if (ImGui.IsItemActivated())
+        {
+            replayMitigationOverlayDraggingId = idSuffix;
+            replayMitigationOverlayDragOffset = ImGui.GetIO().MousePos - overlayStart;
+        }
+
+        if (headerActive && string.Equals(replayMitigationOverlayDraggingId, idSuffix, StringComparison.Ordinal))
+        {
+            var mouse = ImGui.GetIO().MousePos;
+            var draggedStart = ClampReplayMitigationOverlayStart(
+                mouse - replayMitigationOverlayDragOffset,
+                canvasStart,
+                canvasSize,
+                overlaySize);
+            configuration.ReplayMitigationOverlayOffsetY = draggedStart.Y - canvasStart.Y;
+            replayMitigationOverlayAnimatedXByDeathId[idSuffix] = draggedStart.X;
+            overlayStart = draggedStart;
+        }
+
+        var resizeStart = overlayStart + new Vector2(0.0f, overlaySize.Y - ReplayMitigationOverlayResizeHandleHeight);
+        ImGui.SetCursorScreenPos(resizeStart);
+        ImGui.InvisibleButton($"##ReplayMitigationOverlayResize{idSuffix}", new Vector2(overlaySize.X, ReplayMitigationOverlayResizeHandleHeight));
+        var resizeHovered = ImGui.IsItemHovered();
+        var resizeActive = ImGui.IsItemActive();
+        hovered |= resizeHovered;
+        active |= resizeActive;
+        if (resizeHovered || resizeActive)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+        }
+
+        if (ImGui.IsItemActivated())
+        {
+            replayMitigationOverlayResizeDraggingId = idSuffix;
+        }
+
+        if (resizeActive && string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal))
+        {
+            var newHeight = Math.Clamp(
+                overlaySize.Y + ImGui.GetIO().MouseDelta.Y,
+                ReplayMitigationOverlayMinHeight,
+                GetReplayMitigationOverlayMaxHeight(canvasSize));
+            configuration.ReplayMitigationOverlayHeight = newHeight;
+            overlaySize = overlaySize with { Y = newHeight };
+            configuration.ReplayMitigationOverlayOffsetY = ClampReplayMitigationOverlayOffsetY(
+                configuration.ReplayMitigationOverlayOffsetY,
+                canvasSize,
+                overlaySize);
+        }
+
+        FinalizeReplayMitigationOverlayDrag(idSuffix, canvasStart, canvasSize, overlaySize);
+        FinalizeReplayMitigationOverlayResize(idSuffix);
+
+        ImGui.SetCursorScreenPos(cursorBefore);
+        return new ReplayMitigationOverlayInputState(true, hovered, active, overlayStart, overlaySize);
+    }
+
+    private void FinalizeReplayMitigationOverlayDrag(
+        string idSuffix,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        Vector2 overlaySize)
+    {
+        if (!string.Equals(replayMitigationOverlayDraggingId, idSuffix, StringComparison.Ordinal) ||
+            ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        var currentX = replayMitigationOverlayAnimatedXByDeathId.TryGetValue(idSuffix, out var animatedX)
+            ? animatedX
+            : GetReplayMitigationOverlayTargetX(canvasStart, canvasSize, overlaySize);
+        configuration.ReplayMitigationOverlayDockSide =
+            currentX + (overlaySize.X * 0.5f) <= canvasStart.X + (canvasSize.X * 0.5f)
+                ? ReplayOverlayDockSide.Left
+                : ReplayOverlayDockSide.Right;
+        configuration.ReplayMitigationOverlayOffsetY = ClampReplayMitigationOverlayOffsetY(
+            configuration.ReplayMitigationOverlayOffsetY,
+            canvasSize,
+            overlaySize);
+        replayMitigationOverlayDraggingId = null;
+        plugin.SaveConfiguration();
+    }
+
+    private void FinalizeReplayMitigationOverlayResize(string idSuffix)
+    {
+        if (!string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal) ||
+            ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        replayMitigationOverlayResizeDraggingId = null;
+        plugin.SaveConfiguration();
+    }
+
+    private Vector2 GetReplayMitigationOverlaySize(Vector2 canvasSize)
+    {
+        var maxWidth = MathF.Max(48.0f, canvasSize.X - (ReplayMitigationOverlayPadding * 2.0f));
+        var minWidth = MathF.Min(ReplayMitigationOverlayWidthMin, maxWidth);
+        var width = MathF.Min(
+            Math.Clamp(canvasSize.X * 0.48f, minWidth, ReplayMitigationOverlayWidthMax),
+            maxWidth);
+        var height = Math.Clamp(
+            configuration.ReplayMitigationOverlayHeight <= 0.0f ? 156.0f : configuration.ReplayMitigationOverlayHeight,
+            ReplayMitigationOverlayMinHeight,
+            GetReplayMitigationOverlayMaxHeight(canvasSize));
+        return new Vector2(width, height);
+    }
+
+    private static float GetReplayMitigationOverlayMaxHeight(Vector2 canvasSize)
+    {
+        return MathF.Max(
+            ReplayMitigationOverlayMinHeight,
+            MathF.Min(ReplayMitigationOverlayMaxHeight, canvasSize.Y - (ReplayMitigationOverlayPadding * 2.0f)));
+    }
+
+    private Vector2 GetReplayMitigationOverlayStart(
+        string idSuffix,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        Vector2 overlaySize)
+    {
+        var targetX = GetReplayMitigationOverlayTargetX(canvasStart, canvasSize, overlaySize);
+        var minX = canvasStart.X + ReplayMitigationOverlayPadding;
+        var maxX = canvasStart.X + canvasSize.X - ReplayMitigationOverlayPadding - overlaySize.X;
+        var displayX = GetReplayMitigationOverlayDisplayX(idSuffix, targetX, minX, maxX);
+        var offsetY = ClampReplayMitigationOverlayOffsetY(configuration.ReplayMitigationOverlayOffsetY, canvasSize, overlaySize);
+        if (MathF.Abs(configuration.ReplayMitigationOverlayOffsetY - offsetY) > 0.1f)
+        {
+            configuration.ReplayMitigationOverlayOffsetY = offsetY;
+        }
+
+        return new Vector2(displayX, canvasStart.Y + offsetY);
+    }
+
+    private float GetReplayMitigationOverlayTargetX(Vector2 canvasStart, Vector2 canvasSize, Vector2 overlaySize)
+    {
+        var dockSide = Enum.IsDefined(configuration.ReplayMitigationOverlayDockSide)
+            ? configuration.ReplayMitigationOverlayDockSide
+            : ReplayOverlayDockSide.Right;
+        return dockSide == ReplayOverlayDockSide.Left
+            ? canvasStart.X + ReplayMitigationOverlayPadding
+            : canvasStart.X + canvasSize.X - ReplayMitigationOverlayPadding - overlaySize.X;
+    }
+
+    private float GetReplayMitigationOverlayDisplayX(string idSuffix, float targetX, float minX, float maxX)
+    {
+        if (string.Equals(replayMitigationOverlayDraggingId, idSuffix, StringComparison.Ordinal) &&
+            replayMitigationOverlayAnimatedXByDeathId.TryGetValue(idSuffix, out var dragX))
+        {
+            return Math.Clamp(dragX, minX, maxX);
+        }
+
+        if (!replayMitigationOverlayAnimatedXByDeathId.TryGetValue(idSuffix, out var currentX))
+        {
+            replayMitigationOverlayAnimatedXByDeathId[idSuffix] = targetX;
+            return Math.Clamp(targetX, minX, maxX);
+        }
+
+        currentX = Math.Clamp(currentX, minX, maxX);
+        var distance = targetX - currentX;
+        if (MathF.Abs(distance) <= 0.5f)
+        {
+            replayMitigationOverlayAnimatedXByDeathId[idSuffix] = targetX;
+            return Math.Clamp(targetX, minX, maxX);
+        }
+
+        var fraction = Math.Clamp(ImGui.GetIO().DeltaTime * ReplayMitigationOverlaySnapAnimationSpeed, 0.0f, 1.0f);
+        var nextX = currentX + (distance * fraction);
+        replayMitigationOverlayAnimatedXByDeathId[idSuffix] = nextX;
+        return Math.Clamp(nextX, minX, maxX);
+    }
+
+    private static Vector2 ClampReplayMitigationOverlayStart(
+        Vector2 start,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        Vector2 overlaySize)
+    {
+        var minX = canvasStart.X + ReplayMitigationOverlayPadding;
+        var maxX = canvasStart.X + canvasSize.X - ReplayMitigationOverlayPadding - overlaySize.X;
+        var minY = canvasStart.Y + ReplayMitigationOverlayPadding;
+        var maxY = canvasStart.Y + canvasSize.Y - ReplayMitigationOverlayPadding - overlaySize.Y;
+        return new Vector2(
+            Math.Clamp(start.X, minX, MathF.Max(minX, maxX)),
+            Math.Clamp(start.Y, minY, MathF.Max(minY, maxY)));
+    }
+
+    private static float ClampReplayMitigationOverlayOffsetY(float offsetY, Vector2 canvasSize, Vector2 overlaySize)
+    {
+        return Math.Clamp(
+            offsetY,
+            ReplayMitigationOverlayPadding,
+            MathF.Max(ReplayMitigationOverlayPadding, canvasSize.Y - ReplayMitigationOverlayPadding - overlaySize.Y));
+    }
+
+    private void DrawReplayMitigationOverlay(
+        string idSuffix,
+        IReadOnlyList<ReplayMitigationOverlayEntry> entries,
+        ReplayMitigationOverlayInputState state)
+    {
+        if (!state.Visible || entries.Count == 0)
+        {
+            return;
+        }
+
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var start = state.Start;
+        var end = state.Start + state.Size;
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(ModernPanelColor with { W = 0.88f }), 6.0f);
+        drawList.AddRect(start, end, ImGui.GetColorU32(ModernPanelBorderColor with { W = state.Hovered || state.Active ? 0.92f : 0.70f }), 6.0f);
+
+        ImGui.PushClipRect(start, end, true);
+        DrawReplayMitigationOverlayHeader(drawList, start, state.Size, state.Active);
+        DrawReplayMitigationOverlayRows(entries, start, state.Size);
+        DrawReplayMitigationOverlayResizeGrip(drawList, start, state.Size, string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal));
+        ImGui.PopClipRect();
+        ImGui.SetCursorScreenPos(cursorBefore);
+    }
+
+    private static void DrawReplayMitigationOverlayHeader(ImDrawListPtr drawList, Vector2 start, Vector2 size, bool active)
+    {
+        var title = "Active Mits";
+        var titlePos = start + new Vector2(ReplayMitigationOverlayPadding, 4.0f);
+        drawList.AddText(titlePos, ImGui.GetColorU32(active ? LeadUpGoldColor : ModernTextColor), title);
+
+        var gripColor = active ? LeadUpGoldColor : ModernMutedTextColor;
+        var gripCenterY = start.Y + (ReplayMitigationOverlayHeaderHeight * 0.5f);
+        var gripRight = start.X + size.X - ReplayMitigationOverlayPadding;
+        for (var i = 0; i < 3; i++)
+        {
+            drawList.AddCircleFilled(
+                new Vector2(gripRight - (i * 6.0f), gripCenterY),
+                1.5f,
+                ImGui.GetColorU32(gripColor),
+                8);
+        }
+
+        drawList.AddLine(
+            start + new Vector2(ReplayMitigationOverlayPadding, ReplayMitigationOverlayHeaderHeight),
+            start + new Vector2(size.X - ReplayMitigationOverlayPadding, ReplayMitigationOverlayHeaderHeight),
+            ImGui.GetColorU32(ModernPanelBorderColor with { W = 0.55f }),
+            1.0f);
+    }
+
+    private void DrawReplayMitigationOverlayRows(
+        IReadOnlyList<ReplayMitigationOverlayEntry> entries,
+        Vector2 start,
+        Vector2 size)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var rowY = start.Y + ReplayMitigationOverlayHeaderHeight + ReplayMitigationOverlayPadding;
+        var rowBottom = start.Y + size.Y - ReplayMitigationOverlayResizeHandleHeight - ReplayMitigationOverlayPadding;
+        var hiddenCount = 0;
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var rowHeight = GetReplayMitigationOverlayRowHeight(entry);
+            if (rowY + rowHeight > rowBottom)
+            {
+                hiddenCount = entries.Count - index;
+                break;
+            }
+
+            DrawReplayMitigationOverlayRow(drawList, entry, start.X + ReplayMitigationOverlayPadding, rowY, size.X - (ReplayMitigationOverlayPadding * 2.0f));
+            rowY += rowHeight + ReplayMitigationOverlayRowGap;
+        }
+
+        if (hiddenCount > 0 && rowY + ImGui.GetTextLineHeight() <= rowBottom + 1.0f)
+        {
+            drawList.AddText(
+                new Vector2(start.X + ReplayMitigationOverlayPadding, rowY),
+                ImGui.GetColorU32(ModernMutedTextColor),
+                $"+{hiddenCount} more");
+        }
+    }
+
+    private void DrawReplayMitigationOverlayRow(
+        ImDrawListPtr drawList,
+        ReplayMitigationOverlayEntry entry,
+        float x,
+        float y,
+        float width)
+    {
+        var iconSize = ReplayMitigationOverlayIconSize;
+        var textX = x + iconSize + 7.0f;
+        var timerText = $"{FormatStatusDurationNumber(entry.RemainingSeconds, true)}s";
+        var timerSize = ImGui.CalcTextSize(timerText);
+        var labelMaxWidth = MathF.Max(24.0f, width - iconSize - 12.0f - timerSize.X);
+        var mainText = $"{FormatKnownPlayerName(entry.Snapshot.MemberName)} > {FormatPossibleMitigationAbilityLabel(entry.Snapshot.ActionName)}";
+        var clippedMainText = ClipTextToWidth(mainText, labelMaxWidth);
+        var iconTooltip = string.IsNullOrWhiteSpace(entry.ChildText)
+            ? entry.Snapshot.ActionName
+            : $"{entry.Snapshot.ActionName}\n{entry.ChildText}";
+
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        DrawGameIcon(entry.Snapshot.ActionIconId, iconSize, iconTooltip);
+        drawList.AddText(
+            new Vector2(textX, y + 1.0f),
+            ImGui.GetColorU32(ModernTextColor),
+            clippedMainText);
+        drawList.AddText(
+            new Vector2(x + width - timerSize.X, y + 1.0f),
+            ImGui.GetColorU32(LeadUpGoldColor),
+            timerText);
+
+        if (string.IsNullOrWhiteSpace(entry.ChildText))
+        {
+            return;
+        }
+
+        var childText = ClipTextToWidth(entry.ChildText, MathF.Max(24.0f, width - iconSize - 7.0f));
+        drawList.AddText(
+            new Vector2(textX, y + ImGui.GetTextLineHeight() + 1.0f),
+            ImGui.GetColorU32(ModernMutedTextColor),
+            childText);
+    }
+
+    private static float GetReplayMitigationOverlayRowHeight(ReplayMitigationOverlayEntry entry)
+    {
+        return string.IsNullOrWhiteSpace(entry.ChildText)
+            ? MathF.Max(24.0f, ReplayMitigationOverlayIconSize)
+            : MathF.Max(38.0f, ReplayMitigationOverlayIconSize + ImGui.GetTextLineHeight());
+    }
+
+    private static void DrawReplayMitigationOverlayResizeGrip(ImDrawListPtr drawList, Vector2 start, Vector2 size, bool active)
+    {
+        var y = start.Y + size.Y - (ReplayMitigationOverlayResizeHandleHeight * 0.5f);
+        var centerX = start.X + (size.X * 0.5f);
+        var color = active ? LeadUpGoldColor : ModernMutedTextColor;
+        drawList.AddLine(
+            new Vector2(centerX - 24.0f, y),
+            new Vector2(centerX + 24.0f, y),
+            ImGui.GetColorU32(color with { W = active ? 0.95f : 0.70f }),
+            1.4f);
+    }
+
+    private ReplayCanvasResizeState SubmitReplayCanvasResizeHandles(
+        string idSuffix,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float availableWidth)
+    {
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        var hovered = false;
+        var active = false;
+
+        SubmitReplayCanvasResizeHandle(idSuffix, ReplayCanvasResizeCorner.TopLeft, canvasStart, canvasSize, availableWidth, ref hovered, ref active);
+        SubmitReplayCanvasResizeHandle(idSuffix, ReplayCanvasResizeCorner.TopRight, canvasStart, canvasSize, availableWidth, ref hovered, ref active);
+        SubmitReplayCanvasResizeHandle(idSuffix, ReplayCanvasResizeCorner.BottomLeft, canvasStart, canvasSize, availableWidth, ref hovered, ref active);
+        SubmitReplayCanvasResizeHandle(idSuffix, ReplayCanvasResizeCorner.BottomRight, canvasStart, canvasSize, availableWidth, ref hovered, ref active);
+
+        if (!active && replayCanvasResizeDragging)
+        {
+            replayCanvasResizeDragging = false;
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.SetCursorScreenPos(cursorBefore);
+        return new ReplayCanvasResizeState(hovered, active);
+    }
+
+    private void SubmitReplayCanvasResizeHandle(
+        string idSuffix,
+        ReplayCanvasResizeCorner corner,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        float availableWidth,
+        ref bool hovered,
+        ref bool active)
+    {
+        var handleSize = new Vector2(ReplayCanvasResizeHandleSize);
+        var handleStart = corner switch
+        {
+            ReplayCanvasResizeCorner.TopLeft => canvasStart,
+            ReplayCanvasResizeCorner.TopRight => new Vector2(canvasStart.X + canvasSize.X - handleSize.X, canvasStart.Y),
+            ReplayCanvasResizeCorner.BottomLeft => new Vector2(canvasStart.X, canvasStart.Y + canvasSize.Y - handleSize.Y),
+            ReplayCanvasResizeCorner.BottomRight => canvasStart + canvasSize - handleSize,
+            _ => canvasStart,
+        };
+
+        ImGui.SetCursorScreenPos(handleStart);
+        ImGui.InvisibleButton($"##DeathReplayCanvasResize{idSuffix}{corner}", handleSize);
+        var handleHovered = ImGui.IsItemHovered();
+        var handleActive = ImGui.IsItemActive();
+        hovered |= handleHovered;
+        active |= handleActive;
+
+        if (handleHovered || handleActive)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+        }
+
+        if (!handleActive)
+        {
+            return;
+        }
+
+        replayCanvasResizeDragging = true;
+        var resizeDelta = GetReplayCanvasResizeDelta(corner, ImGui.GetIO().MouseDelta);
+        if (MathF.Abs(resizeDelta) <= 0.001f)
+        {
+            return;
+        }
+
+        var newSide = Math.Clamp(
+            canvasSize.X + resizeDelta,
+            ReplayCanvasMinSide,
+            GetReplayCanvasMaxSide(availableWidth));
+        if (MathF.Abs(configuration.ReplayCanvasSide - newSide) > 0.1f)
+        {
+            configuration.ReplayCanvasSide = newSide;
+        }
+    }
+
+    private static float GetReplayCanvasResizeDelta(ReplayCanvasResizeCorner corner, Vector2 mouseDelta)
+    {
+        var horizontalDelta = corner is ReplayCanvasResizeCorner.TopLeft or ReplayCanvasResizeCorner.BottomLeft
+            ? -mouseDelta.X
+            : mouseDelta.X;
+        var verticalDelta = corner is ReplayCanvasResizeCorner.TopLeft or ReplayCanvasResizeCorner.TopRight
+            ? -mouseDelta.Y
+            : mouseDelta.Y;
+        return MathF.Abs(horizontalDelta) >= MathF.Abs(verticalDelta)
+            ? horizontalDelta
+            : verticalDelta;
+    }
+
+    private static void DrawReplayCanvasResizeHandleVisuals(
+        ImDrawListPtr drawList,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        ReplayCanvasResizeState state)
+    {
+        var canvasEnd = canvasStart + canvasSize;
+        var centers = new[]
+        {
+            canvasStart + new Vector2(ReplayCanvasResizeKnobInset),
+            new Vector2(canvasEnd.X - ReplayCanvasResizeKnobInset, canvasStart.Y + ReplayCanvasResizeKnobInset),
+            new Vector2(canvasStart.X + ReplayCanvasResizeKnobInset, canvasEnd.Y - ReplayCanvasResizeKnobInset),
+            canvasEnd - new Vector2(ReplayCanvasResizeKnobInset),
+        };
+        var fill = state.Active
+            ? LeadUpGoldColor
+            : state.Hovered
+                ? ModernAccentColor
+                : BlendColors(ModernPanelColor, ModernAccentColor, 0.35f);
+        var border = state.Active || state.Hovered
+            ? ModernTextColor
+            : ModernPanelBorderColor;
+
+        foreach (var center in centers)
+        {
+            drawList.AddCircleFilled(center, ReplayCanvasResizeKnobRadius + 1.5f, ImGui.GetColorU32(ModernPanelColor with { W = 0.90f }), 14);
+            drawList.AddCircleFilled(center, ReplayCanvasResizeKnobRadius, ImGui.GetColorU32(fill), 14);
+            drawList.AddCircle(center, ReplayCanvasResizeKnobRadius, ImGui.GetColorU32(border), 14, 1.0f);
+        }
     }
 
     private static void AddReplayCanvasWheelScrollSink(Vector2 canvasStart, Vector2 canvasSize)
@@ -9224,24 +9897,31 @@ public sealed class RecapWindow : Window, IDisposable
         string idSuffix,
         Vector2 canvasStart,
         Vector2 canvasSize,
-        (Vector2 Start, Vector2 Size) excludedRect)
+        IReadOnlyList<(Vector2 Start, Vector2 Size)> excludedRects)
     {
         var cursorBefore = ImGui.GetCursorScreenPos();
         var canvasEnd = canvasStart + canvasSize;
-        var excludedStart = new Vector2(
-            Math.Clamp(excludedRect.Start.X, canvasStart.X, canvasEnd.X),
-            Math.Clamp(excludedRect.Start.Y, canvasStart.Y, canvasEnd.Y));
-        var excludedEnd = new Vector2(
-            Math.Clamp(excludedRect.Start.X + excludedRect.Size.X, canvasStart.X, canvasEnd.X),
-            Math.Clamp(excludedRect.Start.Y + excludedRect.Size.Y, canvasStart.Y, canvasEnd.Y));
+        var excluded = BuildReplayCanvasInputExclusions(canvasStart, canvasEnd, excludedRects);
+        var xCuts = BuildReplayCanvasInputCuts(canvasStart.X, canvasEnd.X, excluded.Select(rect => (rect.Start.X, rect.End.X)));
+        var yCuts = BuildReplayCanvasInputCuts(canvasStart.Y, canvasEnd.Y, excluded.Select(rect => (rect.Start.Y, rect.End.Y)));
         var hovered = false;
         var active = false;
         var regionIndex = 0;
 
-        SubmitReplayCanvasInputRegion(idSuffix, regionIndex++, canvasStart, new Vector2(canvasEnd.X, excludedStart.Y), ref hovered, ref active);
-        SubmitReplayCanvasInputRegion(idSuffix, regionIndex++, new Vector2(canvasStart.X, excludedStart.Y), new Vector2(excludedStart.X, excludedEnd.Y), ref hovered, ref active);
-        SubmitReplayCanvasInputRegion(idSuffix, regionIndex++, new Vector2(excludedEnd.X, excludedStart.Y), new Vector2(canvasEnd.X, excludedEnd.Y), ref hovered, ref active);
-        SubmitReplayCanvasInputRegion(idSuffix, regionIndex, new Vector2(canvasStart.X, excludedEnd.Y), canvasEnd, ref hovered, ref active);
+        for (var yIndex = 0; yIndex < yCuts.Count - 1; yIndex++)
+        {
+            for (var xIndex = 0; xIndex < xCuts.Count - 1; xIndex++)
+            {
+                var regionStart = new Vector2(xCuts[xIndex], yCuts[yIndex]);
+                var regionEnd = new Vector2(xCuts[xIndex + 1], yCuts[yIndex + 1]);
+                if (ReplayCanvasInputRegionIntersectsExcludedRect(regionStart, regionEnd, excluded))
+                {
+                    continue;
+                }
+
+                SubmitReplayCanvasInputRegion(idSuffix, regionIndex++, regionStart, regionEnd, ref hovered, ref active);
+            }
+        }
 
         if (!ImGui.IsMouseDown(ImGuiMouseButton.Left) && !ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
@@ -9250,6 +9930,65 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.SetCursorScreenPos(cursorBefore);
         return new ReplayCanvasInputState(hovered, active);
+    }
+
+    private static IReadOnlyList<(Vector2 Start, Vector2 End)> BuildReplayCanvasInputExclusions(
+        Vector2 canvasStart,
+        Vector2 canvasEnd,
+        IReadOnlyList<(Vector2 Start, Vector2 Size)> excludedRects)
+    {
+        if (excludedRects.Count == 0)
+        {
+            return [];
+        }
+
+        return excludedRects
+            .Select(rect => (
+                Start: new Vector2(
+                    Math.Clamp(rect.Start.X, canvasStart.X, canvasEnd.X),
+                    Math.Clamp(rect.Start.Y, canvasStart.Y, canvasEnd.Y)),
+                End: new Vector2(
+                    Math.Clamp(rect.Start.X + rect.Size.X, canvasStart.X, canvasEnd.X),
+                    Math.Clamp(rect.Start.Y + rect.Size.Y, canvasStart.Y, canvasEnd.Y))))
+            .Where(rect => rect.End.X - rect.Start.X > 1.0f && rect.End.Y - rect.Start.Y > 1.0f)
+            .ToList();
+    }
+
+    private static IReadOnlyList<float> BuildReplayCanvasInputCuts(
+        float start,
+        float end,
+        IEnumerable<(float Start, float End)> excludedRanges)
+    {
+        var cuts = new List<float> { start, end };
+        foreach (var range in excludedRanges)
+        {
+            if (range.Start > start + 1.0f && range.Start < end - 1.0f)
+            {
+                cuts.Add(range.Start);
+            }
+
+            if (range.End > start + 1.0f && range.End < end - 1.0f)
+            {
+                cuts.Add(range.End);
+            }
+        }
+
+        return cuts
+            .Distinct()
+            .OrderBy(value => value)
+            .ToList();
+    }
+
+    private static bool ReplayCanvasInputRegionIntersectsExcludedRect(
+        Vector2 regionStart,
+        Vector2 regionEnd,
+        IReadOnlyList<(Vector2 Start, Vector2 End)> excludedRects)
+    {
+        return excludedRects.Any(rect =>
+            regionStart.X < rect.End.X &&
+            regionEnd.X > rect.Start.X &&
+            regionStart.Y < rect.End.Y &&
+            regionEnd.Y > rect.Start.Y);
     }
 
     private void SubmitReplayCanvasInputRegion(
@@ -9677,15 +10416,15 @@ public sealed class RecapWindow : Window, IDisposable
 
             if (marker.MarkerIndex < 4)
             {
-                drawList.AddCircleFilled(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(fill), 24);
-                drawList.AddCircle(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(border), 24, 1.4f);
+                drawList.AddCircleFilled(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(fill), 36);
+                drawList.AddCircle(center, ReplayWorldMarkerRadius, ImGui.GetColorU32(border), 36, ReplayWorldMarkerBorderThickness);
             }
             else
             {
                 var start = center - new Vector2(ReplayWorldMarkerSquareHalfSize);
                 var end = center + new Vector2(ReplayWorldMarkerSquareHalfSize);
-                drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 2.0f);
-                drawList.AddRect(start, end, ImGui.GetColorU32(border), 2.0f, ImDrawFlags.None, 1.4f);
+                drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 4.0f);
+                drawList.AddRect(start, end, ImGui.GetColorU32(border), 4.0f, ImDrawFlags.None, ReplayWorldMarkerBorderThickness);
             }
 
             DrawReplayWorldMarkerLabel(drawList, marker.Label, center, textColor);
@@ -9699,17 +10438,19 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        var textSize = ImGui.CalcTextSize(label);
-        drawList.AddText(center - (textSize * 0.5f), ImGui.GetColorU32(color), label);
+        var font = ImGui.GetFont();
+        var fontSize = ImGui.GetFontSize() * ReplayWorldMarkerLabelScale;
+        var textSize = ImGui.CalcTextSize(label) * ReplayWorldMarkerLabelScale;
+        drawList.AddText(font, fontSize, center - (textSize * 0.5f), ImGui.GetColorU32(color), label);
     }
 
     private static Vector4 GetReplayWorldMarkerColor(int markerIndex)
     {
         return markerIndex switch
         {
-            0 or 4 => new Vector4(0.43f, 0.43f, 1.0f, 1.0f),
-            1 or 5 => new Vector4(0.45f, 0.95f, 0.92f, 1.0f),
-            2 or 6 => new Vector4(1.0f, 0.86f, 0.38f, 1.0f),
+            0 or 4 => DamageColor,
+            1 or 5 => new Vector4(1.0f, 0.86f, 0.38f, 1.0f),
+            2 or 6 => new Vector4(0.43f, 0.43f, 1.0f, 1.0f),
             3 or 7 => new Vector4(1.0f, 0.46f, 0.78f, 1.0f),
             _ => ModernAccentColor,
         };
@@ -16266,6 +17007,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.252");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added a draggable, resizable Active Mits overlay to Death Replay for newly captured pulls.");
+        DrawHighlightedChangelogBullet("Added resize handles for the Death Replay viewer.");
+        DrawHighlightedChangelogBullet("Improved Death Replay world markers with larger markers and corrected A/B/C/D and 1/2/3/4 colors.");
+        DrawWrappedBullet("Improved grouped death marker counts so they fit cleanly on the replay timeline.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.251");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Fitting timeline for replays within the window.");
@@ -18400,6 +19150,40 @@ public sealed class RecapWindow : Window, IDisposable
         return remainingTime >= 10.0f && !showTenthsOverTenSeconds
             ? $"{remainingTime:0}"
             : $"{remainingTime:0.0}";
+    }
+
+    private static string ClipTextToWidth(string text, float maxWidth)
+    {
+        if (string.IsNullOrEmpty(text) ||
+            maxWidth <= 0.0f ||
+            ImGui.CalcTextSize(text).X <= maxWidth)
+        {
+            return text;
+        }
+
+        const string ellipsis = "...";
+        if (ImGui.CalcTextSize(ellipsis).X > maxWidth)
+        {
+            return string.Empty;
+        }
+
+        var low = 0;
+        var high = text.Length;
+        while (low < high)
+        {
+            var mid = (low + high + 1) / 2;
+            var candidate = text[..mid] + ellipsis;
+            if (ImGui.CalcTextSize(candidate).X <= maxWidth)
+            {
+                low = mid;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        return text[..low].TrimEnd() + ellipsis;
     }
 
     private static void DrawGameIcon(uint iconId, float iconSize, string tooltip)
