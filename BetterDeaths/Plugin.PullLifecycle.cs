@@ -67,6 +67,7 @@ public sealed partial class Plugin
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
         EnsureCurrentDutyInstancePullGroup();
+        deathRecapPopupWindow.RefreshVisibility();
     }
 
     private void ArchiveCurrentPullForReview(string reason, bool suppressResetStateDeaths = true)

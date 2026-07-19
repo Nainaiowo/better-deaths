@@ -61,7 +61,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int OwnSharedRecapSuppressionSeconds = 5;
     private const int QueuedChatDelayMs = 200;
     private const int DetectedSharedRecapLinkDelayMs = 800;
-    private const int DeathRecapLinkBatchDelaySeconds = 3;
+    private const int PendingDeathRecapLinkRetentionSeconds = 3;
     private const int MaxQueuedChatMessageLength = 450;
     private const int MaxDebugLogEntries = 1000;
     private const string DebugCaptureFileName = "debug-capture.jsonl";
@@ -350,7 +350,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private long nextRawActorControlSequence = 1;
     private long nextRawMapEffectSequence = 1;
     private long nextResolvedCombatEventOrdinal = 1;
-    private DateTime? pendingDeathRecapLinksDueAtUtc;
+    private DateTime? pendingDeathRecapLinksExpiresAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
     private DateTime nextPluginUpdateCheckAtUtc = DateTime.MinValue;
     private DateTime nextLiveCapturePruneAtUtc = DateTime.MinValue;
@@ -488,6 +488,8 @@ public sealed partial class Plugin : IDalamudPlugin
     public string CurrentDutyInstancePullGroupId => currentDutyInstancePullGroupId;
 
     public int CurrentDutyInstancePullGroupColorIndex => currentDutyInstancePullGroupColorIndex;
+
+    public bool IsDutyStarted => IsDutyCaptureActive();
 
     public bool CurrentPullClosedForReview => currentPullClosedForReview;
 
@@ -680,7 +682,7 @@ public sealed partial class Plugin : IDalamudPlugin
             var now = DateTime.UtcNow;
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);
-            FlushPendingDeathRecapLinks(now);
+            PrunePendingDeathRecapLinks(now);
             UpdateCombatTimerState(now);
             RefreshPartyState();
             FlushDebugCaptureFile(now);

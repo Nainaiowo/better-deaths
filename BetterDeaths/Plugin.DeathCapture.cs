@@ -2862,6 +2862,12 @@ public sealed partial class Plugin
         return IsRelevantDeathStatus(status) && status.RemainingTime > 0.0f;
     }
 
+    internal static bool IsExpiredPlayerMitigationStatusForDisplay(StatusSnapshot status)
+    {
+        return TryGetDefensiveStatusDefinition(status, out var definition) &&
+            definition.Effects != DefensiveStatusEffect.Shield;
+    }
+
     private static IReadOnlyList<StatusSnapshot> GetBossMitigationStatuses(IEnumerable<StatusSnapshot> statuses)
     {
         return DeduplicateStatusSnapshots(statuses

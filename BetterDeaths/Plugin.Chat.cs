@@ -1062,8 +1062,18 @@ public sealed partial class Plugin
             return;
         }
 
+        if (pendingDeathRecapLinks.Any(pending => DeathRecordsMatch(pending, death)))
+        {
+            return;
+        }
+
         pendingDeathRecapLinks.Add(death);
-        pendingDeathRecapLinksDueAtUtc = now.AddSeconds(DeathRecapLinkBatchDelaySeconds);
+        pendingDeathRecapLinksExpiresAtUtc = now.AddSeconds(PendingDeathRecapLinkRetentionSeconds);
+        QueueDeathRecapLinkMessage(
+            death,
+            FormatPlayerDisplayName(death),
+            DeathRecapLinkLabel,
+            DateTime.MinValue);
     }
 
     private static bool HasDeathRecapDetails(PartyDeathRecord death)
@@ -1074,62 +1084,21 @@ public sealed partial class Plugin
             death.EnvironmentalAssessment is { Confidence: > 0.0f };
     }
 
-    private void FlushPendingDeathRecapLinks(DateTime now)
+    private void PrunePendingDeathRecapLinks(DateTime now)
     {
         if (pendingDeathRecapLinks.Count == 0)
         {
-            pendingDeathRecapLinksDueAtUtc = null;
+            pendingDeathRecapLinksExpiresAtUtc = null;
             return;
         }
 
-        if (pendingDeathRecapLinksDueAtUtc is { } dueAt && dueAt > now)
+        if (pendingDeathRecapLinksExpiresAtUtc is { } expiresAt && expiresAt > now)
         {
             return;
         }
 
-        var deaths = pendingDeathRecapLinks
-            .OrderBy(death => death.SeenAtUtc)
-            .ThenBy(death => death.PartyIndex)
-            .ToList();
         pendingDeathRecapLinks.Clear();
-        pendingDeathRecapLinksDueAtUtc = null;
-
-        PrintDeathRecapLink(deaths[0], GetDeathRecapBatchLabel(deaths));
-    }
-
-    private string GetDeathRecapBatchLabel(IReadOnlyList<PartyDeathRecord> deaths)
-    {
-        var namesText = FormatDeathRecapNames(deaths);
-        return deaths.Count switch
-        {
-            <= 1 => namesText,
-            >= 8 => "Party wipe detected",
-            _ => $"{deaths.Count} deaths detected ({namesText})",
-        };
-    }
-
-    private string FormatDeathRecapNames(IReadOnlyList<PartyDeathRecord> deaths)
-    {
-        const int maxShownNames = 4;
-        var names = deaths
-            .Select(death => FormatPlayerDisplayName(death, deaths))
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .ToList();
-        if (names.Count == 0)
-        {
-            return "unknown";
-        }
-
-        var shownNames = names.Take(maxShownNames).ToList();
-        var hiddenCount = names.Count - shownNames.Count;
-        return hiddenCount > 0
-            ? $"{string.Join(", ", shownNames)}, +{hiddenCount} more"
-            : string.Join(", ", shownNames);
-    }
-
-    private void PrintDeathRecapLink(PartyDeathRecord death)
-    {
-        PrintDeathRecapLink(death, FormatPlayerDisplayName(death));
+        pendingDeathRecapLinksExpiresAtUtc = null;
     }
 
     private void QueueDetectedSharedRecapLink(PartyDeathRecord death)
@@ -1139,16 +1108,6 @@ public sealed partial class Plugin
             FormatPlayerDisplayName(death),
             PullRecapLinkLabel,
             DateTime.UtcNow.AddMilliseconds(DetectedSharedRecapLinkDelayMs));
-    }
-
-    private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel)
-    {
-        PrintDeathRecapLink(death, batchLabel, DeathRecapLinkLabel);
-    }
-
-    private void PrintDeathRecapLink(PartyDeathRecord death, string batchLabel, string label)
-    {
-        ChatGui.Print(BuildDeathRecapLinkEntry(death, batchLabel, label));
     }
 
     private void QueueDeathRecapLinkMessage(PartyDeathRecord death)

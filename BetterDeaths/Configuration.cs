@@ -62,6 +62,12 @@ public enum ReplayOverlayDockSide
     Right,
 }
 
+public enum DeathRecapPopupVisibilityMode
+{
+    DutyOnly,
+    Always,
+}
+
 public enum ClockDisplayMode
 {
     TwentyFourHour,
@@ -299,7 +305,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public WidgetDisplayMode WidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;
 
-    public ReviewDisplayMode ReviewDisplayMode { get; set; } = ReviewDisplayMode.Detailed;
+    public ReviewDisplayMode ReviewDisplayMode { get; set; } = ReviewDisplayMode.Focused;
 
     public LeadUpTimelineOrder LeadUpTimelineOrder { get; set; } = LeadUpTimelineOrder.Newest;
 
@@ -312,6 +318,10 @@ public sealed class Configuration : IPluginConfiguration
     public bool RedactPlayerNames { get; set; }
 
     public bool ShowDeathRecapPopup { get; set; } = true;
+
+    public bool KeepDeathRecapPopupVisible { get; set; }
+
+    public DeathRecapPopupVisibilityMode DeathRecapPopupVisibilityMode { get; set; } = DeathRecapPopupVisibilityMode.DutyOnly;
 
     // Legacy setting name kept so older configs can migrate the saved value to MainWindowBackgroundOpacity.
     public float DeathRecapPopupBackgroundOpacity { get; set; } = 0.85f;
@@ -329,6 +339,8 @@ public sealed class Configuration : IPluginConfiguration
     public ClockDisplayMode ClockDisplayMode { get; set; } = ClockDisplayMode.TwentyFourHour;
 
     public bool PullBrowserCollapsed { get; set; } = true;
+
+    public bool ReplayPullBrowserCollapsed { get; set; }
 
     public float PullBrowserWidth { get; set; } = 300.0f;
 

@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.253";
+    private const string CurrentChangelogVersion = "0.1.0.254";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -285,13 +285,14 @@ public sealed class RecapWindow : Window, IDisposable
         IReadOnlyList<CombatEventRecord> Events,
         int SampleCount);
 
-    private sealed record EarlierBossDebuffRow(
+    private sealed record ExpiredMitigationRow(
         DateTime SeenAtUtc,
         float PullElapsedSeconds,
         string SourceKey,
         string SourceName,
         string ActionName,
-        StatusSnapshot Status);
+        StatusSnapshot Status,
+        bool IsBossSide);
 
     private sealed record WidgetMitStatus(StatusSnapshot Status, string Category, string SourceName);
 
@@ -1196,14 +1197,28 @@ public sealed class RecapWindow : Window, IDisposable
                 plugin.RetainLoadedRecordedPullDetails(selectedEntry.Summary);
 
                 var available = ImGui.GetContentRegionAvail();
+                var replayPulls = visiblePulls
+                    .Select(entry => CreateReplayReviewPull(entry.Summary))
+                    .ToList();
                 if (available.X >= 860.0f)
                 {
-                    var browserWidth = MathF.Min(300.0f, MathF.Max(230.0f, available.X * 0.28f));
-                    DrawReplayPane(
-                        "##ReplayPullBrowser",
-                        new Vector2(browserWidth, available.Y),
-                        () => DrawReplayPullBrowser(visiblePulls));
-                    DrawVerticalReplayDivider("ReplayPullBrowserDivider", available.Y);
+                    if (configuration.ReplayPullBrowserCollapsed)
+                    {
+                        DrawCollapsedReplayPullBrowserDivider(
+                            "ReplayPullBrowserDivider",
+                            available.Y,
+                            replayPulls);
+                    }
+                    else
+                    {
+                        var browserWidth = MathF.Min(300.0f, MathF.Max(230.0f, available.X * 0.28f));
+                        DrawReplayPane(
+                            "##ReplayPullBrowser",
+                            new Vector2(browserWidth, available.Y),
+                            () => DrawReplayPullBrowser(replayPulls, "Replay"));
+                        DrawVerticalReplayDivider("ReplayPullBrowserDivider", available.Y);
+                    }
+
                     DrawReplayPane(
                         "##ReplayViewer",
                         new Vector2(0.0f, available.Y),
@@ -1212,11 +1227,27 @@ public sealed class RecapWindow : Window, IDisposable
                     return;
                 }
 
-                var browserHeight = MathF.Min(230.0f, MathF.Max(150.0f, available.Y * 0.30f));
+                var browserHeight = configuration.ReplayPullBrowserCollapsed
+                    ? StackedCollapsedPullBrowserHeight
+                    : MathF.Min(230.0f, MathF.Max(150.0f, available.Y * 0.30f));
                 DrawReplayPane(
                     "##ReplayPullBrowserStacked",
                     new Vector2(0.0f, browserHeight),
-                    () => DrawReplayPullBrowser(visiblePulls, useCells: true));
+                    () =>
+                    {
+                        if (configuration.ReplayPullBrowserCollapsed)
+                        {
+                            DrawCollapsedReplayPullBrowser("Replay", replayPulls);
+                        }
+                        else
+                        {
+                            DrawReplayPullBrowser(
+                                replayPulls,
+                                "Replay",
+                                useVerticalDrawerControls: true,
+                                useCells: true);
+                        }
+                    });
                 ImGui.Dummy(new Vector2(1.0f, ReplayPaneGap));
                 DrawReplayPane(
                     "##ReplayViewerStacked",
@@ -1250,29 +1281,29 @@ public sealed class RecapWindow : Window, IDisposable
     }
 
     private void DrawReplayPullBrowser(
-        IReadOnlyList<(RecordedPullSummary Summary, long PullNumber)> visiblePulls,
+        IReadOnlyList<ReviewPull> visiblePulls,
+        string idPrefix,
+        bool useVerticalDrawerControls = false,
         bool useCells = false)
     {
         using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
-        DrawModernSectionTitle("Replays");
+        DrawReplayPullBrowserHeader(idPrefix, useVerticalDrawerControls);
         DrawRecordedPullControls();
         ImGui.Separator();
 
-        if (ImGui.BeginChild("##ReplayPullRows", Vector2.Zero, false, OptionalScrollbarFlags))
+        if (ImGui.BeginChild($"##ReplayPullRows{idPrefix}", Vector2.Zero, false, OptionalScrollbarFlags))
         {
-            foreach (var (summary, _) in visiblePulls)
+            foreach (var pull in visiblePulls)
             {
-                var key = BuildRecordedPullKey(summary);
+                var key = pull.Key;
                 var selected = string.Equals(selectedReplayPullKey, key, StringComparison.Ordinal);
-                var pull = CreateReplayReviewPull(summary);
                 var rowId = $"ReplayPullRow{key}";
                 var clicked = useCells
                     ? DrawExpandedPullCell(pull, rowId, selected, StackedPullCellRightPadding)
                     : DrawWidePullListItem(pull, rowId, selected);
                 if (clicked)
                 {
-                    selectedReplayPullKey = key;
-                    replayFocusDeathSelection = null;
+                    SelectReplayPull(key);
                 }
 
                 if (ImGui.IsItemHovered())
@@ -1290,6 +1321,45 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+    }
+
+    private void DrawReplayPullBrowserHeader(string idPrefix, bool useVerticalDrawerControls)
+    {
+        var startCursor = ImGui.GetCursorPos();
+        ImGui.TextColored(LeadUpGoldColor, "Pulls");
+
+        var style = ImGui.GetStyle();
+        var iconButtonWidth = ImGui.GetFrameHeight();
+        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - iconButtonWidth - PullBrowserHeaderButtonInset;
+
+        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + style.ItemSpacing.X, buttonX));
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        var collapseIcon = useVerticalDrawerControls
+            ? FontAwesomeIcon.ChevronUp
+            : FontAwesomeIcon.ChevronLeft;
+        if (DrawTransparentIconButton($"CollapseReplayPullBrowser{idPrefix}", collapseIcon))
+        {
+            plugin.SetReplayPullBrowserCollapsed(true);
+        }
+
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Collapse pulls");
+        }
+
+        ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
+    }
+
+    private void SelectReplayPull(string key)
+    {
+        if (string.Equals(selectedReplayPullKey, key, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        selectedReplayPullKey = key;
+        replayFocusDeathSelection = null;
     }
 
     private static ReviewPull CreateReplayReviewPull(RecordedPullSummary summary)
@@ -2805,6 +2875,165 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.EndChild();
         ImGui.PopStyleVar();
+    }
+
+    private void DrawStackedCollapsedReplayPullCells(
+        string idPrefix,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        if (pulls.Count == 0)
+        {
+            return;
+        }
+
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+        if (rowsHeight <= 0.0f)
+        {
+            return;
+        }
+
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        if (!ImGui.BeginChild($"##StackedCollapsedReplayPullCells{idPrefix}", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
+        {
+            ImGui.EndChild();
+            ImGui.PopStyleVar();
+            return;
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var rowWidth = 0.0f;
+        foreach (var pull in pulls)
+        {
+            var selected = string.Equals(selectedReplayPullKey, pull.Key, StringComparison.Ordinal);
+            var label = GetCollapsedPullLabel(pull);
+            var width = Math.Clamp(ImGui.CalcTextSize(label).X + 26.0f, 44.0f, 72.0f);
+            var nextWidth = rowWidth <= 0.0f
+                ? width
+                : rowWidth + spacing + width;
+            if (rowWidth > 0.0f && nextWidth > availableWidth)
+            {
+                rowWidth = 0.0f;
+            }
+            else if (rowWidth > 0.0f)
+            {
+                ImGui.SameLine(0.0f, spacing);
+            }
+
+            if (DrawCollapsedPullButton(label, $"StackedCollapsedReplayPull{idPrefix}{pull.Key}", selected, width, GetPullGroupColor(pull)))
+            {
+                SelectReplayPull(pull.Key);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                SetThemedTooltip(FormatCollapsedPullTooltip(pull));
+            }
+
+            rowWidth = rowWidth <= 0.0f
+                ? width
+                : rowWidth + spacing + width;
+        }
+
+        DrawReviewPaneBottomPadding();
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+    }
+
+    private void DrawCollapsedReplayPullBrowser(
+        string idPrefix,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        var startCursor = ImGui.GetCursorPos();
+        ImGui.TextColored(LeadUpGoldColor, "Pulls");
+        var iconText = FontAwesomeIcon.ChevronDown.ToIconString();
+        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonX = startCursor.X + MathF.Max(0.0f, ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset);
+        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X, buttonX));
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        if (DrawTransparentIconButton($"ExpandReplayPullBrowser{idPrefix}", FontAwesomeIcon.ChevronDown))
+        {
+            plugin.SetReplayPullBrowserCollapsed(false);
+        }
+
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Expand pulls");
+        }
+
+        ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
+        DrawStackedCollapsedReplayPullCells(idPrefix, pulls);
+    }
+
+    private void DrawCollapsedReplayPullBrowserDivider(
+        string id,
+        float height,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        var position = ImGui.GetCursorScreenPos();
+        var size = new Vector2(PullBrowserCollapsedWidth, height);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        if (ImGui.BeginChild($"##{id}", size, false, OptionalScrollbarFlags))
+        {
+            ImGui.SetCursorPosY(4.0f);
+
+            ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+            if (DrawCenteredTransparentIconButton($"ExpandReplayPullBrowser{id}", FontAwesomeIcon.ChevronRight))
+            {
+                plugin.SetReplayPullBrowserCollapsed(false);
+            }
+
+            ImGui.PopStyleColor();
+            if (ImGui.IsItemHovered())
+            {
+                SetThemedTooltip("Expand pulls");
+            }
+
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
+            {
+                foreach (var pull in pulls)
+                {
+                    var selected = string.Equals(selectedReplayPullKey, pull.Key, StringComparison.Ordinal);
+                    var pullLabel = GetCollapsedPullLabel(pull);
+                    if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedReplayPullRail{id}{pull.Key}", selected, GetPullGroupColor(pull)))
+                    {
+                        SelectReplayPull(pull.Key);
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        SetThemedTooltip(FormatCollapsedPullTooltip(pull));
+                    }
+                }
+
+                DrawReviewPaneBottomPadding();
+            }
+
+            ImGui.EndChild();
+            ImGui.PopStyleVar();
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor();
+
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddLine(
+            new Vector2(position.X + size.X - 1.0f, position.Y),
+            new Vector2(position.X + size.X - 1.0f, position.Y + height),
+            ImGui.GetColorU32(ModernDividerColor),
+            1.0f);
+        ImGui.SameLine(0.0f, ReplayPaneGap);
     }
 
     private void DrawCollapsedPullBrowser(
@@ -5712,14 +5941,18 @@ public sealed class RecapWindow : Window, IDisposable
             SetThemedTooltip("Ctrl+click to post. Other Better Deaths users present will see a link to this pull.");
         }
 
-        DrawFatalEventRow(death, causeEvents);
-        ImGui.Separator();
+        if (!IsFocusedReviewMode())
+        {
+            DrawFatalEventRow(death, causeEvents);
+            ImGui.Separator();
+        }
+
         DrawStatusSnapshot(
             resolved.SummaryMitigationDebuffStatuses,
             $"{death.MemberKey}{death.SeenAtUtc.Ticks}SummaryAtDeath",
             resolved.SummaryMitigationDebuffStatusSources);
         ImGui.Separator();
-        DrawEarlierBossDebuffsNotOnFatalHit(resolved, $"{death.MemberKey}{death.SeenAtUtc.Ticks}Summary");
+        DrawExpiredMitigations(resolved, $"{death.MemberKey}{death.SeenAtUtc.Ticks}Summary");
     }
 
     private void DrawEnvironmentalDeathContext(PartyDeathRecord death)
@@ -6376,18 +6609,27 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawLeadUpDeathSummary(PartyDeathRecord death, LeadUpSummaryRow summary)
     {
-        var row = summary.Row;
-        ImGui.BulletText("HP + shields");
-
-        if (!ImGui.BeginTable($"##LeadUpDeathSummary{death.MemberKey}{death.SeenAtUtc.Ticks}", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        var focused = IsFocusedReviewMode();
+        if (!ImGui.BeginTable($"##LeadUpDeathSummary{death.MemberKey}{death.SeenAtUtc.Ticks}", focused ? 2 : 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
         ImGui.TableSetupColumn("HP + shields", ImGuiTableColumnFlags.WidthStretch, 1.05f);
-        ImGui.TableSetupColumn("Captured hits/events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
+        if (!focused)
+        {
+            ImGui.TableSetupColumn("Captured hits/events", ImGuiTableColumnFlags.WidthStretch, 1.45f);
+        }
+
         ImGui.TableSetupColumn("Captured mitigations/debuffs", ImGuiTableColumnFlags.WidthStretch, 1.7f);
-        DrawCenteredTableHeader("HP + shields", "Captured hits/events", "Captured mitigations/debuffs");
+        if (focused)
+        {
+            DrawCenteredTableHeader("HP + shields", "Captured mitigations/debuffs");
+        }
+        else
+        {
+            DrawCenteredTableHeader("HP + shields", "Captured hits/events", "Captured mitigations/debuffs");
+        }
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -6399,8 +6641,12 @@ public sealed class RecapWindow : Window, IDisposable
             $"LeadUpSummaryHp{death.MemberKey}{death.SeenAtUtc.Ticks}{hpSnapshot.SeenAtUtc.Ticks}",
             GetIncomingDamageAmount(summary.Events),
             true);
-        ImGui.TableNextColumn();
-        DrawEventSummaryCell(summary.Events, int.MaxValue);
+        if (!focused)
+        {
+            ImGui.TableNextColumn();
+            DrawEventSummaryCell(summary.Events, int.MaxValue);
+        }
+
         ImGui.TableNextColumn();
         DrawLeadUpSummaryMitigationDebuffCell(summary);
 
@@ -6598,7 +6844,7 @@ public sealed class RecapWindow : Window, IDisposable
             $"{idSuffix}AtDeath",
             resolved.SummaryMitigationDebuffStatusSources);
         ImGui.Separator();
-        DrawEarlierBossDebuffsNotOnFatalHit(resolved, idSuffix);
+        DrawExpiredMitigations(resolved, idSuffix);
     }
 
     private void DrawPossibleMitigationContext(ResolvedDeathDisplay resolved, string idSuffix)
@@ -13016,62 +13262,137 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static IReadOnlyList<StatusSnapshot> GetSelectedPlayerStatuses(PartyDeathRecord death)
     {
-        return DeathDisplaySelector.Select(death).Snapshot?.Statuses ?? death.StatusesAtDeath;
+        return GetSelectedPlayerStatuses(death, DeathDisplaySelector.Select(death));
     }
 
-    private void DrawEarlierBossDebuffsNotOnFatalHit(ResolvedDeathDisplay resolved, string idSuffix)
+    private static IReadOnlyList<StatusSnapshot> GetSelectedPlayerStatuses(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection)
     {
-        var death = resolved.Death;
-        DrawLeadUpLabel("Expired Mits");
-        var selection = resolved.Selection;
-        if (selection.Events.Count == 0)
-        {
-            ImGui.TextDisabled("No fatal hit was captured to compare against.");
-            return;
-        }
+        return selection.Snapshot?.Statuses ?? death.StatusesAtDeath;
+    }
 
-        var rows = GetEarlierBossDebuffsNotOnFatalHit(death, selection, resolved.LeadUpEvents);
+    private void DrawExpiredMitigations(ResolvedDeathDisplay resolved, string idSuffix)
+    {
+        DrawLeadUpLabel("Expired Mits");
+
+        var rows = GetExpiredMitigationRows(resolved);
         if (rows.Count == 0)
         {
-            ImGui.TextDisabled("No earlier boss damage-down debuffs were captured outside the fatal hit.");
+            ImGui.TextDisabled("No player mitigations or boss damage-down debuffs were captured earlier and missing at death.");
             return;
         }
 
-        if (!ImGui.BeginTable($"##EarlierBossDebuffs{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
+        if (IsFocusedReviewMode())
+        {
+            DrawFocusedExpiredMitigationRows(rows);
+            return;
+        }
+
+        if (!ImGui.BeginTable($"##ExpiredMitigations{idSuffix}", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg))
         {
             return;
         }
 
         ImGui.TableSetupColumn("Seen", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        ImGui.TableSetupColumn("Timer", ImGuiTableColumnFlags.WidthStretch, 0.7f);
-        ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthStretch, 1.1f);
-        ImGui.TableSetupColumn("Earlier hit", ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        ImGui.TableSetupColumn("Debuff", ImGuiTableColumnFlags.WidthStretch, 1.7f);
-        DrawCenteredTableHeader("Seen", "Timer", "Source", "Earlier hit", "Debuff");
+        ImGui.TableSetupColumn("Actor", ImGuiTableColumnFlags.WidthStretch, 1.2f);
+        ImGui.TableSetupColumn("Mit", ImGuiTableColumnFlags.WidthStretch, 1.9f);
+        ImGui.TableSetupColumn("Mit%", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        DrawCenteredTableHeader("Seen", "Actor", "Mit", "Mit%");
 
         foreach (var row in rows)
         {
+            var displayInfo = Plugin.GetMitigationDisplayInfo(row.Status);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatRelativeToDeath(selection.AnchorSeenAtUtc, row.SeenAtUtc));
-            ImGui.TableNextColumn();
-            DrawCenteredText(FormatCombatTimer(row.PullElapsedSeconds));
+            DrawCenteredText(FormatRelativeToDeath(resolved.Selection.AnchorSeenAtUtc, row.SeenAtUtc));
             ImGui.TableNextColumn();
             DrawCenteredOrWrappedText(FormatKnownPlayerName(row.SourceName));
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(FormatActionNameForDisplay(row.ActionName));
-            ImGui.TableNextColumn();
             DrawCenteredIconText(row.Status.IconId, configuration.StatusIconSize, row.Status.Name, row.Status.Name);
+            ImGui.TableNextColumn();
+            DrawMitigationPercentCell(displayInfo);
         }
 
         ImGui.EndTable();
     }
 
-    private static IReadOnlyList<EarlierBossDebuffRow> GetEarlierBossDebuffsNotOnFatalHit(
+    private void DrawFocusedExpiredMitigationRows(IReadOnlyList<ExpiredMitigationRow> rows)
+    {
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var textWidth = MathF.Max(24.0f, availableWidth - (FocusedDataRowPaddingX * 2.0f) - iconSize - spacing);
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            var rowHeight = MathF.Max(iconSize, GetWrappedTextHeight(row.Status.Name, textWidth)) + (FocusedDataRowPaddingY * 2.0f);
+            var rowStart = ImGui.GetCursorScreenPos();
+            DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, rowIndex);
+
+            var contentY = rowStart.Y + FocusedDataRowPaddingY;
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX, contentY));
+            DrawGameIcon(row.Status.IconId, iconSize, row.Status.Name);
+            ImGui.SameLine(0.0f, spacing);
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX + iconSize + spacing, contentY));
+            DrawWrappedTextLines(row.Status.Name, textWidth);
+            ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
+        }
+    }
+
+    private static IReadOnlyList<ExpiredMitigationRow> GetExpiredMitigationRows(ResolvedDeathDisplay resolved)
+    {
+        return GetExpiredPlayerMitigations(resolved.Death, resolved.Selection, resolved.TimelineRows)
+            .Concat(GetEarlierBossDebuffsNotOnFatalHit(resolved.Death, resolved.Selection, resolved.LeadUpEvents))
+            .GroupBy(row => BuildExpiredMitigationKey(row))
+            .Select(group => group.OrderByDescending(row => row.SeenAtUtc).First())
+            .OrderByDescending(row => row.SeenAtUtc)
+            .ThenBy(row => row.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(row => row.Status.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static IReadOnlyList<ExpiredMitigationRow> GetExpiredPlayerMitigations(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection,
+        IReadOnlyList<LeadUpTimelineRow> timelineRows)
+    {
+        var activePlayerMitigations = GetSelectedPlayerStatuses(death, selection)
+            .Where(Plugin.IsExpiredPlayerMitigationStatusForDisplay)
+            .Select(GetStatusKey)
+            .ToHashSet();
+        var cutoffAtUtc = selection.Events.Count > 0
+            ? selection.Events.Select(combatEvent => combatEvent.SeenAtUtc).OrderBy(seenAtUtc => seenAtUtc).First()
+            : selection.AnchorSeenAtUtc;
+
+        return timelineRows
+            .Where(row => row.SeenAtUtc < cutoffAtUtc)
+            .SelectMany(row => row.Statuses
+                .Where(status => status.RemainingTime > 0.0f)
+                .Where(Plugin.IsExpiredPlayerMitigationStatusForDisplay)
+                .Where(status => !activePlayerMitigations.Contains(GetStatusKey(status)))
+                .Select(status => new ExpiredMitigationRow(
+                    row.SeenAtUtc,
+                    row.PullElapsedSeconds,
+                    death.MemberKey,
+                    death.MemberName,
+                    row.Event is null ? "HP sample" : row.Event.ActionName,
+                    status,
+                    false)))
+            .ToList();
+    }
+
+    private static IReadOnlyList<ExpiredMitigationRow> GetEarlierBossDebuffsNotOnFatalHit(
         PartyDeathRecord death,
         DeathDisplaySelection selection,
         IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
+        if (selection.Events.Count == 0)
+        {
+            return [];
+        }
+
         var firstFatalHitAtUtc = selection.Events
             .Select(combatEvent => combatEvent.SeenAtUtc)
             .OrderBy(seenAtUtc => seenAtUtc)
@@ -13088,20 +13409,22 @@ public sealed class RecapWindow : Window, IDisposable
                 var sourceKey = GetSourceKey(combatEvent);
                 return Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents))
                     .Where(status => !fatalEventKeys.Contains(BuildBossDebuffKey(sourceKey, status.Id)))
-                    .Select(status => new EarlierBossDebuffRow(
+                    .Select(status => new ExpiredMitigationRow(
                         combatEvent.SeenAtUtc,
                         combatEvent.PullElapsedSeconds,
                         sourceKey,
                         combatEvent.SourceName,
                         combatEvent.ActionName,
-                        status));
+                        status,
+                        true));
             })
-            .GroupBy(row => BuildBossDebuffKey(row.SourceKey, row.Status.Id))
-            .Select(group => group.OrderByDescending(row => row.SeenAtUtc).First())
-            .OrderByDescending(row => row.SeenAtUtc)
-            .ThenBy(row => row.SourceName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(row => row.Status.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static string BuildExpiredMitigationKey(ExpiredMitigationRow row)
+    {
+        var side = row.IsBossSide ? "boss" : "player";
+        return $"{side}:{row.SourceKey}:{row.Status.Id}:{row.Status.IconId}:{row.Status.SourceId}:{row.Status.Name}";
     }
 
     private static string BuildBossDebuffKey(string sourceKey, uint statusId)
@@ -14497,6 +14820,62 @@ public sealed class RecapWindow : Window, IDisposable
         {
             SetThemedTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
         }
+
+        var keepDeathRecapPopupVisible = configuration.KeepDeathRecapPopupVisible;
+        ImGui.BeginDisabled(!showDeathRecapPopup);
+        if (DrawThemedCheckbox("Keep recap button visible", ref keepDeathRecapPopupVisible))
+        {
+            plugin.SetKeepDeathRecapPopupVisible(keepDeathRecapPopupVisible);
+        }
+
+        var keepPopupHovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+        ImGui.EndDisabled();
+        if (keepPopupHovered)
+        {
+            SetThemedTooltip("Keeps the death recap button visible after your latest death. New deaths show Updated! briefly.");
+        }
+
+        ImGui.BeginDisabled(!showDeathRecapPopup || !keepDeathRecapPopupVisible);
+        var visibilityModeHovered = DrawDeathRecapPopupVisibilityModeToggle();
+        ImGui.EndDisabled();
+        if (visibilityModeHovered)
+        {
+            SetThemedTooltip("Duty Only hides the persistent button outside duties. Always keeps it visible anywhere after your latest death.");
+        }
+    }
+
+    private bool DrawDeathRecapPopupVisibilityModeToggle()
+    {
+        var hovered = false;
+        ImGui.TextUnformatted("Persistent button");
+        hovered |= ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+        ImGui.SameLine();
+        hovered |= DrawDeathRecapPopupVisibilityModeButton(DeathRecapPopupVisibilityMode.DutyOnly);
+        DrawTextSelectorSeparator();
+        hovered |= ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+        hovered |= DrawDeathRecapPopupVisibilityModeButton(DeathRecapPopupVisibilityMode.Always);
+        return hovered;
+    }
+
+    private bool DrawDeathRecapPopupVisibilityModeButton(DeathRecapPopupVisibilityMode mode)
+    {
+        var selected = configuration.DeathRecapPopupVisibilityMode == mode;
+        if (DrawTextSelectorOption(GetDeathRecapPopupVisibilityModeLabel(mode), $"DeathRecapPopupVisibilityMode{mode}", selected) &&
+            !selected)
+        {
+            plugin.SetDeathRecapPopupVisibilityMode(mode);
+        }
+
+        return ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+    }
+
+    private static string GetDeathRecapPopupVisibilityModeLabel(DeathRecapPopupVisibilityMode mode)
+    {
+        return mode switch
+        {
+            DeathRecapPopupVisibilityMode.Always => "Always",
+            _ => "Duty Only",
+        };
     }
 
     private void DrawPrivacyChatSettingsGroup()
@@ -17134,6 +17513,15 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.254");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added persistent death recap button options.");
+        DrawWrappedBullet("Replay Pulls can now collapse and remember their state.");
+        DrawWrappedBullet("Automatic Death Links now post separately for each captured death.");
+        DrawWrappedBullet("Cleaned up Focused review summary details and expired mitigation context.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.253");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Made the Death Replay Active Mits overlay fully resizable.");

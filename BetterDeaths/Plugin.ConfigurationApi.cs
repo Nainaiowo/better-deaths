@@ -169,6 +169,23 @@ public sealed partial class Plugin
     public void SetShowDeathRecapPopup(bool enabled)
     {
         Configuration.ShowDeathRecapPopup = enabled;
+        deathRecapPopupWindow.RefreshVisibility();
+        SaveConfiguration();
+    }
+
+    public void SetKeepDeathRecapPopupVisible(bool enabled)
+    {
+        Configuration.KeepDeathRecapPopupVisible = enabled;
+        deathRecapPopupWindow.RefreshVisibility();
+        SaveConfiguration();
+    }
+
+    public void SetDeathRecapPopupVisibilityMode(DeathRecapPopupVisibilityMode mode)
+    {
+        Configuration.DeathRecapPopupVisibilityMode = Enum.IsDefined(mode)
+            ? mode
+            : DeathRecapPopupVisibilityMode.DutyOnly;
+        deathRecapPopupWindow.RefreshVisibility();
         SaveConfiguration();
     }
 
@@ -212,6 +229,17 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void SetReplayPullBrowserCollapsed(bool collapsed)
+    {
+        if (Configuration.ReplayPullBrowserCollapsed == collapsed)
+        {
+            return;
+        }
+
+        Configuration.ReplayPullBrowserCollapsed = collapsed;
+        SaveConfiguration();
+    }
+
     public void SetDeathChatChannel(DeathChatChannel channel)
     {
         Configuration.DeathChatChannel = GetChatChannelOption(channel).Channel;
@@ -230,7 +258,7 @@ public sealed partial class Plugin
     {
         Configuration.ReviewDisplayMode = Enum.IsDefined(mode)
             ? mode
-            : ReviewDisplayMode.Detailed;
+            : ReviewDisplayMode.Focused;
         SaveConfiguration();
     }
 
@@ -505,7 +533,7 @@ public sealed partial class Plugin
 
         if (!Enum.IsDefined(Configuration.ReviewDisplayMode))
         {
-            Configuration.ReviewDisplayMode = ReviewDisplayMode.Detailed;
+            Configuration.ReviewDisplayMode = ReviewDisplayMode.Focused;
             changed = true;
         }
 
@@ -576,6 +604,12 @@ public sealed partial class Plugin
         if (!Enum.IsDefined(Configuration.DeathRecapLinkChannel))
         {
             Configuration.DeathRecapLinkChannel = DeathRecapLinkChannel.SystemMessage;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.DeathRecapPopupVisibilityMode))
+        {
+            Configuration.DeathRecapPopupVisibilityMode = DeathRecapPopupVisibilityMode.DutyOnly;
             changed = true;
         }
 
