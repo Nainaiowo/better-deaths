@@ -358,6 +358,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;
 
+    public float ReplayMitigationOverlayWidth { get; set; }
+
     public float ReplayMitigationOverlayHeight { get; set; } = 156.0f;
 
     public float ReplayWorldMarkerOpacity { get; set; } = 0.75f;

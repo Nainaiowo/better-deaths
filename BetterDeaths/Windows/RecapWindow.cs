@@ -31,6 +31,8 @@ public sealed class RecapWindow : Window, IDisposable
     private bool replayCanvasResizeDragging;
     private string? replayMitigationOverlayDraggingId;
     private string? replayMitigationOverlayResizeDraggingId;
+    private ReplayMitigationOverlayResizeMode replayMitigationOverlayResizeMode;
+    private ReplayOverlayDockSide replayMitigationOverlayResizeDockSide = ReplayOverlayDockSide.Right;
     private Vector2 replayMitigationOverlayDragOffset;
     private string debugTextFilter = string.Empty;
     private string addonInspectorName = string.Empty;
@@ -117,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.252";
+    private const string CurrentChangelogVersion = "0.1.0.253";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -148,11 +150,13 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayCanvasResizeKnobRadius = 4.0f;
     private const float ReplayMitigationOverlayPadding = 8.0f;
     private const float ReplayMitigationOverlayWidthMin = 218.0f;
-    private const float ReplayMitigationOverlayWidthMax = 340.0f;
+    private const float ReplayMitigationOverlayWidthMax = 560.0f;
+    private const float ReplayMitigationOverlayDefaultWidthMax = 340.0f;
+    private const float ReplayMitigationOverlayDefaultHeight = 156.0f;
     private const float ReplayMitigationOverlayMinHeight = 86.0f;
     private const float ReplayMitigationOverlayMaxHeight = 300.0f;
     private const float ReplayMitigationOverlayHeaderHeight = 22.0f;
-    private const float ReplayMitigationOverlayResizeHandleHeight = 10.0f;
+    private const float ReplayMitigationOverlayResizeCornerSize = 20.0f;
     private const float ReplayMitigationOverlayRowGap = 5.0f;
     private const float ReplayMitigationOverlayIconSize = 20.0f;
     private const float ReplayMitigationOverlaySnapAnimationSpeed = 16.0f;
@@ -400,6 +404,12 @@ public sealed class RecapWindow : Window, IDisposable
         TopRight,
         BottomLeft,
         BottomRight,
+    }
+
+    private enum ReplayMitigationOverlayResizeMode
+    {
+        None,
+        Corner,
     }
 
     private sealed record DmuP4AssignmentSummaryStatus(
@@ -9401,6 +9411,7 @@ public sealed class RecapWindow : Window, IDisposable
             {
                 replayMitigationOverlayDraggingId = null;
                 replayMitigationOverlayResizeDraggingId = null;
+                replayMitigationOverlayResizeMode = ReplayMitigationOverlayResizeMode.None;
             }
 
             return default;
@@ -9442,35 +9453,24 @@ public sealed class RecapWindow : Window, IDisposable
             overlayStart = draggedStart;
         }
 
-        var resizeStart = overlayStart + new Vector2(0.0f, overlaySize.Y - ReplayMitigationOverlayResizeHandleHeight);
-        ImGui.SetCursorScreenPos(resizeStart);
-        ImGui.InvisibleButton($"##ReplayMitigationOverlayResize{idSuffix}", new Vector2(overlaySize.X, ReplayMitigationOverlayResizeHandleHeight));
-        var resizeHovered = ImGui.IsItemHovered();
-        var resizeActive = ImGui.IsItemActive();
-        hovered |= resizeHovered;
-        active |= resizeActive;
-        if (resizeHovered || resizeActive)
-        {
-            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
-        }
+        var dockSide = GetReplayMitigationOverlayDockSide();
+        SubmitReplayMitigationOverlayCornerResizeHandle(
+            idSuffix,
+            overlayStart,
+            overlaySize,
+            dockSide,
+            ref hovered,
+            ref active);
 
-        if (ImGui.IsItemActivated())
+        if (string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal))
         {
-            replayMitigationOverlayResizeDraggingId = idSuffix;
-        }
-
-        if (resizeActive && string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal))
-        {
-            var newHeight = Math.Clamp(
-                overlaySize.Y + ImGui.GetIO().MouseDelta.Y,
-                ReplayMitigationOverlayMinHeight,
-                GetReplayMitigationOverlayMaxHeight(canvasSize));
-            configuration.ReplayMitigationOverlayHeight = newHeight;
-            overlaySize = overlaySize with { Y = newHeight };
-            configuration.ReplayMitigationOverlayOffsetY = ClampReplayMitigationOverlayOffsetY(
-                configuration.ReplayMitigationOverlayOffsetY,
+            var resized = ResizeReplayMitigationOverlay(
+                idSuffix,
+                canvasStart,
                 canvasSize,
                 overlaySize);
+            overlayStart = resized.Start;
+            overlaySize = resized.Size;
         }
 
         FinalizeReplayMitigationOverlayDrag(idSuffix, canvasStart, canvasSize, overlaySize);
@@ -9478,6 +9478,79 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.SetCursorScreenPos(cursorBefore);
         return new ReplayMitigationOverlayInputState(true, hovered, active, overlayStart, overlaySize);
+    }
+
+    private void SubmitReplayMitigationOverlayCornerResizeHandle(
+        string idSuffix,
+        Vector2 overlayStart,
+        Vector2 overlaySize,
+        ReplayOverlayDockSide dockSide,
+        ref bool hovered,
+        ref bool active)
+    {
+        var cornerSize = MathF.Min(ReplayMitigationOverlayResizeCornerSize, MathF.Min(overlaySize.X, overlaySize.Y));
+        var cornerX = dockSide == ReplayOverlayDockSide.Left
+            ? overlayStart.X + overlaySize.X - cornerSize
+            : overlayStart.X;
+        ImGui.SetCursorScreenPos(new Vector2(cornerX, overlayStart.Y + overlaySize.Y - cornerSize));
+        ImGui.InvisibleButton(
+            $"##ReplayMitigationOverlayResizeCorner{idSuffix}",
+            new Vector2(cornerSize));
+        var resizeHovered = ImGui.IsItemHovered();
+        var resizeActive = ImGui.IsItemActive();
+        hovered |= resizeHovered;
+        active |= resizeActive;
+        if (resizeHovered || resizeActive)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+        }
+
+        if (ImGui.IsItemActivated())
+        {
+            replayMitigationOverlayResizeDraggingId = idSuffix;
+            replayMitigationOverlayResizeMode = ReplayMitigationOverlayResizeMode.Corner;
+            replayMitigationOverlayResizeDockSide = dockSide;
+        }
+    }
+
+    private (Vector2 Start, Vector2 Size) ResizeReplayMitigationOverlay(
+        string idSuffix,
+        Vector2 canvasStart,
+        Vector2 canvasSize,
+        Vector2 overlaySize)
+    {
+        var mouseDelta = ImGui.GetIO().MouseDelta;
+        var maxHeight = GetReplayMitigationOverlayMaxHeight(canvasSize);
+        var newHeight = Math.Clamp(
+            overlaySize.Y + mouseDelta.Y,
+            ReplayMitigationOverlayMinHeight,
+            maxHeight);
+        var newWidth = overlaySize.X;
+
+        if (replayMitigationOverlayResizeMode == ReplayMitigationOverlayResizeMode.Corner)
+        {
+            var widthDelta = replayMitigationOverlayResizeDockSide == ReplayOverlayDockSide.Left
+                ? mouseDelta.X
+                : -mouseDelta.X;
+            newWidth = Math.Clamp(
+                overlaySize.X + widthDelta,
+                GetReplayMitigationOverlayMinWidth(canvasSize),
+                GetReplayMitigationOverlayMaxWidth(canvasSize));
+            configuration.ReplayMitigationOverlayWidth = newWidth;
+        }
+
+        configuration.ReplayMitigationOverlayHeight = newHeight;
+        var resizedSize = new Vector2(newWidth, newHeight);
+        configuration.ReplayMitigationOverlayOffsetY = ClampReplayMitigationOverlayOffsetY(
+            configuration.ReplayMitigationOverlayOffsetY,
+            canvasSize,
+            resizedSize);
+
+        var targetX = GetReplayMitigationOverlayTargetX(canvasStart, canvasSize, resizedSize);
+        replayMitigationOverlayAnimatedXByDeathId[idSuffix] = targetX;
+        return (
+            new Vector2(targetX, canvasStart.Y + configuration.ReplayMitigationOverlayOffsetY),
+            resizedSize);
     }
 
     private void FinalizeReplayMitigationOverlayDrag(
@@ -9516,21 +9589,37 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         replayMitigationOverlayResizeDraggingId = null;
+        replayMitigationOverlayResizeMode = ReplayMitigationOverlayResizeMode.None;
         plugin.SaveConfiguration();
     }
 
     private Vector2 GetReplayMitigationOverlaySize(Vector2 canvasSize)
     {
-        var maxWidth = MathF.Max(48.0f, canvasSize.X - (ReplayMitigationOverlayPadding * 2.0f));
-        var minWidth = MathF.Min(ReplayMitigationOverlayWidthMin, maxWidth);
-        var width = MathF.Min(
-            Math.Clamp(canvasSize.X * 0.48f, minWidth, ReplayMitigationOverlayWidthMax),
+        var minWidth = GetReplayMitigationOverlayMinWidth(canvasSize);
+        var maxWidth = GetReplayMitigationOverlayMaxWidth(canvasSize);
+        var defaultWidth = Math.Clamp(
+            canvasSize.X * 0.48f,
+            minWidth,
+            MathF.Min(ReplayMitigationOverlayDefaultWidthMax, maxWidth));
+        var width = Math.Clamp(
+            configuration.ReplayMitigationOverlayWidth <= 0.0f ? defaultWidth : configuration.ReplayMitigationOverlayWidth,
+            minWidth,
             maxWidth);
         var height = Math.Clamp(
-            configuration.ReplayMitigationOverlayHeight <= 0.0f ? 156.0f : configuration.ReplayMitigationOverlayHeight,
+            configuration.ReplayMitigationOverlayHeight <= 0.0f ? ReplayMitigationOverlayDefaultHeight : configuration.ReplayMitigationOverlayHeight,
             ReplayMitigationOverlayMinHeight,
             GetReplayMitigationOverlayMaxHeight(canvasSize));
         return new Vector2(width, height);
+    }
+
+    private static float GetReplayMitigationOverlayMinWidth(Vector2 canvasSize)
+    {
+        return MathF.Min(ReplayMitigationOverlayWidthMin, GetReplayMitigationOverlayMaxWidth(canvasSize));
+    }
+
+    private static float GetReplayMitigationOverlayMaxWidth(Vector2 canvasSize)
+    {
+        return MathF.Max(48.0f, MathF.Min(ReplayMitigationOverlayWidthMax, canvasSize.X - (ReplayMitigationOverlayPadding * 2.0f)));
     }
 
     private static float GetReplayMitigationOverlayMaxHeight(Vector2 canvasSize)
@@ -9561,12 +9650,16 @@ public sealed class RecapWindow : Window, IDisposable
 
     private float GetReplayMitigationOverlayTargetX(Vector2 canvasStart, Vector2 canvasSize, Vector2 overlaySize)
     {
-        var dockSide = Enum.IsDefined(configuration.ReplayMitigationOverlayDockSide)
-            ? configuration.ReplayMitigationOverlayDockSide
-            : ReplayOverlayDockSide.Right;
-        return dockSide == ReplayOverlayDockSide.Left
+        return GetReplayMitigationOverlayDockSide() == ReplayOverlayDockSide.Left
             ? canvasStart.X + ReplayMitigationOverlayPadding
             : canvasStart.X + canvasSize.X - ReplayMitigationOverlayPadding - overlaySize.X;
+    }
+
+    private ReplayOverlayDockSide GetReplayMitigationOverlayDockSide()
+    {
+        return Enum.IsDefined(configuration.ReplayMitigationOverlayDockSide)
+            ? configuration.ReplayMitigationOverlayDockSide
+            : ReplayOverlayDockSide.Right;
     }
 
     private float GetReplayMitigationOverlayDisplayX(string idSuffix, float targetX, float minX, float maxX)
@@ -9640,7 +9733,12 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushClipRect(start, end, true);
         DrawReplayMitigationOverlayHeader(drawList, start, state.Size, state.Active);
         DrawReplayMitigationOverlayRows(entries, start, state.Size);
-        DrawReplayMitigationOverlayResizeGrip(drawList, start, state.Size, string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal));
+        DrawReplayMitigationOverlayResizeGrip(
+            drawList,
+            start,
+            state.Size,
+            GetReplayMitigationOverlayDockSide(),
+            string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal));
         ImGui.PopClipRect();
         ImGui.SetCursorScreenPos(cursorBefore);
     }
@@ -9677,7 +9775,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var drawList = ImGui.GetWindowDrawList();
         var rowY = start.Y + ReplayMitigationOverlayHeaderHeight + ReplayMitigationOverlayPadding;
-        var rowBottom = start.Y + size.Y - ReplayMitigationOverlayResizeHandleHeight - ReplayMitigationOverlayPadding;
+        var rowBottom = start.Y + size.Y - ReplayMitigationOverlayResizeCornerSize - ReplayMitigationOverlayPadding;
         var hiddenCount = 0;
 
         for (var index = 0; index < entries.Count; index++)
@@ -9751,16 +9849,45 @@ public sealed class RecapWindow : Window, IDisposable
             : MathF.Max(38.0f, ReplayMitigationOverlayIconSize + ImGui.GetTextLineHeight());
     }
 
-    private static void DrawReplayMitigationOverlayResizeGrip(ImDrawListPtr drawList, Vector2 start, Vector2 size, bool active)
+    private static void DrawReplayMitigationOverlayResizeGrip(
+        ImDrawListPtr drawList,
+        Vector2 start,
+        Vector2 size,
+        ReplayOverlayDockSide dockSide,
+        bool active)
     {
-        var y = start.Y + size.Y - (ReplayMitigationOverlayResizeHandleHeight * 0.5f);
-        var centerX = start.X + (size.X * 0.5f);
         var color = active ? LeadUpGoldColor : ModernMutedTextColor;
-        drawList.AddLine(
-            new Vector2(centerX - 24.0f, y),
-            new Vector2(centerX + 24.0f, y),
-            ImGui.GetColorU32(color with { W = active ? 0.95f : 0.70f }),
-            1.4f);
+        var colorU32 = ImGui.GetColorU32(color with { W = active ? 0.95f : 0.70f });
+        var cornerSize = ReplayMitigationOverlayResizeCornerSize - 6.0f;
+        var cornerX = dockSide == ReplayOverlayDockSide.Left
+            ? start.X + size.X - 5.0f
+            : start.X + 5.0f;
+        var cornerY = start.Y + size.Y - 5.0f;
+        for (var i = 0; i < 3; i++)
+        {
+            var inset = 3.0f + (i * 4.0f);
+            if (dockSide == ReplayOverlayDockSide.Left)
+            {
+                drawList.AddLine(
+                    new Vector2(cornerX - inset, cornerY),
+                    new Vector2(cornerX, cornerY - inset),
+                    colorU32,
+                    1.2f);
+            }
+            else
+            {
+                drawList.AddLine(
+                    new Vector2(cornerX + inset, cornerY),
+                    new Vector2(cornerX, cornerY - inset),
+                    colorU32,
+                    1.2f);
+            }
+
+            if (inset >= cornerSize)
+            {
+                break;
+            }
+        }
     }
 
     private ReplayCanvasResizeState SubmitReplayCanvasResizeHandles(
@@ -17007,6 +17134,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.253");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Made the Death Replay Active Mits overlay fully resizable.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.252");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added a draggable, resizable Active Mits overlay to Death Replay for newly captured pulls.");
