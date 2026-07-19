@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.254";
+    private const string CurrentChangelogVersion = "0.1.0.255";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -733,6 +733,36 @@ public sealed class RecapWindow : Window, IDisposable
             ? GetExampleSelectionPage()
             : MainPage.Review;
         clearPendingDeathSelection = false;
+        IsOpen = true;
+        return true;
+    }
+
+    public bool HasLatestPull()
+    {
+        return plugin.CurrentDeaths.Count > 0 ||
+            plugin.RecordedPulls.Any(summary => summary.DeathCount > 0);
+    }
+
+    public bool FocusLatestPull()
+    {
+        if (!HasLatestPull())
+        {
+            return false;
+        }
+
+        recordedPullDutyFilter = AllRecordedPullDuties;
+        var pulls = BuildDeathRecapReviewPulls();
+        var latestPull = pulls.FirstOrDefault(pull => pull.DeathCount > 0 || pull.Deaths.Count > 0);
+        if (latestPull is null)
+        {
+            return false;
+        }
+
+        recapReviewSelection.PullKey = latestPull.Key;
+        ClearSelectedDeath(recapReviewSelection);
+        pendingDeathSelection = null;
+        clearPendingDeathSelection = false;
+        currentMainPage = MainPage.Review;
         IsOpen = true;
         return true;
     }
@@ -14832,7 +14862,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndDisabled();
         if (keepPopupHovered)
         {
-            SetThemedTooltip("Keeps the death recap button visible after your latest death. New deaths show Updated! briefly.");
+            SetThemedTooltip("Keeps the recap button visible. Before a fresh death, it opens your newest saved pull. Close the popup to turn this off.");
         }
 
         ImGui.BeginDisabled(!showDeathRecapPopup || !keepDeathRecapPopupVisible);
@@ -14840,7 +14870,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.EndDisabled();
         if (visibilityModeHovered)
         {
-            SetThemedTooltip("Duty Only hides the persistent button outside duties. Always keeps it visible anywhere after your latest death.");
+            SetThemedTooltip("Duty Only hides the persistent button outside duties. Always keeps it visible anywhere after a saved pull or fresh death.");
         }
     }
 
@@ -17513,6 +17543,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.255");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Improved persistent death recap button behavior.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.254");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added persistent death recap button options.");

@@ -655,6 +655,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void DrawUi()
     {
+        deathRecapPopupWindow.RefreshVisibility();
         windowSystem.Draw();
     }
 

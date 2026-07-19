@@ -9,6 +9,7 @@ namespace BetterDeaths.Windows;
 public sealed class DeathRecapPopupWindow : Window, IDisposable
 {
     private static readonly TimeSpan PopupLifetime = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan InternalCloseSuppressionWindow = TimeSpan.FromMilliseconds(500);
     private static readonly Vector2 DefaultSize = new(240.0f, 82.0f);
     private const float ButtonDragThreshold = 3.0f;
     private const float PopupBackgroundOpacity = 0.85f;
@@ -18,6 +19,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     private DateTime? deathUpdatedAtUtc;
     private DateTime? testStartedAtUtc;
     private Vector2? lastKnownPosition;
+    private DateTime? suppressUserCloseToggleUntilUtc;
     private bool applySavedPositionOnNextDraw;
     private bool buttonDragged;
     private bool stylePushed;
@@ -82,17 +84,34 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     {
         if (!plugin.Configuration.ShowDeathRecapPopup)
         {
-            ClosePopup();
+            if (IsOpen || pendingDeath is not null || testStartedAtUtc is not null)
+            {
+                ClosePopup();
+            }
+
             return;
         }
 
         if (plugin.Configuration.KeepDeathRecapPopupVisible &&
-            testStartedAtUtc is null &&
-            pendingDeath is not null)
+            testStartedAtUtc is null)
         {
+            if (!HasPersistentButtonTarget())
+            {
+                if (IsOpen)
+                {
+                    ClosePopup();
+                }
+
+                return;
+            }
+
             if (ShouldShowPersistentDeathButton())
             {
-                applySavedPositionOnNextDraw = true;
+                if (!IsOpen)
+                {
+                    applySavedPositionOnNextDraw = true;
+                }
+
                 IsOpen = true;
             }
             else
@@ -110,6 +129,26 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
 
         ClosePopup();
+    }
+
+    public override void OnClose()
+    {
+        SaveLastKnownPosition();
+        if (ConsumeInternalCloseSuppression())
+        {
+            return;
+        }
+
+        var wasTestPopup = testStartedAtUtc is not null;
+        pendingDeath = null;
+        deathUpdatedAtUtc = null;
+        testStartedAtUtc = null;
+        buttonDragged = false;
+
+        if (!wasTestPopup && plugin.Configuration.KeepDeathRecapPopupVisible)
+        {
+            plugin.SetKeepDeathRecapPopupVisible(false);
+        }
     }
 
     public override void PreDraw()
@@ -154,13 +193,21 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             return;
         }
 
+        var keepVisible = plugin.Configuration.KeepDeathRecapPopupVisible;
         if (pendingDeath is not { } death)
         {
-            ClosePopup();
+            if (keepVisible)
+            {
+                DrawLatestPullButton();
+            }
+            else
+            {
+                ClosePopup();
+            }
+
             return;
         }
 
-        var keepVisible = plugin.Configuration.KeepDeathRecapPopupVisible;
         if (keepVisible && !ShouldShowPersistentDeathButton())
         {
             HidePopup();
@@ -196,6 +243,36 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         }
     }
 
+    private void DrawLatestPullButton()
+    {
+        if (!ShouldShowPersistentDeathButton())
+        {
+            HidePopup();
+            return;
+        }
+
+        if (!recapWindow.HasLatestPull())
+        {
+            ClosePopup();
+            return;
+        }
+
+        if (DrawDraggableButton("Open latest recap###BetterDeathsDeathRecapPopupButton"))
+        {
+            if (!recapWindow.FocusLatestPull())
+            {
+                Plugin.ChatGui.Print("[Better Deaths] No saved death recap is available yet.");
+                ClosePopup();
+                return;
+            }
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Opens the newest saved pull.");
+        }
+    }
+
     private string GetDeathButtonLabel(PendingDeath death, DateTime now, bool keepVisible)
     {
         if (keepVisible)
@@ -215,6 +292,11 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             DeathRecapPopupVisibilityMode.Always => true,
             _ => plugin.IsDutyStarted,
         };
+    }
+
+    private bool HasPersistentButtonTarget()
+    {
+        return pendingDeath is not null || recapWindow.HasLatestPull();
     }
 
     private bool DrawDraggableButton(string label)
@@ -251,6 +333,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     private void ClosePopup()
     {
         SaveLastKnownPosition();
+        MarkInternalClose();
         pendingDeath = null;
         deathUpdatedAtUtc = null;
         testStartedAtUtc = null;
@@ -261,9 +344,26 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     private void HidePopup()
     {
         SaveLastKnownPosition();
+        MarkInternalClose();
         testStartedAtUtc = null;
         buttonDragged = false;
         IsOpen = false;
+    }
+
+    private void MarkInternalClose()
+    {
+        suppressUserCloseToggleUntilUtc = DateTime.UtcNow + InternalCloseSuppressionWindow;
+    }
+
+    private bool ConsumeInternalCloseSuppression()
+    {
+        if (suppressUserCloseToggleUntilUtc is not { } suppressUntilUtc)
+        {
+            return false;
+        }
+
+        suppressUserCloseToggleUntilUtc = null;
+        return DateTime.UtcNow <= suppressUntilUtc;
     }
 
     private void ApplyPopupPosition()
