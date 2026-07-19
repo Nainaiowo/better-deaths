@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.255";
+    private const string CurrentChangelogVersion = "0.1.0.256";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -17543,6 +17543,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.256");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Persistent recap button now opens and closes Better Deaths.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.255");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Improved persistent death recap button behavior.");

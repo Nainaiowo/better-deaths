@@ -224,6 +224,11 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         var label = GetDeathButtonLabel(death, now, keepVisible);
         if (DrawDraggableButton(label))
         {
+            if (keepVisible && ToggleMainWindowClosedIfOpen())
+            {
+                return;
+            }
+
             if (!recapWindow.FocusDeath(death.DeathSeenAtTicks, death.MemberKeyHash))
             {
                 Plugin.ChatGui.Print("[Better Deaths] That death recap is no longer available.");
@@ -259,6 +264,11 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 
         if (DrawDraggableButton("Open latest recap###BetterDeathsDeathRecapPopupButton"))
         {
+            if (ToggleMainWindowClosedIfOpen())
+            {
+                return;
+            }
+
             if (!recapWindow.FocusLatestPull())
             {
                 Plugin.ChatGui.Print("[Better Deaths] No saved death recap is available yet.");
@@ -269,8 +279,19 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("Opens the newest saved pull.");
+            ImGui.SetTooltip("Opens or closes Better Deaths on the newest saved pull.");
         }
+    }
+
+    private bool ToggleMainWindowClosedIfOpen()
+    {
+        if (!recapWindow.IsOpen)
+        {
+            return false;
+        }
+
+        recapWindow.IsOpen = false;
+        return true;
     }
 
     private string GetDeathButtonLabel(PendingDeath death, DateTime now, bool keepVisible)
