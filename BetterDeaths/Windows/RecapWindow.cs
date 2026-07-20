@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.263";
+    private const string CurrentChangelogVersion = "0.1.0.264";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -212,7 +212,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ModernTopNavItemPaddingX = 16.0f;
     private const float ModernTopNavItemGap = 7.0f;
     private const float ModernRailWidth = 174.0f;
-    private const float ModernRailPadding = 12.0f;
+    private const float ModernRailPadding = 8.0f;
     private const float ModernRailItemHeight = 38.0f;
     private const float ModernRailItemGap = 5.0f;
     private const float ModernShellGap = 10.0f;
@@ -859,7 +859,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
         DrawSubtleSeparator();
         ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
-        DrawModernWorkspace(Vector2.Zero, drawHeader: true);
+        DrawModernWorkspace(Vector2.Zero);
     }
 
     private void DrawModernCompactShell(IReadOnlyList<MainNavigationItem> navigationItems)
@@ -869,7 +869,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
         DrawSubtleSeparator();
         ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
-        DrawModernWorkspace(Vector2.Zero, drawHeader: true);
+        DrawModernWorkspace(Vector2.Zero);
     }
 
     private static void DrawModernTopHeader()
@@ -1011,11 +1011,10 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernSectionRail(IReadOnlyList<MainNavigationItem> navigationItems, Vector2 size)
     {
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity));
-        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor with { W = 0.74f });
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleColor(ImGuiCol.Border, Vector4.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernRailPadding, ModernRailPadding));
-        if (ImGui.BeginChild("##BetterDeathsSectionRail", size, true, OptionalScrollbarFlags))
+        if (ImGui.BeginChild("##BetterDeathsSectionRail", size, false, OptionalScrollbarFlags))
         {
             DrawModernRailBrand();
             ImGui.Dummy(new Vector2(1.0f, 12.0f));
@@ -1024,7 +1023,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
-        ImGui.PopStyleVar(2);
+        ImGui.PopStyleVar();
         ImGui.PopStyleColor(2);
     }
 
@@ -1147,64 +1146,16 @@ public sealed class RecapWindow : Window, IDisposable
         DrawMainNavigationCombo(navigationItems);
     }
 
-    private void DrawModernWorkspace(Vector2 size, bool drawHeader = true)
+    private void DrawModernWorkspace(Vector2 size)
     {
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernWorkspacePadding, ModernWorkspacePadding));
         if (ImGui.BeginChild("##BetterDeathsWorkspace", size, false, OptionalScrollbarFlags))
         {
-            if (drawHeader)
-            {
-                DrawModernWorkspaceHeader();
-                ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
-                DrawSubtleSeparator();
-                ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
-            }
-
             DrawModernPageContent();
         }
 
         ImGui.EndChild();
         ImGui.PopStyleVar();
-    }
-
-    private void DrawModernWorkspaceHeader()
-    {
-        var title = GetModernPageTitle(currentMainPage);
-        var subtitle = GetModernPageSubtitle(currentMainPage);
-        ImGui.TextColored(ModernTextColor, title);
-        if (!string.IsNullOrWhiteSpace(subtitle))
-        {
-            ImGui.SameLine();
-            ImGui.TextColored(ModernMutedTextColor, subtitle);
-        }
-
-        DrawModernWorkspaceCredit();
-    }
-
-    private static void DrawModernWorkspaceCredit()
-    {
-        const float rightPadding = 2.0f;
-        const string prefix = "Powered by ";
-        const string nai = "Nai";
-        const string middle = " and ";
-        const string you = "You";
-
-        var prefixSize = ImGui.CalcTextSize(prefix);
-        var naiSize = ImGui.CalcTextSize(nai);
-        var middleSize = ImGui.CalcTextSize(middle);
-        var youSize = ImGui.CalcTextSize(you);
-        var signatureWidth = prefixSize.X + naiSize.X + middleSize.X + youSize.X;
-        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X - rightPadding;
-        var titleEnd = ImGui.GetItemRectMax();
-        var signatureStartX = contentRight - signatureWidth;
-        if (signatureStartX <= titleEnd.X + (ImGui.GetStyle().ItemSpacing.X * 2.0f))
-        {
-            return;
-        }
-
-        var drawList = ImGui.GetWindowDrawList();
-        var position = new Vector2(signatureStartX, ImGui.GetItemRectMin().Y);
-        DrawModernCreditLine(drawList, position);
     }
 
     private static void DrawModernCreditLine()
@@ -1216,54 +1167,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(ModernMutedTextColor, " and ");
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.TextColored(ModernAccentColor, "You");
-    }
-
-    private static void DrawModernCreditLine(ImDrawListPtr drawList, Vector2 position)
-    {
-        const string prefix = "Powered by ";
-        const string nai = "Nai";
-        const string middle = " and ";
-        const string you = "You";
-
-        var mutedColor = ImGui.GetColorU32(ModernMutedTextColor);
-        var highlightColor = ImGui.GetColorU32(ModernAccentColor);
-        drawList.AddText(position, mutedColor, prefix);
-        position.X += ImGui.CalcTextSize(prefix).X;
-        drawList.AddText(position, highlightColor, nai);
-        position.X += ImGui.CalcTextSize(nai).X;
-        drawList.AddText(position, mutedColor, middle);
-        position.X += ImGui.CalcTextSize(middle).X;
-        drawList.AddText(position, highlightColor, you);
-    }
-
-    private static string GetModernPageTitle(MainPage page)
-    {
-        return page switch
-        {
-            MainPage.Replay => "Replay",
-            MainPage.Customize => "Customize",
-            MainPage.Data => "Data",
-            MainPage.Feedback => "Data",
-            MainPage.Updates => "Updates",
-            MainPage.Example => "Example",
-            MainPage.Debug => "Debug",
-            _ => "Review",
-        };
-    }
-
-    private static string GetModernPageSubtitle(MainPage page)
-    {
-        return page switch
-        {
-            MainPage.Replay => "Saved death-pull playback",
-            MainPage.Customize => "Display, privacy, capture, and popup settings",
-            MainPage.Data => "Local storage, privacy, and feedback",
-            MainPage.Feedback => "Local storage, privacy, and feedback",
-            MainPage.Updates => $"v{CurrentChangelogVersion}",
-            MainPage.Example => "Sample pull for first-time users",
-            MainPage.Debug => "Local diagnostics",
-            _ => "Pull review that opens detail only when needed",
-        };
     }
 
     private void PushWindowStyle()
@@ -18404,6 +18307,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.264");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Cleaned up Better Deaths navigation and removed the redundant section header.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.263");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Reworked Better Deaths frontend with responsive navigation, flatter Review/Replay workspaces, and a selected-death command strip.");
