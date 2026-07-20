@@ -131,6 +131,12 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         ClosePopup();
     }
 
+    public void ResetPosition()
+    {
+        lastKnownPosition = GetDefaultPopupPosition();
+        applySavedPositionOnNextDraw = true;
+    }
+
     public override void OnClose()
     {
         SaveLastKnownPosition();
@@ -166,13 +172,13 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     public override void Draw()
     {
         var currentPosition = ImGui.GetWindowPos();
-        var clampedPosition = ClampPopupPosition(currentPosition, ImGui.GetWindowSize());
-        if (clampedPosition != currentPosition)
+        var sanitizedPosition = SanitizePopupPosition(currentPosition);
+        if (sanitizedPosition != currentPosition)
         {
-            ImGui.SetWindowPos(clampedPosition);
+            ImGui.SetWindowPos(sanitizedPosition);
         }
 
-        lastKnownPosition = clampedPosition;
+        lastKnownPosition = sanitizedPosition;
 
         var now = DateTime.UtcNow;
         if (testStartedAtUtc is { } startedAtUtc)
@@ -333,7 +339,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
             var mouseDelta = ImGui.GetIO().MouseDelta;
             if (mouseDelta.LengthSquared() > 0.0f)
             {
-                var position = ClampPopupPosition(ImGui.GetWindowPos() + mouseDelta, ImGui.GetWindowSize());
+                var position = SanitizePopupPosition(ImGui.GetWindowPos() + mouseDelta);
                 ImGui.SetWindowPos(position);
                 lastKnownPosition = position;
             }
@@ -400,7 +406,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
                 plugin.Configuration.DeathRecapPopupPositionX,
                 plugin.Configuration.DeathRecapPopupPositionY)
             : GetDefaultPopupPosition();
-        var position = ClampPopupPosition(requestedPosition, GetScaledDefaultSize());
+        var position = SanitizePopupPosition(requestedPosition);
         lastKnownPosition = position;
         ImGui.SetNextWindowPos(position, ImGuiCond.Always);
     }
@@ -467,27 +473,14 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         return DefaultSize * ImGuiHelpers.GlobalScale;
     }
 
-    private static Vector2 ClampPopupPosition(Vector2 position, Vector2 size)
+    private static Vector2 SanitizePopupPosition(Vector2 position)
     {
         if (!float.IsFinite(position.X) || !float.IsFinite(position.Y))
         {
-            position = GetDefaultPopupPosition();
+            return GetDefaultPopupPosition();
         }
 
-        if (!float.IsFinite(size.X) || size.X <= 0.0f ||
-            !float.IsFinite(size.Y) || size.Y <= 0.0f)
-        {
-            size = GetScaledDefaultSize();
-        }
-
-        ref var viewportPosition = ref ImGui.GetMainViewport().WorkPos;
-        ref var viewportSize = ref ImGui.GetMainViewport().WorkSize;
-        var maxX = viewportPosition.X + MathF.Max(0.0f, viewportSize.X - size.X);
-        var maxY = viewportPosition.Y + MathF.Max(0.0f, viewportSize.Y - size.Y);
-
-        return new Vector2(
-            Math.Clamp(position.X, viewportPosition.X, maxX),
-            Math.Clamp(position.Y, viewportPosition.Y, maxY));
+        return position;
     }
 
     private sealed record PendingDeath(

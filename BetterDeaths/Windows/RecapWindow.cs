@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.256";
+    private const string CurrentChangelogVersion = "0.1.0.257";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -14819,11 +14819,14 @@ public sealed class RecapWindow : Window, IDisposable
     {
         var showDeathRecapPopup = configuration.ShowDeathRecapPopup;
         var testButtonWidth = GetThemedActionButtonWidth("Test");
+        var resetButtonWidth = GetThemedActionButtonWidth("Reset");
         var availableWidth = ImGui.GetContentRegionAvail().X;
+        var itemSpacing = ImGui.GetStyle().ItemSpacing.X;
         var toggleWidth = ImGui.CalcTextSize("Show recap popup when you die").X +
             ImGui.GetFrameHeight() +
             (ImGui.GetStyle().ItemInnerSpacing.X * 2.0f);
-        var canFitTestInline = availableWidth - toggleWidth - ImGui.GetStyle().ItemSpacing.X >= testButtonWidth;
+        var popupControlWidth = testButtonWidth + itemSpacing + resetButtonWidth;
+        var canFitPopupControlsInline = availableWidth - toggleWidth - itemSpacing >= popupControlWidth;
 
         if (DrawThemedCheckbox("Show recap popup when you die", ref showDeathRecapPopup))
         {
@@ -14831,7 +14834,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var popupSettingHovered = ImGui.IsItemHovered();
-        if (canFitTestInline)
+        if (canFitPopupControlsInline)
         {
             ImGui.SameLine();
         }
@@ -14842,6 +14845,17 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var testHovered = ImGui.IsItemHovered();
+        if (ImGui.GetContentRegionAvail().X >= resetButtonWidth + itemSpacing)
+        {
+            ImGui.SameLine();
+        }
+
+        if (DrawThemedActionButton("Reset", "ResetDeathRecapPopupPosition", resetButtonWidth))
+        {
+            plugin.ResetDeathRecapPopupPosition();
+        }
+
+        var resetHovered = ImGui.IsItemHovered();
         if (popupSettingHovered)
         {
             SetThemedTooltip("Shows a small local-only button for 30 seconds after your own death. The button opens that exact death in Review.");
@@ -14849,6 +14863,10 @@ public sealed class RecapWindow : Window, IDisposable
         else if (testHovered)
         {
             SetThemedTooltip("Shows the same movable popup button for 30 seconds. The Test button does nothing and turns off when it disappears.");
+        }
+        else if (resetHovered)
+        {
+            SetThemedTooltip("Resets the recap popup button back to its default position.");
         }
 
         var keepDeathRecapPopupVisible = configuration.KeepDeathRecapPopupVisible;
@@ -17543,6 +17561,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.257");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("The button no longer clamps to the game's screen, allowing it to be moved off-screen for multi-screen compatibility.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.256");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Persistent recap button now opens and closes Better Deaths.");

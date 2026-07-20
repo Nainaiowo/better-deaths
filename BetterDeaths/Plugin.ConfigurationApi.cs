@@ -142,6 +142,15 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void ResetDeathRecapPopupPosition()
+    {
+        Configuration.HasDeathRecapPopupPosition = false;
+        Configuration.DeathRecapPopupPositionX = 0.0f;
+        Configuration.DeathRecapPopupPositionY = 0.0f;
+        deathRecapPopupWindow.ResetPosition();
+        SaveConfiguration();
+    }
+
     public void SetRemoveChatBranding(bool remove)
     {
         Configuration.RemoveChatBranding = remove;
