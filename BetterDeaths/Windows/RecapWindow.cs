@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.264";
+    private const string CurrentChangelogVersion = "0.1.0.265";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -203,19 +203,14 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReviewPaneBottomPadding = 14.0f;
     private const float SectionHelpMarkerRightInset = 12.0f;
     private const float ModernShellPadding = 12.0f;
+    private const float ModernShellTopPadding = 8.0f;
     private const float ModernHeaderBottomGap = 6.0f;
     private const float ModernPanelRounding = 6.0f;
-    private const float ModernRailBreakpoint = 1320.0f;
     private const float ModernTopNavigationBreakpoint = 640.0f;
     private const float ModernTopNavItemHeight = 32.0f;
     private const float ModernTopNavItemMinWidth = 72.0f;
     private const float ModernTopNavItemPaddingX = 16.0f;
     private const float ModernTopNavItemGap = 7.0f;
-    private const float ModernRailWidth = 174.0f;
-    private const float ModernRailPadding = 8.0f;
-    private const float ModernRailItemHeight = 38.0f;
-    private const float ModernRailItemGap = 5.0f;
-    private const float ModernShellGap = 10.0f;
     private const float ModernWorkspacePadding = 12.0f;
     private const float ModernWorkspaceHeaderGap = 8.0f;
     private const float ReviewCommandStripMinWidth = 620.0f;
@@ -228,7 +223,6 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayPaneVerticalPadding = 8.0f;
     private const float ReplayPaneGap = WorkspacePaneGap;
     private const float ReplaySurfaceSectionGap = 6.0f;
-    private const float ReplayTransportPadding = 8.0f;
     private const float ReplayTransportInnerGap = 6.0f;
     private const float ReplayViewportPadding = 10.0f;
     private const float ReplayDisplaySettingsGap = 7.0f;
@@ -822,13 +816,10 @@ public sealed class RecapWindow : Window, IDisposable
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
+            ImGui.Dummy(new Vector2(1.0f, ModernShellTopPadding));
             var navigationItems = BuildMainNavigationItems();
             var available = ImGui.GetContentRegionAvail();
-            if (available.X >= ModernRailBreakpoint)
-            {
-                DrawModernRailShell(navigationItems, available);
-            }
-            else if (available.X >= ModernTopNavigationBreakpoint)
+            if (available.X >= ModernTopNavigationBreakpoint)
             {
                 DrawModernTopShell(navigationItems);
             }
@@ -839,15 +830,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
-    }
-
-    private void DrawModernRailShell(IReadOnlyList<MainNavigationItem> navigationItems, Vector2 available)
-    {
-        using var shellIndent = new ImGuiIndentScope(ModernShellPadding);
-        var railHeight = MathF.Max(0.0f, available.Y - (ModernShellPadding * 2.0f));
-        DrawModernSectionRail(navigationItems, new Vector2(ModernRailWidth, railHeight));
-        ImGui.SameLine(0.0f, ModernShellGap);
-        DrawModernWorkspace(new Vector2(0.0f, railHeight));
     }
 
     private void DrawModernTopShell(IReadOnlyList<MainNavigationItem> navigationItems)
@@ -1007,126 +989,6 @@ public sealed class RecapWindow : Window, IDisposable
         {
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
         }
-    }
-
-    private void DrawModernSectionRail(IReadOnlyList<MainNavigationItem> navigationItems, Vector2 size)
-    {
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-        ImGui.PushStyleColor(ImGuiCol.Border, Vector4.Zero);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernRailPadding, ModernRailPadding));
-        if (ImGui.BeginChild("##BetterDeathsSectionRail", size, false, OptionalScrollbarFlags))
-        {
-            DrawModernRailBrand();
-            ImGui.Dummy(new Vector2(1.0f, 12.0f));
-            DrawModernRailNav(navigationItems);
-            DrawModernRailFooter();
-        }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
-        ImGui.PopStyleColor(2);
-    }
-
-    private static void DrawModernRailBrand()
-    {
-        ImGui.TextColored(ModernAccentColor, "Better Deaths");
-        ImGui.TextColored(ModernMutedTextColor, "Raid death review");
-        ImGui.Dummy(new Vector2(1.0f, 6.0f));
-        DrawSubtleSeparator();
-    }
-
-    private void DrawModernRailNav(IReadOnlyList<MainNavigationItem> navigationItems)
-    {
-        ImGui.TextColored(ModernMutedTextColor, "Sections");
-        ImGui.Dummy(new Vector2(1.0f, 4.0f));
-        for (var index = 0; index < navigationItems.Count; index++)
-        {
-            DrawModernRailNavItem(navigationItems[index], index);
-            ImGui.Dummy(new Vector2(1.0f, ModernRailItemGap));
-        }
-    }
-
-    private void DrawModernRailNavItem(MainNavigationItem item, int index)
-    {
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var size = new Vector2(availableWidth, ModernRailItemHeight);
-        var selected = currentMainPage == item.Page;
-        var start = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton($"##ModernRailNav{item.Page}", size);
-        var hovered = ImGui.IsItemHovered();
-        var active = ImGui.IsItemActive();
-        if (clicked)
-        {
-            currentMainPage = item.Page;
-        }
-
-        var end = start + size;
-        var fill = selected
-            ? ModernNavButtonSelectedColor
-            : active
-                ? ModernNavButtonActiveColor with { W = 0.56f }
-                : hovered
-                    ? ModernPanelAltColor with { W = 0.72f }
-                    : ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.34f : 0.22f };
-        var border = selected
-            ? BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.46f)
-            : ModernPanelBorderColor with { W = hovered ? 0.72f : 0.32f };
-        var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), ModernPanelRounding);
-        drawList.AddRect(start, end, ImGui.GetColorU32(border), ModernPanelRounding);
-        if (selected)
-        {
-            drawList.AddRectFilled(
-                new Vector2(start.X, start.Y + 5.0f),
-                new Vector2(start.X + 3.0f, end.Y - 5.0f),
-                ImGui.GetColorU32(ModernAccentColor),
-                2.0f);
-        }
-
-        var number = (index + 1).ToString("00", CultureInfo.InvariantCulture);
-        var numberSize = ImGui.CalcTextSize(number);
-        var numberPos = new Vector2(start.X + 11.0f, start.Y + ((size.Y - numberSize.Y) * 0.5f));
-        drawList.AddText(numberPos, ImGui.GetColorU32(selected ? ModernTextColor : ModernMutedTextColor), number);
-
-        var badgeText = item.BadgeText ?? (item.Highlight ? ThemeNewBadgeText : null);
-        var badgeSize = string.IsNullOrWhiteSpace(badgeText)
-            ? Vector2.Zero
-            : GetInlineNavBadgeSize(badgeText);
-        var labelMaxX = badgeSize.X > 0.0f
-            ? end.X - badgeSize.X - 14.0f
-            : end.X - 8.0f;
-        var labelMaxWidth = MathF.Max(24.0f, labelMaxX - (start.X + 40.0f));
-        var label = ClipTextToWidth(item.Label, labelMaxWidth);
-        var labelSize = ImGui.CalcTextSize(label);
-        var labelPos = new Vector2(start.X + 40.0f, start.Y + ((size.Y - labelSize.Y) * 0.5f));
-        drawList.AddText(labelPos, ImGui.GetColorU32(selected ? ModernSelectedButtonTextColor : ModernTextColor), label);
-
-        if (!string.IsNullOrWhiteSpace(badgeText))
-        {
-            DrawInlineNavBadge(
-                drawList,
-                badgeText,
-                new Vector2(end.X - badgeSize.X - 8.0f, start.Y + ((size.Y - badgeSize.Y) * 0.5f)));
-        }
-
-        if (hovered)
-        {
-            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-        }
-    }
-
-    private static void DrawModernRailFooter()
-    {
-        var remainingHeight = ImGui.GetContentRegionAvail().Y;
-        var footerHeight = ImGui.GetTextLineHeightWithSpacing() * 2.0f;
-        if (remainingHeight > footerHeight + 10.0f)
-        {
-            ImGui.Dummy(new Vector2(1.0f, remainingHeight - footerHeight));
-        }
-
-        DrawSubtleSeparator();
-        ImGui.Dummy(new Vector2(1.0f, 6.0f));
-        DrawModernCreditLine();
     }
 
     private void DrawModernCompactHeader(IReadOnlyList<MainNavigationItem> navigationItems)
@@ -1753,7 +1615,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         scrubSeconds = Math.Clamp(scrubSeconds, minOffset, maxOffset);
-        DrawReplayTransportPanel(
+        DrawReplayTransport(
             pull,
             summary,
             idSuffix,
@@ -1795,7 +1657,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawDeathReplayDisplaySettings(idSuffix);
     }
 
-    private void DrawReplayTransportPanel(
+    private void DrawReplayTransport(
         PullDeathSnapshot pull,
         RecordedPullSummary summary,
         string idSuffix,
@@ -1806,37 +1668,15 @@ public sealed class RecapWindow : Window, IDisposable
     {
         UpdateReplayPlayback(idSuffix, minOffset, maxOffset, ref scrubSeconds);
 
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var controlRows = availableWidth < 330.0f
-            ? 3.0f
-            : availableWidth < 520.0f
-                ? 2.0f
-                : 1.0f;
-        var height = (ReplayTransportPadding * 2.0f) +
-            (ImGui.GetFrameHeightWithSpacing() * controlRows) +
-            ReplayTransportInnerGap +
-            ReplayTimelineBarHeight;
-
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.46f : 0.34f });
-        ImGui.PushStyleColor(ImGuiCol.Border, BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.30f) with { W = 0.82f });
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayTransportPadding, ReplayTransportPadding));
-        if (ImGui.BeginChild($"##ReplayTransportPanel{idSuffix}", new Vector2(0.0f, height), true, ImGuiWindowFlags.NoScrollbar))
-        {
-            DrawDeathReplayControls(
-                idSuffix,
-                minOffset,
-                maxOffset,
-                ref scrubSeconds,
-                focusDeath?.PullElapsedSeconds,
-                "Death");
-            ImGui.Dummy(new Vector2(1.0f, ReplayTransportInnerGap));
-            DrawFullReplayTimelineScrubber(pull, summary, minOffset, maxOffset, ref scrubSeconds, focusDeath, idSuffix);
-        }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar(2);
-        ImGui.PopStyleColor(2);
+        DrawDeathReplayControls(
+            idSuffix,
+            minOffset,
+            maxOffset,
+            ref scrubSeconds,
+            focusDeath?.PullElapsedSeconds,
+            "Death");
+        ImGui.Dummy(new Vector2(1.0f, ReplayTransportInnerGap));
+        DrawFullReplayTimelineScrubber(pull, summary, minOffset, maxOffset, ref scrubSeconds, focusDeath, idSuffix);
     }
 
     private static string BuildReplayViewerId(RecordedPullSummary summary)
@@ -8198,29 +8038,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawDeathReplayDisplaySettings(string idSuffix)
     {
         ImGui.Dummy(new Vector2(1.0f, ReplayDisplaySettingsGap));
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var style = ImGui.GetStyle();
-        var estimatedRows = availableWidth < 360.0f
-            ? 3.0f
-            : availableWidth < 650.0f
-                ? 2.0f
-                : 1.0f;
-        var footerHeight = (ReplayViewportPadding * 2.0f) +
-            (ImGui.GetFrameHeightWithSpacing() * estimatedRows) +
-            MathF.Max(0.0f, estimatedRows - 1.0f) * style.ItemSpacing.Y;
-
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.40f : 0.28f });
-        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor with { W = 0.72f });
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayViewportPadding, ReplayViewportPadding * 0.6f));
-        if (ImGui.BeginChild($"##ReplayDisplaySettingsBar{idSuffix}", new Vector2(0.0f, footerHeight), true, ImGuiWindowFlags.NoScrollbar))
-        {
-            DrawDeathReplayDisplaySettingsContent(idSuffix);
-        }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar(2);
-        ImGui.PopStyleColor(2);
+        DrawDeathReplayDisplaySettingsContent(idSuffix);
     }
 
     private void DrawDeathReplayDisplaySettingsContent(string idSuffix)
@@ -18307,6 +18125,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.265");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Moved Better Deaths navigation back to the top and simplified Death Replay controls.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.264");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Cleaned up Better Deaths navigation and removed the redundant section header.");
