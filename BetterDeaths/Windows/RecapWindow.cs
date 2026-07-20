@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.261";
+    private const string CurrentChangelogVersion = "0.1.0.262";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -205,19 +205,22 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReviewPaneHorizontalPadding = 9.0f;
     private const float ReviewPaneBottomPadding = 14.0f;
     private const float SectionHelpMarkerRightInset = 12.0f;
-    private const float RaidConsoleShellPadding = 12.0f;
-    private const float RaidConsoleHeaderBottomGap = 6.0f;
-    private const float RaidConsoleNavButtonHeight = 28.0f;
-    private const float RaidConsoleNavButtonRounding = 3.0f;
-    private const float RaidConsoleNavButtonPaddingX = 14.0f;
-    private const float RaidConsoleNavBadgeGap = 6.0f;
-    private const float RaidConsolePanelRounding = 6.0f;
+    private const float ModernShellPadding = 12.0f;
+    private const float ModernHeaderBottomGap = 6.0f;
+    private const float ModernNavButtonHeight = 28.0f;
+    private const float ModernNavButtonRounding = 3.0f;
+    private const float ModernNavButtonPaddingX = 14.0f;
+    private const float ModernNavBadgeGap = 6.0f;
+    private const float ModernPanelRounding = 6.0f;
     private const float WorkspaceOuterPadding = 8.0f;
     private const float WorkspacePaneGap = 8.0f;
     private const float ReplayPaneHorizontalPadding = 14.0f;
     private const float ReplayPaneVerticalPadding = 8.0f;
     private const float ReplayPaneGap = WorkspacePaneGap;
     private const float ReplaySurfaceSectionGap = 6.0f;
+    private const float ReplayTransportPadding = 8.0f;
+    private const float ReplayTransportInnerGap = 6.0f;
+    private const float ReplayViewportPadding = 10.0f;
     private const float ReplayDisplaySettingsGap = 7.0f;
     private const float ReplayWorldMarkerOpacitySliderMinWidth = 120.0f;
     private const float ReplayWorldMarkerOpacitySliderMaxWidth = 210.0f;
@@ -809,11 +812,11 @@ public sealed class RecapWindow : Window, IDisposable
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
-            using var shellIndent = new ImGuiIndentScope(RaidConsoleShellPadding);
+            using var shellIndent = new ImGuiIndentScope(ModernShellPadding);
             var navigationItems = BuildMainNavigationItems();
             DrawModernHeader();
             DrawModernNavigation(navigationItems);
-            ImGui.Dummy(new Vector2(1.0f, RaidConsoleHeaderBottomGap));
+            ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
             DrawSubtleSeparator();
             ImGui.Spacing();
             DrawModernPageContent();
@@ -944,6 +947,10 @@ public sealed class RecapWindow : Window, IDisposable
             .ToList();
         var fullWidth = tabWidths.Sum() + (Math.Max(0, items.Count - 1) * spacing);
         var useCompactWidths = fullWidth > availableWidth;
+        if (!useCompactWidths && fullWidth < availableWidth)
+        {
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0.0f, (availableWidth - fullWidth) * 0.5f));
+        }
 
         var rowWidth = 0.0f;
         for (var index = 0; index < items.Count; index++)
@@ -974,10 +981,10 @@ public sealed class RecapWindow : Window, IDisposable
     private static float GetMainNavigationTabWidth(MainNavigationItem item, bool compact = false)
     {
         var badgeText = item.BadgeText ?? (item.Highlight ? ThemeNewBadgeText : null);
-        var width = ImGui.CalcTextSize(item.Label).X + (RaidConsoleNavButtonPaddingX * 2.0f);
+        var width = ImGui.CalcTextSize(item.Label).X + (ModernNavButtonPaddingX * 2.0f);
         if (!string.IsNullOrWhiteSpace(badgeText))
         {
-            width += RaidConsoleNavBadgeGap + GetInlineNavBadgeSize(badgeText).X;
+            width += ModernNavBadgeGap + GetInlineNavBadgeSize(badgeText).X;
         }
 
         return Math.Clamp(width, MainNavigationButtonMinWidth, MainNavigationButtonWidth);
@@ -1107,7 +1114,7 @@ public sealed class RecapWindow : Window, IDisposable
         var selected = currentMainPage == page;
         var inlineBadgeText = badgeText ?? (highlight ? ThemeNewBadgeText : null);
         var start = ImGui.GetCursorScreenPos();
-        var size = new Vector2(width, RaidConsoleNavButtonHeight);
+        var size = new Vector2(width, ModernNavButtonHeight);
         var clicked = ImGui.InvisibleButton($"##MainNav{page}", size);
         var hovered = ImGui.IsItemHovered();
         var active = ImGui.IsItemActive();
@@ -1132,22 +1139,22 @@ public sealed class RecapWindow : Window, IDisposable
             ? LeadUpGoldColor
             : GetButtonTextColor(fill, selected);
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRectFilled(buttonMin, buttonMax, ImGui.GetColorU32(fill), RaidConsoleNavButtonRounding);
-        drawList.AddRect(buttonMin, buttonMax, ImGui.GetColorU32(border), RaidConsoleNavButtonRounding, ImDrawFlags.None, selected ? 1.4f : 1.0f);
+        drawList.AddRectFilled(buttonMin, buttonMax, ImGui.GetColorU32(fill), ModernNavButtonRounding);
+        drawList.AddRect(buttonMin, buttonMax, ImGui.GetColorU32(border), ModernNavButtonRounding, ImDrawFlags.None, selected ? 1.4f : 1.0f);
         if (selected)
         {
             drawList.AddRectFilled(
                 new Vector2(buttonMin.X, buttonMax.Y - 3.0f),
                 new Vector2(buttonMax.X, buttonMax.Y),
                 ImGui.GetColorU32(LeadUpGoldColor),
-                RaidConsoleNavButtonRounding);
+                ModernNavButtonRounding);
         }
 
         var textSize = ImGui.CalcTextSize(label);
         var badgeSize = string.IsNullOrWhiteSpace(inlineBadgeText)
             ? Vector2.Zero
             : GetInlineNavBadgeSize(inlineBadgeText);
-        var contentWidth = textSize.X + (badgeSize.X > 0.0f ? RaidConsoleNavBadgeGap + badgeSize.X : 0.0f);
+        var contentWidth = textSize.X + (badgeSize.X > 0.0f ? ModernNavBadgeGap + badgeSize.X : 0.0f);
         var contentStartX = start.X + MathF.Max(0.0f, (size.X - contentWidth) * 0.5f);
         var textPosition = new Vector2(
             contentStartX,
@@ -1162,7 +1169,7 @@ public sealed class RecapWindow : Window, IDisposable
                 drawList,
                 inlineBadgeText,
                 new Vector2(
-                    textPosition.X + textSize.X + RaidConsoleNavBadgeGap,
+                    textPosition.X + textSize.X + ModernNavBadgeGap,
                     start.Y + MathF.Max(0.0f, (size.Y - badgeSize.Y) * 0.5f)));
         }
 
@@ -1593,15 +1600,14 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         scrubSeconds = Math.Clamp(scrubSeconds, minOffset, maxOffset);
-        DrawDeathReplayControls(
+        DrawReplayTransportPanel(
+            pull,
+            summary,
             idSuffix,
             minOffset,
             maxOffset,
             ref scrubSeconds,
-            focusDeath?.PullElapsedSeconds,
-            "Death");
-        ImGui.Dummy(new Vector2(1.0f, ReplaySurfaceSectionGap));
-        DrawFullReplayTimelineScrubber(pull, summary, minOffset, maxOffset, ref scrubSeconds, focusDeath, idSuffix);
+            focusDeath);
         ImGui.Dummy(new Vector2(1.0f, ReplaySurfaceSectionGap));
 
         var selectedAtUtc = referenceAtUtc.AddSeconds(scrubSeconds);
@@ -1634,6 +1640,50 @@ public sealed class RecapWindow : Window, IDisposable
             showTrails);
 
         DrawDeathReplayDisplaySettings(idSuffix);
+    }
+
+    private void DrawReplayTransportPanel(
+        PullDeathSnapshot pull,
+        RecordedPullSummary summary,
+        string idSuffix,
+        float minOffset,
+        float maxOffset,
+        ref float scrubSeconds,
+        PartyDeathRecord? focusDeath)
+    {
+        UpdateReplayPlayback(idSuffix, minOffset, maxOffset, ref scrubSeconds);
+
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var controlRows = availableWidth < 330.0f
+            ? 3.0f
+            : availableWidth < 520.0f
+                ? 2.0f
+                : 1.0f;
+        var height = (ReplayTransportPadding * 2.0f) +
+            (ImGui.GetFrameHeightWithSpacing() * controlRows) +
+            ReplayTransportInnerGap +
+            ReplayTimelineBarHeight;
+
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.46f : 0.34f });
+        ImGui.PushStyleColor(ImGuiCol.Border, BlendColors(ModernPanelBorderColor, ModernAccentColor, 0.30f) with { W = 0.82f });
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayTransportPadding, ReplayTransportPadding));
+        if (ImGui.BeginChild($"##ReplayTransportPanel{idSuffix}", new Vector2(0.0f, height), true, ImGuiWindowFlags.NoScrollbar))
+        {
+            DrawDeathReplayControls(
+                idSuffix,
+                minOffset,
+                maxOffset,
+                ref scrubSeconds,
+                focusDeath?.PullElapsedSeconds,
+                "Death");
+            ImGui.Dummy(new Vector2(1.0f, ReplayTransportInnerGap));
+            DrawFullReplayTimelineScrubber(pull, summary, minOffset, maxOffset, ref scrubSeconds, focusDeath, idSuffix);
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar(2);
+        ImGui.PopStyleColor(2);
     }
 
     private static string BuildReplayViewerId(RecordedPullSummary summary)
@@ -2447,7 +2497,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, framed ? ModernPanelBorderColor : Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, framed ? RaidConsolePanelRounding : 0.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, framed ? ModernPanelRounding : 0.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, indentContent ? new Vector2(ReviewPaneContentIndent, 6.0f) : Vector2.Zero);
         if (ImGui.BeginChild(id, size, framed, OptionalScrollbarFlags))
         {
@@ -2486,7 +2536,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, RaidConsolePanelRounding);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReviewPaneHorizontalPadding, 6.0f));
         if (ImGui.BeginChild(id, size, true, OptionalScrollbarFlags))
         {
@@ -2504,7 +2554,7 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
         ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
         ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, RaidConsolePanelRounding);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayPaneHorizontalPadding, ReplayPaneVerticalPadding));
         if (ImGui.BeginChild(id, size, true, OptionalScrollbarFlags))
         {
@@ -2852,8 +2902,8 @@ public sealed class RecapWindow : Window, IDisposable
             ? LeadUpGoldColor with { W = 0.92f }
             : ModernPanelBorderColor with { W = hovered ? 0.82f : 0.48f };
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), RaidConsolePanelRounding);
-        drawList.AddRect(start, end, ImGui.GetColorU32(border), RaidConsolePanelRounding, ImDrawFlags.None, selected ? 1.35f : 1.0f);
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), ModernPanelRounding);
+        drawList.AddRect(start, end, ImGui.GetColorU32(border), ModernPanelRounding, ImDrawFlags.None, selected ? 1.35f : 1.0f);
         if (selected)
         {
             drawList.AddRectFilled(
@@ -7872,9 +7922,33 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawDeathReplayDisplaySettings(string idSuffix)
     {
         ImGui.Dummy(new Vector2(1.0f, ReplayDisplaySettingsGap));
-        DrawSubtleSeparator();
-        ImGui.Dummy(new Vector2(1.0f, ReplayDisplaySettingsGap * 0.5f));
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var style = ImGui.GetStyle();
+        var estimatedRows = availableWidth < 360.0f
+            ? 3.0f
+            : availableWidth < 650.0f
+                ? 2.0f
+                : 1.0f;
+        var footerHeight = (ReplayViewportPadding * 2.0f) +
+            (ImGui.GetFrameHeightWithSpacing() * estimatedRows) +
+            MathF.Max(0.0f, estimatedRows - 1.0f) * style.ItemSpacing.Y;
 
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.40f : 0.28f });
+        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor with { W = 0.72f });
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, ModernPanelRounding);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayViewportPadding, ReplayViewportPadding * 0.6f));
+        if (ImGui.BeginChild($"##ReplayDisplaySettingsBar{idSuffix}", new Vector2(0.0f, footerHeight), true, ImGuiWindowFlags.NoScrollbar))
+        {
+            DrawDeathReplayDisplaySettingsContent(idSuffix);
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar(2);
+        ImGui.PopStyleColor(2);
+    }
+
+    private void DrawDeathReplayDisplaySettingsContent(string idSuffix)
+    {
         var style = ImGui.GetStyle();
         var showReplayPlayerNames = configuration.ShowReplayPlayerNames;
         if (DrawThemedCheckbox($"Show names##DeathReplayShowNames{idSuffix}", ref showReplayPlayerNames))
@@ -8775,7 +8849,6 @@ public sealed class RecapWindow : Window, IDisposable
         float? focusOffset = 0.0f,
         string focusLabel = "Death")
     {
-        UpdateReplayPlayback(idSuffix, minOffset, maxOffset, ref scrubSeconds);
         var style = ImGui.GetStyle();
         var isPlaying = replayPlayingByDeathId.TryGetValue(idSuffix, out var playing) && playing;
         var playLabel = isPlaying ? "Pause" : "Play";
@@ -17958,6 +18031,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.262");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Cleaned up Death Replay controls and display settings layout.");
+        DrawWrappedBullet("Corrected previous UI changelog wording.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.261");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Improved Review and Replay spacing around window edges and separators.");
@@ -17973,13 +18053,13 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.TextUnformatted("v0.1.0.259");
         ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Reworked Death Replay into a cleaner raid-console replay surface.");
+        DrawHighlightedChangelogBullet("Cleaned up Death Replay spacing, controls, and panel framing.");
 
         ImGui.Separator();
 
         ImGui.TextUnformatted("v0.1.0.258");
         ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Reworked Better Deaths with a raid-console style UI layout.");
+        DrawHighlightedChangelogBullet("Adjusted Better Deaths window styling, navigation spacing, and panel framing.");
 
         ImGui.Separator();
 
