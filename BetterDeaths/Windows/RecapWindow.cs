@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.259";
+    private const string CurrentChangelogVersion = "0.1.0.260";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -160,6 +160,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const float ReplayMitigationOverlayRowGap = 5.0f;
     private const float ReplayMitigationOverlayIconSize = 20.0f;
     private const float ReplayMitigationOverlaySnapAnimationSpeed = 16.0f;
+    private const float ReplayMitigationExternalPanelGap = 10.0f;
     private const float ReplayZoomSliderWidth = 220.0f;
     private const float ReplayZoomOverlayPadding = 10.0f;
     private const float ReplayZoomOverlayHeight = 30.0f;
@@ -896,13 +897,17 @@ public sealed class RecapWindow : Window, IDisposable
             currentMainPage = MainPage.Review;
         }
 
+        if (currentMainPage == MainPage.Feedback)
+        {
+            currentMainPage = MainPage.Data;
+        }
+
         var items = new List<MainNavigationItem>
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
-            new("Feedback", MainPage.Feedback),
             new("Updates", MainPage.Updates, ShouldHighlightChangelogTab()),
         };
         if (showExamplePage)
@@ -1029,7 +1034,8 @@ public sealed class RecapWindow : Window, IDisposable
                 DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
                 break;
             case MainPage.Feedback:
-                DrawReviewPanel("##FeedbackModern", Vector2.Zero, DrawFeedbackPage);
+                currentMainPage = MainPage.Data;
+                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
                 break;
             case MainPage.Updates:
                 plugin.MarkChangelogVersionSeen(CurrentChangelogVersion);
@@ -9735,9 +9741,23 @@ public sealed class RecapWindow : Window, IDisposable
         var cursorStart = ImGui.GetCursorScreenPos();
         var availableWidth = MathF.Max(ReplayCanvasMinSide, ImGui.GetContentRegionAvail().X);
         var canvasSide = GetReplayCanvasSide(availableWidth);
-        var canvasX = cursorStart.X + MathF.Max(0.0f, (availableWidth - canvasSide) * 0.5f);
-
         var canvasSize = new Vector2(canvasSide, canvasSide);
+        var mitigationOverlayEntries = BuildReplayMitigationOverlayEntries(mitigations, scrubSeconds);
+        var useExternalMitigationPanel = TryGetReplayMitigationExternalPanelSize(
+            availableWidth,
+            canvasSide,
+            mitigationOverlayEntries,
+            out var externalMitigationPanelSize);
+
+        if (useExternalMitigationPanel)
+        {
+            ClearReplayMitigationOverlayInteraction(idSuffix);
+        }
+
+        var replayGroupWidth = useExternalMitigationPanel
+            ? canvasSide + ReplayMitigationExternalPanelGap + externalMitigationPanelSize.X
+            : canvasSide;
+        var canvasX = cursorStart.X + MathF.Max(0.0f, (availableWidth - replayGroupWidth) * 0.5f);
         ImGui.SetCursorScreenPos(new Vector2(canvasX, cursorStart.Y));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         var canvasChildVisible = ImGui.BeginChild($"##DeathReplayCanvasScrollBlock{idSuffix}", canvasSize, false, ReplayCanvasChildFlags);
@@ -9758,8 +9778,9 @@ public sealed class RecapWindow : Window, IDisposable
         var zoomOverlayHovered = canvasWindowHovered && IsMouseInsideRect(zoomOverlayRect.Start, zoomOverlayRect.Size);
         var canvasHovered = canvasWindowHovered && IsMouseInsideRect(canvasStart, canvasSize);
         var resizeState = SubmitReplayCanvasResizeHandles(idSuffix, canvasStart, canvasSize, availableWidth);
-        var mitigationOverlayEntries = BuildReplayMitigationOverlayEntries(mitigations, scrubSeconds);
-        var mitigationOverlayState = SubmitReplayMitigationOverlayInput(idSuffix, mitigationOverlayEntries, canvasStart, canvasSize);
+        var mitigationOverlayState = useExternalMitigationPanel
+            ? default
+            : SubmitReplayMitigationOverlayInput(idSuffix, mitigationOverlayEntries, canvasStart, canvasSize);
         var excludedCanvasInputRects = new List<(Vector2 Start, Vector2 Size)> { zoomOverlayRect };
         if (mitigationOverlayState.Visible)
         {
@@ -9790,10 +9811,22 @@ public sealed class RecapWindow : Window, IDisposable
         if (!TryGetReplayBounds(replayModule, allPositions, boundsMechanics, allWorldMarkers, out var minX, out var maxX, out var minZ, out var maxZ))
         {
             DrawCenteredCanvasText(drawList, canvasStart, canvasSize, "Replay positions could not be mapped.");
-            DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+            if (!useExternalMitigationPanel)
+            {
+                DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+            }
+
             DrawReplayCanvasResizeHandleVisuals(drawList, canvasStart, canvasSize, resizeState);
             AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
             ImGui.EndChild();
+            if (useExternalMitigationPanel)
+            {
+                DrawReplayMitigationExternalPanel(
+                    mitigationOverlayEntries,
+                    canvasStart + new Vector2(canvasSide + ReplayMitigationExternalPanelGap, 0.0f),
+                    externalMitigationPanelSize);
+            }
+
             RestoreCursorAfterReplayCanvas(cursorStart);
             return;
         }
@@ -9839,12 +9872,23 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.PopClipRect();
         DrawDeathReplayZoomOverlay(idSuffix, canvasStart, canvasSize);
-        DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+        if (!useExternalMitigationPanel)
+        {
+            DrawReplayMitigationOverlay(idSuffix, mitigationOverlayEntries, mitigationOverlayState);
+        }
+
         DrawReplayCanvasResizeHandleVisuals(drawList, canvasStart, canvasSize, resizeState);
         HandleReplayCanvasFocus(idSuffix, canvasInputHovered, actorScreenPositions);
 
         AddReplayCanvasWheelScrollSink(canvasStart, canvasSize);
         ImGui.EndChild();
+        if (useExternalMitigationPanel)
+        {
+            DrawReplayMitigationExternalPanel(
+                mitigationOverlayEntries,
+                canvasStart + new Vector2(canvasSide + ReplayMitigationExternalPanelGap, 0.0f),
+                externalMitigationPanelSize);
+        }
 
         RestoreCursorAfterReplayCanvas(cursorStart);
     }
@@ -9872,6 +9916,60 @@ public sealed class RecapWindow : Window, IDisposable
     private static bool IsUsableReplayCanvasSide(float side)
     {
         return !float.IsNaN(side) && !float.IsInfinity(side) && side > 0.0f;
+    }
+
+    private bool TryGetReplayMitigationExternalPanelSize(
+        float availableWidth,
+        float canvasSide,
+        IReadOnlyList<ReplayMitigationOverlayEntry> entries,
+        out Vector2 size)
+    {
+        size = default;
+        if (entries.Count == 0)
+        {
+            return false;
+        }
+
+        var availablePanelWidth = availableWidth - canvasSide - ReplayMitigationExternalPanelGap;
+        if (availablePanelWidth < ReplayMitigationOverlayWidthMin)
+        {
+            return false;
+        }
+
+        var maxWidth = MathF.Min(ReplayMitigationOverlayWidthMax, availablePanelWidth);
+        var minWidth = MathF.Min(ReplayMitigationOverlayWidthMin, maxWidth);
+        var defaultWidth = Math.Clamp(
+            ReplayMitigationOverlayDefaultWidthMax,
+            minWidth,
+            maxWidth);
+        var width = Math.Clamp(
+            configuration.ReplayMitigationOverlayWidth <= 0.0f ? defaultWidth : configuration.ReplayMitigationOverlayWidth,
+            minWidth,
+            maxWidth);
+        var maxHeight = MathF.Max(
+            ReplayMitigationOverlayMinHeight,
+            MathF.Min(ReplayMitigationOverlayMaxHeight, canvasSide));
+        var height = Math.Clamp(
+            configuration.ReplayMitigationOverlayHeight <= 0.0f ? ReplayMitigationOverlayDefaultHeight : configuration.ReplayMitigationOverlayHeight,
+            ReplayMitigationOverlayMinHeight,
+            maxHeight);
+
+        size = new Vector2(width, height);
+        return true;
+    }
+
+    private void ClearReplayMitigationOverlayInteraction(string idSuffix)
+    {
+        if (string.Equals(replayMitigationOverlayDraggingId, idSuffix, StringComparison.Ordinal))
+        {
+            replayMitigationOverlayDraggingId = null;
+        }
+
+        if (string.Equals(replayMitigationOverlayResizeDraggingId, idSuffix, StringComparison.Ordinal))
+        {
+            replayMitigationOverlayResizeDraggingId = null;
+            replayMitigationOverlayResizeMode = ReplayMitigationOverlayResizeMode.None;
+        }
     }
 
     private IReadOnlyList<ReplayMitigationOverlayEntry> BuildReplayMitigationOverlayEntries(
@@ -10268,22 +10366,53 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.SetCursorScreenPos(cursorBefore);
     }
 
-    private static void DrawReplayMitigationOverlayHeader(ImDrawListPtr drawList, Vector2 start, Vector2 size, bool active)
+    private void DrawReplayMitigationExternalPanel(
+        IReadOnlyList<ReplayMitigationOverlayEntry> entries,
+        Vector2 start,
+        Vector2 size)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var end = start + size;
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(ModernPanelColor with { W = 0.92f }), 6.0f);
+        drawList.AddRect(start, end, ImGui.GetColorU32(ModernPanelBorderColor with { W = 0.78f }), 6.0f);
+
+        ImGui.PushClipRect(start, end, true);
+        DrawReplayMitigationOverlayHeader(drawList, start, size, active: false, showGrip: false);
+        DrawReplayMitigationOverlayRows(entries, start, size, reserveResizeGrip: false);
+        ImGui.PopClipRect();
+        ImGui.SetCursorScreenPos(cursorBefore);
+    }
+
+    private static void DrawReplayMitigationOverlayHeader(
+        ImDrawListPtr drawList,
+        Vector2 start,
+        Vector2 size,
+        bool active,
+        bool showGrip = true)
     {
         var title = "Active Mits";
         var titlePos = start + new Vector2(ReplayMitigationOverlayPadding, 4.0f);
         drawList.AddText(titlePos, ImGui.GetColorU32(active ? LeadUpGoldColor : ModernTextColor), title);
 
-        var gripColor = active ? LeadUpGoldColor : ModernMutedTextColor;
-        var gripCenterY = start.Y + (ReplayMitigationOverlayHeaderHeight * 0.5f);
-        var gripRight = start.X + size.X - ReplayMitigationOverlayPadding;
-        for (var i = 0; i < 3; i++)
+        if (showGrip)
         {
-            drawList.AddCircleFilled(
-                new Vector2(gripRight - (i * 6.0f), gripCenterY),
-                1.5f,
-                ImGui.GetColorU32(gripColor),
-                8);
+            var gripColor = active ? LeadUpGoldColor : ModernMutedTextColor;
+            var gripCenterY = start.Y + (ReplayMitigationOverlayHeaderHeight * 0.5f);
+            var gripRight = start.X + size.X - ReplayMitigationOverlayPadding;
+            for (var i = 0; i < 3; i++)
+            {
+                drawList.AddCircleFilled(
+                    new Vector2(gripRight - (i * 6.0f), gripCenterY),
+                    1.5f,
+                    ImGui.GetColorU32(gripColor),
+                    8);
+            }
         }
 
         drawList.AddLine(
@@ -10296,11 +10425,13 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawReplayMitigationOverlayRows(
         IReadOnlyList<ReplayMitigationOverlayEntry> entries,
         Vector2 start,
-        Vector2 size)
+        Vector2 size,
+        bool reserveResizeGrip = true)
     {
         var drawList = ImGui.GetWindowDrawList();
         var rowY = start.Y + ReplayMitigationOverlayHeaderHeight + ReplayMitigationOverlayPadding;
-        var rowBottom = start.Y + size.Y - ReplayMitigationOverlayResizeCornerSize - ReplayMitigationOverlayPadding;
+        var bottomReservedHeight = reserveResizeGrip ? ReplayMitigationOverlayResizeCornerSize : 0.0f;
+        var rowBottom = start.Y + size.Y - bottomReservedHeight - ReplayMitigationOverlayPadding;
         var hiddenCount = 0;
 
         for (var index = 0; index < entries.Count; index++)
@@ -17625,11 +17756,14 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.TextColored(LeadUpGoldColor, "Sharing");
         DrawWrappedBullet("Chat posting is opt-in. If you post recap information to chat, that information is shared through the selected in-game chat channel.");
         DrawWrappedBullet("Recap links are not web links and do not send data to a Better Deaths server. They are local Dalamud chat payloads used to find a matching recap.");
-        DrawWrappedBullet("The Feedback tab only opens the Punish Discord invite in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
+        DrawWrappedBullet("The feedback link only opens the Punish Discord invite in your browser after you confirm. Better Deaths does not attach or upload plugin data to it.");
+
+        ImGui.Separator();
+        DrawFeedbackDataSection();
         DrawReviewPaneBottomPadding();
     }
 
-    private void DrawFeedbackPage()
+    private void DrawFeedbackDataSection()
     {
         ImGui.TextColored(LeadUpGoldColor, "Feedback");
         ImGui.TextWrapped("Feedback is now taken on the Punish Discord server.");
@@ -17646,7 +17780,6 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         DrawFeedbackConfirmationPopup();
-        DrawReviewPaneBottomPadding();
     }
 
     private static void DrawFeedbackConfirmationPopup()
@@ -17819,6 +17952,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.260");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Moved Death Replay Active Mits beside the replay when space allows.");
+        DrawWrappedBullet("Merged Feedback into the Data tab.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.259");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Reworked Death Replay into a cleaner raid-console replay surface.");
