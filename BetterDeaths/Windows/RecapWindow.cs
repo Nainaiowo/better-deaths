@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.260";
+    private const string CurrentChangelogVersion = "0.1.0.261";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -212,10 +212,11 @@ public sealed class RecapWindow : Window, IDisposable
     private const float RaidConsoleNavButtonPaddingX = 14.0f;
     private const float RaidConsoleNavBadgeGap = 6.0f;
     private const float RaidConsolePanelRounding = 6.0f;
-    private const float ReplayPageOuterPadding = 8.0f;
+    private const float WorkspaceOuterPadding = 8.0f;
+    private const float WorkspacePaneGap = 8.0f;
     private const float ReplayPaneHorizontalPadding = 14.0f;
     private const float ReplayPaneVerticalPadding = 8.0f;
-    private const float ReplayPaneGap = 8.0f;
+    private const float ReplayPaneGap = WorkspacePaneGap;
     private const float ReplaySurfaceSectionGap = 6.0f;
     private const float ReplayDisplaySettingsGap = 7.0f;
     private const float ReplayWorldMarkerOpacitySliderMinWidth = 120.0f;
@@ -1277,24 +1278,14 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReviewPanel(
             "##ReplayPage",
             Vector2.Zero,
-            () =>
+            () => DrawWorkspacePaddedContent("##ReplayPagePaddedContent", () =>
             {
-                ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ReplayPageOuterPadding, ReplayPageOuterPadding));
-                var replayPageVisible = ImGui.BeginChild("##ReplayPagePaddedContent", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar);
-                ImGui.PopStyleVar();
-                if (!replayPageVisible)
-                {
-                    ImGui.EndChild();
-                    return;
-                }
-
                 if (visiblePulls.Count == 0)
                 {
                     ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
                         ? "Loading saved pulls..."
                         : "No saved death pulls have replay data yet.");
                     DrawReviewPaneBottomPadding();
-                    ImGui.EndChild();
                     return;
                 }
 
@@ -1335,7 +1326,6 @@ public sealed class RecapWindow : Window, IDisposable
                         "##ReplayViewer",
                         new Vector2(0.0f, available.Y),
                         () => DrawReplayViewer(selectedEntry.Summary));
-                    ImGui.EndChild();
                     return;
                 }
 
@@ -1365,8 +1355,7 @@ public sealed class RecapWindow : Window, IDisposable
                     "##ReplayViewerStacked",
                     Vector2.Zero,
                     () => DrawReplayViewer(selectedEntry.Summary));
-                ImGui.EndChild();
-            },
+            }),
             indentContent: false);
     }
 
@@ -2142,7 +2131,8 @@ public sealed class RecapWindow : Window, IDisposable
         var selectedPull = GetSelectedReviewPull(pulls, selection.PullKey) ?? pulls[0];
         var selectedDeath = GetSelectedReviewDeath(selectedPull, selection);
         var available = ImGui.GetContentRegionAvail();
-        var wideLayout = available.X >= (showPullBrowser ? 1120.0f : 860.0f);
+        var paddedAvailableWidth = MathF.Max(0.0f, available.X - (WorkspaceOuterPadding * 2.0f));
+        var wideLayout = paddedAvailableWidth >= (showPullBrowser ? 1120.0f : 860.0f);
 
         if (!wideLayout)
         {
@@ -2159,13 +2149,13 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReviewPanel(
             $"##{idPrefix}UnifiedReview",
             available,
-            () => DrawWideUnifiedReviewWorkspace(
-                pulls,
-                selectedPull,
-                selectedDeath,
-                idPrefix,
-                showPullBrowser,
-                selection),
+            () => DrawWorkspacePaddedContent($"##{idPrefix}UnifiedReviewPadding", () => DrawWideUnifiedReviewWorkspace(
+                    pulls,
+                    selectedPull,
+                    selectedDeath,
+                    idPrefix,
+                    showPullBrowser,
+                    selection)),
             indentContent: false);
     }
 
@@ -2194,10 +2184,13 @@ public sealed class RecapWindow : Window, IDisposable
             }
         }
 
-        var pullBrowserDividerWidth = showPullBrowser && !pullBrowserCollapsed
-            ? ReviewPaneDividerWidth
+        var pullBrowserDividerWidth = showPullBrowser
+            ? pullBrowserCollapsed
+                ? WorkspacePaneGap
+                : ReviewPaneDividerWidth + (WorkspacePaneGap * 2.0f)
             : 0.0f;
-        var reviewWidth = available.X - pullBrowserControlWidth - pullBrowserDividerWidth - ReviewPaneSplitterWidth;
+        var timelineDividerWidth = ReviewPaneSplitterWidth + (WorkspacePaneGap * 2.0f);
+        var reviewWidth = available.X - pullBrowserControlWidth - pullBrowserDividerWidth - timelineDividerWidth;
         if (reviewWidth < MinimumTimelinePaneWidth + MinimumDeathDetailsPaneWidth)
         {
             DrawStackedReviewWorkspace(
@@ -2288,7 +2281,7 @@ public sealed class RecapWindow : Window, IDisposable
         DrawReviewPanel(
             $"##{idPrefix}UnifiedReviewStacked",
             available,
-            () =>
+            () => DrawWorkspacePaddedContent($"##{idPrefix}UnifiedReviewStackedPadding", () =>
             {
                 var innerAvailable = ImGui.GetContentRegionAvail();
                 var stackedLayout = GetStackedReviewLayout(innerAvailable.Y, showPullBrowser, configuration.PullBrowserCollapsed);
@@ -2346,7 +2339,7 @@ public sealed class RecapWindow : Window, IDisposable
                     $"##{idPrefix}DeathDetailsStacked",
                     new Vector2(0.0f, stackedLayout.DeathDetailsHeight),
                     () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix));
-            },
+            }),
             indentContent: false);
     }
 
@@ -2474,6 +2467,19 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor(4);
     }
 
+    private void DrawWorkspacePaddedContent(string id, Action draw)
+    {
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(WorkspaceOuterPadding, WorkspaceOuterPadding));
+        var visible = ImGui.BeginChild(id, Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar);
+        ImGui.PopStyleVar();
+        if (visible)
+        {
+            draw();
+        }
+
+        ImGui.EndChild();
+    }
+
     private void DrawReviewPane(string id, Vector2 size, Action draw)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity));
@@ -2512,12 +2518,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawVerticalReviewDivider(string id, float height)
     {
-        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.SameLine(0.0f, WorkspacePaneGap);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ModernDividerColor);
         ImGui.BeginChild($"##{id}", new Vector2(1.0f, height), false, ImGuiWindowFlags.NoScrollbar);
         ImGui.EndChild();
         ImGui.PopStyleColor();
-        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.SameLine(0.0f, WorkspacePaneGap);
     }
 
     private static void DrawVerticalReplayDivider(string id, float height)
@@ -2532,7 +2538,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawResizableTimelineDivider(string id, float height, float reviewWidth, float currentTimelineWidth)
     {
-        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.SameLine(0.0f, WorkspacePaneGap);
         var position = ImGui.GetCursorScreenPos();
         var size = new Vector2(ReviewPaneSplitterWidth, height);
         var drawList = ImGui.GetWindowDrawList();
@@ -2581,7 +2587,7 @@ public sealed class RecapWindow : Window, IDisposable
             SetThemedTooltip("Drag to resize the death timeline.");
         }
 
-        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.SameLine(0.0f, WorkspacePaneGap);
     }
 
     private static bool IsUsableReviewTimelineWidth(float width)
@@ -3351,7 +3357,7 @@ public sealed class RecapWindow : Window, IDisposable
             new Vector2(lineX, position.Y + size.Y),
             ImGui.GetColorU32(ModernDividerColor),
             1.0f);
-        ImGui.SameLine(0.0f, 0.0f);
+        ImGui.SameLine(0.0f, WorkspacePaneGap);
     }
 
     private bool DrawCollapsedPullButton(
@@ -17952,6 +17958,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.261");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Improved Review and Replay spacing around window edges and separators.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.260");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Moved Death Replay Active Mits beside the replay when space allows.");
