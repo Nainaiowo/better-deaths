@@ -99,7 +99,7 @@ public sealed partial class Plugin
             }
 
             var replayModule = ReplayEncounterModules.Get(territoryId);
-            if (replayModule.TryGetReplayArena(out var arena) &&
+            if (replayModule.TryGetReplayArena(replayPositions, Array.Empty<ReplayPositionSnapshot>(), deathSeenAtUtc, out var arena) &&
                 TryGetEnvironmentalArenaEdgeDistance(arena, lastSample, out var edgeDistance, out var edgeReferenceDistance) &&
                 edgeDistance <= EnvironmentalKnownArenaEdgeTolerance)
             {
@@ -272,7 +272,11 @@ public sealed partial class Plugin
         edgeReferenceDistance = 0.0f;
         if (!float.IsFinite(arena.CenterX) ||
             !float.IsFinite(arena.CenterZ) ||
+            !float.IsFinite(arena.HalfWidth) ||
+            !float.IsFinite(arena.HalfHeight) ||
             !float.IsFinite(arena.Radius) ||
+            arena.HalfWidth <= 0.1f ||
+            arena.HalfHeight <= 0.1f ||
             arena.Radius <= 0.1f)
         {
             return false;
@@ -280,6 +284,15 @@ public sealed partial class Plugin
 
         var offsetX = sample.X - arena.CenterX;
         var offsetZ = sample.Z - arena.CenterZ;
+        if (arena.Shape == ReplayArenaShape.Rectangle)
+        {
+            var distanceToHorizontalEdge = arena.HalfHeight - MathF.Abs(offsetZ);
+            var distanceToVerticalEdge = arena.HalfWidth - MathF.Abs(offsetX);
+            edgeDistance = MathF.Min(distanceToHorizontalEdge, distanceToVerticalEdge);
+            edgeReferenceDistance = arena.Radius - edgeDistance;
+            return true;
+        }
+
         edgeReferenceDistance = arena.Shape switch
         {
             ReplayArenaShape.Circle => MathF.Sqrt((offsetX * offsetX) + (offsetZ * offsetZ)),
@@ -300,6 +313,7 @@ public sealed partial class Plugin
         {
             ReplayArenaShape.Circle => "circular",
             ReplayArenaShape.Square => "square",
+            ReplayArenaShape.Rectangle => "rectangular",
             _ => "known",
         };
         var boundaryText = edgeDistance <= 0.0f

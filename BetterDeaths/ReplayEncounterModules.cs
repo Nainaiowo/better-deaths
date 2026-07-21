@@ -36,13 +36,23 @@ internal enum ReplayArenaShape
 {
     Circle,
     Square,
+    Rectangle,
 }
 
 internal readonly record struct ReplayArenaInfo(
     float CenterX,
     float CenterZ,
-    float Radius,
-    ReplayArenaShape Shape);
+    float HalfWidth,
+    float HalfHeight,
+    ReplayArenaShape Shape)
+{
+    public ReplayArenaInfo(float centerX, float centerZ, float radius, ReplayArenaShape shape)
+        : this(centerX, centerZ, radius, radius, shape)
+    {
+    }
+
+    public float Radius => MathF.Max(HalfWidth, HalfHeight);
+}
 
 internal interface IReplayEncounterModule
 {
@@ -50,7 +60,11 @@ internal interface IReplayEncounterModule
 
     bool AppliesTo(uint territoryId);
 
-    bool TryGetReplayArena(out ReplayArenaInfo arena);
+    bool TryGetReplayArena(
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        IReadOnlyList<ReplayPositionSnapshot> actorStates,
+        DateTime selectedAtUtc,
+        out ReplayArenaInfo arena);
 
     bool IsReplayOverheadStatus(uint statusId);
 
@@ -97,6 +111,8 @@ internal static class ReplayEncounterModules
     private static readonly IReplayEncounterModule FallbackModule = new GenericReplayEncounterModule();
     private static readonly IReadOnlyList<IReplayEncounterModule> Modules =
     [
+        new CrownReplayEncounterModule(),
+        new ArcadiaReplayEncounterModule(),
         new DmuReplayEncounterModule(),
     ];
 
@@ -243,13 +259,46 @@ internal static class ReplayEncounterModules
         return !string.IsNullOrEmpty(resolution);
     }
 
+    private static bool GenericTryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
+    {
+        if (TryGetNumber(markerId, out var number))
+        {
+            info = new ReplayMarkerInfo(number.ToString(), $"Number {number}");
+            return true;
+        }
+
+        info = markerId == 0
+            ? new ReplayMarkerInfo("?", "Unknown marker")
+            : new ReplayMarkerInfo($"#{markerId}", "Unknown marker");
+        return true;
+    }
+
+    private static bool ContainsEnemyActor(
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        IReadOnlyList<string> actorNames)
+    {
+        return positions.Any(position =>
+            position.ActorKind == ReplayActorKind.Enemy &&
+            ActorNameMatches(position.ActorName, actorNames));
+    }
+
+    private static bool ActorNameMatches(string actorName, IReadOnlyList<string> actorNames)
+    {
+        return actorNames.Any(candidate =>
+            string.Equals(actorName, candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class GenericReplayEncounterModule : IReplayEncounterModule
     {
         public string Name => "Universal";
 
         public bool AppliesTo(uint territoryId) => true;
 
-        public bool TryGetReplayArena(out ReplayArenaInfo arena)
+        public bool TryGetReplayArena(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayPositionSnapshot> actorStates,
+            DateTime selectedAtUtc,
+            out ReplayArenaInfo arena)
         {
             arena = default;
             return false;
@@ -259,16 +308,7 @@ internal static class ReplayEncounterModules
 
         public bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
         {
-            if (TryGetNumber(markerId, out var number))
-            {
-                info = new ReplayMarkerInfo(number.ToString(), $"Number {number}");
-                return true;
-            }
-
-            info = markerId == 0
-                ? new ReplayMarkerInfo("?", "Unknown marker")
-                : new ReplayMarkerInfo($"#{markerId}", "Unknown marker");
-            return true;
+            return GenericTryGetMarkerInfo(markerId, out info);
         }
 
         public bool ShouldCreateReplayMarkerMechanic(
@@ -285,6 +325,147 @@ internal static class ReplayEncounterModules
             IReadOnlyList<ReplayPositionSnapshot> positions,
             DateTime selectedAtUtc) => true;
 
+    }
+
+    private sealed class CrownReplayEncounterModule : IReplayEncounterModule
+    {
+        private const uint TerritoryTheCrown = 1325;
+        private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Square);
+
+        public string Name => "The Crown";
+
+        public bool AppliesTo(uint territoryId) => territoryId == TerritoryTheCrown;
+
+        public bool TryGetReplayArena(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayPositionSnapshot> actorStates,
+            DateTime selectedAtUtc,
+            out ReplayArenaInfo arena)
+        {
+            arena = Arena;
+            return true;
+        }
+
+        public bool IsReplayOverheadStatus(uint statusId) => false;
+
+        public bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
+        {
+            return GenericTryGetMarkerInfo(markerId, out info);
+        }
+
+        public bool ShouldCreateReplayMarkerMechanic(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            return TryGetMarkerInfo(marker.MarkerId, out var info) &&
+                info.Shape is not null;
+        }
+
+        public bool ShouldDisplayReplayMarker(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers,
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            DateTime selectedAtUtc) => true;
+    }
+
+    private sealed class ArcadiaReplayEncounterModule : IReplayEncounterModule
+    {
+        private const uint TerritoryArcadia = 1327;
+        private static readonly ReplayArenaInfo P1Arena = new(100.0f, 100.0f, 20.0f, 15.0f, ReplayArenaShape.Rectangle);
+        private static readonly ReplayArenaInfo P2Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
+        private static readonly string[] P1EnemyNames = ["Blood Vessel"];
+        private static readonly string[] P2EnemyNames = ["Lindschrat", "Luzzelwurm", "Mana Sphere", "Understudy"];
+
+        public string Name => "Arcadia";
+
+        public bool AppliesTo(uint territoryId) => territoryId == TerritoryArcadia;
+
+        public bool TryGetReplayArena(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayPositionSnapshot> actorStates,
+            DateTime selectedAtUtc,
+            out ReplayArenaInfo arena)
+        {
+            if (TryGetFirstEnemySeenAt(positions, P2EnemyNames, out var firstP2SeenAtUtc))
+            {
+                if (selectedAtUtc >= firstP2SeenAtUtc.AddSeconds(-1.0))
+                {
+                    arena = P2Arena;
+                    return true;
+                }
+
+                arena = P1Arena;
+                return true;
+            }
+
+            if (ContainsEnemyActor(actorStates, P2EnemyNames) ||
+                ContainsEnemyActorNear(positions, selectedAtUtc, P2EnemyNames))
+            {
+                arena = P2Arena;
+                return true;
+            }
+
+            if (ContainsEnemyActor(actorStates, P1EnemyNames) ||
+                ContainsEnemyActorNear(positions, selectedAtUtc, P1EnemyNames))
+            {
+                arena = P1Arena;
+                return true;
+            }
+
+            arena = ContainsEnemyActor(positions, P2EnemyNames)
+                ? P2Arena
+                : P1Arena;
+            return true;
+        }
+
+        public bool IsReplayOverheadStatus(uint statusId) => false;
+
+        public bool TryGetMarkerInfo(uint markerId, out ReplayMarkerInfo info)
+        {
+            return GenericTryGetMarkerInfo(markerId, out info);
+        }
+
+        public bool ShouldCreateReplayMarkerMechanic(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            return TryGetMarkerInfo(marker.MarkerId, out var info) &&
+                info.Shape is not null;
+        }
+
+        public bool ShouldDisplayReplayMarker(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers,
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            DateTime selectedAtUtc) => true;
+
+        private static bool ContainsEnemyActorNear(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            DateTime selectedAtUtc,
+            IReadOnlyList<string> actorNames)
+        {
+            var startAtUtc = selectedAtUtc.AddSeconds(-2.0);
+            var endAtUtc = selectedAtUtc.AddSeconds(2.0);
+            return positions.Any(position =>
+                position.ActorKind == ReplayActorKind.Enemy &&
+                position.SeenAtUtc >= startAtUtc &&
+                position.SeenAtUtc <= endAtUtc &&
+                ActorNameMatches(position.ActorName, actorNames));
+        }
+
+        private static bool TryGetFirstEnemySeenAt(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<string> actorNames,
+            out DateTime seenAtUtc)
+        {
+            seenAtUtc = positions
+                .Where(position => position.ActorKind == ReplayActorKind.Enemy &&
+                    ActorNameMatches(position.ActorName, actorNames))
+                .Select(position => position.SeenAtUtc)
+                .OrderBy(seenAt => seenAt)
+                .FirstOrDefault();
+            return seenAtUtc != default;
+        }
     }
 
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
@@ -309,7 +490,11 @@ internal static class ReplayEncounterModules
 
         public bool AppliesTo(uint territoryId) => territoryId == TerritoryDancingMadUltimate;
 
-        public bool TryGetReplayArena(out ReplayArenaInfo arena)
+        public bool TryGetReplayArena(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayPositionSnapshot> actorStates,
+            DateTime selectedAtUtc,
+            out ReplayArenaInfo arena)
         {
             arena = Arena;
             return true;
