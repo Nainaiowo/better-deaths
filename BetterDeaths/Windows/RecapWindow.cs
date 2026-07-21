@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.266";
+    private const string CurrentChangelogVersion = "0.1.0.267";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -814,7 +814,8 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
-        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags | ImGuiWindowFlags.NoBackground))
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity));
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             ImGui.Dummy(new Vector2(1.0f, ModernShellTopPadding));
             var navigationItems = BuildMainNavigationItems();
@@ -830,6 +831,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        ImGui.PopStyleColor();
     }
 
     private void DrawModernTopShell(IReadOnlyList<MainNavigationItem> navigationItems)
@@ -18115,6 +18117,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.267");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Unified the Better Deaths header and content background.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.266");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Tightened Better Deaths header spacing.");
