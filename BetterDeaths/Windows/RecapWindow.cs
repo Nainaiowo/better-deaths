@@ -119,7 +119,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.265";
+    private const string CurrentChangelogVersion = "0.1.0.266";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -204,15 +204,15 @@ public sealed class RecapWindow : Window, IDisposable
     private const float SectionHelpMarkerRightInset = 12.0f;
     private const float ModernShellPadding = 12.0f;
     private const float ModernShellTopPadding = 8.0f;
-    private const float ModernHeaderBottomGap = 6.0f;
+    private const float ModernHeaderBottomGap = 3.0f;
     private const float ModernPanelRounding = 6.0f;
     private const float ModernTopNavigationBreakpoint = 640.0f;
     private const float ModernTopNavItemHeight = 32.0f;
     private const float ModernTopNavItemMinWidth = 72.0f;
     private const float ModernTopNavItemPaddingX = 16.0f;
     private const float ModernTopNavItemGap = 7.0f;
-    private const float ModernWorkspacePadding = 12.0f;
-    private const float ModernWorkspaceHeaderGap = 8.0f;
+    private const float ModernWorkspaceHorizontalPadding = 12.0f;
+    private const float ModernWorkspaceVerticalPadding = 6.0f;
     private const float ReviewCommandStripMinWidth = 620.0f;
     private const float ReviewCommandStripHeight = 58.0f;
     private const float ReviewCommandTileGap = 8.0f;
@@ -814,7 +814,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
-        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
+        if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags | ImGuiWindowFlags.NoBackground))
         {
             ImGui.Dummy(new Vector2(1.0f, ModernShellTopPadding));
             var navigationItems = BuildMainNavigationItems();
@@ -839,8 +839,6 @@ public sealed class RecapWindow : Window, IDisposable
         ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
         DrawModernTopNavigation(navigationItems);
         ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
-        DrawSubtleSeparator();
-        ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
         DrawModernWorkspace(Vector2.Zero);
     }
 
@@ -849,8 +847,6 @@ public sealed class RecapWindow : Window, IDisposable
         using var shellIndent = new ImGuiIndentScope(ModernShellPadding);
         DrawModernCompactHeader(navigationItems);
         ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
-        DrawSubtleSeparator();
-        ImGui.Dummy(new Vector2(1.0f, ModernWorkspaceHeaderGap));
         DrawModernWorkspace(Vector2.Zero);
     }
 
@@ -883,12 +879,6 @@ public sealed class RecapWindow : Window, IDisposable
             .Select(GetModernTopNavItemWidth)
             .ToList();
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var fullWidth = widths.Sum() + (Math.Max(0, navigationItems.Count - 1) * ModernTopNavItemGap);
-        if (fullWidth < availableWidth)
-        {
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((availableWidth - fullWidth) * 0.5f));
-        }
-
         var rowWidth = 0.0f;
         for (var index = 0; index < navigationItems.Count; index++)
         {
@@ -1010,7 +1000,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernWorkspace(Vector2 size)
     {
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernWorkspacePadding, ModernWorkspacePadding));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernWorkspaceHorizontalPadding, ModernWorkspaceVerticalPadding));
         if (ImGui.BeginChild("##BetterDeathsWorkspace", size, false, OptionalScrollbarFlags))
         {
             DrawModernPageContent();
@@ -18125,6 +18115,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.266");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Tightened Better Deaths header spacing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.265");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Moved Better Deaths navigation back to the top and simplified Death Replay controls.");
