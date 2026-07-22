@@ -121,7 +121,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.269";
+    private const string CurrentChangelogVersion = "0.1.0.270";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -843,7 +843,7 @@ public sealed class RecapWindow : Window, IDisposable
     private void DrawModernShell()
     {
         using var shellStyle = new ModernStyleScope(currentMainWindowBackgroundOpacity);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity));
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
             ImGui.Dummy(new Vector2(1.0f, ModernShellTopPadding));
@@ -865,19 +865,27 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernTopShell(IReadOnlyList<MainNavigationItem> navigationItems)
     {
-        using var shellIndent = new ImGuiIndentScope(ModernShellPadding);
-        DrawModernTopHeader();
-        ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
-        DrawModernTopNavigation(navigationItems);
-        ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+        using (new ImGuiIndentScope(ModernShellPadding))
+        {
+            DrawModernTopHeader();
+            ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+            DrawModernTopNavigation(navigationItems);
+            ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+        }
+
+        ImGui.SetCursorPosX(0.0f);
         DrawModernWorkspace(Vector2.Zero);
     }
 
     private void DrawModernCompactShell(IReadOnlyList<MainNavigationItem> navigationItems)
     {
-        using var shellIndent = new ImGuiIndentScope(ModernShellPadding);
-        DrawModernCompactHeader(navigationItems);
-        ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+        using (new ImGuiIndentScope(ModernShellPadding))
+        {
+            DrawModernCompactHeader(navigationItems);
+            ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+        }
+
+        ImGui.SetCursorPosX(0.0f);
         DrawModernWorkspace(Vector2.Zero);
     }
 
@@ -1031,7 +1039,11 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawModernWorkspace(Vector2 size)
     {
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(ModernWorkspaceHorizontalPadding, ModernWorkspaceVerticalPadding));
+        var horizontalPadding = currentMainPage == MainPage.Review
+            ? 0.0f
+            : ModernWorkspaceHorizontalPadding;
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(horizontalPadding, ModernWorkspaceVerticalPadding));
         if (ImGui.BeginChild("##BetterDeathsWorkspace", size, false, OptionalScrollbarFlags))
         {
             DrawModernPageContent();
@@ -1039,6 +1051,7 @@ public sealed class RecapWindow : Window, IDisposable
 
         ImGui.EndChild();
         ImGui.PopStyleVar();
+        ImGui.PopStyleColor();
     }
 
     private static void DrawModernCreditLine()
@@ -18263,6 +18276,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.270");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Cleaned up Review layout background and spacing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.269");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Cleaned up Review layout spacing.");
