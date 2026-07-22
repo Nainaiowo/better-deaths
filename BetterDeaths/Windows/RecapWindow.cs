@@ -121,7 +121,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.268";
+    private const string CurrentChangelogVersion = "0.1.0.269";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -2195,11 +2195,10 @@ public sealed class RecapWindow : Window, IDisposable
         var selectedPull = GetSelectedReviewPull(pulls, selection.PullKey) ?? pulls[0];
         var selectedDeath = GetSelectedReviewDeath(selectedPull, selection);
         var available = ImGui.GetContentRegionAvail();
-        var paddedAvailableWidth = MathF.Max(0.0f, available.X - (WorkspaceOuterPadding * 2.0f));
         var requiredWideWidth = showPullBrowser
             ? configuration.PullBrowserCollapsed ? 900.0f : 1120.0f
             : 860.0f;
-        var wideLayout = paddedAvailableWidth >= requiredWideWidth;
+        var wideLayout = available.X >= requiredWideWidth;
 
         if (!wideLayout)
         {
@@ -2213,15 +2212,13 @@ public sealed class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawWorkspacePaddedContent(
-            $"##{idPrefix}UnifiedReviewPadding",
-            () => DrawWideUnifiedReviewWorkspace(
-                pulls,
-                selectedPull,
-                selectedDeath,
-                idPrefix,
-                showPullBrowser,
-                selection));
+        DrawWideUnifiedReviewWorkspace(
+            pulls,
+            selectedPull,
+            selectedDeath,
+            idPrefix,
+            showPullBrowser,
+            selection);
     }
 
     private void DrawWideUnifiedReviewWorkspace(
@@ -2344,67 +2341,64 @@ public sealed class RecapWindow : Window, IDisposable
         bool showPullBrowser,
         ReviewSelectionState selection)
     {
-        DrawWorkspacePaddedContent($"##{idPrefix}UnifiedReviewStackedPadding", () =>
+        var innerAvailable = ImGui.GetContentRegionAvail();
+        var stackedLayout = GetStackedReviewLayout(innerAvailable.Y, showPullBrowser, configuration.PullBrowserCollapsed);
+        if (showPullBrowser)
         {
-            var innerAvailable = ImGui.GetContentRegionAvail();
-            var stackedLayout = GetStackedReviewLayout(innerAvailable.Y, showPullBrowser, configuration.PullBrowserCollapsed);
-            if (showPullBrowser)
+            if (configuration.PullBrowserCollapsed)
             {
-                if (configuration.PullBrowserCollapsed)
-                {
-                    DrawReviewPane(
-                        $"##{idPrefix}PullBrowserStackedCollapsed",
-                        new Vector2(0.0f, stackedLayout.PullBrowserHeight),
-                        () => DrawCollapsedPullBrowser(idPrefix, pulls, selection));
-                }
-                else
-                {
-                    DrawReviewPane(
-                        $"##{idPrefix}PullBrowserStacked",
-                        new Vector2(0.0f, stackedLayout.PullBrowserHeight),
-                        () => DrawPullBrowser(
-                            pulls,
-                            idPrefix,
-                            selection,
-                            useVerticalDrawerControls: true,
-                            usePullCells: true));
-                }
-
-                DrawResizableStackedReviewDivider(
-                    $"{idPrefix}PullBrowserStackedResize",
-                    innerAvailable.X,
-                    configuration.PullBrowserCollapsed
-                        ? StackedReviewResizeTarget.CollapsedPullBrowser
-                        : StackedReviewResizeTarget.PullBrowser,
-                    stackedLayout.PullBrowserHeight,
-                    stackedLayout.PullBrowserMinHeight,
-                    stackedLayout.PullBrowserMaxHeight,
-                    "Drag to resize Pulls.");
+                DrawReviewPane(
+                    $"##{idPrefix}PullBrowserStackedCollapsed",
+                    new Vector2(0.0f, stackedLayout.PullBrowserHeight),
+                    () => DrawCollapsedPullBrowser(idPrefix, pulls, selection));
+            }
+            else
+            {
+                DrawReviewPane(
+                    $"##{idPrefix}PullBrowserStacked",
+                    new Vector2(0.0f, stackedLayout.PullBrowserHeight),
+                    () => DrawPullBrowser(
+                        pulls,
+                        idPrefix,
+                        selection,
+                        useVerticalDrawerControls: true,
+                        usePullCells: true));
             }
 
-            DrawReviewPane(
-                $"##{idPrefix}TimelineStacked",
-                new Vector2(0.0f, stackedLayout.TimelineHeight),
-                () => DrawSelectedPullTimeline(
-                    selectedPull,
-                    idPrefix,
-                    selection,
-                    allowLeadUpScrollHandoff: true),
-                framed: false);
             DrawResizableStackedReviewDivider(
-                $"{idPrefix}TimelineStackedResize",
+                $"{idPrefix}PullBrowserStackedResize",
                 innerAvailable.X,
-                StackedReviewResizeTarget.Timeline,
-                stackedLayout.TimelineHeight,
-                stackedLayout.TimelineMinHeight,
-                stackedLayout.TimelineMaxHeight,
-                "Drag to resize the death timeline.");
-            DrawReviewPane(
-                $"##{idPrefix}DeathDetailsStacked",
-                new Vector2(0.0f, stackedLayout.DeathDetailsHeight),
-                () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix),
-                framed: false);
-        });
+                configuration.PullBrowserCollapsed
+                    ? StackedReviewResizeTarget.CollapsedPullBrowser
+                    : StackedReviewResizeTarget.PullBrowser,
+                stackedLayout.PullBrowserHeight,
+                stackedLayout.PullBrowserMinHeight,
+                stackedLayout.PullBrowserMaxHeight,
+                "Drag to resize Pulls.");
+        }
+
+        DrawReviewPane(
+            $"##{idPrefix}TimelineStacked",
+            new Vector2(0.0f, stackedLayout.TimelineHeight),
+            () => DrawSelectedPullTimeline(
+                selectedPull,
+                idPrefix,
+                selection,
+                allowLeadUpScrollHandoff: true),
+            framed: false);
+        DrawResizableStackedReviewDivider(
+            $"{idPrefix}TimelineStackedResize",
+            innerAvailable.X,
+            StackedReviewResizeTarget.Timeline,
+            stackedLayout.TimelineHeight,
+            stackedLayout.TimelineMinHeight,
+            stackedLayout.TimelineMaxHeight,
+            "Drag to resize the death timeline.");
+        DrawReviewPane(
+            $"##{idPrefix}DeathDetailsStacked",
+            new Vector2(0.0f, stackedLayout.DeathDetailsHeight),
+            () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix),
+            framed: false);
     }
 
     private StackedReviewLayout GetStackedReviewLayout(float availableHeight, bool showPullBrowser, bool pullBrowserCollapsed)
@@ -4361,15 +4355,6 @@ public sealed class RecapWindow : Window, IDisposable
 
     private void DrawSelectedDeathHeader(ReviewPull pull, PartyDeathRecord death)
     {
-        var timerText = FormatCombatTimer(death.PullElapsedSeconds);
-        var timerSize = ImGui.CalcTextSize(timerText);
-        var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
-        var rowStart = ImGui.GetCursorScreenPos();
-        ImGui.GetWindowDrawList().AddText(
-            new Vector2(MathF.Max(rowStart.X, contentRight - timerSize.X), rowStart.Y),
-            ImGui.GetColorU32(LeadUpGoldColor),
-            timerText);
-
         var iconId = GetClassJobIconId(death.ClassJobId);
         if (iconId != 0)
         {
@@ -4378,8 +4363,7 @@ public sealed class RecapWindow : Window, IDisposable
         }
 
         var playerLine = $"{FormatPlayerName(death, pull.Deaths)} ({death.ClassJobName})";
-        var wrapLocalX = MathF.Max(ImGui.GetCursorPosX() + 80.0f, ImGui.GetWindowContentRegionMax().X - timerSize.X - 12.0f);
-        ImGui.PushTextWrapPos(wrapLocalX);
+        ImGui.PushTextWrapPos(ImGui.GetWindowContentRegionMax().X);
         ImGui.TextUnformatted(playerLine);
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
@@ -18279,6 +18263,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.269");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Cleaned up Review layout spacing.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.268");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Fixed fallback replay alignment.");
