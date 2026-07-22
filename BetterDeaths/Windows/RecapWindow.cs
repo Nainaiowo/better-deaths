@@ -121,7 +121,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.270";
+    private const string CurrentChangelogVersion = "0.1.0.271";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -18276,86 +18276,12 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.270");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Cleaned up Review layout background and spacing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.269");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Cleaned up Review layout spacing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.268");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("v0.1.0.271");
+        ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Fixed fallback replay alignment.");
         DrawHighlightedChangelogBullet("Improved Death Replay layout and spacing.");
         DrawHighlightedChangelogBullet("Cleaned up Better Deaths navigation.");
         DrawWrappedBullet("Merged Feedback into the Data tab.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.267");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Unified the Better Deaths header and content background.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.266");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Tightened Better Deaths header spacing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.265");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Moved Better Deaths navigation back to the top and simplified Death Replay controls.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.264");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Cleaned up Better Deaths navigation and removed the redundant section header.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.263");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Reworked Better Deaths frontend with responsive navigation, flatter Review/Replay workspaces, and a selected-death command strip.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.262");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Cleaned up Death Replay controls and display settings layout.");
-        DrawWrappedBullet("Corrected previous UI changelog wording.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.261");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Improved Review and Replay spacing around window edges and separators.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.260");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Moved Death Replay Active Mits beside the replay when space allows.");
-        DrawWrappedBullet("Merged Feedback into the Data tab.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.259");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Cleaned up Death Replay spacing, controls, and panel framing.");
-
-        ImGui.Separator();
-
-        ImGui.TextUnformatted("v0.1.0.258");
-        ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Adjusted Better Deaths window styling, navigation spacing, and panel framing.");
 
         ImGui.Separator();
 
