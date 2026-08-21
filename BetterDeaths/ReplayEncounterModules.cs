@@ -78,11 +78,22 @@ internal interface IReplayEncounterModule
         ReplayMarkerSnapshot marker,
         IReadOnlyList<ReplayMarkerSnapshot> markers,
         IReadOnlyList<ReplayPositionSnapshot> positions,
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics,
         DateTime selectedAtUtc);
+
+    bool ShouldDisplayReplayMechanic(
+        ReplayMechanicSnapshot mechanic,
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics);
 }
 
 internal static class ReplayEncounterModules
 {
+    private const uint DmuP2ForsakenStackIconId = 715;
+    private const uint DmuP2ForsakenSpreadIconId = 716;
+    private const uint DmuP2ForsakenConeIconId = 717;
+    private const uint DmuP2ForsakenStackStatusId = 5084;
+    private const uint DmuP2ForsakenSpreadStatusId = 5085;
+    private const uint DmuP2ForsakenConeStatusId = 5086;
     internal const uint DmuP5ArenaHoleMapEffectState = 0x00200010;
     internal const float DmuP5ArenaHoleRadius = 8.0f;
     private const uint DmuP1FireSpreadMarkerId = 127;
@@ -124,6 +135,28 @@ internal static class ReplayEncounterModules
         (86.5f, 113.5f),
     ];
     private static readonly IReplayEncounterModule FallbackModule = new GenericReplayEncounterModule();
+
+    internal static bool IsDmuP2ForsakenMarker(uint markerId)
+    {
+        return TryGetDmuP2ForsakenMarkerKind(markerId, out _);
+    }
+
+    internal static bool TryGetDmuP2ForsakenMarkerKind(uint markerId, out ForsakenMarkerKind markerKind)
+    {
+        markerKind = markerId switch
+        {
+            DmuP2ForsakenStackIconId or DmuP2ForsakenStackStatusId => ForsakenMarkerKind.Stack,
+            DmuP2ForsakenSpreadIconId or DmuP2ForsakenSpreadStatusId => ForsakenMarkerKind.Spread,
+            DmuP2ForsakenConeIconId or DmuP2ForsakenConeStatusId => ForsakenMarkerKind.Cone,
+            _ => ForsakenMarkerKind.Unknown,
+        };
+        return markerKind != ForsakenMarkerKind.Unknown;
+    }
+
+    private static bool IsDmuP2ForsakenIcon(uint markerId)
+    {
+        return markerId is DmuP2ForsakenStackIconId or DmuP2ForsakenSpreadIconId or DmuP2ForsakenConeIconId;
+    }
     private static readonly IReadOnlyList<IReplayEncounterModule> Modules =
     [
         new CrownReplayEncounterModule(),
@@ -391,7 +424,12 @@ internal static class ReplayEncounterModules
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
             DateTime selectedAtUtc) => true;
+
+        public bool ShouldDisplayReplayMechanic(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics) => true;
 
     }
 
@@ -445,7 +483,12 @@ internal static class ReplayEncounterModules
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
             DateTime selectedAtUtc) => true;
+
+        public bool ShouldDisplayReplayMechanic(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics) => true;
     }
 
     private sealed class CrownReplayEncounterModule : IReplayEncounterModule
@@ -486,7 +529,12 @@ internal static class ReplayEncounterModules
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
             DateTime selectedAtUtc) => true;
+
+        public bool ShouldDisplayReplayMechanic(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics) => true;
     }
 
     private sealed class ArcadiaReplayEncounterModule : IReplayEncounterModule
@@ -558,7 +606,12 @@ internal static class ReplayEncounterModules
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
             DateTime selectedAtUtc) => true;
+
+        public bool ShouldDisplayReplayMechanic(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics) => true;
 
         private static bool ContainsEnemyActorNear(
             IReadOnlyList<ReplayPositionSnapshot> positions,
@@ -592,6 +645,12 @@ internal static class ReplayEncounterModules
     private sealed class DmuReplayEncounterModule : IReplayEncounterModule
     {
         public const uint TerritoryDancingMadUltimate = 1363;
+        private const uint PathOfLightActionId = 47806;
+        private const uint SpelldriverActionId = 47808;
+        private const uint SpellscatterActionId = 47809;
+        private const uint SpellwaveActionId = 47810;
+        private const double ForsakenAssignmentPromotionSeconds = 2.0;
+        private const double ForsakenLegacyEndDelaySeconds = 15.0;
         private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
         private static readonly ReplayMarkerResolveGroup[] ForsakenTowerResolveSequence =
         [
@@ -694,48 +753,80 @@ internal static class ReplayEncounterModules
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers)
         {
-            if (!IsForsakenTowerMarker(marker.MarkerId))
-            {
-                return true;
-            }
-
-            var relevantMarkers = GetForsakenTowerMarkers(markers);
-            if (relevantMarkers.Count == 0)
-            {
-                return true;
-            }
-
-            var initialBatchEnd = relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
-            return marker.SeenAtUtc > initialBatchEnd;
+            return true;
         }
 
         public bool ShouldDisplayReplayMarker(
             ReplayMarkerSnapshot marker,
             IReadOnlyList<ReplayMarkerSnapshot> markers,
             IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
             DateTime selectedAtUtc)
         {
-            if (!IsForsakenTowerMarker(marker.MarkerId))
+            if (!IsDmuP2ForsakenMarker(marker.MarkerId))
             {
                 return true;
             }
 
-            var cache = GetForsakenReplayCache(markers, positions);
+            var cache = GetForsakenReplayCache(markers, positions, mechanics);
+            if (cache.PreferredMarkers.Count == 0 || selectedAtUtc < cache.PreferredMarkers[0].SeenAtUtc)
+            {
+                return false;
+            }
+
+            var completedResolves = GetCompletedForsakenResolveCount(cache, selectedAtUtc);
+            if (completedResolves >= ForsakenTowerResolveSequence.Length ||
+                (cache.ResolveBatches.Count == 0 &&
+                    selectedAtUtc > cache.PreferredMarkers[^1].SeenAtUtc.AddSeconds(ForsakenLegacyEndDelaySeconds)))
+            {
+                return false;
+            }
+
+            var resolvingMarker = GetResolvingForsakenMarker(cache, marker.ActorKey, selectedAtUtc, completedResolves);
+            if (resolvingMarker is null || !IsSameReplayMarker(marker, resolvingMarker))
+            {
+                return false;
+            }
+
             var markerGroup = cache.ActorGroups.TryGetValue(marker.ActorKey, out var group)
                 ? group
                 : ReplayMarkerResolveGroup.Unknown;
-            var activeGroup = GetActiveForsakenResolveGroup(cache, selectedAtUtc);
+            var activeGroup = GetActiveForsakenResolveGroup(cache, selectedAtUtc, completedResolves);
             return markerGroup == ReplayMarkerResolveGroup.Unknown ||
                 activeGroup == ReplayMarkerResolveGroup.Unknown ||
                 markerGroup == activeGroup;
         }
 
-        private static ReplayMarkerResolveGroup GetActiveForsakenResolveGroup(ForsakenReplayCache cache, DateTime selectedAtUtc)
+        public bool ShouldDisplayReplayMechanic(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics)
         {
-            if (cache.RelevantMarkers.Count == 0 ||
+            if (IsForsakenShapeResolveMechanic(mechanic))
+            {
+                return false;
+            }
+
+            return mechanic.RawEventId != PathOfLightActionId ||
+                !string.Equals(mechanic.RawEventKind, "bossmod-action", StringComparison.OrdinalIgnoreCase) ||
+                !mechanics.Any(candidate => string.Equals(candidate.RawEventKind, "dmu-p2-path-of-light", StringComparison.Ordinal));
+        }
+
+        private static ReplayMarkerResolveGroup GetActiveForsakenResolveGroup(
+            ForsakenReplayCache cache,
+            DateTime selectedAtUtc,
+            int completedResolves)
+        {
+            if (cache.PreferredMarkers.Count == 0 ||
                 cache.ActorGroups.Count == 0)
             {
                 return ReplayMarkerResolveGroup.Unknown;
+            }
+
+            if (cache.ResolveBatches.Count > 0)
+            {
+                return completedResolves >= ForsakenTowerResolveSequence.Length
+                    ? ReplayMarkerResolveGroup.Unknown
+                    : ForsakenTowerResolveSequence[completedResolves];
             }
 
             var sequenceIndex = 0;
@@ -756,20 +847,67 @@ internal static class ReplayEncounterModules
             return ForsakenTowerResolveSequence[sequenceIndex];
         }
 
+        private static int GetCompletedForsakenResolveCount(ForsakenReplayCache cache, DateTime selectedAtUtc)
+        {
+            return cache.ResolveBatches.Count == 0
+                ? 0
+                : Math.Min(
+                    ForsakenTowerResolveSequence.Length,
+                    cache.ResolveBatches.Count(resolveAtUtc => resolveAtUtc <= selectedAtUtc));
+        }
+
+        private static ReplayMarkerSnapshot? GetResolvingForsakenMarker(
+            ForsakenReplayCache cache,
+            string actorKey,
+            DateTime selectedAtUtc,
+            int completedResolves)
+        {
+            var actorMarkers = cache.PreferredMarkers
+                .Where(candidate => string.Equals(candidate.ActorKey, actorKey, StringComparison.Ordinal));
+            DateTime cutoffAtUtc;
+            if (cache.ResolveBatches.Count == 0)
+            {
+                cutoffAtUtc = selectedAtUtc;
+            }
+            else if (completedResolves == 0)
+            {
+                cutoffAtUtc = cache.InitialBatchEndAtUtc;
+            }
+            else
+            {
+                var promotionEndAtUtc = cache.ResolveBatches[completedResolves - 1].AddSeconds(ForsakenAssignmentPromotionSeconds);
+                cutoffAtUtc = selectedAtUtc <= promotionEndAtUtc ? selectedAtUtc : promotionEndAtUtc;
+            }
+
+            return actorMarkers
+                .Where(candidate => candidate.SeenAtUtc <= cutoffAtUtc)
+                .OrderByDescending(candidate => candidate.SeenAtUtc)
+                .ThenByDescending(candidate => IsDmuP2ForsakenIcon(candidate.MarkerId))
+                .FirstOrDefault();
+        }
+
+        private static bool IsSameReplayMarker(ReplayMarkerSnapshot left, ReplayMarkerSnapshot right)
+        {
+            return string.Equals(left.ActorKey, right.ActorKey, StringComparison.Ordinal) &&
+                left.SeenAtUtc == right.SeenAtUtc &&
+                left.RawMarkerId == right.RawMarkerId;
+        }
+
         private static ForsakenReplayCache GetForsakenReplayCache(
             IReadOnlyList<ReplayMarkerSnapshot> markers,
-            IReadOnlyList<ReplayPositionSnapshot> positions)
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics)
         {
             lock (ForsakenReplayCacheLock)
             {
                 if (ForsakenReplayCaches.TryGetValue(markers, out var cached) &&
-                    cached.Matches(markers, positions))
+                    cached.Matches(markers, positions, mechanics))
                 {
                     return cached;
                 }
 
                 ForsakenReplayCaches.Remove(markers);
-                var cache = BuildForsakenReplayCache(markers, positions);
+                var cache = BuildForsakenReplayCache(markers, positions, mechanics);
                 ForsakenReplayCaches.Add(markers, cache);
                 return cache;
             }
@@ -777,24 +915,29 @@ internal static class ReplayEncounterModules
 
         private static ForsakenReplayCache BuildForsakenReplayCache(
             IReadOnlyList<ReplayMarkerSnapshot> markers,
-            IReadOnlyList<ReplayPositionSnapshot> positions)
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics)
         {
-            var relevantMarkers = GetForsakenTowerMarkers(markers);
-            var initialBatchEnd = relevantMarkers.Count == 0
+            var preferredMarkers = GetPreferredForsakenMarkers(markers);
+            var initialBatchEnd = preferredMarkers.Count == 0
                 ? DateTime.MinValue
-                : relevantMarkers[0].SeenAtUtc.AddSeconds(3.0);
-            var updateBatches = relevantMarkers.Count == 0
+                : preferredMarkers[0].SeenAtUtc.AddSeconds(3.0);
+            var updateBatches = preferredMarkers.Count == 0
                 ? []
-                : BuildForsakenMarkerUpdateBatches(relevantMarkers, initialBatchEnd);
+                : BuildForsakenMarkerUpdateBatches(preferredMarkers, initialBatchEnd);
 
             return new ForsakenReplayCache(
                 markers,
                 positions,
+                mechanics,
                 CreateMarkerListSignature(markers),
                 CreatePositionListSignature(positions),
-                relevantMarkers,
+                CreateMechanicListSignature(mechanics),
+                preferredMarkers,
+                initialBatchEnd,
                 updateBatches,
-                BuildForsakenActorGroups(markers, positions));
+                BuildForsakenResolveBatches(mechanics),
+                BuildForsakenActorGroups(preferredMarkers, positions));
         }
 
         private static ReplayListSignature CreateMarkerListSignature(IReadOnlyList<ReplayMarkerSnapshot> markers)
@@ -809,6 +952,72 @@ internal static class ReplayEncounterModules
             return positions.Count == 0
                 ? new ReplayListSignature(0, 0L, 0L)
                 : new ReplayListSignature(positions.Count, positions[0].SeenAtUtc.Ticks, positions[^1].SeenAtUtc.Ticks);
+        }
+
+        private static ReplayListSignature CreateMechanicListSignature(IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+        {
+            return mechanics.Count == 0
+                ? new ReplayListSignature(0, 0L, 0L)
+                : new ReplayListSignature(mechanics.Count, mechanics[0].SeenAtUtc.Ticks, mechanics[^1].SeenAtUtc.Ticks);
+        }
+
+        private static IReadOnlyList<DateTime> BuildForsakenResolveBatches(IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+        {
+            var shapeResolveTimes = BuildForsakenTimestampBatches(mechanics
+                .Where(IsForsakenShapeResolveMechanic)
+                .Select(mechanic => mechanic.SeenAtUtc));
+            if (shapeResolveTimes.Count > 0)
+            {
+                return shapeResolveTimes.Take(ForsakenTowerResolveSequence.Length).ToList();
+            }
+
+            return BuildForsakenTimestampBatches(mechanics
+                    .Where(mechanic => string.Equals(mechanic.RawEventKind, "dmu-p2-path-of-light", StringComparison.Ordinal))
+                    .Select(mechanic => mechanic.SeenAtUtc.AddSeconds(Math.Max(0.05f, mechanic.DurationSeconds) + 0.6f)))
+                .Take(ForsakenTowerResolveSequence.Length)
+                .ToList();
+        }
+
+        private static IReadOnlyList<DateTime> BuildForsakenTimestampBatches(IEnumerable<DateTime> timestamps)
+        {
+            var batches = new List<List<DateTime>>();
+            foreach (var timestamp in timestamps.OrderBy(value => value))
+            {
+                if (batches.Count == 0 || timestamp - batches[^1][^1] > TimeSpan.FromSeconds(0.25))
+                {
+                    batches.Add([timestamp]);
+                }
+                else
+                {
+                    batches[^1].Add(timestamp);
+                }
+            }
+
+            return batches.Select(batch => batch.Max()).ToList();
+        }
+
+        private static bool IsForsakenShapeResolveMechanic(ReplayMechanicSnapshot mechanic)
+        {
+            return (mechanic.RawEventId is SpelldriverActionId or SpellscatterActionId or SpellwaveActionId) &&
+                !string.Equals(mechanic.RawEventKind, "target-icon", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static List<ReplayMarkerSnapshot> GetPreferredForsakenMarkers(IReadOnlyList<ReplayMarkerSnapshot> markers)
+        {
+            var relevantMarkers = markers
+                .Where(marker => IsDmuP2ForsakenMarker(marker.MarkerId))
+                .OrderBy(marker => marker.SeenAtUtc)
+                .ToList();
+            return relevantMarkers
+                .Where(marker => IsDmuP2ForsakenIcon(marker.MarkerId) ||
+                    !relevantMarkers.Any(candidate =>
+                        IsDmuP2ForsakenIcon(candidate.MarkerId) &&
+                        string.Equals(candidate.ActorKey, marker.ActorKey, StringComparison.Ordinal) &&
+                        TryGetDmuP2ForsakenMarkerKind(candidate.MarkerId, out var candidateKind) &&
+                        TryGetDmuP2ForsakenMarkerKind(marker.MarkerId, out var markerKind) &&
+                        candidateKind == markerKind &&
+                        Math.Abs((candidate.SeenAtUtc - marker.SeenAtUtc).TotalSeconds) <= 1.0))
+                .ToList();
         }
 
         private static IReadOnlyList<IReadOnlyList<ReplayMarkerSnapshot>> BuildForsakenMarkerUpdateBatches(
@@ -1030,7 +1239,7 @@ internal static class ReplayEncounterModules
 
         private static Dictionary<string, ForsakenMarkerKind> GetInitialForsakenMarkerKinds(IReadOnlyList<ReplayMarkerSnapshot> markers)
         {
-            var relevantMarkers = GetForsakenTowerMarkers(markers);
+            var relevantMarkers = GetPreferredForsakenMarkers(markers);
             if (relevantMarkers.Count == 0)
             {
                 return [];
@@ -1078,28 +1287,11 @@ internal static class ReplayEncounterModules
             pairs.Add([first.ActorKey, second.ActorKey]);
         }
 
-        private static bool IsForsakenTowerMarker(uint markerId)
-        {
-            return markerId is 715 or 716 or 717 or 5084 or 5085 or 5086;
-        }
-
-        private static List<ReplayMarkerSnapshot> GetForsakenTowerMarkers(IReadOnlyList<ReplayMarkerSnapshot> markers)
-        {
-            return markers
-                .Where(marker => IsForsakenTowerMarker(marker.MarkerId))
-                .OrderBy(marker => marker.SeenAtUtc)
-                .ToList();
-        }
-
         private static ForsakenMarkerKind GetForsakenMarkerKind(uint markerId)
         {
-            return markerId switch
-            {
-                715 or 5084 => ForsakenMarkerKind.Stack,
-                716 or 5085 => ForsakenMarkerKind.Spread,
-                717 or 5086 => ForsakenMarkerKind.Cone,
-                _ => ForsakenMarkerKind.Unknown,
-            };
+            return TryGetDmuP2ForsakenMarkerKind(markerId, out var markerKind)
+                ? markerKind
+                : ForsakenMarkerKind.Unknown;
         }
 
         private static bool IsTank(string classJobName)
@@ -1169,20 +1361,27 @@ internal static class ReplayEncounterModules
         private sealed record ForsakenReplayCache(
             IReadOnlyList<ReplayMarkerSnapshot> Markers,
             IReadOnlyList<ReplayPositionSnapshot> Positions,
+            IReadOnlyList<ReplayMechanicSnapshot> Mechanics,
             ReplayListSignature MarkerSignature,
             ReplayListSignature PositionSignature,
-            IReadOnlyList<ReplayMarkerSnapshot> RelevantMarkers,
+            ReplayListSignature MechanicSignature,
+            IReadOnlyList<ReplayMarkerSnapshot> PreferredMarkers,
+            DateTime InitialBatchEndAtUtc,
             IReadOnlyList<IReadOnlyList<ReplayMarkerSnapshot>> UpdateBatches,
+            IReadOnlyList<DateTime> ResolveBatches,
             IReadOnlyDictionary<string, ReplayMarkerResolveGroup> ActorGroups)
         {
             public bool Matches(
                 IReadOnlyList<ReplayMarkerSnapshot> markers,
-                IReadOnlyList<ReplayPositionSnapshot> positions)
+                IReadOnlyList<ReplayPositionSnapshot> positions,
+                IReadOnlyList<ReplayMechanicSnapshot> mechanics)
             {
                 return ReferenceEquals(Markers, markers) &&
                     ReferenceEquals(Positions, positions) &&
+                    ReferenceEquals(Mechanics, mechanics) &&
                     MarkerSignature == CreateMarkerListSignature(markers) &&
-                    PositionSignature == CreatePositionListSignature(positions);
+                    PositionSignature == CreatePositionListSignature(positions) &&
+                    MechanicSignature == CreateMechanicListSignature(mechanics);
             }
         }
     }

@@ -5,7 +5,7 @@
   "DownloadCount": 4872,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Fixed Review timeline HP becoming misaligned during rapid multi-hit attacks. Fixed delayed snapshots causing old HP or shield values to reappear. Improved shield tracking without adding misleading zero-damage rows. Hits with missing result data now show clear before-and-after HP bars. Healing rows now appear only when the HP increase can be confirmed.",
+  "Changelog": "Improved DMU P2 Forsaken replay timing across all eight waves. Fixed Forsaken assignments changing too early and removed duplicate tower and resolved-shape drawings. Corrected cone and arena-edge geometry. Past's End and Future's End warnings now appear before impact and follow affected players when the recorded pull contains reliable target data.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

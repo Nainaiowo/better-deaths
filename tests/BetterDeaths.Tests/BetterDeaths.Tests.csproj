@@ -30,6 +30,7 @@
     <Compile Include="../../BetterDeaths/ReplayMechanicCatalog.cs" Link="ReplayMechanicCatalog.cs" />
     <Compile Include="../../BetterDeaths/BossModUltimateCatalog.Generated.cs" Link="BossModUltimateCatalog.Generated.cs" />
     <Compile Include="../../BetterDeaths/ReplayEncounterModules.cs" Link="ReplayEncounterModules.cs" />
+    <Compile Include="../../BetterDeaths/ReplayGeometry.cs" Link="ReplayGeometry.cs" />
     <Compile Include="../../BetterDeaths/ReplaySampleSelection.cs" Link="ReplaySampleSelection.cs" />
     <Compile Include="../../BetterDeaths/ReplayStatusPanelPolicy.cs" Link="ReplayStatusPanelPolicy.cs" />
     <Compile Include="../../BetterDeaths/ThemeIdentityPolicy.cs" Link="ThemeIdentityPolicy.cs" />

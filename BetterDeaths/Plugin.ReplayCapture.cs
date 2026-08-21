@@ -344,10 +344,13 @@ public sealed partial class Plugin
                 EndReplayDmuP2PathOfLightTower(packet);
                 break;
             case DmuP2SpelldriverActionId:
-                CaptureReplayDmuPacketCenteredMechanic(
+                CaptureReplayDmuSourceAnchoredMechanic(
                     packet,
                     ReplayMechanicShape.Stack,
                     5.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f,
                     "Spelldriver",
                     "dmu-p2-spelldriver",
                     2.0f);
@@ -2828,6 +2831,7 @@ public sealed partial class Plugin
             DmuP1GravitationalWaveActionId or
             DmuP1IntemperateWillActionId or
             DmuP2PathOfLightActionId or
+            DmuP2SpelldriverActionId or
             DmuP2SpellwaveActionId or
             DmuP2AllThingsEndingFirstActionId or
             DmuP2AllThingsEndingSecondActionId or
