@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.288";
+    private const string CurrentChangelogVersion = "0.1.0.289";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -20000,6 +20000,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.289");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Updated the Analyzer and acknowledgements presentation.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.288");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Updated the Analyzer presentation.");

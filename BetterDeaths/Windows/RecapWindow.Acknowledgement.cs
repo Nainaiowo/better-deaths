@@ -27,7 +27,10 @@ public sealed partial class RecapWindow
         var buttonColor = BlendColors(
             LeadUpGoldColor,
             new Vector4(1.0f, 0.96f, 0.70f, 1.0f),
-            pulse * 0.20f) with { W = 0.90f };
+            pulse * 0.20f) with
+        {
+            W = 0.90f,
+        };
         var hoveredColor = BlendColors(buttonColor, new Vector4(1.0f), 0.16f) with { W = 0.98f };
         var textColor = GetButtonTextColor(buttonColor, selected: true);
 
@@ -85,7 +88,10 @@ public sealed partial class RecapWindow
         var border = BlendColors(
             LeadUpGoldColor,
             new Vector4(1.0f, 0.97f, 0.76f, 1.0f),
-            pulse * 0.28f) with { W = 0.78f + (pulse * 0.20f) };
+            pulse * 0.28f) with
+        {
+            W = 0.78f + (pulse * 0.20f),
+        };
         ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
         ImGui.PushStyleColor(ImGuiCol.Border, border);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(16.0f, 14.0f));
