@@ -88,6 +88,9 @@ internal interface IReplayEncounterModule
 
 internal static class ReplayEncounterModules
 {
+    internal const string DmuP2PathOfLightActivationRawEventKind = "dmu-p2-path-of-light-activation";
+    internal const string DmuP2ForsakenTargetRawEventKind = "dmu-p2-forsaken-target";
+    internal const string DmuP2ForsakenCloneDropRawEventKind = "dmu-p2-forsaken-clone-drop";
     private const uint DmuP2ForsakenStackIconId = 715;
     private const uint DmuP2ForsakenSpreadIconId = 716;
     private const uint DmuP2ForsakenConeIconId = 717;
@@ -183,6 +186,40 @@ internal static class ReplayEncounterModules
     public static bool IsDancingMadUltimate(uint territoryId)
     {
         return territoryId == DmuReplayEncounterModule.TerritoryDancingMadUltimate;
+    }
+
+    internal static bool IsDmuP2ForsakenCloneDropAction(uint actionId)
+    {
+        return actionId is 47830 or 47831 or 47832 or 47833;
+    }
+
+    internal static bool IsDmuP2ForsakenPastEndAction(uint actionId)
+    {
+        return actionId is 47831 or 47833;
+    }
+
+    internal static float GetDmuP2ForsakenCleaveRotation(float capturedRotation, uint dropActionId)
+    {
+        return IsDmuP2ForsakenPastEndAction(dropActionId)
+            ? capturedRotation + MathF.PI
+            : capturedRotation;
+    }
+
+    internal static bool TryGetDmuP2ForsakenConeTargetActorKey(
+        ReplayMarkerSnapshot marker,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        DateTime selectedAtUtc,
+        out string actorKey)
+    {
+        return DmuReplayEncounterModule.TryGetForsakenConeTargetActorKey(
+            marker,
+            markers,
+            positions,
+            mechanics,
+            selectedAtUtc,
+            out actorKey);
     }
 
     public static bool TryGetDmuP5ArenaHolePosition(uint mapEffectIndex, out float x, out float z)
@@ -774,6 +811,28 @@ internal static class ReplayEncounterModules
                 return false;
             }
 
+            if (cache.ExactResolutions.Count > 0)
+            {
+                var exactResolveIndex = cache.ExactResolutions.Count(resolve => resolve.ResolveAtUtc <= selectedAtUtc);
+                if (exactResolveIndex >= cache.ExactResolutions.Count)
+                {
+                    return false;
+                }
+
+                var exactResolve = cache.ExactResolutions[exactResolveIndex];
+                if (exactResolve.Activations.Count > 0)
+                {
+                    if (!exactResolve.Activations.TryGetValue(marker.ActorKey, out var activation) ||
+                        GetForsakenMarkerKind(marker.MarkerId) != activation.Kind)
+                    {
+                        return false;
+                    }
+
+                    var exactMarker = GetForsakenMarkerAtResolve(cache, marker.ActorKey, exactResolve.ResolveAtUtc);
+                    return exactMarker is not null && IsSameReplayMarker(marker, exactMarker);
+                }
+            }
+
             var completedResolves = GetCompletedForsakenResolveCount(cache, selectedAtUtc);
             if (completedResolves >= ForsakenTowerResolveSequence.Length ||
                 (cache.ResolveBatches.Count == 0 &&
@@ -801,6 +860,11 @@ internal static class ReplayEncounterModules
             ReplayMechanicSnapshot mechanic,
             IReadOnlyList<ReplayMechanicSnapshot> mechanics)
         {
+            if (IsForsakenEvidenceMechanic(mechanic))
+            {
+                return false;
+            }
+
             if (IsForsakenShapeResolveMechanic(mechanic))
             {
                 return false;
@@ -886,6 +950,63 @@ internal static class ReplayEncounterModules
                 .FirstOrDefault();
         }
 
+        private static ReplayMarkerSnapshot? GetForsakenMarkerAtResolve(
+            ForsakenReplayCache cache,
+            string actorKey,
+            DateTime resolveAtUtc)
+        {
+            return GetForsakenMarkerAtResolve(cache.PreferredMarkers, actorKey, resolveAtUtc);
+        }
+
+        private static ReplayMarkerSnapshot? GetForsakenMarkerAtResolve(
+            IReadOnlyList<ReplayMarkerSnapshot> preferredMarkers,
+            string actorKey,
+            DateTime resolveAtUtc)
+        {
+            var assignmentCutoffAtUtc = resolveAtUtc.AddSeconds(-2.5);
+            var actorMarkers = preferredMarkers
+                .Where(candidate => string.Equals(candidate.ActorKey, actorKey, StringComparison.Ordinal))
+                .ToList();
+            return actorMarkers
+                .Where(candidate => candidate.SeenAtUtc <= assignmentCutoffAtUtc)
+                .OrderByDescending(candidate => candidate.SeenAtUtc)
+                .ThenByDescending(candidate => IsDmuP2ForsakenIcon(candidate.MarkerId))
+                .FirstOrDefault() ??
+                actorMarkers
+                    .Where(candidate => candidate.SeenAtUtc <= resolveAtUtc)
+                    .OrderByDescending(candidate => candidate.SeenAtUtc)
+                    .ThenByDescending(candidate => IsDmuP2ForsakenIcon(candidate.MarkerId))
+                    .FirstOrDefault();
+        }
+
+        internal static bool TryGetForsakenConeTargetActorKey(
+            ReplayMarkerSnapshot marker,
+            IReadOnlyList<ReplayMarkerSnapshot> markers,
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+            DateTime selectedAtUtc,
+            out string actorKey)
+        {
+            actorKey = string.Empty;
+            var cache = GetForsakenReplayCache(markers, positions, mechanics);
+            if (cache.ExactResolutions.Count == 0)
+            {
+                return false;
+            }
+
+            var resolveIndex = cache.ExactResolutions.Count(resolve => resolve.ResolveAtUtc <= selectedAtUtc);
+            if (resolveIndex >= cache.ExactResolutions.Count ||
+                !cache.ExactResolutions[resolveIndex].Activations.TryGetValue(marker.ActorKey, out var activation) ||
+                activation.Kind != ForsakenMarkerKind.Cone ||
+                string.IsNullOrWhiteSpace(activation.ConeTargetActorKey))
+            {
+                return false;
+            }
+
+            actorKey = activation.ConeTargetActorKey;
+            return true;
+        }
+
         private static bool IsSameReplayMarker(ReplayMarkerSnapshot left, ReplayMarkerSnapshot right)
         {
             return string.Equals(left.ActorKey, right.ActorKey, StringComparison.Ordinal) &&
@@ -937,7 +1058,8 @@ internal static class ReplayEncounterModules
                 initialBatchEnd,
                 updateBatches,
                 BuildForsakenResolveBatches(mechanics),
-                BuildForsakenActorGroups(preferredMarkers, positions));
+                BuildForsakenActorGroups(preferredMarkers, positions),
+                BuildForsakenExactResolutions(preferredMarkers, positions, mechanics));
         }
 
         private static ReplayListSignature CreateMarkerListSignature(IReadOnlyList<ReplayMarkerSnapshot> markers)
@@ -978,6 +1100,256 @@ internal static class ReplayEncounterModules
                 .ToList();
         }
 
+        private static IReadOnlyList<ForsakenExactResolution> BuildForsakenExactResolutions(
+            IReadOnlyList<ReplayMarkerSnapshot> preferredMarkers,
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+        {
+            var actorKeys = preferredMarkers
+                .Select(marker => marker.ActorKey)
+                .Concat(positions
+                    .Where(position => position.ActorKind == ReplayActorKind.Player)
+                    .Select(position => position.ActorKey))
+                .Distinct(StringComparer.Ordinal)
+                .OrderByDescending(actorKey => actorKey.Length)
+                .ToArray();
+            if (actorKeys.Length == 0)
+            {
+                return [];
+            }
+
+            var pathActivations = mechanics
+                .Where(mechanic => string.Equals(
+                    mechanic.RawEventKind,
+                    DmuP2PathOfLightActivationRawEventKind,
+                    StringComparison.Ordinal))
+                .Select(mechanic => TryGetForsakenEvidenceActorKey(mechanic, actorKeys, out var actorKey) &&
+                        TryGetPathOfLightActivationTowerIndex(mechanic.SourceKey, out var towerIndex)
+                    ? new ForsakenPathActivation(actorKey, towerIndex, mechanic.SeenAtUtc, mechanic.X, mechanic.Z)
+                    : null)
+                .Where(activation => activation is not null)
+                .Select(activation => activation!)
+                .ToArray();
+            if (pathActivations.Length == 0)
+            {
+                return [];
+            }
+
+            var exactTargetMechanics = mechanics
+                .Where(mechanic =>
+                    mechanic.RawEventId is SpelldriverActionId or SpellscatterActionId or SpellwaveActionId &&
+                    string.Equals(mechanic.RawEventKind, DmuP2ForsakenTargetRawEventKind, StringComparison.Ordinal))
+                .ToArray();
+            var shapeResolveGroups = BuildForsakenMechanicGroups(exactTargetMechanics.Length > 0
+                ? exactTargetMechanics
+                : mechanics.Where(IsNativeForsakenShapeResolveMechanic));
+            var exactResolutions = new List<ForsakenExactResolution>();
+            foreach (var resolveGroup in shapeResolveGroups)
+            {
+                var resolveAtUtc = resolveGroup.Max(mechanic => mechanic.SeenAtUtc);
+                var currentActivations = pathActivations
+                    .Where(activation => activation.SeenAtUtc <= resolveAtUtc &&
+                        resolveAtUtc - activation.SeenAtUtc <= TimeSpan.FromSeconds(3.8))
+                    .GroupBy(activation => activation.ActorKey, StringComparer.Ordinal)
+                    .Select(group => group.OrderByDescending(activation => activation.SeenAtUtc).First())
+                    .ToArray();
+                if (currentActivations.Length == 0)
+                {
+                    exactResolutions.Add(new ForsakenExactResolution(
+                        resolveAtUtc,
+                        new Dictionary<string, ForsakenResolvedActivation>(StringComparer.Ordinal)));
+                    continue;
+                }
+
+                var assignments = currentActivations.ToDictionary(
+                    activation => activation.ActorKey,
+                    activation => GetForsakenMarkerAtResolve(preferredMarkers, activation.ActorKey, resolveAtUtc) is { } marker
+                        ? GetForsakenMarkerKind(marker.MarkerId)
+                        : ForsakenMarkerKind.Unknown,
+                    StringComparer.Ordinal);
+                var resolvedTargets = mechanics
+                    .Where(mechanic =>
+                        mechanic.RawEventId is SpelldriverActionId or SpellscatterActionId or SpellwaveActionId &&
+                        string.Equals(mechanic.RawEventKind, DmuP2ForsakenTargetRawEventKind, StringComparison.Ordinal) &&
+                        Math.Abs((mechanic.SeenAtUtc - resolveAtUtc).TotalSeconds) <= 0.5)
+                    .Select(mechanic => TryGetForsakenEvidenceActorKey(mechanic, actorKeys, out var actorKey)
+                        ? new ForsakenTargetEvidence(actorKey, mechanic.RawEventId, mechanic.X, mechanic.Z)
+                        : null)
+                    .Where(target => target is not null)
+                    .Select(target => target!)
+                    .ToArray();
+                var stackTargets = resolvedTargets
+                    .Where(target => target.ActionId == SpelldriverActionId)
+                    .Select(target => target.ActorKey)
+                    .ToHashSet(StringComparer.Ordinal);
+                var spreadTargets = resolvedTargets
+                    .Where(target => target.ActionId == SpellscatterActionId)
+                    .Select(target => target.ActorKey)
+                    .ToHashSet(StringComparer.Ordinal);
+                var coneVictims = resolvedTargets
+                    .Where(target => target.ActionId == SpellwaveActionId)
+                    .GroupBy(target => target.ActorKey, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .ToArray();
+                var activated = new Dictionary<string, ForsakenResolvedActivation>(StringComparer.Ordinal);
+                foreach (var towerSoakers in currentActivations.GroupBy(activation => activation.TowerIndex))
+                {
+                    var soakers = towerSoakers.ToArray();
+                    var activatedActorKeys = new HashSet<string>(StringComparer.Ordinal);
+                    if (soakers.Length <= 2)
+                    {
+                        activatedActorKeys.UnionWith(soakers.Select(activation => activation.ActorKey));
+                    }
+                    else
+                    {
+                        foreach (var soaker in soakers)
+                        {
+                            var assignment = assignments.GetValueOrDefault(soaker.ActorKey);
+                            if (assignment == ForsakenMarkerKind.Stack && stackTargets.Contains(soaker.ActorKey) ||
+                                assignment == ForsakenMarkerKind.Spread && spreadTargets.Contains(soaker.ActorKey))
+                            {
+                                activatedActorKeys.Add(soaker.ActorKey);
+                            }
+                        }
+
+                        foreach (var coneSoaker in soakers
+                            .Where(soaker => assignments.GetValueOrDefault(soaker.ActorKey) == ForsakenMarkerKind.Cone)
+                            .OrderBy(soaker => coneVictims.Any(victim =>
+                                string.Equals(victim.ActorKey, soaker.ActorKey, StringComparison.Ordinal)) ? 1 : 0)
+                            .ThenBy(soaker =>
+                            {
+                                var origin = GetForsakenActorPoint(positions, soaker, resolveAtUtc);
+                                return coneVictims
+                                    .Where(victim => !string.Equals(victim.ActorKey, soaker.ActorKey, StringComparison.Ordinal))
+                                    .Select(victim => ForsakenDistanceSquared(victim.X, victim.Z, origin))
+                                    .DefaultIfEmpty(float.PositiveInfinity)
+                                    .Min();
+                            })
+                            .ThenBy(soaker => soaker.ActorKey, StringComparer.Ordinal))
+                        {
+                            if (activatedActorKeys.Count >= 2)
+                            {
+                                break;
+                            }
+
+                            activatedActorKeys.Add(coneSoaker.ActorKey);
+                        }
+                    }
+
+                    foreach (var actorKey in activatedActorKeys)
+                    {
+                        var assignment = assignments.GetValueOrDefault(actorKey);
+                        if (assignment != ForsakenMarkerKind.Unknown)
+                        {
+                            activated[actorKey] = new ForsakenResolvedActivation(assignment, null);
+                        }
+                    }
+                }
+
+                foreach (var (actorKey, activation) in activated.ToArray())
+                {
+                    if (activation.Kind != ForsakenMarkerKind.Cone)
+                    {
+                        continue;
+                    }
+
+                    var pathActivation = currentActivations.First(candidate =>
+                        string.Equals(candidate.ActorKey, actorKey, StringComparison.Ordinal));
+                    var origin = GetForsakenActorPoint(positions, pathActivation, resolveAtUtc);
+                    var coneTarget = coneVictims
+                        .Where(target => !string.Equals(target.ActorKey, actorKey, StringComparison.Ordinal))
+                        .OrderBy(target => ForsakenDistanceSquared(target.X, target.Z, origin))
+                        .ThenBy(target => target.ActorKey, StringComparer.Ordinal)
+                        .FirstOrDefault();
+                    if (coneTarget is not null)
+                    {
+                        activated[actorKey] = activation with { ConeTargetActorKey = coneTarget.ActorKey };
+                    }
+                }
+
+                if (activated.Count > 0)
+                {
+                    exactResolutions.Add(new ForsakenExactResolution(resolveAtUtc, activated));
+                }
+            }
+
+            return exactResolutions;
+        }
+
+        private static IReadOnlyList<IReadOnlyList<ReplayMechanicSnapshot>> BuildForsakenMechanicGroups(
+            IEnumerable<ReplayMechanicSnapshot> mechanics)
+        {
+            var groups = new List<List<ReplayMechanicSnapshot>>();
+            foreach (var mechanic in mechanics.OrderBy(mechanic => mechanic.SeenAtUtc))
+            {
+                if (groups.Count == 0 || mechanic.SeenAtUtc - groups[^1][^1].SeenAtUtc > TimeSpan.FromSeconds(0.25))
+                {
+                    groups.Add([mechanic]);
+                }
+                else
+                {
+                    groups[^1].Add(mechanic);
+                }
+            }
+
+            return groups;
+        }
+
+        private static bool IsNativeForsakenShapeResolveMechanic(ReplayMechanicSnapshot mechanic)
+        {
+            return mechanic.RawEventId switch
+            {
+                SpelldriverActionId => string.Equals(mechanic.RawEventKind, "dmu-p2-spelldriver", StringComparison.Ordinal),
+                SpellscatterActionId => string.Equals(mechanic.RawEventKind, "dmu-p2-spellscatter", StringComparison.Ordinal),
+                SpellwaveActionId => string.Equals(mechanic.RawEventKind, "dmu-p2-spellwave", StringComparison.Ordinal),
+                _ => false,
+            };
+        }
+
+        private static bool TryGetForsakenEvidenceActorKey(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<string> actorKeys,
+            out string actorKey)
+        {
+            actorKey = actorKeys.FirstOrDefault(candidate =>
+                mechanic.SourceKey.EndsWith($":{candidate}", StringComparison.Ordinal)) ?? string.Empty;
+            return actorKey.Length > 0;
+        }
+
+        private static bool TryGetPathOfLightActivationTowerIndex(string sourceKey, out int towerIndex)
+        {
+            var prefix = DmuP2PathOfLightActivationRawEventKind + ":";
+            towerIndex = 0;
+            if (!sourceKey.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var indexEnd = sourceKey.IndexOf(':', prefix.Length);
+            return indexEnd > prefix.Length &&
+                int.TryParse(sourceKey[prefix.Length..indexEnd], out towerIndex) &&
+                towerIndex is >= 1 and <= 8;
+        }
+
+        private static (float X, float Z) GetForsakenActorPoint(
+            IReadOnlyList<ReplayPositionSnapshot> positions,
+            ForsakenPathActivation activation,
+            DateTime resolveAtUtc)
+        {
+            var position = positions
+                .Where(candidate => string.Equals(candidate.ActorKey, activation.ActorKey, StringComparison.Ordinal))
+                .OrderBy(candidate => Math.Abs((candidate.SeenAtUtc - resolveAtUtc).TotalSeconds))
+                .FirstOrDefault();
+            return position is null ? (activation.X, activation.Z) : (position.X, position.Z);
+        }
+
+        private static float ForsakenDistanceSquared(float x, float z, (float X, float Z) point)
+        {
+            var dx = x - point.X;
+            var dz = z - point.Z;
+            return (dx * dx) + (dz * dz);
+        }
+
         private static IReadOnlyList<DateTime> BuildForsakenTimestampBatches(IEnumerable<DateTime> timestamps)
         {
             var batches = new List<List<DateTime>>();
@@ -999,7 +1371,20 @@ internal static class ReplayEncounterModules
         private static bool IsForsakenShapeResolveMechanic(ReplayMechanicSnapshot mechanic)
         {
             return (mechanic.RawEventId is SpelldriverActionId or SpellscatterActionId or SpellwaveActionId) &&
-                !string.Equals(mechanic.RawEventKind, "target-icon", StringComparison.OrdinalIgnoreCase);
+                !string.Equals(mechanic.RawEventKind, "target-icon", StringComparison.OrdinalIgnoreCase) &&
+                !IsForsakenEvidenceMechanic(mechanic);
+        }
+
+        private static bool IsForsakenEvidenceMechanic(ReplayMechanicSnapshot mechanic)
+        {
+            return string.Equals(
+                    mechanic.RawEventKind,
+                    DmuP2PathOfLightActivationRawEventKind,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    mechanic.RawEventKind,
+                    DmuP2ForsakenTargetRawEventKind,
+                    StringComparison.Ordinal);
         }
 
         private static List<ReplayMarkerSnapshot> GetPreferredForsakenMarkers(IReadOnlyList<ReplayMarkerSnapshot> markers)
@@ -1356,6 +1741,23 @@ internal static class ReplayEncounterModules
 
         private sealed record ForsakenActor(string ActorKey, int PartyIndex, string ClassJobName);
 
+        private sealed record ForsakenPathActivation(
+            string ActorKey,
+            int TowerIndex,
+            DateTime SeenAtUtc,
+            float X,
+            float Z);
+
+        private sealed record ForsakenTargetEvidence(string ActorKey, uint ActionId, float X, float Z);
+
+        private sealed record ForsakenResolvedActivation(
+            ForsakenMarkerKind Kind,
+            string? ConeTargetActorKey);
+
+        private sealed record ForsakenExactResolution(
+            DateTime ResolveAtUtc,
+            IReadOnlyDictionary<string, ForsakenResolvedActivation> Activations);
+
         private readonly record struct ReplayListSignature(int Count, long FirstSeenAtTicks, long LastSeenAtTicks);
 
         private sealed record ForsakenReplayCache(
@@ -1369,7 +1771,8 @@ internal static class ReplayEncounterModules
             DateTime InitialBatchEndAtUtc,
             IReadOnlyList<IReadOnlyList<ReplayMarkerSnapshot>> UpdateBatches,
             IReadOnlyList<DateTime> ResolveBatches,
-            IReadOnlyDictionary<string, ReplayMarkerResolveGroup> ActorGroups)
+            IReadOnlyDictionary<string, ReplayMarkerResolveGroup> ActorGroups,
+            IReadOnlyList<ForsakenExactResolution> ExactResolutions)
         {
             public bool Matches(
                 IReadOnlyList<ReplayMarkerSnapshot> markers,

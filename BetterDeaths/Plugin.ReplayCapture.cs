@@ -338,6 +338,11 @@ public sealed partial class Plugin
             return;
         }
 
+        if (packet.ActionId is DmuP2SpelldriverActionId or DmuP2SpellscatterActionId or DmuP2SpellwaveActionId)
+        {
+            CaptureReplayDmuP2ForsakenTargetEvidence(packet);
+        }
+
         switch (packet.ActionId)
         {
             case DmuP2PathOfLightActionId:
@@ -375,23 +380,11 @@ public sealed partial class Plugin
                 break;
             case DmuP2FuturesEndBossActionId:
             case DmuP2FuturesEndCloneActionId:
-                CaptureReplayDmuPacketCenteredMechanic(
-                    packet,
-                    ReplayMechanicShape.Spread,
-                    5.0f,
-                    "Future's End",
-                    "dmu-p2-futures-end",
-                    2.4f);
+                CaptureReplayDmuP2ForsakenCloneDrops(packet, "Future's End");
                 break;
             case DmuP2PastsEndBossActionId:
             case DmuP2PastsEndCloneActionId:
-                CaptureReplayDmuPacketCenteredMechanic(
-                    packet,
-                    ReplayMechanicShape.Spread,
-                    5.0f,
-                    "Past's End",
-                    "dmu-p2-pasts-end",
-                    2.4f);
+                CaptureReplayDmuP2ForsakenCloneDrops(packet, "Past's End");
                 break;
             case DmuP2AllThingsEndingFirstActionId:
             case DmuP2AllThingsEndingSecondActionId:
@@ -2681,8 +2674,123 @@ public sealed partial class Plugin
             return;
         }
 
+        CaptureReplayDmuP2PathOfLightActivationEvidence(packet, tower);
         ClampRecentReplayMechanicEnd(tower.SourceKey, packet.SeenAtUtc);
         activeDmuP2PathOfLightTowersByIndex.Remove(tower.Index);
+    }
+
+    private void CaptureReplayDmuP2PathOfLightActivationEvidence(
+        RawActionEffectPacket packet,
+        ActiveDmuP2PathOfLightTower tower)
+    {
+        CaptureReplayDmuP2ForsakenTargetEvidence(
+            packet,
+            ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+            "Path of Light activation",
+            tower.Index);
+    }
+
+    private void CaptureReplayDmuP2ForsakenTargetEvidence(
+        RawActionEffectPacket packet,
+        string rawEventKind = ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+        string? label = null,
+        uint? towerIndex = null)
+    {
+        var sourceName = string.IsNullOrWhiteSpace(packet.CasterName)
+            ? GetEntityDisplayName(packet.CasterEntityId)
+            : packet.CasterName;
+        var seenTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var target in packet.Targets)
+        {
+            var member = FindCurrentMemberByTargetId(target.TargetId);
+            if (member is null || !seenTargets.Add(member.MemberKey))
+            {
+                continue;
+            }
+
+            var targetPose = packet.ReplayPoses.FirstOrDefault(pose =>
+                pose.TargetIndex == target.TargetIndex &&
+                pose.SampleSource == ReplayPositionSampleSource.ActionEffectTarget &&
+                pose.ActorKind == ReplayActorKind.Player &&
+                IsUsableReplayPosition(pose.Position));
+            var position = targetPose?.Position ?? member.Position;
+            var rotation = targetPose?.Rotation ?? member.Rotation;
+            var amount = target.Effects
+                .Where(effect => GetEventKind((ActionEffectKind)effect.Type) == DeathEventKind.Damage)
+                .Aggregate(0UL, (total, effect) => total + CalculateRawActionEffectAmount(effect));
+            var sourceKey = towerIndex is { } index
+                ? $"{rawEventKind}:{index}:{packet.CasterEntityId:X8}:{packet.Sequence}:{member.MemberKey}"
+                : $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.Sequence}:{member.MemberKey}";
+
+            AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+                packet.SeenAtUtc,
+                CalculatePullElapsed(packet.SeenAtUtc),
+                0.05f,
+                sourceKey,
+                $"{sourceName} -> {member.MemberName}",
+                ReplayMechanicShape.Label,
+                position.X,
+                position.Y,
+                position.Z,
+                rotation,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                label ?? $"{GetActionName(packet.ActionId)} target",
+                rawEventKind,
+                packet.ActionId,
+                (uint)Math.Min(uint.MaxValue, amount),
+                true));
+        }
+    }
+
+    private void CaptureReplayDmuP2ForsakenCloneDrops(RawActionEffectPacket packet, string label)
+    {
+        var sourceName = string.IsNullOrWhiteSpace(packet.CasterName)
+            ? GetEntityDisplayName(packet.CasterEntityId)
+            : packet.CasterName;
+        var seenTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var target in packet.Targets)
+        {
+            var member = FindCurrentMemberByTargetId(target.TargetId);
+            if (member is null || !seenTargets.Add(member.MemberKey))
+            {
+                continue;
+            }
+
+            var targetPose = packet.ReplayPoses.FirstOrDefault(pose =>
+                pose.TargetIndex == target.TargetIndex &&
+                pose.SampleSource == ReplayPositionSampleSource.ActionEffectTarget &&
+                pose.ActorKind == ReplayActorKind.Player &&
+                IsUsableReplayPosition(pose.Position));
+            var position = targetPose?.Position ?? member.Position;
+            var rotation = targetPose?.Rotation ?? member.Rotation;
+            var amount = target.Effects
+                .Where(effect => GetEventKind((ActionEffectKind)effect.Type) == DeathEventKind.Damage)
+                .Aggregate(0UL, (total, effect) => total + CalculateRawActionEffectAmount(effect));
+
+            AddRecentReplayMechanicSnapshot(new ReplayMechanicSnapshot(
+                packet.SeenAtUtc,
+                CalculatePullElapsed(packet.SeenAtUtc),
+                2.4f,
+                $"{ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind}:{packet.CasterEntityId:X8}:{packet.Sequence}:{member.MemberKey}",
+                $"{sourceName} -> {member.MemberName}",
+                ReplayMechanicShape.Spread,
+                position.X,
+                position.Y,
+                position.Z,
+                rotation,
+                5.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                label,
+                ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind,
+                packet.ActionId,
+                (uint)Math.Min(uint.MaxValue, amount),
+                true));
+        }
     }
 
     private bool TryFindActiveDmuP2PathOfLightTower(

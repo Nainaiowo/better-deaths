@@ -376,6 +376,18 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             var castKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mechanic in mechanics)
             {
+                if (IsForsakenCloneDrop(mechanic))
+                {
+                    AddForsakenCloneDrop(mechanic, castKeys);
+                    continue;
+                }
+
+                if (IsForsakenTargetEvidence(mechanic))
+                {
+                    AddMechanicDamage(mechanic);
+                    continue;
+                }
+
                 if (mechanic.Shape == ReplayMechanicShape.Tether)
                 {
                     AddTether(mechanic);
@@ -384,7 +396,19 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
 
                 if (IsCastSnapshot(mechanic))
                 {
+                    if (IsSupersededForsakenCleaveCast(mechanic, mechanics))
+                    {
+                        continue;
+                    }
+
                     AddCast(mechanic, castKeys, predicted: true);
+                    continue;
+                }
+
+                if (IsForsakenCleaveResolve(mechanic))
+                {
+                    AddForsakenCleaveCast(mechanic, explicitCasts, castKeys);
+                    AddMechanicDamage(mechanic);
                     continue;
                 }
 
@@ -401,6 +425,124 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
 
                 AddMechanicDamage(mechanic);
             }
+        }
+
+        private void AddForsakenCloneDrop(ReplayMechanicSnapshot mechanic, ISet<string> castKeys)
+        {
+            var sourceId = actors.GetMechanicSource(mechanic);
+            var targetId = actors.FindPlayerInSourceKey(mechanic.SourceKey);
+            if (targetId is null)
+            {
+                return;
+            }
+
+            var timestamp = ToMilliseconds(mechanic.PullElapsedSeconds);
+            var roundedTime = (long)Math.Round(timestamp / 100.0);
+            if (castKeys.Add($"{sourceId}:{mechanic.RawEventId}:{targetId.Value}:{roundedTime}"))
+            {
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = timestamp,
+                        Type = "cast",
+                        SourceID = sourceId,
+                        TargetID = targetId.Value,
+                        AbilityGameID = mechanic.RawEventId,
+                        SourceInstance = sourceId,
+                        SourceResources = ResourceAt(sourceId, mechanic.PullElapsedSeconds),
+                        TargetResources = ToResources(mechanic.X, mechanic.Z, mechanic.Rotation),
+                    },
+                    FflogsEventDataType.Casts,
+                    FflogsHostilityType.Enemies));
+            }
+
+            var known = knownDamage
+                .Where(entry => entry.ActionId == mechanic.RawEventId && entry.TargetId == targetId.Value)
+                .OrderBy(entry => Math.Abs(entry.Timestamp - timestamp))
+                .FirstOrDefault();
+            if (known is not null && Math.Abs(known.Timestamp - timestamp) <= 1_500)
+            {
+                return;
+            }
+
+            AddDamagePair(
+                timestamp,
+                sourceId,
+                targetId.Value,
+                mechanic.RawEventId,
+                mechanic.RawState,
+                ResourceAt(sourceId, mechanic.PullElapsedSeconds),
+                ToResources(mechanic.X, mechanic.Z, mechanic.Rotation),
+                sourceId);
+        }
+
+        private bool IsSupersededForsakenCleaveCast(
+            ReplayMechanicSnapshot cast,
+            IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+        {
+            if (cast.RawEventId is not (47836 or 47837))
+            {
+                return false;
+            }
+
+            var sourceId = actors.GetMechanicSource(cast);
+            return mechanics.Any(candidate =>
+                IsForsakenCleaveResolve(candidate) &&
+                candidate.RawEventId == cast.RawEventId &&
+                actors.GetMechanicSource(candidate) == sourceId &&
+                candidate.PullElapsedSeconds >= cast.PullElapsedSeconds &&
+                candidate.PullElapsedSeconds - cast.PullElapsedSeconds <= 7.0f);
+        }
+
+        private void AddForsakenCleaveCast(
+            ReplayMechanicSnapshot mechanic,
+            IReadOnlyList<ReplayMechanicSnapshot> explicitCasts,
+            ISet<string> castKeys)
+        {
+            var sourceId = actors.GetMechanicSource(mechanic);
+            var matchingCast = explicitCasts
+                .Where(candidate =>
+                    candidate.RawEventId == mechanic.RawEventId &&
+                    actors.GetMechanicSource(candidate) == sourceId &&
+                    candidate.PullElapsedSeconds <= mechanic.PullElapsedSeconds &&
+                    mechanic.PullElapsedSeconds - candidate.PullElapsedSeconds <= 7.0f)
+                .OrderBy(candidate => candidate.PullElapsedSeconds)
+                .FirstOrDefault();
+            if (matchingCast is not null)
+            {
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = ToMilliseconds(matchingCast.PullElapsedSeconds),
+                        Type = "begincast",
+                        SourceID = sourceId,
+                        AbilityGameID = mechanic.RawEventId,
+                        SourceInstance = sourceId,
+                        SourceResources = ResourceAt(sourceId, matchingCast.PullElapsedSeconds) ?? MechanicSourceResources(matchingCast),
+                    },
+                    FflogsEventDataType.Casts,
+                    FflogsHostilityType.Enemies));
+            }
+
+            var timestamp = ToMilliseconds(mechanic.PullElapsedSeconds);
+            var roundedTime = (long)Math.Round(timestamp / 100.0);
+            if (!castKeys.Add($"{sourceId}:{mechanic.RawEventId}:{roundedTime}"))
+            {
+                return;
+            }
+
+            output.Add(new LocalEvent(
+                new FflogsEvent
+                {
+                    Timestamp = timestamp,
+                    Type = "cast",
+                    SourceID = sourceId,
+                    AbilityGameID = mechanic.RawEventId,
+                    SourceInstance = sourceId,
+                    SourceResources = MechanicSourceResources(mechanic),
+                },
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies));
         }
 
         private void AddMissingAnalyzerAnchors()
@@ -488,12 +630,48 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 return;
             }
 
+            if (IsForsakenTargetEvidence(mechanic))
+            {
+                var targetId = actors.FindPlayerInSourceKey(mechanic.SourceKey);
+                if (targetId is null)
+                {
+                    return;
+                }
+
+                var evidenceTimestamp = ToMilliseconds(mechanic.PullElapsedSeconds);
+                var known = knownDamage
+                    .Where(entry => entry.ActionId == mechanic.RawEventId && entry.TargetId == targetId.Value)
+                    .OrderBy(entry => Math.Abs(entry.Timestamp - evidenceTimestamp))
+                    .FirstOrDefault();
+                if (known is not null && Math.Abs(known.Timestamp - evidenceTimestamp) <= 1_500)
+                {
+                    return;
+                }
+
+                var evidenceSourceId = actors.GetMechanicSource(mechanic);
+                AddDamagePair(
+                    evidenceTimestamp,
+                    evidenceSourceId,
+                    targetId.Value,
+                    mechanic.RawEventId,
+                    mechanic.RawState,
+                    ResourceAt(evidenceSourceId, mechanic.PullElapsedSeconds) ?? MechanicSourceResources(mechanic),
+                    ResourceAt(targetId.Value, mechanic.PullElapsedSeconds) ?? ToResources(mechanic.X, mechanic.Z, mechanic.Rotation),
+                    evidenceSourceId);
+                return;
+            }
+
             var sourceId = actors.GetMechanicSource(mechanic);
             var eventSeconds = mechanic.RawEventId == PathOfLightActionId &&
                 string.Equals(mechanic.RawEventKind, "dmu-p2-path-of-light", StringComparison.OrdinalIgnoreCase)
                 ? mechanic.PullElapsedSeconds + mechanic.DurationSeconds
                 : mechanic.PullElapsedSeconds;
             var timestamp = ToMilliseconds(eventSeconds);
+            if (HasExactForsakenTargetEvidence(mechanic, eventSeconds))
+            {
+                return;
+            }
+
             if (string.Equals(mechanic.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase))
             {
                 var targetId = actors.FindPlayerInSourceKey(mechanic.SourceKey);
@@ -565,6 +743,19 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     ResourceAt(targetId, eventSeconds),
                     sourceId);
             }
+        }
+
+        private bool HasExactForsakenTargetEvidence(ReplayMechanicSnapshot mechanic, float eventSeconds)
+        {
+            if (mechanic.RawEventId is not (47806 or 47808 or 47809 or 47810))
+            {
+                return false;
+            }
+
+            return pull.ReplayMechanics.Any(candidate =>
+                IsForsakenTargetEvidence(candidate) &&
+                candidate.RawEventId == mechanic.RawEventId &&
+                Math.Abs(candidate.PullElapsedSeconds - eventSeconds) <= 1.0f);
         }
 
         private void AddTether(ReplayMechanicSnapshot mechanic)
@@ -894,6 +1085,15 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
 
         internal int GetMechanicSource(ReplayMechanicSnapshot mechanic)
         {
+            if (IsForsakenTargetEvidence(mechanic))
+            {
+                var evidenceSource = HexTokens(mechanic.SourceKey).FirstOrDefault();
+                if (evidenceSource != 0)
+                {
+                    return GetCombatSource(evidenceSource, mechanic.SourceName);
+                }
+            }
+
             foreach (var entityId in HexTokens(mechanic.SourceKey))
             {
                 if (byEntity.TryGetValue(entityId, out var existing))
@@ -1067,6 +1267,27 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
     private static bool IsCastSnapshot(ReplayMechanicSnapshot mechanic) =>
         mechanic.RawEventKind.Contains("cast", StringComparison.OrdinalIgnoreCase) ||
         mechanic.RawEventKind.Contains("predicted", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsForsakenTargetEvidence(ReplayMechanicSnapshot mechanic) =>
+        string.Equals(
+            mechanic.RawEventKind,
+            ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+            StringComparison.Ordinal) ||
+        string.Equals(
+            mechanic.RawEventKind,
+            ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+            StringComparison.Ordinal);
+
+    private static bool IsForsakenCloneDrop(ReplayMechanicSnapshot mechanic) =>
+        ReplayEncounterModules.IsDmuP2ForsakenCloneDropAction(mechanic.RawEventId) &&
+        string.Equals(
+            mechanic.RawEventKind,
+            ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind,
+            StringComparison.Ordinal);
+
+    private static bool IsForsakenCleaveResolve(ReplayMechanicSnapshot mechanic) =>
+        mechanic.RawEventId is 47836 or 47837 &&
+        string.Equals(mechanic.RawEventKind, "dmu-p2-all-things-ending", StringComparison.Ordinal);
 
     private static uint ToFflogsStatusId(uint statusId) => statusId >= 1_000_000 ? statusId : statusId + 1_000_000;
 

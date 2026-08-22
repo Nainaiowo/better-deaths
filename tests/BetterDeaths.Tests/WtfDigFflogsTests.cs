@@ -185,6 +185,66 @@ public sealed class WtfDigFflogsTests
         Assert.StartsWith("local:", source.Report.Code);
     }
 
+    [Fact]
+    public async Task LocalPull_ForsakenUsesRecordedTowerTargetsInsteadOfPositionGuessing()
+    {
+        var source = LocalPullEventSource.Create(CreateLocalForsakenEvidencePull());
+        var damage = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.DamageTaken,
+                FflogsHostilityType.Friendlies,
+                AbilityId: 47806),
+            CancellationToken.None);
+        var expectedTarget = source.Report.Actors.Single(actor => actor.Name == "Actual Soaker").Id;
+        var guessedTarget = source.Report.Actors.Single(actor => actor.Name == "Nearby Player").Id;
+
+        Assert.Contains(damage, entry => entry.Type == "calculateddamage" && entry.TargetID == expectedTarget);
+        Assert.DoesNotContain(damage, entry => entry.TargetID == guessedTarget);
+    }
+
+    [Fact]
+    public async Task LocalPull_ForsakenCloneAndCleaveKeepExactTargetSourceAndFinalFacing()
+    {
+        var source = LocalPullEventSource.Create(CreateLocalForsakenClonePull());
+        var cloneCasts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: 47833),
+            CancellationToken.None);
+        var expectedTarget = source.Report.Actors.Single(actor => actor.Name == "Actual Bait").Id;
+        var cloneCast = Assert.Single(cloneCasts, entry => entry.Type == "cast");
+        Assert.Equal(expectedTarget, cloneCast.TargetID);
+        Assert.Equal(11200, cloneCast.TargetResources!.X);
+
+        var cleaveCasts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: 47837),
+            CancellationToken.None);
+        Assert.Contains(cleaveCasts, entry => entry.Type == "begincast" && entry.Timestamp == 10_000);
+        var resolvedCleave = Assert.Single(cleaveCasts, entry => entry.Type == "cast");
+        Assert.Equal(cloneCast.SourceID, resolvedCleave.SourceID);
+        Assert.Equal(cloneCast.SourceInstance, resolvedCleave.SourceInstance);
+        Assert.Equal(15_000, resolvedCleave.Timestamp);
+        Assert.Equal(10500, resolvedCleave.SourceResources!.X);
+        Assert.Equal(10100, resolvedCleave.SourceResources.Y);
+        Assert.Equal((-1.25 * 100.0) - (150.0 * Math.PI), resolvedCleave.SourceResources.Facing, 4);
+    }
+
     private static PullDeathSnapshot CreateLocalArrowPull()
     {
         var startedAt = new DateTime(2026, 8, 21, 12, 0, 0, DateTimeKind.Utc);
@@ -229,6 +289,150 @@ public sealed class WtfDigFflogsTests
                     new StatusSnapshot(4876, "Tele-Portent", 0, bossEntityId, 0, 0), false),
             ],
             ReplayDebuffsCaptured = true,
+        };
+    }
+
+    private static PullDeathSnapshot CreateLocalForsakenEvidencePull()
+    {
+        var startedAt = new DateTime(2026, 8, 21, 13, 0, 0, DateTimeKind.Utc);
+        ReplayPositionSnapshot Position(float seconds, string key, string name, uint entityId, float x, float z, int partyIndex) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, key, name,
+                entityId == 0x40000001 ? ReplayActorKind.Enemy : ReplayActorKind.Player,
+                partyIndex,
+                entityId,
+                entityId == 0x40000001 ? 0u : 34u,
+                entityId == 0x40000001 ? string.Empty : "SAM",
+                x, 0, z, 0, 100_000, 0, 100_000, false, true);
+        ReplayMechanicSnapshot Mechanic(
+            float seconds,
+            float duration,
+            string sourceKey,
+            ReplayMechanicShape shape,
+            float x,
+            float z,
+            string rawEventKind,
+            uint rawState = 0) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, duration, sourceKey, "Kefka",
+                shape, x, 0, z, 0, 4, 0, 0, 0, "The Path of Light",
+                rawEventKind, 47806, rawState, true);
+
+        return new PullDeathSnapshot(
+            startedAt.AddSeconds(20),
+            "Wipe",
+            1363,
+            "Dancing Mad",
+            20,
+            [])
+        {
+            PullNumber = 13,
+            ReplayPositions =
+            [
+                Position(9, "enemy:40000001", "Kefka", 0x40000001, 100, 100, 2000),
+                Position(9, "nearby-player", "Nearby Player", 0x10000001, 96, 100, 0),
+                Position(9, "actual-soaker", "Actual Soaker", 0x10000002, 110, 100, 1),
+            ],
+            ReplayMechanics =
+            [
+                Mechanic(4, 5, "dmu-p2-path-of-light:1:1", ReplayMechanicShape.Tower, 96, 100, "dmu-p2-path-of-light"),
+                Mechanic(
+                    9,
+                    0.05f,
+                    "dmu-p2-path-of-light-activation:1:40000001:100:actual-soaker",
+                    ReplayMechanicShape.Label,
+                    110,
+                    100,
+                    ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                    1234),
+            ],
+        };
+    }
+
+    private static PullDeathSnapshot CreateLocalForsakenClonePull()
+    {
+        var startedAt = new DateTime(2026, 8, 21, 14, 0, 0, DateTimeKind.Utc);
+        ReplayPositionSnapshot Position(float seconds, string key, string name, ReplayActorKind kind, uint entityId, float x, float z, float rotation, int partyIndex) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, key, name, kind, partyIndex, entityId,
+                kind == ReplayActorKind.Player ? 34u : 0u,
+                kind == ReplayActorKind.Player ? "SAM" : string.Empty,
+                x, 0, z, rotation, 100_000, 0, 100_000, false, true);
+        ReplayMechanicSnapshot Mechanic(
+            float seconds,
+            float duration,
+            string sourceKey,
+            string sourceName,
+            ReplayMechanicShape shape,
+            float x,
+            float z,
+            float rotation,
+            string label,
+            string rawEventKind,
+            uint actionId,
+            uint rawState = 0) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, duration, sourceKey, sourceName,
+                shape, x, 0, z, rotation, 5, 100, 0, 180, label,
+                rawEventKind, actionId, rawState, true);
+
+        return new PullDeathSnapshot(
+            startedAt.AddSeconds(20),
+            "Wipe",
+            1363,
+            "Dancing Mad",
+            20,
+            [])
+        {
+            PullNumber = 14,
+            ReplayPositions =
+            [
+                Position(5, "clone", "Future Fragment", ReplayActorKind.Enemy, 0x40000002, 100, 100, 0, 2000),
+                Position(5, "nearby", "Nearby Player", ReplayActorKind.Player, 0x10000001, 101, 100, 0, 0),
+                Position(5, "actual-bait", "Actual Bait", ReplayActorKind.Player, 0x10000002, 112, 99, 0, 1),
+            ],
+            ReplayMechanics =
+            [
+                Mechanic(
+                    5,
+                    2.4f,
+                    "dmu-p2-forsaken-clone-drop:40000002:100:actual-bait",
+                    "Future Fragment -> Actual Bait",
+                    ReplayMechanicShape.Spread,
+                    112,
+                    99,
+                    0,
+                    "Past's End",
+                    ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind,
+                    47833,
+                    1234),
+                Mechanic(
+                    10,
+                    5.6f,
+                    $"bossmod-cast:40000002:47837:{startedAt.AddSeconds(10).Ticks}",
+                    "Future Fragment",
+                    ReplayMechanicShape.Cone,
+                    100,
+                    100,
+                    0.25f,
+                    "All Things Ending",
+                    "bossmod-cast",
+                    47837,
+                    0x40000002),
+                Mechanic(
+                    15,
+                    2,
+                    "dmu-p2-all-things-ending:40000002:101",
+                    "Future Fragment",
+                    ReplayMechanicShape.Cone,
+                    105,
+                    101,
+                    1.25f,
+                    "All Things Ending",
+                    "dmu-p2-all-things-ending",
+                    47837,
+                    0x40000002),
+            ],
         };
     }
 

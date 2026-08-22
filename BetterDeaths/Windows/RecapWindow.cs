@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.285";
+    private const string CurrentChangelogVersion = "0.1.0.286";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -224,6 +224,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const int MaxReplayMarkerBadgesPerActor = 3;
     private const string ReplayPathOfLightRawEventKind = "dmu-p2-path-of-light";
     private const string ReplayDmuP2EndPredictionRawEventKind = "dmu-p2-end-predicted";
+    private const string ReplayDmuP2ForsakenCleavePredictionRawEventKind = "dmu-p2-forsaken-cleave-predicted";
     private const string ReplayDmuP1FlagrantFireRawEventKind = "dmu-p1-flagrant-fire";
     private const string ReplayDmuP5ArenaHoleRawEventKind = "dmu-p5-arena-hole";
     private const float ReplayDmuP2EndPredictionSeconds = 6.6f;
@@ -8418,7 +8419,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         bool showEarlierMarkers)
     {
         var normalizedMechanics = NormalizeReplayDmuP2EndTimeline(
-            rawMechanics.Select(NormalizeReplayMechanicForDisplay).ToList(),
+            NormalizeReplayDmuP2ForsakenCleaveTimeline(
+                rawMechanics.Select(NormalizeReplayMechanicForDisplay).ToList()),
             positions);
         var mechanics = NormalizeReplayPathOfLightTowerTimeline(normalizedMechanics)
             .ToList();
@@ -8737,14 +8739,21 @@ public sealed partial class RecapWindow : Window, IDisposable
                 continue;
             }
 
-            var target = GetReplayPlayerActorsAt(
-                    positions,
-                    mechanic.SeenAtUtc,
-                    displayStartAtUtc,
-                    displayEndAtUtc)
-                .OrderBy(position => DistanceSquared(mechanic.X, mechanic.Z, position.X, position.Z))
-                .FirstOrDefault();
-            if (target is null || DistanceSquared(mechanic.X, mechanic.Z, target.X, target.Z) > 9.0f)
+            var players = GetReplayPlayerActorsAt(
+                positions,
+                mechanic.SeenAtUtc,
+                displayStartAtUtc,
+                displayEndAtUtc);
+            var exactTargetActorKey = string.Empty;
+            var hasExactTarget = IsReplayDmuP2ForsakenCloneDrop(mechanic) &&
+                TryGetReplayActorKeyFromSourceKey(mechanic.SourceKey, players, out exactTargetActorKey);
+            var target = hasExactTarget
+                ? players.FirstOrDefault(position => string.Equals(position.ActorKey, exactTargetActorKey, StringComparison.Ordinal))
+                : players
+                    .OrderBy(position => DistanceSquared(mechanic.X, mechanic.Z, position.X, position.Z))
+                    .FirstOrDefault();
+            if (target is null ||
+                (!hasExactTarget && DistanceSquared(mechanic.X, mechanic.Z, target.X, target.Z) > 9.0f))
             {
                 normalized.Add(mechanic);
                 continue;
@@ -8771,9 +8780,132 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static bool IsReplayDmuP2EndResolveMechanic(ReplayMechanicSnapshot mechanic)
     {
-        return (mechanic.RawEventId is 47830 or 47831 or 47832 or 47833) &&
-            (string.Equals(mechanic.RawEventKind, "dmu-p2-futures-end", StringComparison.Ordinal) ||
+        return ReplayEncounterModules.IsDmuP2ForsakenCloneDropAction(mechanic.RawEventId) &&
+            (IsReplayDmuP2ForsakenCloneDrop(mechanic) ||
+                string.Equals(mechanic.RawEventKind, "dmu-p2-futures-end", StringComparison.Ordinal) ||
                 string.Equals(mechanic.RawEventKind, "dmu-p2-pasts-end", StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<ReplayMechanicSnapshot> NormalizeReplayDmuP2ForsakenCleaveTimeline(
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+    {
+        var cloneDrops = mechanics
+            .Where(IsReplayDmuP2ForsakenCloneDrop)
+            .ToArray();
+        if (cloneDrops.Length == 0)
+        {
+            return mechanics;
+        }
+
+        var replacements = new Dictionary<string, ReplayMechanicSnapshot>(StringComparer.Ordinal);
+        var supersededCastKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var cleave in mechanics.Where(IsReplayDmuP2ForsakenCleaveResolve))
+        {
+            if (!TryGetReplayMechanicSourceEntityId(cleave, out var sourceEntityId))
+            {
+                continue;
+            }
+
+            var drop = cloneDrops
+                .Where(candidate =>
+                    TryGetReplayMechanicSourceEntityId(candidate, out var candidateSourceEntityId) &&
+                    candidateSourceEntityId == sourceEntityId &&
+                    candidate.SeenAtUtc < cleave.SeenAtUtc &&
+                    cleave.SeenAtUtc - candidate.SeenAtUtc <= TimeSpan.FromSeconds(15))
+                .OrderByDescending(candidate => candidate.SeenAtUtc)
+                .FirstOrDefault();
+            if (drop is null)
+            {
+                continue;
+            }
+
+            var matchingCasts = mechanics
+                .Where(candidate =>
+                    IsReplayCastSnapshot(candidate) &&
+                    candidate.RawEventId == cleave.RawEventId &&
+                    TryGetReplayMechanicSourceEntityId(candidate, out var candidateSourceEntityId) &&
+                    candidateSourceEntityId == sourceEntityId &&
+                    candidate.SeenAtUtc <= cleave.SeenAtUtc &&
+                    cleave.SeenAtUtc - candidate.SeenAtUtc <= TimeSpan.FromSeconds(7))
+                .OrderBy(candidate => candidate.SeenAtUtc)
+                .ToArray();
+            var startedAtUtc = matchingCasts.Length > 0
+                ? matchingCasts[0].SeenAtUtc
+                : cleave.SeenAtUtc.AddSeconds(-Math.Max(0.05f, cleave.DurationSeconds));
+            foreach (var cast in matchingCasts)
+            {
+                supersededCastKeys.Add(cast.SourceKey);
+            }
+
+            var durationSeconds = Math.Max(0.05f, (float)(cleave.SeenAtUtc - startedAtUtc).TotalSeconds);
+            replacements[cleave.SourceKey] = cleave with
+            {
+                SeenAtUtc = startedAtUtc,
+                PullElapsedSeconds = cleave.PullElapsedSeconds - durationSeconds,
+                DurationSeconds = durationSeconds,
+                SourceKey = $"{ReplayDmuP2ForsakenCleavePredictionRawEventKind}:{sourceEntityId:X8}:{drop.RawEventId}:{cleave.SeenAtUtc.Ticks}",
+                Rotation = ReplayEncounterModules.GetDmuP2ForsakenCleaveRotation(cleave.Rotation, drop.RawEventId),
+                Label = ReplayEncounterModules.IsDmuP2ForsakenPastEndAction(drop.RawEventId)
+                    ? "All Things Ending (Past's End)"
+                    : "All Things Ending (Future's End)",
+                RawEventKind = ReplayDmuP2ForsakenCleavePredictionRawEventKind,
+            };
+        }
+
+        if (replacements.Count == 0)
+        {
+            return mechanics;
+        }
+
+        return mechanics
+            .Where(mechanic => !supersededCastKeys.Contains(mechanic.SourceKey))
+            .Select(mechanic => replacements.GetValueOrDefault(mechanic.SourceKey, mechanic))
+            .ToArray();
+    }
+
+    private static bool IsReplayDmuP2ForsakenCloneDrop(ReplayMechanicSnapshot mechanic)
+    {
+        return ReplayEncounterModules.IsDmuP2ForsakenCloneDropAction(mechanic.RawEventId) &&
+            string.Equals(
+                mechanic.RawEventKind,
+                ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind,
+                StringComparison.Ordinal);
+    }
+
+    private static bool IsReplayDmuP2ForsakenCleaveResolve(ReplayMechanicSnapshot mechanic)
+    {
+        return mechanic.RawEventId is 47836 or 47837 &&
+            string.Equals(mechanic.RawEventKind, "dmu-p2-all-things-ending", StringComparison.Ordinal);
+    }
+
+    private static bool IsReplayCastSnapshot(ReplayMechanicSnapshot mechanic)
+    {
+        return mechanic.RawEventKind.Contains("cast", StringComparison.OrdinalIgnoreCase) ||
+            mechanic.RawEventKind.Contains("predicted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryGetReplayMechanicSourceEntityId(
+        ReplayMechanicSnapshot mechanic,
+        out uint sourceEntityId)
+    {
+        sourceEntityId = 0;
+        var parts = mechanic.SourceKey.Split(':');
+        return parts.Length >= 2 &&
+            uint.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out sourceEntityId) &&
+            sourceEntityId != 0;
+    }
+
+    private static bool TryGetReplayActorKeyFromSourceKey(
+        string sourceKey,
+        IReadOnlyList<ReplayPositionSnapshot> actors,
+        out string actorKey)
+    {
+        actorKey = actors
+            .Select(actor => actor.ActorKey)
+            .Where(candidate => sourceKey.EndsWith($":{candidate}", StringComparison.Ordinal))
+            .OrderByDescending(candidate => candidate.Length)
+            .FirstOrDefault() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(actorKey);
     }
 
     private static IReadOnlyList<ReplayMechanicSnapshot> NormalizeReplayPathOfLightTowerTimeline(
@@ -8797,6 +8929,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             return passthroughMechanics;
         }
+
+        pathOfLightTowers = ExtendReplayPathOfLightTowersToShapeResolve(pathOfLightTowers, mechanics).ToList();
 
         var adjustedTowers = new List<ReplayMechanicSnapshot>(pathOfLightTowers.Count);
         var activeTowers = new List<(ReplayMechanicSnapshot Mechanic, DateTime EndAtUtc)>();
@@ -8927,6 +9061,94 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         return int.TryParse(sourceKey[prefix.Length..indexEnd], CultureInfo.InvariantCulture, out towerIndex) &&
+            towerIndex is >= 1 and <= 8;
+    }
+
+    private static IReadOnlyList<ReplayMechanicSnapshot> ExtendReplayPathOfLightTowersToShapeResolve(
+        IReadOnlyList<ReplayMechanicSnapshot> towers,
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+    {
+        var activations = mechanics
+            .Where(mechanic => string.Equals(
+                mechanic.RawEventKind,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                StringComparison.Ordinal))
+            .Select(mechanic => TryGetReplayPathOfLightActivationTowerIndex(mechanic.SourceKey, out var towerIndex)
+                ? (Mechanic: mechanic, TowerIndex: towerIndex)
+                : (Mechanic: (ReplayMechanicSnapshot?)null, TowerIndex: 0))
+            .Where(entry => entry.Mechanic is not null)
+            .Select(entry => (Mechanic: entry.Mechanic!, entry.TowerIndex))
+            .ToArray();
+        if (activations.Length == 0)
+        {
+            return towers;
+        }
+
+        var exactResolveMechanics = mechanics
+            .Where(mechanic =>
+                mechanic.RawEventId is 47808 or 47809 or 47810 &&
+                string.Equals(
+                    mechanic.RawEventKind,
+                    ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                    StringComparison.Ordinal))
+            .ToArray();
+        var resolveTimes = (exactResolveMechanics.Length > 0
+                ? exactResolveMechanics
+                : mechanics.Where(mechanic =>
+                    mechanic.RawEventId is 47808 or 47809 or 47810 &&
+                    (string.Equals(mechanic.RawEventKind, "dmu-p2-spelldriver", StringComparison.Ordinal) ||
+                        string.Equals(mechanic.RawEventKind, "dmu-p2-spellscatter", StringComparison.Ordinal) ||
+                        string.Equals(mechanic.RawEventKind, "dmu-p2-spellwave", StringComparison.Ordinal))))
+            .Select(mechanic => mechanic.SeenAtUtc)
+            .OrderBy(seenAtUtc => seenAtUtc)
+            .ToArray();
+        if (resolveTimes.Length == 0)
+        {
+            return towers;
+        }
+
+        return towers.Select(tower =>
+        {
+            if (!TryGetReplayPathOfLightTowerIndex(tower.SourceKey, out var towerIndex))
+            {
+                return tower;
+            }
+
+            var currentEndAtUtc = tower.SeenAtUtc.AddSeconds(Math.Max(0.05f, tower.DurationSeconds));
+            var activation = activations
+                .Where(entry => entry.TowerIndex == towerIndex)
+                .OrderBy(entry => Math.Abs((entry.Mechanic.SeenAtUtc - currentEndAtUtc).TotalSeconds))
+                .FirstOrDefault();
+            if (activation.Mechanic is null ||
+                Math.Abs((activation.Mechanic.SeenAtUtc - currentEndAtUtc).TotalSeconds) > 1.0)
+            {
+                return tower;
+            }
+
+            var resolveAtUtc = resolveTimes.FirstOrDefault(candidate =>
+                candidate >= activation.Mechanic.SeenAtUtc &&
+                candidate - activation.Mechanic.SeenAtUtc <= TimeSpan.FromSeconds(2.0));
+            return resolveAtUtc == default || resolveAtUtc <= currentEndAtUtc
+                ? tower
+                : tower with
+                {
+                    DurationSeconds = Math.Max(0.05f, (float)(resolveAtUtc - tower.SeenAtUtc).TotalSeconds),
+                };
+        }).ToList();
+    }
+
+    private static bool TryGetReplayPathOfLightActivationTowerIndex(string sourceKey, out int towerIndex)
+    {
+        var prefix = ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind + ":";
+        towerIndex = 0;
+        if (!sourceKey.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var indexEnd = sourceKey.IndexOf(':', prefix.Length);
+        return indexEnd > prefix.Length &&
+            int.TryParse(sourceKey[prefix.Length..indexEnd], CultureInfo.InvariantCulture, out towerIndex) &&
             towerIndex is >= 1 and <= 8;
     }
 
@@ -9685,7 +9907,14 @@ public sealed partial class RecapWindow : Window, IDisposable
             .Where(mechanic => mechanic.SeenAtUtc <= selectedAtUtc)
             .Where(mechanic => selectedAtUtc <= mechanic.SeenAtUtc.AddSeconds(Math.Max(0.05f, mechanic.DurationSeconds)))
             .Where(mechanic => ShouldDisplayReplayMechanic(mechanic, mechanics, markers, positions, selectedAtUtc, replayModule))
-            .Select(mechanic => ProjectReplayMechanicToActorState(mechanic, actorStates, replayModule))
+            .Select(mechanic => ProjectReplayMechanicToActorState(
+                mechanic,
+                actorStates,
+                markers,
+                positions,
+                mechanics,
+                selectedAtUtc,
+                replayModule))
             .OrderBy(mechanic => mechanic.SeenAtUtc)
             .ThenBy(mechanic => mechanic.SourceName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(mechanic => mechanic.RawEventKind, StringComparer.OrdinalIgnoreCase)
@@ -9731,6 +9960,10 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static ReplayMechanicSnapshot ProjectReplayMechanicToActorState(
         ReplayMechanicSnapshot mechanic,
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
+        IReadOnlyList<ReplayMarkerSnapshot> markers,
+        IReadOnlyList<ReplayPositionSnapshot> positions,
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        DateTime selectedAtUtc,
         IReplayEncounterModule replayModule)
     {
         if (IsReplayTetherMechanic(mechanic))
@@ -9774,10 +10007,25 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         var rotation = sourceActor.Rotation;
         if (mechanic.Shape == ReplayMechanicShape.Cone &&
-            markerInfo.ConeBaitsClosestPlayer &&
-            TryFindClosestReplayPlayer(sourceActor, actorStates, out var targetActor))
+            markerInfo.ConeBaitsClosestPlayer)
         {
-            rotation = ReplayRotationFromDirection(targetActor.X - sourceActor.X, targetActor.Z - sourceActor.Z);
+            var marker = FindReplayMarkerForMechanic(mechanic, markers);
+            if (marker is not null &&
+                ReplayEncounterModules.TryGetDmuP2ForsakenConeTargetActorKey(
+                    marker,
+                    markers,
+                    positions,
+                    mechanics,
+                    selectedAtUtc,
+                    out var targetActorKey) &&
+                actorStates.FirstOrDefault(actor => string.Equals(actor.ActorKey, targetActorKey, StringComparison.Ordinal)) is { } exactTarget)
+            {
+                rotation = ReplayRotationFromDirection(exactTarget.X - sourceActor.X, exactTarget.Z - sourceActor.Z);
+            }
+            else if (TryFindClosestReplayPlayer(sourceActor, actorStates, out var closestTarget))
+            {
+                rotation = ReplayRotationFromDirection(closestTarget.X - sourceActor.X, closestTarget.Z - sourceActor.Z);
+            }
         }
 
         return mechanic with
@@ -19749,6 +19997,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.286");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Improved DMU P2 Forsaken replays by using recorded mechanic targets instead of positional guesses.");
+        DrawHighlightedChangelogBullet("Corrected clone baits and All Things Ending cleaves to use the actual baited player, clone position, and final direction.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.285");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added the WTF.DIG analyzer to Better Deaths for supported DMU mechanics.");
