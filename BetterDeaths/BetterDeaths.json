@@ -5,7 +5,7 @@
   "DownloadCount": 4872,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved DMU P2 Forsaken replays with more accurate timing and cleaner mechanic drawings.",
+  "Changelog": "Added the WTF.DIG analyzer to Better Deaths for supported DMU mechanics. Analyze recorded Better Deaths pulls directly, or paste a full FFLogs report or specific pull link.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

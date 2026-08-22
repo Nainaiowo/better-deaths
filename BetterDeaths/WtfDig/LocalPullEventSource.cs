@@ -1,0 +1,1128 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Numerics;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BetterDeaths.WtfDig;
+
+internal sealed class LocalPullEventSource : IWtfDigEventSource
+{
+    private const float CastPredictionGraceSeconds = 0.6f;
+    private const uint RealFakeStatusId = 2056;
+    private const uint PathOfLightActionId = 47806;
+
+    private static readonly IReadOnlyDictionary<uint, string> CanonicalAbilityNames =
+        new Dictionary<uint, string>
+        {
+            [47801] = "Tele-Trouncing",
+            [47804] = "Forsaken",
+            [47806] = "The Path of Light",
+            [47808] = "Spelldriver",
+            [47809] = "Spellscatter",
+            [47810] = "Spellwave",
+            [47826] = "Future's End",
+            [47827] = "Past's End",
+            [47830] = "Future's End",
+            [47831] = "Past's End",
+            [47832] = "Future's End",
+            [47833] = "Past's End",
+            [47836] = "All Things Ending",
+            [47837] = "All Things Ending",
+            [47843] = "Ultima Blaster",
+            [47844] = "Ultima Blaster",
+            [47867] = "Black Hole",
+            [47868] = "Nothingness",
+            [47892] = "Grand Cross",
+            [47904] = "Inferno",
+            [47905] = "Tsunami",
+            [49884] = "Kefka Says",
+            [50067] = "Flood of Naught",
+            [50068] = "White Antilight",
+            [50069] = "Black Antilight",
+            [50070] = "Edge of Death",
+        };
+
+    private static readonly IReadOnlyDictionary<uint, string> JobNames = new Dictionary<uint, string>
+    {
+        [19] = "Paladin",
+        [20] = "Monk",
+        [21] = "Warrior",
+        [22] = "Dragoon",
+        [23] = "Bard",
+        [24] = "WhiteMage",
+        [25] = "BlackMage",
+        [27] = "Summoner",
+        [28] = "Scholar",
+        [30] = "Ninja",
+        [31] = "Machinist",
+        [32] = "DarkKnight",
+        [33] = "Astrologian",
+        [34] = "Samurai",
+        [35] = "RedMage",
+        [37] = "Gunbreaker",
+        [38] = "Dancer",
+        [39] = "Reaper",
+        [40] = "Sage",
+        [41] = "Viper",
+        [42] = "Pictomancer",
+    };
+
+    private readonly IReadOnlyList<LocalEvent> events;
+
+    private LocalPullEventSource(
+        FflogsReportSummary report,
+        FflogsFight fight,
+        IReadOnlyList<LocalEvent> events)
+    {
+        Report = report;
+        Fight = fight;
+        this.events = events;
+    }
+
+    internal FflogsReportSummary Report { get; }
+
+    internal FflogsFight Fight { get; }
+
+    internal static LocalPullEventSource Create(PullDeathSnapshot pull)
+    {
+        var builder = new Builder(pull);
+        return builder.Build();
+    }
+
+    public Task<IReadOnlyList<FflogsEvent>> FetchAllEventsAsync(
+        FflogsEventQuery query,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var matching = events
+            .Where(entry => entry.Event.Timestamp >= query.StartTime && entry.Event.Timestamp <= query.EndTime)
+            .Where(entry => query.DataType is null || entry.DataType == query.DataType)
+            .Where(entry => query.DataType != FflogsEventDataType.Casts || entry.Hostility == query.HostilityType)
+            .Where(entry => query.AbilityId is null || entry.Event.AbilityGameID == query.AbilityId)
+            .OrderBy(entry => entry.Event.Timestamp)
+            .Select(entry => entry.Event)
+            .ToArray();
+        return Task.FromResult<IReadOnlyList<FflogsEvent>>(matching);
+    }
+
+    private sealed class Builder
+    {
+        private readonly PullDeathSnapshot pull;
+        private readonly ActorIndex actors = new();
+        private readonly List<LocalEvent> output = [];
+        private readonly Dictionary<int, ReplayPositionSnapshot[]> positionTracks = [];
+        private readonly List<KnownDamage> knownDamage = [];
+
+        internal Builder(PullDeathSnapshot pull)
+        {
+            this.pull = pull;
+        }
+
+        internal LocalPullEventSource Build()
+        {
+            IndexActors();
+            BuildPositionTracks();
+            AddPositionSamples();
+            AddDebuffs();
+            AddMarkers();
+            AddKnownDamageAndDeaths();
+            AddMechanics();
+            AddMissingAnalyzerAnchors();
+
+            var durationMs = Math.Max(
+                pull.PullElapsedSeconds * 1000.0,
+                output.Select(entry => entry.Event.Timestamp).DefaultIfEmpty(0).Max());
+            var fight = new FflogsFight
+            {
+                Id = LocalFightId(pull),
+                Name = string.IsNullOrWhiteSpace(pull.TerritoryName) ? "Dancing Mad" : pull.TerritoryName,
+                EncounterID = WtfDigAnalyzerCatalog.DancingMadEncounterId,
+                Kill = pull.Reason.Contains("complete", StringComparison.OrdinalIgnoreCase) ? true : null,
+                StartTime = 0,
+                EndTime = durationMs,
+                FriendlyPlayers = actors.FriendlyIds,
+            };
+            var startedAtUtc = pull.CapturedAtUtc.AddMilliseconds(-durationMs);
+            var reportStart = new DateTimeOffset(DateTime.SpecifyKind(startedAtUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+            var report = new FflogsReportSummary
+            {
+                Code = $"local:{pull.PullNumber}:{pull.CapturedAtUtc.Ticks}",
+                Title = $"Better Deaths Pull {pull.PullNumber}",
+                StartTime = reportStart,
+                EndTime = reportStart + durationMs,
+                Zone = new FflogsZone { Id = unchecked((int)pull.TerritoryId), Name = pull.TerritoryName },
+                Fights = [fight],
+                Actors = actors.BuildActors(),
+                Abilities = BuildAbilities(),
+            };
+            return new LocalPullEventSource(
+                report,
+                fight,
+                output.OrderBy(entry => entry.Event.Timestamp).ToArray());
+        }
+
+        private void IndexActors()
+        {
+            foreach (var position in pull.ReplayPositions
+                .OrderBy(position => position.ActorKind)
+                .ThenBy(position => position.PartyIndex)
+                .ThenBy(position => position.SeenAtUtc))
+            {
+                actors.GetPositionActor(position);
+            }
+
+            foreach (var debuff in pull.ReplayDebuffs)
+            {
+                actors.GetPlayer(debuff.MemberKey, debuff.MemberName, debuff.PartyIndex, debuff.ClassJobId, debuff.ClassJobName);
+            }
+
+            foreach (var death in pull.Deaths)
+            {
+                actors.GetPlayer(death.MemberKey, death.MemberName, death.PartyIndex, death.ClassJobId, death.ClassJobName);
+            }
+
+            foreach (var marker in pull.ReplayMarkers)
+            {
+                actors.GetMarkerActor(marker);
+            }
+
+            foreach (var mechanic in pull.ReplayMechanics)
+            {
+                actors.GetMechanicSource(mechanic);
+            }
+        }
+
+        private void BuildPositionTracks()
+        {
+            foreach (var group in pull.ReplayPositions.GroupBy(actors.GetPositionActor))
+            {
+                positionTracks[group.Key] = group.OrderBy(position => position.PullElapsedSeconds).ToArray();
+            }
+        }
+
+        private void AddPositionSamples()
+        {
+            foreach (var position in pull.ReplayPositions)
+            {
+                var actorId = actors.GetPositionActor(position);
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = ToMilliseconds(position.PullElapsedSeconds),
+                        Type = "cast",
+                        SourceID = actorId,
+                        SourceResources = ToResources(position),
+                    },
+                    FflogsEventDataType.Casts,
+                    position.ActorKind == ReplayActorKind.Player
+                        ? FflogsHostilityType.Friendlies
+                        : FflogsHostilityType.Enemies));
+            }
+        }
+
+        private void AddDebuffs()
+        {
+            var active = new HashSet<(int ActorId, uint StatusId, uint SourceId)>();
+            foreach (var change in pull.ReplayDebuffs.OrderBy(change => change.PullElapsedSeconds))
+            {
+                var actorId = actors.GetPlayer(
+                    change.MemberKey,
+                    change.MemberName,
+                    change.PartyIndex,
+                    change.ClassJobId,
+                    change.ClassJobName);
+                var statusId = ToFflogsStatusId(change.Status.Id);
+                var key = (actorId, statusId, change.Status.SourceId);
+                var type = change.Active
+                    ? active.Add(key) ? "applydebuff" : "refreshdebuff"
+                    : "removedebuff";
+                if (!change.Active)
+                {
+                    active.Remove(key);
+                }
+
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = ToMilliseconds(change.PullElapsedSeconds),
+                        Type = type,
+                        SourceID = actors.FindByEntity(change.Status.SourceId),
+                        TargetID = actorId,
+                        AbilityGameID = statusId,
+                        Stack = change.Status.StackCount,
+                        Duration = change.Status.RemainingTime > 0 ? change.Status.RemainingTime * 1000.0 : 0,
+                        TargetResources = ResourceAt(actorId, change.PullElapsedSeconds),
+                    },
+                    FflogsEventDataType.Debuffs,
+                    FflogsHostilityType.Friendlies));
+            }
+        }
+
+        private void AddMarkers()
+        {
+            var lastRealityTell = new Dictionary<int, (uint Param, double Time)>();
+            foreach (var marker in pull.ReplayMarkers.OrderBy(marker => marker.PullElapsedSeconds))
+            {
+                var actorId = actors.GetMarkerActor(marker);
+                var timestamp = ToMilliseconds(marker.PullElapsedSeconds);
+                if (marker.ActorKind == ReplayActorKind.Enemy && marker.MarkerId == RealFakeStatusId)
+                {
+                    if (lastRealityTell.TryGetValue(actorId, out var previous) &&
+                        previous.Param == marker.RawMarkerId &&
+                        timestamp - previous.Time < 10_000)
+                    {
+                        continue;
+                    }
+
+                    lastRealityTell[actorId] = (marker.RawMarkerId, timestamp);
+                    output.Add(new LocalEvent(
+                        new FflogsEvent
+                        {
+                            Timestamp = timestamp,
+                            Type = "applydebuff",
+                            TargetID = actorId,
+                            AbilityGameID = ToFflogsStatusId(RealFakeStatusId),
+                            ExtraInfo = marker.RawMarkerId,
+                            TargetResources = ResourceAt(actorId, marker.PullElapsedSeconds),
+                        },
+                        null,
+                        FflogsHostilityType.Enemies));
+                    continue;
+                }
+
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = timestamp,
+                        Type = "headmarker",
+                        SourceID = actorId,
+                        TargetID = actorId,
+                        MarkerID = marker.MarkerId,
+                        SourceResources = ResourceAt(actorId, marker.PullElapsedSeconds),
+                        TargetResources = ResourceAt(actorId, marker.PullElapsedSeconds),
+                    },
+                    null,
+                    marker.ActorKind == ReplayActorKind.Player
+                        ? FflogsHostilityType.Friendlies
+                        : FflogsHostilityType.Enemies));
+            }
+        }
+
+        private void AddKnownDamageAndDeaths()
+        {
+            var seenEvents = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var death in pull.Deaths)
+            {
+                var targetId = actors.GetPlayer(
+                    death.MemberKey,
+                    death.MemberName,
+                    death.PartyIndex,
+                    death.ClassJobId,
+                    death.ClassJobName);
+                foreach (var combatEvent in death.RecentEvents.Where(entry => entry.Kind == DeathEventKind.Damage))
+                {
+                    var eventKey = !string.IsNullOrWhiteSpace(combatEvent.EventIdentity)
+                        ? combatEvent.EventIdentity
+                        : $"{combatEvent.MemberKey}:{combatEvent.ActionId}:{combatEvent.SeenAtUtc.Ticks}:{combatEvent.Amount}";
+                    if (!seenEvents.Add(eventKey))
+                    {
+                        continue;
+                    }
+
+                    var sourceId = actors.GetCombatSource(combatEvent.SourceEntityId, combatEvent.SourceName);
+                    var timestamp = ToMilliseconds(combatEvent.PullElapsedSeconds);
+                    var targetResources = ResourceAt(targetId, combatEvent.PullElapsedSeconds) ?? new FflogsResources
+                    {
+                        HitPoints = combatEvent.ResultSeenAtUtc is not null ? combatEvent.ResultCurrentHp : combatEvent.CurrentHp,
+                        MaxHitPoints = combatEvent.ResultSeenAtUtc is not null ? combatEvent.ResultMaxHp : combatEvent.MaxHp,
+                        Absorb = combatEvent.ResultSeenAtUtc is not null ? combatEvent.ResultShieldHp : combatEvent.ShieldHp,
+                    };
+                    knownDamage.Add(new KnownDamage(combatEvent.ActionId, targetId, timestamp, combatEvent.Amount));
+                    AddDamagePair(
+                        timestamp,
+                        sourceId,
+                        targetId,
+                        combatEvent.ActionId,
+                        combatEvent.Amount,
+                        ResourceAt(sourceId, combatEvent.PullElapsedSeconds),
+                        targetResources,
+                        sourceId);
+                }
+
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = ToMilliseconds(death.PullElapsedSeconds),
+                        Type = "death",
+                        TargetID = targetId,
+                        KillingAbilityGameID = death.LikelyCause?.ActionId,
+                        TargetResources = ResourceAt(targetId, death.PullElapsedSeconds),
+                    },
+                    FflogsEventDataType.Deaths,
+                    FflogsHostilityType.Friendlies));
+            }
+        }
+
+        private void AddMechanics()
+        {
+            var mechanics = pull.ReplayMechanics
+                .Where(mechanic => mechanic.RawEventId != 0)
+                .OrderBy(mechanic => mechanic.PullElapsedSeconds)
+                .ToArray();
+            var explicitCasts = mechanics.Where(IsCastSnapshot).ToArray();
+            var castKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var mechanic in mechanics)
+            {
+                if (mechanic.Shape == ReplayMechanicShape.Tether)
+                {
+                    AddTether(mechanic);
+                    continue;
+                }
+
+                if (IsCastSnapshot(mechanic))
+                {
+                    AddCast(mechanic, castKeys, predicted: true);
+                    continue;
+                }
+
+                var sourceId = actors.GetMechanicSource(mechanic);
+                var hasNearbyCast = explicitCasts.Any(cast =>
+                    cast.RawEventId == mechanic.RawEventId &&
+                    actors.GetMechanicSource(cast) == sourceId &&
+                    cast.PullElapsedSeconds <= mechanic.PullElapsedSeconds + 1 &&
+                    mechanic.PullElapsedSeconds - cast.PullElapsedSeconds <= 20);
+                if (!hasNearbyCast)
+                {
+                    AddCast(mechanic, castKeys, predicted: false);
+                }
+
+                AddMechanicDamage(mechanic);
+            }
+        }
+
+        private void AddMissingAnalyzerAnchors()
+        {
+            AddMissingAnchor(
+                ArrowsAnalyzer.TeleTrouncingCastGameId,
+                pull.ReplayDebuffs
+                    .Where(change => change.Active && change.Status.Id is 4876 or 4877 or 4878 or 4879 or 5079 or 5080 or 5081 or 5082)
+                    .Select(change => (float?)(change.PullElapsedSeconds - 2.0f))
+                    .OrderBy(value => value)
+                    .FirstOrDefault(),
+                "Kefka");
+            AddMissingAnchor(
+                BlackHoleAnalyzer.BlackHoleCastId,
+                pull.ReplayMechanics
+                    .Where(mechanic => mechanic.RawEventId == BlackHoleAnalyzer.NothingnessId)
+                    .Select(mechanic => (float?)(mechanic.PullElapsedSeconds - 6.0f))
+                    .OrderBy(value => value)
+                    .FirstOrDefault(),
+                "Kefka");
+            AddMissingAnchor(
+                P4Analyzer.KefkaSaysId,
+                pull.ReplayMechanics
+                    .Where(mechanic => mechanic.RawEventId == 47892)
+                    .Select(mechanic => (float?)(mechanic.PullElapsedSeconds - 3.0f))
+                    .OrderBy(value => value)
+                    .FirstOrDefault(),
+                "Kefka");
+        }
+
+        private void AddMissingAnchor(uint actionId, float? elapsedSeconds, string sourceName)
+        {
+            if (elapsedSeconds is not { } seconds ||
+                output.Any(entry => entry.Event.Type == "cast" && entry.Event.AbilityGameID == actionId))
+            {
+                return;
+            }
+
+            seconds = Math.Max(0, seconds);
+            var sourceId = actors.GetCombatSource(0, sourceName);
+            output.Add(new LocalEvent(
+                new FflogsEvent
+                {
+                    Timestamp = ToMilliseconds(seconds),
+                    Type = "cast",
+                    SourceID = sourceId,
+                    SourceInstance = sourceId,
+                    AbilityGameID = actionId,
+                    SourceResources = ResourceAt(sourceId, seconds),
+                },
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies));
+        }
+
+        private void AddCast(ReplayMechanicSnapshot mechanic, ISet<string> castKeys, bool predicted)
+        {
+            var sourceId = actors.GetMechanicSource(mechanic);
+            var timestamp = ToMilliseconds(mechanic.PullElapsedSeconds +
+                (predicted ? Math.Max(0, mechanic.DurationSeconds - CastPredictionGraceSeconds) : 0));
+            var roundedTime = (long)Math.Round(timestamp / 100.0);
+            var key = $"{sourceId}:{mechanic.RawEventId}:{roundedTime}";
+            if (!castKeys.Add(key))
+            {
+                return;
+            }
+
+            output.Add(new LocalEvent(
+                new FflogsEvent
+                {
+                    Timestamp = timestamp,
+                    Type = "cast",
+                    SourceID = sourceId,
+                    AbilityGameID = mechanic.RawEventId,
+                    SourceInstance = sourceId,
+                    SourceResources = ResourceAt(sourceId, mechanic.PullElapsedSeconds) ?? MechanicSourceResources(mechanic),
+                },
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies));
+        }
+
+        private void AddMechanicDamage(ReplayMechanicSnapshot mechanic)
+        {
+            if (string.Equals(mechanic.RawEventKind, "action-sheet-action", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var sourceId = actors.GetMechanicSource(mechanic);
+            var eventSeconds = mechanic.RawEventId == PathOfLightActionId &&
+                string.Equals(mechanic.RawEventKind, "dmu-p2-path-of-light", StringComparison.OrdinalIgnoreCase)
+                ? mechanic.PullElapsedSeconds + mechanic.DurationSeconds
+                : mechanic.PullElapsedSeconds;
+            var timestamp = ToMilliseconds(eventSeconds);
+            if (string.Equals(mechanic.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetId = actors.FindPlayerInSourceKey(mechanic.SourceKey);
+                if (targetId is not null)
+                {
+                    AddDamagePair(
+                        timestamp,
+                        sourceId,
+                        targetId.Value,
+                        mechanic.RawEventId,
+                        mechanic.RawState,
+                        BlackHoleSourceResources(mechanic, sourceId),
+                        ResourceAt(targetId.Value, eventSeconds),
+                        sourceId);
+                }
+
+                return;
+            }
+
+            if (mechanic.RawEventId == PathOfLightActionId &&
+                !string.Equals(mechanic.RawEventKind, "dmu-p2-path-of-light", StringComparison.OrdinalIgnoreCase) &&
+                pull.ReplayMechanics.Any(candidate =>
+                    string.Equals(candidate.RawEventKind, "dmu-p2-path-of-light", StringComparison.OrdinalIgnoreCase) &&
+                    Math.Abs(candidate.PullElapsedSeconds + candidate.DurationSeconds - mechanic.PullElapsedSeconds) <= 2.0f))
+            {
+                return;
+            }
+
+            output.Add(new LocalEvent(
+                new FflogsEvent
+                {
+                    Timestamp = timestamp,
+                    Type = "damage",
+                    SourceID = sourceId,
+                    AbilityGameID = mechanic.RawEventId,
+                    SourceInstance = sourceId,
+                    SourceResources = ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
+                },
+                FflogsEventDataType.DamageTaken,
+                FflogsHostilityType.Friendlies));
+
+            if (mechanic.RawEventId == BlackHoleAnalyzer.NothingnessId &&
+                pull.ReplayMechanics.Any(candidate =>
+                    string.Equals(candidate.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase) &&
+                    Math.Abs(candidate.PullElapsedSeconds - mechanic.PullElapsedSeconds) <= 0.25f))
+            {
+                return;
+            }
+
+            foreach (var targetId in AffectedPlayers(mechanic, eventSeconds))
+            {
+                var known = knownDamage
+                    .Where(entry => entry.ActionId == mechanic.RawEventId && entry.TargetId == targetId)
+                    .OrderBy(entry => Math.Abs(entry.Timestamp - timestamp))
+                    .FirstOrDefault();
+                if (known is not null && Math.Abs(known.Timestamp - timestamp) <= 1_500)
+                {
+                    continue;
+                }
+
+                var amount = EstimateHpLoss(targetId, eventSeconds);
+                AddDamagePair(
+                    timestamp,
+                    sourceId,
+                    targetId,
+                    mechanic.RawEventId,
+                    Math.Max(1, amount),
+                    ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
+                    ResourceAt(targetId, eventSeconds),
+                    sourceId);
+            }
+        }
+
+        private void AddTether(ReplayMechanicSnapshot mechanic)
+        {
+            if (!actors.TryResolveTether(mechanic.SourceKey, out var sourceId, out var targetId))
+            {
+                return;
+            }
+
+            var direction = Direction(mechanic.Rotation);
+            var source = new Vector2(mechanic.X, mechanic.Z) - direction * mechanic.Length * 0.5f;
+            var target = new Vector2(mechanic.X, mechanic.Z) + direction * mechanic.Length * 0.5f;
+            output.Add(new LocalEvent(
+                new FflogsEvent
+                {
+                    Timestamp = ToMilliseconds(mechanic.PullElapsedSeconds),
+                    Type = "tether",
+                    SourceID = sourceId,
+                    TargetID = targetId,
+                    SourceInstance = sourceId,
+                    AbilityGameID = mechanic.RawEventId,
+                    SourceResources = ResourceAt(sourceId, mechanic.PullElapsedSeconds) ?? ToResources(source.X, source.Y, mechanic.Rotation),
+                    TargetResources = ResourceAt(targetId, mechanic.PullElapsedSeconds) ?? ToResources(target.X, target.Y, 0),
+                },
+                null,
+                FflogsHostilityType.Enemies));
+        }
+
+        private void AddDamagePair(
+            double timestamp,
+            int sourceId,
+            int targetId,
+            uint actionId,
+            long amount,
+            FflogsResources? sourceResources,
+            FflogsResources? targetResources,
+            int sourceInstance)
+        {
+            foreach (var type in new[] { "calculateddamage", "damage" })
+            {
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = timestamp,
+                        Type = type,
+                        SourceID = sourceId,
+                        TargetID = targetId,
+                        AbilityGameID = actionId,
+                        Amount = amount,
+                        UnmitigatedAmount = amount,
+                        SourceInstance = sourceInstance,
+                        SourceResources = sourceResources,
+                        TargetResources = targetResources,
+                    },
+                    FflogsEventDataType.DamageTaken,
+                    FflogsHostilityType.Friendlies));
+            }
+        }
+
+        private IReadOnlyList<int> AffectedPlayers(ReplayMechanicSnapshot mechanic, float eventSeconds)
+        {
+            var result = new List<int>();
+            foreach (var actorId in actors.FriendlyIds)
+            {
+                var snapshot = PositionAt(actorId, eventSeconds);
+                if (snapshot is null || snapshot.IsDead)
+                {
+                    continue;
+                }
+
+                var point = new Vector2(snapshot.X, snapshot.Z);
+                if (Contains(mechanic, point))
+                {
+                    result.Add(actorId);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool Contains(ReplayMechanicSnapshot mechanic, Vector2 point)
+        {
+            var center = new Vector2(mechanic.X, mechanic.Z);
+            var offset = point - center;
+            var radius = Math.Max(0.5f, mechanic.Radius);
+            switch (mechanic.Shape)
+            {
+                case ReplayMechanicShape.Circle:
+                case ReplayMechanicShape.Tower:
+                case ReplayMechanicShape.Stack:
+                case ReplayMechanicShape.Spread:
+                    return offset.Length() <= radius + 0.75f;
+                case ReplayMechanicShape.Donut:
+                    var distance = offset.Length();
+                    return distance <= radius + 0.75f && distance >= Math.Max(0, mechanic.Width - 0.75f);
+                case ReplayMechanicShape.Cone:
+                    var length = Math.Max(radius, mechanic.Length);
+                    if (offset.Length() > length + 0.75f)
+                    {
+                        return false;
+                    }
+
+                    var forward = Direction(mechanic.Rotation);
+                    var normalized = offset.LengthSquared() <= 0.001f ? forward : Vector2.Normalize(offset);
+                    var dot = Math.Clamp(Vector2.Dot(forward, normalized), -1.0f, 1.0f);
+                    var angle = MathF.Acos(dot) * 180.0f / MathF.PI;
+                    return angle <= mechanic.AngleDegrees * 0.5f + 2.0f;
+                case ReplayMechanicShape.Line:
+                    var direction = Direction(mechanic.Rotation);
+                    var side = new Vector2(direction.Y, -direction.X);
+                    return Math.Abs(Vector2.Dot(offset, direction)) <= mechanic.Length * 0.5f + 0.75f &&
+                        Math.Abs(Vector2.Dot(offset, side)) <= mechanic.Width * 0.5f + 0.75f;
+                default:
+                    return false;
+            }
+        }
+
+        private long EstimateHpLoss(int actorId, float eventSeconds)
+        {
+            if (!positionTracks.TryGetValue(actorId, out var track) || track.Length == 0)
+            {
+                return 0;
+            }
+
+            var before = track.LastOrDefault(position => position.PullElapsedSeconds <= eventSeconds - 0.02f);
+            var after = track.FirstOrDefault(position => position.PullElapsedSeconds >= eventSeconds);
+            if (before is null || after is null || after.PullElapsedSeconds - before.PullElapsedSeconds > 1.5f)
+            {
+                return 0;
+            }
+
+            var beforeTotal = (long)before.CurrentHp + before.ShieldHp;
+            var afterTotal = (long)after.CurrentHp + after.ShieldHp;
+            return Math.Max(0, beforeTotal - afterTotal);
+        }
+
+        private FflogsResources? BlackHoleSourceResources(ReplayMechanicSnapshot mechanic, int sourceId)
+        {
+            var direct = ResourceAt(sourceId, mechanic.PullElapsedSeconds);
+            if (direct is not null)
+            {
+                return direct;
+            }
+
+            var tether = pull.ReplayMechanics
+                .Where(candidate => candidate.Shape == ReplayMechanicShape.Tether &&
+                    candidate.SourceKey.Contains(FirstHexToken(mechanic.SourceKey) ?? "\0", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(candidate => Math.Abs(candidate.PullElapsedSeconds - mechanic.PullElapsedSeconds))
+                .FirstOrDefault();
+            if (tether is null)
+            {
+                return MechanicSourceResources(mechanic);
+            }
+
+            var direction = Direction(tether.Rotation);
+            var source = new Vector2(tether.X, tether.Z) - direction * tether.Length * 0.5f;
+            return ToResources(source.X, source.Y, tether.Rotation);
+        }
+
+        private FflogsResources? ResourceAt(int? actorId, float elapsedSeconds)
+        {
+            if (actorId is not { } id)
+            {
+                return null;
+            }
+
+            var snapshot = PositionAt(id, elapsedSeconds);
+            return snapshot is null ? null : ToResources(snapshot);
+        }
+
+        private ReplayPositionSnapshot? PositionAt(int actorId, float elapsedSeconds)
+        {
+            if (!positionTracks.TryGetValue(actorId, out var track) || track.Length == 0)
+            {
+                return null;
+            }
+
+            var low = 0;
+            var high = track.Length - 1;
+            while (low <= high)
+            {
+                var middle = low + ((high - low) / 2);
+                if (track[middle].PullElapsedSeconds < elapsedSeconds)
+                {
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle - 1;
+                }
+            }
+
+            if (low <= 0)
+            {
+                return track[0];
+            }
+
+            if (low >= track.Length)
+            {
+                return track[^1];
+            }
+
+            return Math.Abs(track[low].PullElapsedSeconds - elapsedSeconds) <
+                Math.Abs(track[low - 1].PullElapsedSeconds - elapsedSeconds)
+                    ? track[low]
+                    : track[low - 1];
+        }
+
+        private IReadOnlyList<FflogsAbility> BuildAbilities()
+        {
+            var abilities = CanonicalAbilityNames.ToDictionary(entry => entry.Key, entry => entry.Value);
+            foreach (var mechanic in pull.ReplayMechanics.Where(mechanic => mechanic.RawEventId != 0))
+            {
+                abilities[mechanic.RawEventId] = AbilityName(mechanic.RawEventId, mechanic.Label);
+            }
+
+            foreach (var change in pull.ReplayDebuffs)
+            {
+                abilities[ToFflogsStatusId(change.Status.Id)] = change.Status.Name;
+            }
+
+            abilities[ToFflogsStatusId(RealFakeStatusId)] = "Real/Fake";
+            foreach (var combatEvent in pull.Deaths.SelectMany(death => death.RecentEvents))
+            {
+                if (combatEvent.ActionId != 0)
+                {
+                    abilities[combatEvent.ActionId] = AbilityName(combatEvent.ActionId, combatEvent.ActionName);
+                }
+            }
+
+            return abilities
+                .OrderBy(entry => entry.Key)
+                .Select(entry => new FflogsAbility { GameID = entry.Key, Name = entry.Value })
+                .ToArray();
+        }
+
+        private static FflogsResources MechanicSourceResources(ReplayMechanicSnapshot mechanic)
+        {
+            var point = new Vector2(mechanic.X, mechanic.Z);
+            if (mechanic.Shape == ReplayMechanicShape.Line && mechanic.Length > 0)
+            {
+                point -= Direction(mechanic.Rotation) * mechanic.Length * 0.5f;
+            }
+
+            return ToResources(point.X, point.Y, mechanic.Rotation);
+        }
+
+        private static int LocalFightId(PullDeathSnapshot pull)
+        {
+            var value = pull.PullNumber > 0 ? pull.PullNumber : pull.CapturedAtUtc.Ticks;
+            return (int)(Math.Abs(value % (int.MaxValue - 1)) + 1);
+        }
+    }
+
+    private sealed class ActorIndex
+    {
+        private readonly Dictionary<string, ActorSeed> byKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<uint, int> byEntity = [];
+        private readonly Dictionary<int, ActorSeed> byId = [];
+        private readonly Dictionary<string, List<int>> byName = new(StringComparer.OrdinalIgnoreCase);
+        private int nextId = 1;
+
+        internal IReadOnlyList<int> FriendlyIds => byId.Values
+            .Where(actor => actor.Friendly)
+            .OrderBy(actor => actor.PartyIndex)
+            .ThenBy(actor => actor.Id)
+            .Select(actor => actor.Id)
+            .ToArray();
+
+        internal int GetPositionActor(ReplayPositionSnapshot position)
+        {
+            return position.ActorKind == ReplayActorKind.Player
+                ? GetPlayer(
+                    PlayerKey(position.ActorKey),
+                    position.ActorName,
+                    position.PartyIndex,
+                    position.ClassJobId,
+                    position.ClassJobName,
+                    position.EntityId)
+                : GetOrAdd(
+                    string.IsNullOrWhiteSpace(position.ActorKey) ? $"enemy:{position.EntityId:X8}" : position.ActorKey,
+                    position.ActorName,
+                    false,
+                    position.PartyIndex,
+                    0,
+                    string.Empty,
+                    position.EntityId);
+        }
+
+        internal int GetPlayer(
+            string memberKey,
+            string name,
+            int partyIndex,
+            uint classJobId,
+            string classJobName,
+            uint entityId = 0)
+        {
+            return GetOrAdd(
+                $"player:{PlayerKey(memberKey)}",
+                name,
+                true,
+                partyIndex,
+                classJobId,
+                classJobName,
+                entityId);
+        }
+
+        internal int GetMarkerActor(ReplayMarkerSnapshot marker)
+        {
+            return marker.ActorKind == ReplayActorKind.Player
+                ? GetPlayer(
+                    PlayerKey(marker.ActorKey),
+                    marker.ActorName,
+                    marker.PartyIndex,
+                    marker.ClassJobId,
+                    marker.ClassJobName,
+                    marker.EntityId)
+                : GetOrAdd(
+                    string.IsNullOrWhiteSpace(marker.ActorKey) ? $"enemy:{marker.EntityId:X8}" : marker.ActorKey,
+                    marker.ActorName,
+                    false,
+                    marker.PartyIndex,
+                    0,
+                    string.Empty,
+                    marker.EntityId);
+        }
+
+        internal int GetMechanicSource(ReplayMechanicSnapshot mechanic)
+        {
+            foreach (var entityId in HexTokens(mechanic.SourceKey))
+            {
+                if (byEntity.TryGetValue(entityId, out var existing))
+                {
+                    return existing;
+                }
+            }
+
+            if (byEntity.TryGetValue(mechanic.RawState, out var rawStateActor) && !byId[rawStateActor].Friendly)
+            {
+                return rawStateActor;
+            }
+
+            var name = SourceName(mechanic.SourceName);
+            if (byName.TryGetValue(name, out var named))
+            {
+                var enemy = named.FirstOrDefault(id => !byId[id].Friendly);
+                if (enemy != 0)
+                {
+                    return enemy;
+                }
+            }
+
+            var entity = HexTokens(mechanic.SourceKey).FirstOrDefault();
+            return GetOrAdd(
+                entity == 0 ? $"mechanic:{name}" : $"enemy:{entity:X8}",
+                name,
+                false,
+                2000,
+                0,
+                string.Empty,
+                entity);
+        }
+
+        internal int GetCombatSource(uint entityId, string name)
+        {
+            if (entityId != 0 && byEntity.TryGetValue(entityId, out var existing))
+            {
+                return existing;
+            }
+
+            var cleanName = SourceName(name);
+            if (byName.TryGetValue(cleanName, out var named))
+            {
+                var enemy = named.FirstOrDefault(id => !byId[id].Friendly);
+                if (enemy != 0)
+                {
+                    return enemy;
+                }
+            }
+
+            return GetOrAdd(
+                entityId == 0 ? $"source:{cleanName}" : $"enemy:{entityId:X8}",
+                cleanName,
+                false,
+                2000,
+                0,
+                string.Empty,
+                entityId);
+        }
+
+        internal int? FindByEntity(uint entityId) => byEntity.GetValueOrDefault(entityId) is var id && id != 0 ? id : null;
+
+        internal int? FindPlayerInSourceKey(string sourceKey)
+        {
+            return byId.Values
+                .Where(actor => actor.Friendly)
+                .Where(actor => sourceKey.Contains($":{actor.OriginalKey}:", StringComparison.Ordinal) ||
+                    sourceKey.EndsWith($":{actor.OriginalKey}", StringComparison.Ordinal))
+                .Select(actor => (int?)actor.Id)
+                .FirstOrDefault();
+        }
+
+        internal bool TryResolveTether(string sourceKey, out int sourceId, out int targetId)
+        {
+            var entities = HexTokens(sourceKey).ToArray();
+            sourceId = entities.Length > 0 && byEntity.TryGetValue(entities[0], out var source) ? source : 0;
+            targetId = entities.Length > 1 && byEntity.TryGetValue(entities[1], out var target) ? target : 0;
+            return sourceId != 0 && targetId != 0;
+        }
+
+        internal IReadOnlyList<FflogsActor> BuildActors() => byId.Values
+            .OrderBy(actor => actor.Id)
+            .Select(actor => new FflogsActor
+            {
+                Id = actor.Id,
+                Name = actor.Name,
+                Type = actor.Friendly ? "Player" : "NPC",
+                SubType = actor.Friendly ? JobName(actor.ClassJobId, actor.ClassJobName) : "Boss",
+            })
+            .ToArray();
+
+        private int GetOrAdd(
+            string key,
+            string name,
+            bool friendly,
+            int partyIndex,
+            uint classJobId,
+            string classJobName,
+            uint entityId)
+        {
+            if (byKey.TryGetValue(key, out var existing))
+            {
+                existing.Update(name, partyIndex, classJobId, classJobName, entityId);
+                if (entityId != 0)
+                {
+                    byEntity[entityId] = existing.Id;
+                }
+
+                return existing.Id;
+            }
+
+            var seed = new ActorSeed(nextId++, key.StartsWith("player:", StringComparison.Ordinal) ? key[7..] : key, name, friendly,
+                partyIndex, classJobId, classJobName, entityId);
+            byKey[key] = seed;
+            byId[seed.Id] = seed;
+            if (entityId != 0)
+            {
+                byEntity[entityId] = seed.Id;
+            }
+
+            if (!byName.TryGetValue(seed.Name, out var named))
+            {
+                named = [];
+                byName[seed.Name] = named;
+            }
+
+            named.Add(seed.Id);
+            return seed.Id;
+        }
+
+        private static string PlayerKey(string key) => key.StartsWith("player:", StringComparison.Ordinal) ? key[7..] : key;
+    }
+
+    private sealed class ActorSeed(
+        int id,
+        string originalKey,
+        string name,
+        bool friendly,
+        int partyIndex,
+        uint classJobId,
+        string classJobName,
+        uint entityId)
+    {
+        internal int Id { get; } = id;
+        internal string OriginalKey { get; } = originalKey;
+        internal string Name { get; private set; } = name;
+        internal bool Friendly { get; } = friendly;
+        internal int PartyIndex { get; private set; } = partyIndex;
+        internal uint ClassJobId { get; private set; } = classJobId;
+        internal string ClassJobName { get; private set; } = classJobName;
+        internal uint EntityId { get; private set; } = entityId;
+
+        internal void Update(string updatedName, int updatedPartyIndex, uint updatedClassJobId, string updatedClassJobName, uint updatedEntityId)
+        {
+            if (!string.IsNullOrWhiteSpace(updatedName)) Name = updatedName;
+            if (updatedPartyIndex >= 0) PartyIndex = updatedPartyIndex;
+            if (updatedClassJobId != 0) ClassJobId = updatedClassJobId;
+            if (!string.IsNullOrWhiteSpace(updatedClassJobName)) ClassJobName = updatedClassJobName;
+            if (updatedEntityId != 0) EntityId = updatedEntityId;
+        }
+    }
+
+    private sealed record LocalEvent(
+        FflogsEvent Event,
+        FflogsEventDataType? DataType,
+        FflogsHostilityType Hostility);
+
+    private sealed record KnownDamage(uint ActionId, int TargetId, double Timestamp, long Amount);
+
+    private static bool IsCastSnapshot(ReplayMechanicSnapshot mechanic) =>
+        mechanic.RawEventKind.Contains("cast", StringComparison.OrdinalIgnoreCase) ||
+        mechanic.RawEventKind.Contains("predicted", StringComparison.OrdinalIgnoreCase);
+
+    private static uint ToFflogsStatusId(uint statusId) => statusId >= 1_000_000 ? statusId : statusId + 1_000_000;
+
+    private static double ToMilliseconds(float seconds) => Math.Max(0, seconds) * 1000.0;
+
+    private static string AbilityName(uint actionId, string fallback) =>
+        CanonicalAbilityNames.TryGetValue(actionId, out var name) ? name : fallback;
+
+    private static string JobName(uint classJobId, string fallback)
+    {
+        if (JobNames.TryGetValue(classJobId, out var name))
+        {
+            return name;
+        }
+
+        return string.IsNullOrWhiteSpace(fallback) ? "Unknown" : fallback.Replace(" ", string.Empty, StringComparison.Ordinal);
+    }
+
+    private static string SourceName(string name)
+    {
+        var separator = name.IndexOf(" -> ", StringComparison.Ordinal);
+        return separator < 0 ? name : name[..separator];
+    }
+
+    private static Vector2 Direction(float rotation) => new(MathF.Sin(rotation), MathF.Cos(rotation));
+
+    private static FflogsResources ToResources(ReplayPositionSnapshot position) => new()
+    {
+        HitPoints = position.CurrentHp,
+        MaxHitPoints = position.MaxHp,
+        Absorb = position.ShieldHp,
+        X = position.X * 100.0,
+        Y = position.Z * 100.0,
+        Facing = ToRawFacing(position.Rotation),
+    };
+
+    private static FflogsResources ToResources(float x, float z, float rotation) => new()
+    {
+        X = x * 100.0,
+        Y = z * 100.0,
+        Facing = ToRawFacing(rotation),
+    };
+
+    private static double ToRawFacing(float rotation) => -rotation * 100.0 - 150.0 * Math.PI;
+
+    private static IEnumerable<uint> HexTokens(string value)
+    {
+        foreach (var token in value.Split(':', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.Length == 8 && uint.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var entityId))
+            {
+                yield return entityId;
+            }
+        }
+    }
+
+    private static string? FirstHexToken(string value) => value.Split(':', StringSplitOptions.RemoveEmptyEntries)
+        .FirstOrDefault(token => token.Length == 8 && uint.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _));
+}

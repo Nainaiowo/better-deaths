@@ -14,7 +14,7 @@ using LuminaStatus = Lumina.Excel.Sheets.Status;
 
 namespace BetterDeaths.Windows;
 
-public sealed class RecapWindow : Window, IDisposable
+public sealed partial class RecapWindow : Window, IDisposable
 {
     private readonly Plugin plugin;
     private readonly Configuration configuration;
@@ -123,7 +123,7 @@ public sealed class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.284";
+    private const string CurrentChangelogVersion = "0.1.0.285";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -755,6 +755,7 @@ public sealed class RecapWindow : Window, IDisposable
 
     public void Dispose()
     {
+        wtfDigAnalyzer.Dispose();
     }
 
     public override void PreDraw()
@@ -1235,6 +1236,7 @@ public sealed class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
+            new("Analyzer", MainPage.Analyzer),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Options", MainPage.Options),
             new("Data", MainPage.Data),
@@ -1294,6 +1296,9 @@ public sealed class RecapWindow : Window, IDisposable
         {
             case MainPage.Replay:
                 DrawReplayPage();
+                break;
+            case MainPage.Analyzer:
+                DrawWtfDigAnalyzerPage();
                 break;
             case MainPage.Example:
                 DrawExamplePullTab();
@@ -19457,6 +19462,7 @@ public sealed class RecapWindow : Window, IDisposable
     {
         Review,
         Replay,
+        Analyzer,
         Example,
         Customize,
         Options,
@@ -19743,6 +19749,13 @@ public sealed class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.285");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added the WTF.DIG analyzer to Better Deaths for supported DMU mechanics.");
+        DrawHighlightedChangelogBullet("Analyze recorded Better Deaths pulls directly, or paste a full FFLogs report or specific pull link.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.284");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Improved DMU P2 Forsaken replays with more accurate timing and cleaner mechanic drawings.");

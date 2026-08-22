@@ -36,3 +36,12 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## WTF.DIG Analyzer
+
+The native FFLogs analyzer under `BetterDeaths/WtfDig` adapts mechanic analysis
+logic and presentation from [WTF.DIG](https://github.com/mczub/wtfdig-analyzer),
+created by mczub. Better Deaths uses WTF.DIG's hosted FFLogs proxy with the
+creator's permission so FFLogs credentials are not distributed with the plugin.
+
+Used with permission from the WTF.DIG creator.

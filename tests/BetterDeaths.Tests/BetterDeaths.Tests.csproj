@@ -35,6 +35,16 @@
     <Compile Include="../../BetterDeaths/ReplayStatusPanelPolicy.cs" Link="ReplayStatusPanelPolicy.cs" />
     <Compile Include="../../BetterDeaths/ThemeIdentityPolicy.cs" Link="ThemeIdentityPolicy.cs" />
     <Compile Include="../../BetterDeaths/WhatIfMitigationRules.cs" Link="WhatIfMitigationRules.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/FflogsModels.cs" Link="WtfDig/FflogsModels.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/FflogsClient.cs" Link="WtfDig/FflogsClient.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/LocalPullEventSource.cs" Link="WtfDig/LocalPullEventSource.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/AnalyzerCatalog.cs" Link="WtfDig/AnalyzerCatalog.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/AnalysisHelpers.cs" Link="WtfDig/AnalysisHelpers.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/ArrowsAnalysis.cs" Link="WtfDig/ArrowsAnalysis.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/ForsakenAnalysis.cs" Link="WtfDig/ForsakenAnalysis.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/LimitCutAnalysis.cs" Link="WtfDig/LimitCutAnalysis.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/BlackHoleAnalysis.cs" Link="WtfDig/BlackHoleAnalysis.cs" />
+    <Compile Include="../../BetterDeaths/WtfDig/P4Analysis.cs" Link="WtfDig/P4Analysis.cs" />
   </ItemGroup>
 
   <ItemGroup>
