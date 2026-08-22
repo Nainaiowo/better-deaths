@@ -155,11 +155,14 @@ public sealed class WtfDigFflogsTests
         var analysis = await new ArrowsAnalyzer(source)
             .AnalyzeAsync(source.Report, source.Fight, CancellationToken.None);
 
-        var wave = Assert.Single(analysis.Waves);
-        var arrow = Assert.Single(wave.Arrows);
-        Assert.Equal("Nai", arrow.Name);
-        Assert.Equal(1004876u, arrow.StatusId);
-        Assert.Equal(new Vector2(12, -6), arrow.Position);
+        Assert.Equal(2, analysis.Waves.Count);
+        var firstArrow = Assert.Single(analysis.Waves[0].Arrows);
+        Assert.Equal("Nai", firstArrow.Name);
+        Assert.Equal(1004876u, firstArrow.StatusId);
+        Assert.Equal(new Vector2(12, -6), firstArrow.Position);
+        var secondArrow = Assert.Single(analysis.Waves[1].Arrows);
+        Assert.Equal(1004876u, secondArrow.StatusId);
+        Assert.Equal(new Vector2(-12, 6), secondArrow.Position);
         var start = Assert.Single(analysis.Starts);
         Assert.Equal(ArrowStartRole.Sleep, start.Role);
         Assert.Equal("SAM", start.Job.Abbreviation);
@@ -180,7 +183,12 @@ public sealed class WtfDigFflogsTests
             CancellationToken.None);
 
         Assert.Contains(debuffs, entry => entry.Type == "applydebuff" && entry.AbilityGameID == 1004894);
-        Assert.Contains(debuffs, entry => entry.Type == "removedebuff" && entry.AbilityGameID == 1004876);
+        Assert.Equal(2, debuffs.Count(entry => entry.Type == "applydebuff" && entry.AbilityGameID == 1004876));
+        var arrowRemovals = debuffs
+            .Where(entry => entry.Type == "removedebuff" && entry.AbilityGameID == 1004876)
+            .ToArray();
+        Assert.Equal(2, arrowRemovals.Length);
+        Assert.Equal([160_000, 163_000], arrowRemovals.Select(entry => entry.Timestamp));
         Assert.Single(source.Report.Fights);
         Assert.StartsWith("local:", source.Report.Code);
     }
@@ -250,6 +258,7 @@ public sealed class WtfDigFflogsTests
         var startedAt = new DateTime(2026, 8, 21, 12, 0, 0, DateTimeKind.Utc);
         var playerEntityId = 0x10000001u;
         var bossEntityId = 0x40000001u;
+        var secondBossEntityId = 0x40000002u;
         ReplayPositionSnapshot Position(float seconds, string key, string name, ReplayActorKind kind, uint entityId, float x, float z) =>
             new(
                 startedAt.AddSeconds(seconds), seconds, key, name, kind,
@@ -271,9 +280,11 @@ public sealed class WtfDigFflogsTests
             ReplayPositions =
             [
                 Position(148, "enemy:40000001", "Kefka", ReplayActorKind.Enemy, bossEntityId, 100, 100),
+                Position(148, "enemy:40000002", "Kefka", ReplayActorKind.Enemy, secondBossEntityId, 100, 100),
                 Position(149, "player:member-1", "Nai", ReplayActorKind.Player, playerEntityId, 108, 96),
                 Position(150, "player:member-1", "Nai", ReplayActorKind.Player, playerEntityId, 110, 95),
                 Position(160, "player:member-1", "Nai", ReplayActorKind.Player, playerEntityId, 112, 94),
+                Position(163, "player:member-1", "Nai", ReplayActorKind.Player, playerEntityId, 88, 106),
             ],
             ReplayMechanics = [],
             ReplayDebuffs =
@@ -283,10 +294,22 @@ public sealed class WtfDigFflogsTests
                     new StatusSnapshot(4894, "Sleep", 0, bossEntityId, 0, 12), true),
                 new ReplayDebuffSnapshot(
                     startedAt.AddSeconds(151), 151, "member-1", "Nai", 0, 34, "SAM",
+                    new StatusSnapshot(4876, "Tele-Portent", 0, 0, 0, 9), true),
+                new ReplayDebuffSnapshot(
+                    startedAt.AddSeconds(151.01), 151.01f, "member-1", "Nai", 0, 34, "SAM",
                     new StatusSnapshot(4876, "Tele-Portent", 0, bossEntityId, 0, 9), true),
+                new ReplayDebuffSnapshot(
+                    startedAt.AddSeconds(151.02), 151.02f, "member-1", "Nai", 0, 34, "SAM",
+                    new StatusSnapshot(4876, "Tele-Portent", 0, secondBossEntityId, 0, 12), true),
+                new ReplayDebuffSnapshot(
+                    startedAt.AddSeconds(151.03), 151.03f, "member-1", "Nai", 0, 34, "SAM",
+                    new StatusSnapshot(4876, "Tele-Portent", 0, 0, 0, 0), false),
                 new ReplayDebuffSnapshot(
                     startedAt.AddSeconds(160), 160, "member-1", "Nai", 0, 34, "SAM",
                     new StatusSnapshot(4876, "Tele-Portent", 0, bossEntityId, 0, 0), false),
+                new ReplayDebuffSnapshot(
+                    startedAt.AddSeconds(163), 163, "member-1", "Nai", 0, 34, "SAM",
+                    new StatusSnapshot(4876, "Tele-Portent", 0, secondBossEntityId, 0, 0), false),
             ],
             ReplayDebuffsCaptured = true,
         };

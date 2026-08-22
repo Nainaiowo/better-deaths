@@ -552,7 +552,11 @@ public sealed partial class Plugin
                 member.MaxHp,
                 member.IsDead,
                 member.IsPartyMember,
-                statuses);
+                statuses)
+            {
+                HasWorldObject = member.HasWorldObject,
+                WorldObjectIsDead = member.WorldObjectIsDead,
+            };
             var snapshot = debugStatusSnapshotsByMember[member.MemberKey];
             var signature = BuildDebugStatusPersistSignature(snapshot);
             if (!debugStatusPersistSignaturesByMember.TryGetValue(member.MemberKey, out var existingSignature) ||
@@ -587,6 +591,8 @@ public sealed partial class Plugin
         return string.Join(
             "|",
             snapshot.IsDead ? "dead" : "alive",
+            snapshot.HasWorldObject ? "world" : "missing",
+            snapshot.WorldObjectIsDead ? "world-dead" : "world-not-dead",
             snapshot.CurrentHp,
             snapshot.ShieldHp,
             snapshot.MaxHp,

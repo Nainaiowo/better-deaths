@@ -111,6 +111,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
     private sealed class Builder
     {
         private readonly PullDeathSnapshot pull;
+        private readonly IReadOnlyList<ReplayDebuffSnapshot> replayDebuffs;
         private readonly ActorIndex actors = new();
         private readonly List<LocalEvent> output = [];
         private readonly Dictionary<int, ReplayPositionSnapshot[]> positionTracks = [];
@@ -119,6 +120,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         internal Builder(PullDeathSnapshot pull)
         {
             this.pull = pull;
+            replayDebuffs = ReplayDebuffSourceCorrectionPolicy.NormalizeForAnalysis(pull.ReplayDebuffs);
         }
 
         internal LocalPullEventSource Build()
@@ -174,7 +176,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 actors.GetPositionActor(position);
             }
 
-            foreach (var debuff in pull.ReplayDebuffs)
+            foreach (var debuff in replayDebuffs)
             {
                 actors.GetPlayer(debuff.MemberKey, debuff.MemberName, debuff.PartyIndex, debuff.ClassJobId, debuff.ClassJobName);
             }
@@ -226,7 +228,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private void AddDebuffs()
         {
             var active = new HashSet<(int ActorId, uint StatusId, uint SourceId)>();
-            foreach (var change in pull.ReplayDebuffs.OrderBy(change => change.PullElapsedSeconds))
+            foreach (var change in replayDebuffs)
             {
                 var actorId = actors.GetPlayer(
                     change.MemberKey,
@@ -236,12 +238,19 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     change.ClassJobName);
                 var statusId = ToFflogsStatusId(change.Status.Id);
                 var key = (actorId, statusId, change.Status.SourceId);
-                var type = change.Active
-                    ? active.Add(key) ? "applydebuff" : "refreshdebuff"
-                    : "removedebuff";
-                if (!change.Active)
+                string type;
+                if (change.Active)
                 {
-                    active.Remove(key);
+                    type = active.Add(key) ? "applydebuff" : "refreshdebuff";
+                }
+                else
+                {
+                    if (!active.Remove(key))
+                    {
+                        continue;
+                    }
+
+                    type = "removedebuff";
                 }
 
                 output.Add(new LocalEvent(
@@ -549,7 +558,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         {
             AddMissingAnchor(
                 ArrowsAnalyzer.TeleTrouncingCastGameId,
-                pull.ReplayDebuffs
+                replayDebuffs
                     .Where(change => change.Active && change.Status.Id is 4876 or 4877 or 4878 or 4879 or 5079 or 5080 or 5081 or 5082)
                     .Select(change => (float?)(change.PullElapsedSeconds - 2.0f))
                     .OrderBy(value => value)
@@ -972,7 +981,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 abilities[mechanic.RawEventId] = AbilityName(mechanic.RawEventId, mechanic.Label);
             }
 
-            foreach (var change in pull.ReplayDebuffs)
+            foreach (var change in replayDebuffs)
             {
                 abilities[ToFflogsStatusId(change.Status.Id)] = change.Status.Name;
             }

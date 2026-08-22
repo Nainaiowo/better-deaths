@@ -4,6 +4,16 @@ using System;
 
 internal static class CaptureTimingPolicy
 {
+    public static bool IsEffectiveInCombat(bool reportedInCombat, bool awaitingCombatClearAfterReset)
+    {
+        return reportedInCombat && !awaitingCombatClearAfterReset;
+    }
+
+    public static bool ShouldReleaseResetCombatOverride(bool awaitingCombatClearAfterReset, bool reportedInCombat)
+    {
+        return awaitingCombatClearAfterReset && !reportedInCombat;
+    }
+
     public static bool IsLiveCombatCapture(
         bool isDutyCaptureActive,
         bool isPvPCaptureBlocked,

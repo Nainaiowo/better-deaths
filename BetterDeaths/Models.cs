@@ -87,7 +87,12 @@ public sealed record PartyMemberSnapshot(
     bool IsPartyMember,
     Vector3 Position,
     float Rotation,
-    IReadOnlyList<StatusSnapshot> Statuses);
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool HasWorldObject { get; init; }
+
+    public bool WorldObjectIsDead { get; init; }
+}
 
 public sealed record ReplayPositionSnapshot(
     DateTime SeenAtUtc,
@@ -426,7 +431,12 @@ public sealed record DebugStatusSnapshot(
     uint MaxHp,
     bool IsDead,
     bool IsPartyMember,
-    IReadOnlyList<StatusSnapshot> Statuses);
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool HasWorldObject { get; init; }
+
+    public bool WorldObjectIsDead { get; init; }
+}
 
 public sealed record DebugEffectResultStatus(
     byte EffectIndex,

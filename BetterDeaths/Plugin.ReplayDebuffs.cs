@@ -16,7 +16,8 @@ public sealed partial class Plugin
     private sealed record TrackedReplayDebuff(
         PartyMemberSnapshot Member,
         StatusSnapshot Status,
-        DateTime ObservedAtUtc);
+        DateTime ObservedAtUtc,
+        DateTime FirstObservedAtUtc);
 
     private void TrackRecentReplayDebuffs(IReadOnlyList<PartyMemberSnapshot> members, DateTime now)
     {
@@ -71,6 +72,21 @@ public sealed partial class Plugin
         DateTime seenAtUtc,
         bool active)
     {
+        if (ReplayDebuffSourceCorrectionPolicy.IsSupportedStatus(observedStatus.Id) &&
+            observedStatus.SourceId == 0 &&
+            HasRecentKnownReplayDebuffSource(member.MemberKey, observedStatus.Id, seenAtUtc))
+        {
+            RemoveProvisionalReplayDebuff(member.MemberKey, observedStatus.Id, seenAtUtc);
+            return;
+        }
+
+        if (ReplayDebuffSourceCorrectionPolicy.IsSupportedStatus(observedStatus.Id) &&
+            active &&
+            observedStatus.SourceId != 0)
+        {
+            RemoveProvisionalReplayDebuff(member.MemberKey, observedStatus.Id, seenAtUtc);
+        }
+
         var key = BuildReplayDebuffTrackingKey(member.MemberKey, observedStatus);
         activeReplayDebuffs.TryGetValue(key, out var tracked);
 
@@ -93,11 +109,52 @@ public sealed partial class Plugin
 
         var status = NormalizeReplayDebuffObservation(observedStatus, tracked, seenAtUtc);
         var shouldRecord = tracked is null || ReplayDebuffObservationChanged(tracked, status, seenAtUtc);
-        activeReplayDebuffs[key] = new TrackedReplayDebuff(member, status, seenAtUtc);
+        activeReplayDebuffs[key] = new TrackedReplayDebuff(
+            member,
+            status,
+            seenAtUtc,
+            tracked?.FirstObservedAtUtc ?? seenAtUtc);
         if (shouldRecord)
         {
             AddRecentReplayDebuffChange(member, status, seenAtUtc, active: true);
         }
+    }
+
+    private bool HasRecentKnownReplayDebuffSource(string memberKey, uint statusId, DateTime seenAtUtc)
+    {
+        return activeReplayDebuffs.Any(pair =>
+            pair.Key.MemberKey == memberKey &&
+            pair.Key.StatusId == statusId &&
+            pair.Key.SourceId != 0 &&
+            ReplayDebuffSourceCorrectionPolicy.IsWithinCorrectionWindow(pair.Value.FirstObservedAtUtc, seenAtUtc));
+    }
+
+    private void RemoveProvisionalReplayDebuff(string memberKey, uint statusId, DateTime seenAtUtc)
+    {
+        var key = new ReplayDebuffTrackingKey(memberKey, statusId, 0);
+        activeReplayDebuffs.TryGetValue(key, out var tracked);
+        var firstObservedAtUtc = tracked?.FirstObservedAtUtc ?? recentReplayDebuffs
+            .Where(change =>
+                change.MemberKey == memberKey &&
+                change.Status.Id == statusId &&
+                change.Status.SourceId == 0 &&
+                change.Active &&
+                ReplayDebuffSourceCorrectionPolicy.IsWithinCorrectionWindow(change.SeenAtUtc, seenAtUtc))
+            .Select(change => (DateTime?)change.SeenAtUtc)
+            .Min();
+        if (firstObservedAtUtc is not { } startedAtUtc ||
+            !ReplayDebuffSourceCorrectionPolicy.IsWithinCorrectionWindow(startedAtUtc, seenAtUtc))
+        {
+            return;
+        }
+
+        activeReplayDebuffs.Remove(key);
+        recentReplayDebuffs.RemoveAll(change =>
+            change.MemberKey == memberKey &&
+            change.Status.Id == statusId &&
+            change.Status.SourceId == 0 &&
+            change.SeenAtUtc >= startedAtUtc &&
+            change.SeenAtUtc <= seenAtUtc.AddMilliseconds(1));
     }
 
     private static StatusSnapshot NormalizeReplayDebuffObservation(

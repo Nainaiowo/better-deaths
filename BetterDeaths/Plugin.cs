@@ -264,6 +264,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private static readonly TimeSpan FatalSequenceStartBuffer = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan FatalSequenceEndBuffer = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan EffectResultActionMatchWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PendingDeathConfirmationDelay = TimeSpan.FromMilliseconds(2500);
+    private static readonly TimeSpan PendingDeathCandidateRetention = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MissingMemberLookupRetention = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan PostCombatCaptureGrace = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan PluginUpdateCheckInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan RecordedPullIndexBackfillInterval = TimeSpan.FromSeconds(2);
@@ -353,13 +356,16 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
+    private readonly HashSet<string> knownAliveMemberKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PendingDeathCandidate> pendingDeathCandidatesByMember = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PartyMemberSnapshot> lastKnownMembersByKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> lastKnownMemberSeenAtUtc = new(StringComparer.Ordinal);
     private DateTime lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
     private DateTime lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
     private bool replayWorldMarkersCapturedForPull;
     private readonly HashSet<string> deadMemberKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
-    private readonly HashSet<string> currentMemberKeyScratch = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> actionNameCache = new();
     private readonly Dictionary<uint, uint> actionIconCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
@@ -489,6 +495,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private float lastKnownPullElapsedSeconds;
     private bool combatTimerRunning;
     private bool collectingPostResetDeadMembers;
+    private bool awaitingCombatClearAfterReset;
     private bool currentPullClosedForReview;
     private bool currentPullSnapshotCaptured;
     private long currentPullRecordedPullNumber;

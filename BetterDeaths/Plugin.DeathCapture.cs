@@ -52,6 +52,10 @@ public sealed partial class Plugin
         uint ShieldHp,
         IReadOnlyList<StatusSnapshot> ResultStatuses);
 
+    private sealed record PendingDeathCandidate(
+        DateTime FirstSeenAtUtc,
+        PartyMemberSnapshot Snapshot);
+
     private void RefreshPartyState()
     {
         var territoryId = ClientState.TerritoryType;
@@ -81,6 +85,7 @@ public sealed partial class Plugin
 
             currentMembers.Clear();
             ClearPostResetDeathSuppression();
+            awaitingCombatClearAfterReset = false;
             return;
         }
 
@@ -90,16 +95,10 @@ public sealed partial class Plugin
         currentMembers.Clear();
         currentMembers.AddRange(nextMembers);
 
-        currentMemberKeyScratch.Clear();
-        foreach (var member in currentMembers)
-        {
-            currentMemberKeyScratch.Add(member.MemberKey);
-        }
-
-        deadMemberKeys.RemoveWhere(key => !currentMemberKeyScratch.Contains(key));
-        postResetSuppressedDeadMemberKeys.RemoveWhere(key => !currentMemberKeyScratch.Contains(key));
-
         var now = DateTime.UtcNow;
+        RememberTrackedMembers(currentMembers, now);
+        PruneLastKnownMembers(now);
+        PrunePendingDeathCandidates(now);
         TrackDebugStatusSnapshots(currentMembers, now);
         UpdatePostResetDeathSuppression();
         if (ShouldAcceptRawCombatCapture(now))
@@ -118,10 +117,14 @@ public sealed partial class Plugin
 
         foreach (var member in currentMembers)
         {
-            if (!member.IsDead)
+            var observation = DeathDetectionPolicy.ClassifyPolledState(
+                member.HasWorldObject,
+                member.WorldObjectIsDead,
+                member.CurrentHp,
+                member.MaxHp);
+            if (observation == PlayerDeathObservation.Alive)
             {
-                deadMemberKeys.Remove(member.MemberKey);
-                postResetSuppressedDeadMemberKeys.Remove(member.MemberKey);
+                MarkMemberAlive(member);
                 continue;
             }
 
@@ -131,9 +134,102 @@ public sealed partial class Plugin
                 continue;
             }
 
-            TryCaptureDeath(member, now, "Framework");
+            if (observation == PlayerDeathObservation.WorldObjectDead)
+            {
+                ObservePendingWorldObjectDeath(member, now);
+            }
         }
 
+    }
+
+    private void RememberTrackedMembers(IEnumerable<PartyMemberSnapshot> members, DateTime now)
+    {
+        foreach (var member in members)
+        {
+            lastKnownMembersByKey[member.MemberKey] = member;
+            lastKnownMemberSeenAtUtc[member.MemberKey] = now;
+        }
+    }
+
+    private void PruneLastKnownMembers(DateTime now)
+    {
+        foreach (var memberKey in lastKnownMemberSeenAtUtc
+                     .Where(entry => now >= entry.Value && now - entry.Value > MissingMemberLookupRetention)
+                     .Select(entry => entry.Key)
+                     .ToList())
+        {
+            lastKnownMemberSeenAtUtc.Remove(memberKey);
+            lastKnownMembersByKey.Remove(memberKey);
+        }
+    }
+
+    private void MarkMemberAlive(PartyMemberSnapshot member)
+    {
+        knownAliveMemberKeys.Add(member.MemberKey);
+        pendingDeathCandidatesByMember.Remove(member.MemberKey);
+        deadMemberKeys.Remove(member.MemberKey);
+        postResetSuppressedDeadMemberKeys.Remove(member.MemberKey);
+    }
+
+    private void ObservePendingWorldObjectDeath(PartyMemberSnapshot member, DateTime now)
+    {
+        if (deadMemberKeys.Contains(member.MemberKey) ||
+            !knownAliveMemberKeys.Contains(member.MemberKey))
+        {
+            return;
+        }
+
+        if (!pendingDeathCandidatesByMember.TryGetValue(member.MemberKey, out var candidate))
+        {
+            candidate = new PendingDeathCandidate(
+                now,
+                member with
+                {
+                    CurrentHp = 0,
+                    ShieldHp = 0,
+                    IsDead = true,
+                });
+            pendingDeathCandidatesByMember[member.MemberKey] = candidate;
+            AddDebugLog($"Pending world-object death for {member.MemberName}.");
+        }
+
+        if (DeathDetectionPolicy.ShouldConfirmPendingWorldObjectDeath(
+                wasKnownAlive: true,
+                worldObjectIsStillDead: member.WorldObjectIsDead,
+                candidate.FirstSeenAtUtc,
+                now,
+                PendingDeathConfirmationDelay))
+        {
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Framework confirmed");
+        }
+    }
+
+    private void PrunePendingDeathCandidates(DateTime now)
+    {
+        foreach (var memberKey in pendingDeathCandidatesByMember
+                     .Where(entry => DeathDetectionPolicy.IsPendingCandidateExpired(
+                         entry.Value.FirstSeenAtUtc,
+                         now,
+                         PendingDeathCandidateRetention))
+                     .Select(entry => entry.Key)
+                     .ToList())
+        {
+            pendingDeathCandidatesByMember.Remove(memberKey);
+        }
+    }
+
+    private void FinalizePendingDeathsForDutyReset(DateTime now)
+    {
+        PrunePendingDeathCandidates(now);
+        if (ShouldAcceptRawCombatCapture(now))
+        {
+            ResolveRawCombatQueues(now);
+        }
+
+        foreach (var candidate in pendingDeathCandidatesByMember.Values.ToList())
+        {
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Duty reset confirmation");
+        }
     }
 
     private List<PartyMemberSnapshot> BuildTrackedCharacterSnapshots()
@@ -168,9 +264,11 @@ public sealed partial class Plugin
                     ? $"entity:{member.EntityId:X8}"
                     : $"{memberName}:{partyIndex}";
             var classJobId = member.ClassJob.RowId;
-            var isDead = member.GameObject?.IsDead == true ||
+            var gameObject = member.GameObject;
+            var worldObjectIsDead = gameObject?.IsDead == true;
+            var isDead = worldObjectIsDead ||
                 (member.MaxHP > 0 && member.CurrentHP == 0);
-            var shieldHp = CalculateShieldHp(member.GameObject, member.MaxHP);
+            var shieldHp = CalculateShieldHp(gameObject, member.MaxHP);
             members.Add(new PartyMemberSnapshot(
                 memberKey,
                 memberName,
@@ -184,9 +282,13 @@ public sealed partial class Plugin
                 member.MaxHP,
                 isDead,
                 true,
-                member.GameObject?.Position ?? Vector3.Zero,
-                member.GameObject?.Rotation ?? 0.0f,
-                BuildCharacterStatusSnapshots(member.GameObject, member.Statuses)));
+                gameObject?.Position ?? Vector3.Zero,
+                gameObject?.Rotation ?? 0.0f,
+                BuildCharacterStatusSnapshots(gameObject, member.Statuses))
+            {
+                HasWorldObject = gameObject is not null,
+                WorldObjectIsDead = worldObjectIsDead,
+            });
             partyIndex++;
         }
 
@@ -233,7 +335,11 @@ public sealed partial class Plugin
                     false,
                     player.Position,
                     player.Rotation,
-                    statusSnapshots));
+                    statusSnapshots)
+                {
+                    HasWorldObject = true,
+                    WorldObjectIsDead = player.IsDead,
+                });
             }
         }
 
@@ -283,7 +389,11 @@ public sealed partial class Plugin
             true,
             localPlayer.Position,
             localPlayer.Rotation,
-            statusSnapshots));
+            statusSnapshots)
+        {
+            HasWorldObject = true,
+            WorldObjectIsDead = localPlayer.IsDead,
+        });
         trackedEntityIds.Add(localPlayer.EntityId);
         trackedNames.Add(memberName);
     }
@@ -452,6 +562,7 @@ public sealed partial class Plugin
                 };
                 record = AttachPendingEffectResult(record);
                 AddRecentEvent(record);
+                TryCaptureMatchedLethalDamage(member, record);
                 BackfillCombatEventToCapturedDeaths(record);
                 QueueDebugCaptureRecord("ActionEffect", CreateDebugActionEffectRecord(record));
             }
@@ -521,25 +632,17 @@ public sealed partial class Plugin
 
         if (member is not null)
         {
+            if (DeathDetectionPolicy.IsConfirmedAliveResult(packet.CurrentHp, packet.MaxHp))
+            {
+                MarkMemberAlive(member);
+            }
+
             var resultStatuses = GetRelevantDeathStatuses(mergedStatuses);
             StorePendingEffectResult(member.MemberKey, packet, shieldHp, resultStatuses);
             AttachEffectResultToCombatEvents(member, packet, shieldHp, mergedStatuses);
             RemoveIntermediateEffectResultHpHistorySnapshots(member.MemberKey, packet, shieldHp);
             CaptureEffectResultHpSnapshot(member, packet, shieldHp, mergedStatuses);
-            if (packet.MaxHp > 0 && packet.CurrentHp == 0)
-            {
-                TryCaptureDeath(
-                    member with
-                    {
-                        CurrentHp = 0,
-                        ShieldHp = 0,
-                        MaxHp = packet.MaxHp,
-                        IsDead = true,
-                        Statuses = mergedStatuses,
-                    },
-                    packet.SeenAtUtc,
-                    "EffectResult");
-            }
+            TryCaptureMatchedLethalDamage(member, packet);
         }
 
         if (!shouldRecordDebug)
@@ -773,6 +876,58 @@ public sealed partial class Plugin
             Duration(combatEvent.SeenAtUtc, packet.SeenAtUtc) <= EffectResultActionMatchWindow;
     }
 
+    private void TryCaptureMatchedLethalDamage(PartyMemberSnapshot member, RawEffectResultPacket packet)
+    {
+        if (!recentEventsByMember.TryGetValue(member.MemberKey, out var events))
+        {
+            return;
+        }
+
+        foreach (var combatEvent in events)
+        {
+            if (EffectResultMatchesCombatEvent(combatEvent, packet) &&
+                combatEvent.ResultSeenAtUtc == packet.SeenAtUtc &&
+                TryCaptureMatchedLethalDamage(member, combatEvent))
+            {
+                return;
+            }
+        }
+    }
+
+    private bool TryCaptureMatchedLethalDamage(PartyMemberSnapshot member, CombatEventRecord combatEvent)
+    {
+        var wasKnownAlive = knownAliveMemberKeys.Contains(member.MemberKey) ||
+            combatEvent.MaxHp > 0 && (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0);
+        var hasMatchedDamage = combatEvent.Kind == DeathEventKind.Damage &&
+            combatEvent.Amount > 0 &&
+            combatEvent.ResultSeenAtUtc is not null;
+        if (!DeathDetectionPolicy.IsConfirmedLethalDamageResult(
+                wasKnownAlive,
+                hasMatchedDamage,
+                combatEvent.ResultCurrentHp,
+                combatEvent.ResultShieldHp,
+                combatEvent.ResultMaxHp) ||
+            combatEvent.ResultSeenAtUtc is not { } resultSeenAtUtc)
+        {
+            return false;
+        }
+
+        var statuses = combatEvent.ResultStatuses.Count > 0
+            ? DeduplicateStatusSnapshots(member.Statuses.Concat(combatEvent.ResultStatuses))
+            : member.Statuses;
+        return TryCaptureDeath(
+            member with
+            {
+                CurrentHp = 0,
+                ShieldHp = 0,
+                MaxHp = combatEvent.ResultMaxHp,
+                IsDead = true,
+                Statuses = statuses,
+            },
+            resultSeenAtUtc,
+            "EffectResult");
+    }
+
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
     {
         var member = FindCurrentMemberByEntityId(packet.EntityId);
@@ -859,20 +1014,22 @@ public sealed partial class Plugin
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(GameObjectId targetId)
     {
-        return currentMembers.FirstOrDefault(member =>
-            TargetMatchesMember(targetId, member));
+        return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member)) ??
+            lastKnownMembersByKey.Values.FirstOrDefault(member => TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByTargetId(RawTargetId targetId)
     {
-        return currentMembers.FirstOrDefault(member =>
-            TargetMatchesMember(targetId, member));
+        return currentMembers.FirstOrDefault(member => TargetMatchesMember(targetId, member)) ??
+            lastKnownMembersByKey.Values.FirstOrDefault(member => TargetMatchesMember(targetId, member));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByName(string memberName)
     {
         return currentMembers.FirstOrDefault(member =>
-            string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
+                   string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase)) ??
+            lastKnownMembersByKey.Values.FirstOrDefault(member =>
+                string.Equals(member.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByEntityId(uint entityId)
@@ -880,15 +1037,21 @@ public sealed partial class Plugin
         return entityId == 0
             ? null
             : currentMembers.FirstOrDefault(member =>
-                member.EntityId != 0 &&
-                member.EntityId == entityId);
+                  member.EntityId != 0 &&
+                  member.EntityId == entityId) ??
+              lastKnownMembersByKey.Values.FirstOrDefault(member =>
+                  member.EntityId != 0 &&
+                  member.EntityId == entityId);
     }
 
     private PartyMemberSnapshot? FindCurrentMemberByEffectResultPacket(RawEffectResultPacket packet)
     {
         return currentMembers.FirstOrDefault(member =>
-            member.EntityId != 0 &&
-            (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
+                   member.EntityId != 0 &&
+                   (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId)) ??
+            lastKnownMembersByKey.Values.FirstOrDefault(member =>
+                member.EntityId != 0 &&
+                (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
     }
 
     private void CaptureActorControlTargetIcon(RawActorControlPacket packet, PartyMemberSnapshot? member)
@@ -1516,6 +1679,8 @@ public sealed partial class Plugin
                     ShieldHp = CalculateShieldHp(player, player.MaxHp),
                     MaxHp = player.MaxHp,
                     IsDead = player.IsDead || player.CurrentHp == 0,
+                    HasWorldObject = true,
+                    WorldObjectIsDead = player.IsDead,
                     Statuses = statuses,
                 };
             }
@@ -1573,6 +1738,11 @@ public sealed partial class Plugin
         string signalSource,
         DeathCaptureContext? deathContext = null)
     {
+        if (awaitingCombatClearAfterReset)
+        {
+            return false;
+        }
+
         if (pullStartedAtUtc is null && !ShouldCaptureLiveCombat(DateTime.UtcNow))
         {
             return false;
@@ -1580,8 +1750,20 @@ public sealed partial class Plugin
 
         if (postResetSuppressedDeadMemberKeys.Contains(member.MemberKey))
         {
+            pendingDeathCandidatesByMember.Remove(member.MemberKey);
             deadMemberKeys.Add(member.MemberKey);
             return false;
+        }
+
+        if (pendingDeathCandidatesByMember.Remove(member.MemberKey, out var candidate) &&
+            candidate.FirstSeenAtUtc <= deathSeenAtUtc &&
+            !DeathDetectionPolicy.IsPendingCandidateExpired(
+                candidate.FirstSeenAtUtc,
+                deathSeenAtUtc,
+                PendingDeathCandidateRetention))
+        {
+            deathSeenAtUtc = candidate.FirstSeenAtUtc;
+            member = candidate.Snapshot;
         }
 
         if (!deadMemberKeys.Add(member.MemberKey))
@@ -1594,6 +1776,7 @@ public sealed partial class Plugin
             return false;
         }
 
+        knownAliveMemberKeys.Remove(member.MemberKey);
         EnsurePullStarted(deathSeenAtUtc);
         var death = CreateDeathRecord(member, deathSeenAtUtc, deathContext);
         currentDeaths.Add(death);

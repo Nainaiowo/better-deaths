@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.286";
+    private const string CurrentChangelogVersion = "0.1.0.287";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -1237,7 +1237,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
-            new("Analyzer", MainPage.Analyzer),
+            new("Analyzer", MainPage.Analyzer, BadgeText: ThemeNewBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Options", MainPage.Options),
             new("Data", MainPage.Data),
@@ -19997,6 +19997,14 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v0.1.0.287");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Reduced false dungeon deaths and wipes caused by brief or missing player information.");
+        DrawHighlightedChangelogBullet("Fixed DMU P1 Arrows analysis so false extra arrows no longer distort the directions and positions.");
+        DrawHighlightedChangelogBullet("Cleaned up the Analyzer tab and marked it as new.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.286");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Improved DMU P2 Forsaken replays by using recorded mechanic targets instead of positional guesses.");

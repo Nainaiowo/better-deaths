@@ -6,6 +6,23 @@ public sealed class CaptureTimingPolicyTests
     private static readonly DateTime CombatAtUtc = new(2026, 7, 29, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public void ResetOverrideMasksLingeringCombatUntilTheGameActuallyClearsIt()
+    {
+        Assert.False(CaptureTimingPolicy.IsEffectiveInCombat(
+            reportedInCombat: true,
+            awaitingCombatClearAfterReset: true));
+        Assert.False(CaptureTimingPolicy.ShouldReleaseResetCombatOverride(
+            awaitingCombatClearAfterReset: true,
+            reportedInCombat: true));
+        Assert.True(CaptureTimingPolicy.ShouldReleaseResetCombatOverride(
+            awaitingCombatClearAfterReset: true,
+            reportedInCombat: false));
+        Assert.True(CaptureTimingPolicy.IsEffectiveInCombat(
+            reportedInCombat: true,
+            awaitingCombatClearAfterReset: false));
+    }
+
+    [Fact]
     public void RawCaptureRejectsIdleDutyTraffic()
     {
         var accepted = CaptureTimingPolicy.ShouldAcceptRawCombatCapture(

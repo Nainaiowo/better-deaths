@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DeathDetectionPolicy.cs" Link="DeathDetectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />
     <Compile Include="../../BetterDeaths/GoofyDeathText.cs" Link="GoofyDeathText.cs" />
     <Compile Include="../../BetterDeaths/HpBarFormatting.cs" Link="HpBarFormatting.cs" />
@@ -27,6 +28,7 @@
     <Compile Include="../../BetterDeaths/RecordedPullLookup.cs" Link="RecordedPullLookup.cs" />
     <Compile Include="../../BetterDeaths/ReplayBoundsInference.cs" Link="ReplayBoundsInference.cs" />
     <Compile Include="../../BetterDeaths/ReplayDebuffTimeline.cs" Link="ReplayDebuffTimeline.cs" />
+    <Compile Include="../../BetterDeaths/ReplayDebuffSourceCorrectionPolicy.cs" Link="ReplayDebuffSourceCorrectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/ReplayMechanicCatalog.cs" Link="ReplayMechanicCatalog.cs" />
     <Compile Include="../../BetterDeaths/BossModUltimateCatalog.Generated.cs" Link="BossModUltimateCatalog.Generated.cs" />
     <Compile Include="../../BetterDeaths/ReplayEncounterModules.cs" Link="ReplayEncounterModules.cs" />

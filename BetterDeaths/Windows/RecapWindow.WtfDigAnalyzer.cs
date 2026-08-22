@@ -45,10 +45,6 @@ public sealed partial class RecapWindow
             selectedBlackHoleTether = 0;
         }
         ImGui.TextColored(ModernAccentColor, "WTF.DIG Analyzer");
-        ImGui.SameLine();
-        ImGui.TextDisabled(state.Source == WtfDigAnalyzerSource.LocalPull
-            ? "Better Deaths pull review"
-            : "FFLogs mechanic review");
         ImGui.Dummy(new Vector2(1.0f, 5.0f));
 
         DrawWtfDigSourceSelector(state);

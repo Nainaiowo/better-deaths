@@ -54,9 +54,13 @@ public sealed partial class Plugin
             currentTerritoryId = ClientState.TerritoryType;
             currentTerritoryName = GetTerritoryName(currentTerritoryId);
             ClearCurrentDutyInstancePullGroup();
+            awaitingCombatClearAfterReset = false;
             return;
         }
 
+        var now = DateTime.UtcNow;
+        FinalizePendingDeathsForDutyReset(now);
+        BeginResetCombatOverride();
         ArchiveCurrentPullForReview("Duty reset");
         currentTerritoryId = ClientState.TerritoryType;
         currentTerritoryName = GetTerritoryName(currentTerritoryId);
@@ -82,6 +86,13 @@ public sealed partial class Plugin
         if (pullStartedAtUtc is not null || lastKnownPullElapsedSeconds > 0.0f)
         {
             ResetCurrentPull(suppressResetStateDeaths);
+            return;
+        }
+
+        if (suppressResetStateDeaths)
+        {
+            ClearLivePullCaptureState();
+            StartPostResetDeathSuppression();
         }
     }
 
@@ -200,8 +211,12 @@ public sealed partial class Plugin
         activeReplayMechanicsByKey.Clear();
         recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
+        pendingDeathCandidatesByMember.Clear();
         possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
+        knownAliveMemberKeys.Clear();
+        lastKnownMembersByKey.Clear();
+        lastKnownMemberSeenAtUtc.Clear();
         lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;
         lastReplayObjectPositionSampleAtUtc = DateTime.MinValue;
         lastReplayWorldMarkerSampleAtUtc = DateTime.MinValue;
@@ -214,7 +229,6 @@ public sealed partial class Plugin
             rawMapEffectPackets.Clear();
         }
 
-        currentMemberKeyScratch.Clear();
         deadMemberKeys.Clear();
     }
 
@@ -233,7 +247,7 @@ public sealed partial class Plugin
         return CaptureTimingPolicy.IsLiveCombatCapture(
             IsDutyCaptureActive(),
             IsPvPCaptureBlocked(),
-            Condition[ConditionFlag.InCombat],
+            IsEffectiveInCombat(),
             lastInCombatAtUtc,
             now,
             PostCombatCaptureGrace);
@@ -245,10 +259,24 @@ public sealed partial class Plugin
             IsDutyCaptureActive(),
             IsPvPCaptureBlocked(),
             Configuration.CapturePartyDeaths || Configuration.CaptureOtherDeaths,
-            Condition[ConditionFlag.InCombat],
+            IsEffectiveInCombat(),
             lastInCombatAtUtc,
             now,
             PostCombatCaptureGrace);
+    }
+
+    private bool IsEffectiveInCombat()
+    {
+        return CaptureTimingPolicy.IsEffectiveInCombat(
+            Condition[ConditionFlag.InCombat],
+            awaitingCombatClearAfterReset);
+    }
+
+    private void BeginResetCombatOverride()
+    {
+        awaitingCombatClearAfterReset = true;
+        combatTimerRunning = false;
+        lastInCombatAtUtc = null;
     }
 
     private void StartPostResetDeathSuppression()
@@ -295,7 +323,8 @@ public sealed partial class Plugin
             return;
         }
 
-        if (!Condition[ConditionFlag.InCombat])
+        var inCombat = IsEffectiveInCombat();
+        if (!inCombat)
         {
             foreach (var member in currentMembers)
             {
@@ -313,7 +342,7 @@ public sealed partial class Plugin
             }
         }
 
-        if (Condition[ConditionFlag.InCombat] || hasAliveMember)
+        if (inCombat || hasAliveMember)
         {
             collectingPostResetDeadMembers = false;
         }
@@ -338,7 +367,7 @@ public sealed partial class Plugin
             currentPullTerritoryName = currentTerritoryName;
         }
 
-        combatTimerRunning = combatTimerRunning || Condition[ConditionFlag.InCombat];
+        combatTimerRunning = combatTimerRunning || IsEffectiveInCombat();
         lastKnownPullElapsedSeconds = CalculatePullElapsed(now);
     }
 
@@ -349,7 +378,23 @@ public sealed partial class Plugin
             return;
         }
 
-        var inCombat = Condition[ConditionFlag.InCombat];
+        var reportedInCombat = Condition[ConditionFlag.InCombat];
+        if (awaitingCombatClearAfterReset)
+        {
+            combatTimerRunning = false;
+            lastInCombatAtUtc = null;
+            if (CaptureTimingPolicy.ShouldReleaseResetCombatOverride(
+                    awaitingCombatClearAfterReset,
+                    reportedInCombat))
+            {
+                awaitingCombatClearAfterReset = false;
+                AddDebugLog("Duty reset combat override cleared after the game reported combat ended.");
+            }
+
+            return;
+        }
+
+        var inCombat = reportedInCombat;
         if (inCombat)
         {
             if (currentPullClosedForReview)
