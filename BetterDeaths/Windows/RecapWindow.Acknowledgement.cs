@@ -80,9 +80,9 @@ public sealed partial class RecapWindow
         var popupHeight = MathF.Min(540.0f, MathF.Max(340.0f, viewportSize.Y - 40.0f));
         ImGui.SetNextWindowPos(
             viewportPosition + (viewportSize * 0.5f),
-            ImGuiCond.Appearing,
+            ImGuiCond.Always,
             new Vector2(0.5f));
-        ImGui.SetNextWindowSize(new Vector2(popupWidth, popupHeight), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSize(new Vector2(popupWidth, popupHeight), ImGuiCond.Always);
 
         var pulse = GetAcknowledgementPulse();
         var border = BlendColors(
@@ -98,7 +98,9 @@ public sealed partial class RecapWindow
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 2.0f + (pulse * 0.8f));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 7.0f);
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8.0f, 9.0f));
-        if (!ImGui.BeginPopup(CommunityAcknowledgementPopupId, ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
+        if (!ImGui.BeginPopup(
+                CommunityAcknowledgementPopupId,
+                ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.PopStyleVar(4);
             ImGui.PopStyleColor(2);
