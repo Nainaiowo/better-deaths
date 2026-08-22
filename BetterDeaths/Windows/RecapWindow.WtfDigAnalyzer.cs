@@ -12,6 +12,20 @@ namespace BetterDeaths.Windows;
 
 public sealed partial class RecapWindow
 {
+    private static readonly Vector4 LimitCutKefkaRotationColor = new(0.94f, 0.53f, 0.03f, 1.0f);
+    private static readonly Vector4 LimitCutPlayerRotationColor = new(0.50f, 0.84f, 0.88f, 1.0f);
+    private static readonly Vector2[] WtfDigTextOutlineOffsets =
+    [
+        new(-1.0f, -1.0f),
+        new(0.0f, -1.0f),
+        new(1.0f, -1.0f),
+        new(-1.0f, 0.0f),
+        new(1.0f, 0.0f),
+        new(-1.0f, 1.0f),
+        new(0.0f, 1.0f),
+        new(1.0f, 1.0f),
+    ];
+
     private readonly WtfDigAnalyzerController wtfDigAnalyzer = new();
     private long? selectedWtfDigLocalPullNumber;
     private long? selectedWtfDigLocalPullCapturedAtTicks;
@@ -585,13 +599,13 @@ public sealed partial class RecapWindow
         ImGui.TextColored(ModernAccentColor, "Limit Cut");
         ImGui.TextUnformatted("Clone started ");
         ImGui.SameLine(0.0f, 0.0f);
-        ImGui.TextColored(LeadUpGoldColor, kefka.StartName);
+        ImGui.TextColored(LimitCutKefkaRotationColor, kefka.StartName);
         ImGui.SameLine(0.0f, 0.0f);
         ImGui.TextUnformatted(" rotating ");
         ImGui.SameLine(0.0f, 0.0f);
-        ImGui.TextColored(LeadUpGoldColor, FormatLimitCutRotation(kefka.Rotation));
+        ImGui.TextColored(LimitCutKefkaRotationColor, FormatLimitCutRotation(kefka.Rotation));
         ImGui.SameLine();
-        ImGui.TextDisabled($"Players rotate {FormatLimitCutRotation(analysis.PlayerRotation)}");
+        ImGui.TextColored(LimitCutPlayerRotationColor, $"Players rotate {FormatLimitCutRotation(analysis.PlayerRotation)}");
         if (wrong > 0)
         {
             ImGui.TextColored(DamageColor, $"{wrong} player{(wrong == 1 ? string.Empty : "s")} in the wrong spot");
@@ -623,6 +637,12 @@ public sealed partial class RecapWindow
             DrawLimitCutTable(analysis.Players, Vector2.Zero);
         }
 
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        ImGui.TextColored(LimitCutKefkaRotationColor, "Kefka rotation");
+        ImGui.SameLine();
+        ImGui.TextColored(ModernMutedTextColor, "|");
+        ImGui.SameLine();
+        ImGui.TextColored(LimitCutPlayerRotationColor, "Player rotation");
         ImGui.TextDisabled(source == WtfDigAnalyzerSource.LocalPull
             ? "Positions use Better Deaths replay snapshots near the final blast."
             : "Positions are estimated from FFLogs snapshots near the final blast.");
@@ -660,33 +680,9 @@ public sealed partial class RecapWindow
         }
 
         ImGui.Dummy(new Vector2(1.0f, 5.0f));
-        var rowWidth = 0.0f;
-        var available = ImGui.GetContentRegionAvail().X;
-        for (var index = 0; index < analysis.Tethers.Count; index++)
-        {
-            var candidate = analysis.Tethers[index];
-            var soaks = candidate.States.Sum(state => state.HitsThisTether);
-            var expected = BlackHoleAnalyzer.ExpectedSoaks(candidate.Set, candidate.Tether);
-            var warning = candidate.States.Any(state => state.DiedThisTether) || soaks > expected ? " !" : string.Empty;
-            var label = $"S{candidate.Set} T{candidate.Tether}{warning}";
-            var width = GetThemedActionButtonWidth(label);
-            if (rowWidth > 0 && rowWidth + ImGui.GetStyle().ItemSpacing.X + width <= available)
-            {
-                ImGui.SameLine();
-                rowWidth += ImGui.GetStyle().ItemSpacing.X + width;
-            }
-            else
-            {
-                rowWidth = width;
-            }
+        DrawBlackHoleTetherSelector(analysis, ref tether);
 
-            if (DrawThemedToggleButton(label, $"BlackHoleTether{index}", index == selectedBlackHoleTether, width))
-            {
-                selectedBlackHoleTether = index;
-                tether = candidate;
-            }
-        }
-
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
         var actualSoaks = tether.States.Sum(state => state.HitsThisTether);
         var expectedSoaks = BlackHoleAnalyzer.ExpectedSoaks(tether.Set, tether.Tether);
         ImGui.TextUnformatted($"{tether.Label} - {FormatWtfDigTime(tether.Time)}");
@@ -711,6 +707,129 @@ public sealed partial class RecapWindow
             DrawBlackHoleTable(tether, analysis.Players, Vector2.Zero);
         }
 
+    }
+
+    private void DrawBlackHoleTetherSelector(BlackHoleAnalysis analysis, ref BlackHoleTether tether)
+    {
+        const float groupPadding = 4.0f;
+        const float buttonSpacing = 2.0f;
+        var groups = analysis.Tethers
+            .Select((candidate, index) => (Candidate: candidate, Index: index))
+            .GroupBy(item => item.Candidate.Set)
+            .OrderBy(group => group.Key)
+            .ToArray();
+        var available = ImGui.GetContentRegionAvail().X;
+        var outerSpacing = ImGui.GetStyle().ItemSpacing.X;
+        var rowWidth = 0.0f;
+
+        foreach (var group in groups)
+        {
+            var items = group.OrderBy(item => item.Candidate.Tether).ToArray();
+            var labels = items.Select(item =>
+            {
+                var candidate = item.Candidate;
+                var soaks = candidate.States.Sum(state => state.HitsThisTether);
+                var expected = BlackHoleAnalyzer.ExpectedSoaks(candidate.Set, candidate.Tether);
+                var warning = candidate.States.Any(state => state.DiedThisTether) || soaks > expected;
+                return $"Tether {candidate.Tether}{(warning ? " !" : string.Empty)}";
+            }).ToArray();
+            var widths = labels.Select(GetThemedActionButtonWidth).ToArray();
+            var selectorWidth = (groupPadding * 2.0f) + widths.Sum() +
+                (buttonSpacing * Math.Max(0, items.Length - 1));
+            var setLabel = items[0].Candidate.Label.Split(',', 2)[0].Trim().ToUpperInvariant();
+            var groupWidth = MathF.Max(selectorWidth, ImGui.CalcTextSize(setLabel).X);
+
+            if (rowWidth > 0.0f && rowWidth + outerSpacing + groupWidth <= available)
+            {
+                ImGui.SameLine(0.0f, outerSpacing);
+                rowWidth += outerSpacing + groupWidth;
+            }
+            else
+            {
+                rowWidth = groupWidth;
+            }
+
+            ImGui.BeginGroup();
+            ImGui.TextColored(ModernMutedTextColor, setLabel);
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
+            ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(groupPadding));
+            var selectorHeight = ImGui.GetFrameHeight() + (groupPadding * 2.0f) + 2.0f;
+            if (ImGui.BeginChild(
+                    $"##BlackHoleSet{group.Key}",
+                    new Vector2(groupWidth, selectorHeight),
+                    true,
+                    ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+            {
+                for (var itemIndex = 0; itemIndex < items.Length; itemIndex++)
+                {
+                    if (itemIndex > 0)
+                    {
+                        ImGui.SameLine(0.0f, buttonSpacing);
+                    }
+
+                    var item = items[itemIndex];
+                    var candidate = item.Candidate;
+                    var soaks = candidate.States.Sum(state => state.HitsThisTether);
+                    var expected = BlackHoleAnalyzer.ExpectedSoaks(candidate.Set, candidate.Tether);
+                    var death = candidate.States.Any(state => state.DiedThisTether);
+                    var over = soaks > expected;
+                    if (DrawBlackHoleTetherButton(
+                            labels[itemIndex],
+                            $"BlackHoleTether{item.Index}",
+                            item.Index == selectedBlackHoleTether,
+                            widths[itemIndex]))
+                    {
+                        selectedBlackHoleTether = item.Index;
+                        tether = candidate;
+                    }
+
+                    if (ImGui.IsItemHovered() && (death || over))
+                    {
+                        var details = new List<string>();
+                        if (death)
+                        {
+                            details.Add("Death on this tether");
+                        }
+
+                        if (over)
+                        {
+                            details.Add($"{soaks} soaks (expected {expected})");
+                        }
+
+                        SetThemedTooltip(string.Join("\n", details));
+                    }
+                }
+            }
+
+            ImGui.EndChild();
+            ImGui.PopStyleVar(2);
+            ImGui.PopStyleColor(2);
+            ImGui.EndGroup();
+        }
+    }
+
+    private static bool DrawBlackHoleTetherButton(string label, string id, bool selected, float width)
+    {
+        var buttonColor = selected ? ModernNavButtonSelectedColor : Vector4.Zero;
+        var hoveredColor = selected
+            ? ModernNavButtonSelectedHoveredColor
+            : ModernNavButtonHoveredColor;
+        var textColor = selected
+            ? GetButtonTextColor(ModernNavButtonSelectedColor, selected: true)
+            : ModernMutedTextColor;
+
+        ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
+        var clicked = ImGui.Button($"{label}##{id}", new Vector2(width, ImGui.GetFrameHeight()));
+        ImGui.PopStyleVar(2);
+        ImGui.PopStyleColor(4);
+        return clicked;
     }
 
     private void DrawP4Analysis(P4Analysis analysis)
@@ -825,10 +944,12 @@ public sealed partial class RecapWindow
             return;
         }
 
-        var jobs = string.Join(" ", targets.Select(target => target.Job.Abbreviation));
         ImGui.TextDisabled(label);
-        ImGui.SameLine();
-        ImGui.TextUnformatted(jobs);
+        foreach (var target in targets)
+        {
+            ImGui.SameLine();
+            DrawWtfDigJobBadge(target.Job, target.Job.Abbreviation);
+        }
     }
 
     private void DrawP4Wounds(IReadOnlyList<P4WoundInfo> wounds)
@@ -848,7 +969,7 @@ public sealed partial class RecapWindow
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextColored(ParseWtfDigColor(wound.Job.Color), wound.Job.Abbreviation);
+            DrawWtfDigJobBadge(wound.Job, wound.Job.Abbreviation);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(FormatP4Wound(wound.Wound));
             ImGui.TableNextColumn();
@@ -937,9 +1058,28 @@ public sealed partial class RecapWindow
             foreach (var group in element.Players.GroupBy(player => player.Call))
             {
                 ImGui.Indent(16.0f);
-                var jobs = string.Join(" ", group.Select(player => player.Job.Abbreviation));
+                var available = ImGui.GetContentRegionAvail().X;
+                var label = $"{group.Key}:";
+                var rowWidth = ImGui.CalcTextSize(label).X;
                 ImGui.TextColored(group.Any(player => player.Danger) ? LeadUpGoldColor : ModernMutedTextColor,
-                    $"{group.Key}: {jobs}");
+                    label);
+                foreach (var player in group)
+                {
+                    var width = ImGui.CalcTextSize(player.Job.Abbreviation).X + 10.0f;
+                    var spacing = ImGui.GetStyle().ItemSpacing.X;
+                    if (rowWidth + spacing + width <= available)
+                    {
+                        ImGui.SameLine();
+                        rowWidth += spacing + width;
+                    }
+                    else
+                    {
+                        rowWidth = width;
+                    }
+
+                    DrawWtfDigJobBadge(player.Job, player.Job.Abbreviation);
+                }
+
                 ImGui.Unindent(16.0f);
             }
         }
@@ -969,57 +1109,141 @@ public sealed partial class RecapWindow
     private void DrawBlackHoleArena(BlackHoleTether tether, IReadOnlyList<BlackHolePlayerInfo> players, float size)
     {
         var playerById = players.ToDictionary(player => player.ActorId);
+        var positionById = tether.States
+            .Where(state => state.Position is not null)
+            .ToDictionary(state => state.ActorId, state => state.Position!.Value);
         var origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##BlackHoleArena", new Vector2(size, size));
         var drawList = ImGui.GetWindowDrawList();
         var end = origin + new Vector2(size, size);
         var center = origin + new Vector2(size * 0.5f);
-        const float extent = 28.0f;
+        const float extent = BlackHoleAnalyzer.ArenaRadius + 6.0f;
         var scale = (size * 0.5f) / extent;
         Vector2 ToScreen(Vector2 point) => center + point * scale;
         ImGui.PushClipRect(origin, end, true);
-        drawList.AddRectFilled(origin, end, ImGui.GetColorU32(ModernPanelAltColor with { W = 0.86f }), 4.0f);
-        drawList.AddRect(origin, end, ImGui.GetColorU32(ModernPanelBorderColor), 4.0f);
-        drawList.AddCircle(center, BlackHoleAnalyzer.ArenaRadius * scale, ImGui.GetColorU32(ModernPanelBorderColor), 96, 1.5f);
+        drawList.AddRectFilled(origin, end, ImGui.GetColorU32(new Vector4(0.067f, 0.078f, 0.106f, 1.0f)), 4.0f);
+        drawList.AddRect(origin, end, ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 1.0f, 0.10f)), 4.0f);
+        drawList.AddCircleFilled(
+            center,
+            BlackHoleAnalyzer.ArenaRadius * scale,
+            ImGui.GetColorU32(new Vector4(0.051f, 0.063f, 0.086f, 1.0f)),
+            96);
+        drawList.AddCircle(
+            center,
+            BlackHoleAnalyzer.ArenaRadius * scale,
+            ImGui.GetColorU32(new Vector4(0.165f, 0.184f, 0.227f, 1.0f)),
+            96,
+            1.5f);
+        drawList.AddLine(
+            center - new Vector2(0.0f, BlackHoleAnalyzer.ArenaRadius * scale),
+            center + new Vector2(0.0f, BlackHoleAnalyzer.ArenaRadius * scale),
+            ImGui.GetColorU32(new Vector4(0.110f, 0.125f, 0.161f, 1.0f)));
+        drawList.AddLine(
+            center - new Vector2(BlackHoleAnalyzer.ArenaRadius * scale, 0.0f),
+            center + new Vector2(BlackHoleAnalyzer.ArenaRadius * scale, 0.0f),
+            ImGui.GetColorU32(new Vector4(0.110f, 0.125f, 0.161f, 1.0f)));
+        drawList.AddCircleFilled(
+            center,
+            3.0f,
+            ImGui.GetColorU32(new Vector4(0.227f, 0.255f, 0.314f, 1.0f)),
+            16);
         DrawForsakenWaymarks(drawList, ToScreen, scale);
 
+        if (tether.BigKefka is { } bigKefka)
+        {
+            var point = ToScreen(bigKefka);
+            var fill = new Vector4(0.10f, 0.04f, 0.16f, 1.0f);
+            var stroke = new Vector4(0.78f, 0.36f, 1.0f, 1.0f);
+            var text = new Vector4(0.84f, 0.61f, 1.0f, 1.0f);
+            drawList.AddCircleFilled(point, 14.0f, ImGui.GetColorU32(fill), 28);
+            drawList.AddCircle(point, 14.0f, ImGui.GetColorU32(stroke), 28, 2.5f);
+            DrawWtfDigCenteredText(drawList, point, "K", text, 0.86f);
+        }
+
+        if (showBlackHoleBosses)
+        {
+            if (tether.Chaos is { } chaos)
+            {
+                DrawBlackHoleBossMarker(
+                    drawList,
+                    ToScreen(chaos),
+                    BlackHoleAnalyzer.ChaosRadius * scale,
+                    new Vector4(1.0f, 0.48f, 0.30f, 1.0f),
+                    "C");
+            }
+
+            if (tether.Exdeath is { } exdeath)
+            {
+                DrawBlackHoleBossMarker(
+                    drawList,
+                    ToScreen(exdeath),
+                    BlackHoleAnalyzer.ExdeathRadius * scale,
+                    new Vector4(0.37f, 0.83f, 0.55f, 1.0f),
+                    "X");
+            }
+        }
+
+        var beamColor = new Vector4(0.63f, 0.42f, 1.0f, 1.0f);
         foreach (var beam in tether.Beams)
         {
             var beamOrigin = ToScreen(beam.Origin);
             var direction = new Vector2((float)Math.Sin(beam.FacingRadians), (float)Math.Cos(beam.FacingRadians));
             var perpendicular = new Vector2(-direction.Y, direction.X);
-            var beamEnd = beamOrigin + direction * (50.0f * scale);
+            var beamStart = ToScreen(beam.Origin - (direction * 12.0f));
+            var beamEnd = ToScreen(beam.Origin + (direction * ((BlackHoleAnalyzer.ArenaRadius * 2.0f) + 6.0f)));
             var halfWidth = 3.0f * scale;
-            var color = new Vector4(0.63f, 0.42f, 1.0f, 1.0f);
+            var first = beamStart + perpendicular * halfWidth;
+            var second = beamEnd + perpendicular * halfWidth;
+            var third = beamEnd - perpendicular * halfWidth;
+            var fourth = beamStart - perpendicular * halfWidth;
             drawList.AddQuadFilled(
-                beamOrigin + perpendicular * halfWidth,
-                beamEnd + perpendicular * halfWidth,
-                beamEnd - perpendicular * halfWidth,
-                beamOrigin - perpendicular * halfWidth,
-                ImGui.GetColorU32(color with { W = 0.12f }));
-            drawList.AddLine(beamOrigin, beamEnd, ImGui.GetColorU32(color with { W = 0.60f }), 1.3f);
-            drawList.AddCircleFilled(beamOrigin, 7.0f, ImGui.GetColorU32(color), 24);
+                first,
+                second,
+                third,
+                fourth,
+                ImGui.GetColorU32(beamColor with { W = 0.11f }));
+            drawList.AddQuad(
+                first,
+                second,
+                third,
+                fourth,
+                ImGui.GetColorU32(beamColor with { W = 0.27f }),
+                1.0f);
+            drawList.AddCircleFilled(beamOrigin, 8.0f, ImGui.GetColorU32(new Vector4(0.09f, 0.04f, 0.15f, 1.0f)), 24);
+            drawList.AddCircle(beamOrigin, 8.0f, ImGui.GetColorU32(beamColor), 24, 2.0f);
+            drawList.AddCircleFilled(beamOrigin, 3.0f, ImGui.GetColorU32(beamColor), 16);
         }
 
-        if (showBlackHoleBosses)
+        foreach (var beam in tether.Beams)
         {
-            if (tether.BigKefka is { } bigKefka)
+            var beamOrigin = ToScreen(beam.Origin);
+            foreach (var hit in beam.Hits)
             {
-                var point = ToScreen(bigKefka);
-                drawList.AddCircleFilled(point, 11.0f, ImGui.GetColorU32(DamageColor with { W = 0.54f }), 24);
-                drawList.AddText(point + new Vector2(8.0f, -8.0f), ImGui.GetColorU32(DamageColor), "Kefka");
-            }
+                if (!positionById.TryGetValue(hit.ActorId, out var position))
+                {
+                    continue;
+                }
 
-            if (tether.Chaos is { } chaos)
-            {
-                var point = ToScreen(chaos);
-                drawList.AddCircle(point, BlackHoleAnalyzer.ChaosRadius * scale, ImGui.GetColorU32(new Vector4(1.0f, 0.48f, 0.30f, 0.72f)), 48, 1.5f);
-            }
-
-            if (tether.Exdeath is { } exdeath)
-            {
-                var point = ToScreen(exdeath);
-                drawList.AddCircle(point, BlackHoleAnalyzer.ExdeathRadius * scale, ImGui.GetColorU32(new Vector4(0.37f, 0.83f, 0.55f, 0.72f)), 48, 1.5f);
+                var playerPosition = ToScreen(position);
+                if (hit.ActorId == beam.TetherHolder)
+                {
+                    drawList.AddLine(
+                        beamOrigin,
+                        playerPosition,
+                        ImGui.GetColorU32(hit.Lethal ? new Vector4(1.0f, 0.42f, 0.42f, 1.0f) : Vector4.One),
+                        2.5f);
+                }
+                else
+                {
+                    DrawWtfDigDashedLine(
+                        drawList,
+                        beamOrigin,
+                        playerPosition,
+                        new Vector4(0.54f, 0.58f, 0.65f, 0.33f),
+                        1.0f,
+                        3.0f,
+                        3.0f);
+                }
             }
         }
 
@@ -1032,31 +1256,157 @@ public sealed partial class RecapWindow
                 continue;
             }
 
-            var levelColor = state.Level switch
-            {
-                NothingLevel.Unbecoming => new Vector4(0.36f, 0.61f, 1.0f, 1.0f),
-                NothingLevel.Meanest => new Vector4(0.77f, 0.80f, 1.0f, 1.0f),
-                _ => ModernMutedTextColor,
-            };
-            if (state.HitsThisTether > 0)
-            {
-                drawList.AddCircle(point, 13.0f, ImGui.GetColorU32(state.LethalThisTether ? DamageColor : levelColor), 28, 2.5f);
-            }
-
-            if (state.TetherThisTether)
-            {
-                drawList.AddCircle(point, 16.0f, ImGui.GetColorU32(ModernTextColor), 28, 2.0f);
-            }
-            else if (state.HitsThisTether > 0)
-            {
-                drawList.AddCircle(point, 16.0f, ImGui.GetColorU32(LeadUpGoldColor), 28, 1.5f);
-            }
-
-            DrawForsakenPlayerToken(drawList, point, player.Job, null, false, false);
-            drawList.AddText(point + new Vector2(9.0f, 6.0f), ImGui.GetColorU32(ModernTextColor), BlackHoleRoleTag(player.Role));
+            DrawBlackHolePlayerToken(drawList, point, player, state);
         }
 
         ImGui.PopClipRect();
+    }
+
+    private static void DrawBlackHoleBossMarker(
+        ImDrawListPtr drawList,
+        Vector2 point,
+        float radius,
+        Vector4 color,
+        string label)
+    {
+        DrawWtfDigDashedCircle(drawList, point, radius, color with { W = 0.80f }, 1.5f, 4, 3);
+        drawList.AddCircleFilled(point, 3.5f, ImGui.GetColorU32(color), 16);
+        DrawWtfDigCenteredText(
+            drawList,
+            point - new Vector2(0.0f, radius + 8.0f),
+            label,
+            color,
+            0.86f);
+    }
+
+    private static void DrawBlackHolePlayerToken(
+        ImDrawListPtr drawList,
+        Vector2 point,
+        BlackHolePlayerInfo player,
+        BlackHolePlayerState state)
+    {
+        var alpha = state.Dead ? 0.50f : 1.0f;
+        if (state.HitsThisTether > 0)
+        {
+            var emphasis = state.TetherThisTether
+                ? Vector4.One
+                : new Vector4(0.96f, 0.77f, 0.32f, 1.0f);
+            drawList.AddCircle(point, 16.0f, ImGui.GetColorU32(emphasis with { W = alpha }), 28, 2.0f);
+        }
+
+        if (state.Crust)
+        {
+            DrawWtfDigDashedCircle(
+                drawList,
+                point,
+                14.0f,
+                new Vector4(0.89f, 0.76f, 0.31f, alpha),
+                1.5f,
+                3,
+                2);
+        }
+
+        var levelColor = state.Level switch
+        {
+            NothingLevel.Unbecoming => new Vector4(0.36f, 0.61f, 1.0f, alpha),
+            NothingLevel.Meanest => new Vector4(0.77f, 0.80f, 1.0f, alpha),
+            _ => new Vector4(0.36f, 0.39f, 0.45f, alpha),
+        };
+        drawList.AddCircle(point, 12.0f, ImGui.GetColorU32(levelColor), 28, 2.5f);
+
+        var jobColor = ParseWtfDigColor(player.Job.Color) with { W = alpha };
+        drawList.AddCircleFilled(point, 9.5f, ImGui.GetColorU32(jobColor), 24);
+        drawList.AddCircle(point, 9.5f, ImGui.GetColorU32(new Vector4(0.0f, 0.0f, 0.0f, alpha)), 24, 1.0f);
+        DrawWtfDigCenteredText(
+            drawList,
+            point,
+            BlackHoleRoleTag(player.Role),
+            new Vector4(0.04f, 0.05f, 0.07f, alpha),
+            0.72f);
+        DrawWtfDigCenteredText(
+            drawList,
+            point - new Vector2(0.0f, 18.0f),
+            player.Job.Abbreviation,
+            jobColor,
+            0.72f);
+        if (state.Dead)
+        {
+            DrawWtfDigCenteredText(
+                drawList,
+                point + new Vector2(11.0f, -8.0f),
+                "X",
+                DamageColor with { W = alpha },
+                0.64f);
+        }
+    }
+
+    private static void DrawWtfDigCenteredText(
+        ImDrawListPtr drawList,
+        Vector2 center,
+        string text,
+        Vector4 color,
+        float scale)
+    {
+        var font = ImGui.GetFont();
+        var fontSize = ImGui.GetFontSize() * scale;
+        var textSize = ImGui.CalcTextSize(text) * scale;
+        drawList.AddText(font, fontSize, center - (textSize * 0.5f), ImGui.GetColorU32(color), text);
+    }
+
+    private static void DrawWtfDigDashedLine(
+        ImDrawListPtr drawList,
+        Vector2 start,
+        Vector2 end,
+        Vector4 color,
+        float thickness,
+        float dashLength,
+        float gapLength)
+    {
+        var delta = end - start;
+        var length = delta.Length();
+        if (length <= 0.01f)
+        {
+            return;
+        }
+
+        var direction = delta / length;
+        for (var distance = 0.0f; distance < length; distance += dashLength + gapLength)
+        {
+            var segmentEnd = MathF.Min(length, distance + dashLength);
+            drawList.AddLine(
+                start + direction * distance,
+                start + direction * segmentEnd,
+                ImGui.GetColorU32(color),
+                thickness);
+        }
+    }
+
+    private static void DrawWtfDigDashedCircle(
+        ImDrawListPtr drawList,
+        Vector2 center,
+        float radius,
+        Vector4 color,
+        float thickness,
+        int drawnSegments,
+        int gapSegments)
+    {
+        const int segments = 96;
+        var patternLength = Math.Max(1, drawnSegments + gapSegments);
+        for (var index = 0; index < segments; index++)
+        {
+            if (index % patternLength >= drawnSegments)
+            {
+                continue;
+            }
+
+            var firstAngle = MathF.Tau * index / segments;
+            var secondAngle = MathF.Tau * (index + 1) / segments;
+            drawList.AddLine(
+                center + new Vector2(MathF.Cos(firstAngle), MathF.Sin(firstAngle)) * radius,
+                center + new Vector2(MathF.Cos(secondAngle), MathF.Sin(secondAngle)) * radius,
+                ImGui.GetColorU32(color),
+                thickness);
+        }
     }
 
     private void DrawBlackHoleTable(
@@ -1085,7 +1435,8 @@ public sealed partial class RecapWindow
                 var player = info.GetValueOrDefault(state.ActorId);
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
-                ImGui.TextColored(player is null ? ModernMutedTextColor : ParseWtfDigColor(player.Job.Color),
+                DrawWtfDigJobBadge(
+                    player?.Job,
                     player is null ? "?" : state.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(player?.Role.Label ?? "-");
@@ -1144,22 +1495,58 @@ public sealed partial class RecapWindow
             drawList.AddCircle(point, 8.0f, ImGui.GetColorU32(DamageColor with { W = 0.36f }), 20, 1.0f);
         }
 
+        if (analysis.Kefka is { } kefka)
+        {
+            DrawLimitCutRotationArrow(
+                drawList,
+                ToScreen,
+                kefka.StartAngle,
+                kefka.Rotation,
+                (float)analysis.WallRadius + 1.5f,
+                LimitCutKefkaRotationColor);
+            var point = ToScreen(LimitCutAnalyzer.PositionAtAngle(kefka.StartAngle, analysis.WallRadius));
+            var north = point + new Vector2(0, -9);
+            var east = point + new Vector2(9, 0);
+            var south = point + new Vector2(0, 9);
+            var west = point + new Vector2(-9, 0);
+            drawList.AddQuadFilled(
+                north,
+                east,
+                south,
+                west,
+                ImGui.GetColorU32(new Vector4(0.04f, 0.05f, 0.07f, 0.90f)));
+            drawList.AddQuad(
+                north,
+                east,
+                south,
+                west,
+                ImGui.GetColorU32(LimitCutKefkaRotationColor), 2.5f);
+            const string kefkaLabel = "K";
+            var kefkaLabelSize = ImGui.CalcTextSize(kefkaLabel);
+            drawList.AddText(
+                point - (kefkaLabelSize * 0.5f),
+                ImGui.GetColorU32(LimitCutKefkaRotationColor),
+                kefkaLabel);
+        }
+
+        if (analysis.PlayerStartAngle is { } playerStartAngle && analysis.PlayerRotation is { } playerRotation)
+        {
+            DrawLimitCutRotationArrow(
+                drawList,
+                ToScreen,
+                playerStartAngle,
+                playerRotation,
+                (float)analysis.WallRadius - 2.5f,
+                LimitCutPlayerRotationColor);
+        }
+
         foreach (var gap in analysis.Gaps)
         {
             var point = ToScreen(gap.Position);
-            drawList.AddCircle(point, 10.0f, ImGui.GetColorU32(new Vector4(0.50f, 0.84f, 0.88f, 0.74f)), 24, 2.0f);
+            drawList.AddCircle(point, 10.0f, ImGui.GetColorU32(LimitCutPlayerRotationColor with { W = 0.74f }), 24, 2.0f);
             var label = gap.Number.ToString(CultureInfo.InvariantCulture);
             var textSize = ImGui.CalcTextSize(label);
-            drawList.AddText(point - textSize * 0.5f, ImGui.GetColorU32(new Vector4(0.50f, 0.84f, 0.88f, 1.0f)), label);
-        }
-
-        if (analysis.Kefka is { } kefka)
-        {
-            var point = ToScreen(LimitCutAnalyzer.PositionAtAngle(kefka.StartAngle, analysis.WallRadius));
-            drawList.AddQuad(
-                point + new Vector2(0, -9), point + new Vector2(9, 0),
-                point + new Vector2(0, 9), point + new Vector2(-9, 0),
-                ImGui.GetColorU32(LeadUpGoldColor), 2.5f);
+            drawList.AddText(point - textSize * 0.5f, ImGui.GetColorU32(LimitCutPlayerRotationColor), label);
         }
 
         foreach (var player in analysis.Players.Where(player => player.Position is not null))
@@ -1177,6 +1564,47 @@ public sealed partial class RecapWindow
         }
 
         ImGui.PopClipRect();
+    }
+
+    private static void DrawLimitCutRotationArrow(
+        ImDrawListPtr drawList,
+        Func<Vector2, Vector2> toScreen,
+        double startAngle,
+        LimitCutRotation rotation,
+        float radius,
+        Vector4 color)
+    {
+        const int arcDegrees = 55;
+        const int stepDegrees = 6;
+        const float arrowHeadLength = 9.0f;
+        const float arrowHeadAngle = 0.5f;
+        var direction = rotation == LimitCutRotation.Cw ? 1.0 : -1.0;
+        var points = new List<Vector2>();
+        for (var degrees = 0; degrees <= arcDegrees; degrees += stepDegrees)
+        {
+            points.Add(toScreen(LimitCutAnalyzer.PositionAtAngle(
+                startAngle + (direction * degrees),
+                radius)));
+        }
+
+        var outline = new Vector4(0.04f, 0.05f, 0.07f, 0.78f);
+        for (var index = 1; index < points.Count; index++)
+        {
+            drawList.AddLine(points[index - 1], points[index], ImGui.GetColorU32(outline), 4.0f);
+            drawList.AddLine(points[index - 1], points[index], ImGui.GetColorU32(color), 2.0f);
+        }
+
+        var tip = points[^1];
+        var previous = points[^2];
+        var angle = MathF.Atan2(tip.Y - previous.Y, tip.X - previous.X);
+        var headOne = tip - new Vector2(
+            arrowHeadLength * MathF.Cos(angle - arrowHeadAngle),
+            arrowHeadLength * MathF.Sin(angle - arrowHeadAngle));
+        var headTwo = tip - new Vector2(
+            arrowHeadLength * MathF.Cos(angle + arrowHeadAngle),
+            arrowHeadLength * MathF.Sin(angle + arrowHeadAngle));
+        drawList.AddTriangle(tip, headOne, headTwo, ImGui.GetColorU32(outline), 3.5f);
+        drawList.AddTriangleFilled(tip, headOne, headTwo, ImGui.GetColorU32(color));
     }
 
     private void DrawLimitCutTable(IReadOnlyList<LimitCutPlayer> players, Vector2 size)
@@ -1197,7 +1625,9 @@ public sealed partial class RecapWindow
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(player.Number?.ToString(CultureInfo.InvariantCulture) ?? "?");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(ParseWtfDigColor(player.Job.Color), player.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
+                DrawWtfDigJobBadge(
+                    player.Job,
+                    player.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
                 ImGui.TableNextColumn();
                 ImGui.TextDisabled(player.Angle is { } stood ? $"{Math.Round(stood * 2) / 2:0.#} deg" : "-");
                 ImGui.TableNextColumn();
@@ -1282,7 +1712,11 @@ public sealed partial class RecapWindow
                 ImGui.GetColorU32(color));
             var label = arrow.Job.Abbreviation;
             var labelSize = ImGui.CalcTextSize(label);
-            drawList.AddText(point + new Vector2(7.0f, 6.0f) - labelSize * 0.5f, ImGui.GetColorU32(ParseWtfDigColor(arrow.Job.Color)), label);
+            DrawWtfDigOutlinedText(
+                drawList,
+                point + new Vector2(7.0f, 6.0f) - labelSize * 0.5f,
+                label,
+                ParseWtfDigColor(arrow.Job.Color));
         }
 
         ImGui.PopClipRect();
@@ -1305,7 +1739,7 @@ public sealed partial class RecapWindow
                 var error = ArrowsAnalyzer.Error(arrow.Position, expectedSlots);
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
-                ImGui.TextColored(ParseWtfDigColor(arrow.Job.Color), arrow.Job.Abbreviation);
+                DrawWtfDigJobBadge(arrow.Job, arrow.Job.Abbreviation);
                 ImGui.TableNextColumn();
                 ImGui.TextDisabled(arrow.Wave.ToString(CultureInfo.InvariantCulture));
                 ImGui.TableNextColumn();
@@ -1470,7 +1904,9 @@ public sealed partial class RecapWindow
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(ParseWtfDigColor(player.Job.Color), player.Died ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
+                    DrawWtfDigJobBadge(
+                        player.Job,
+                        player.Died ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
                     ImGui.TableNextColumn();
                     var assignment = FormatForsakenAssignment(player.Assignment);
                     if (player.ReassignedTo is { } reassigned)
@@ -1729,6 +2165,49 @@ public sealed partial class RecapWindow
         var textSize = ImGui.CalcTextSize(job.Abbreviation);
         var textColor = GetReadableTextColorForBackground(color, 4.5f) with { W = alpha };
         drawList.AddText(point - (textSize * 0.5f), ImGui.GetColorU32(textColor), job.Abbreviation);
+    }
+
+    private static void DrawWtfDigJobBadge(WtfDigJobInfo? job, string label)
+    {
+        var textSize = ImGui.CalcTextSize(label);
+        var size = new Vector2(textSize.X + 10.0f, MathF.Max(20.0f, textSize.Y + 4.0f));
+        var start = ImGui.GetCursorScreenPos();
+        var end = start + size;
+        var fill = job is null
+            ? ModernPanelBorderColor
+            : ParseWtfDigColor(job.Color);
+        var textColor = GetReadableTextColorForBackground(fill, 4.5f);
+        var borderColor = BlendColors(
+            fill,
+            textColor,
+            ActiveThemeUsesLightPanels() ? 0.42f : 0.30f) with
+        {
+            W = 0.90f,
+        };
+        var drawList = ImGui.GetWindowDrawList();
+
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 4.0f);
+        drawList.AddRect(start, end, ImGui.GetColorU32(borderColor), 4.0f, ImDrawFlags.None, 1.2f);
+        drawList.AddText(
+            start + ((size - textSize) * 0.5f),
+            ImGui.GetColorU32(textColor),
+            label);
+        ImGui.Dummy(size);
+    }
+
+    private static void DrawWtfDigOutlinedText(
+        ImDrawListPtr drawList,
+        Vector2 position,
+        string text,
+        Vector4 color)
+    {
+        var outline = GetReadableTextColorForBackground(ModernPanelAltColor, 4.5f) with { W = 0.92f };
+        foreach (var offset in WtfDigTextOutlineOffsets)
+        {
+            drawList.AddText(position + offset, ImGui.GetColorU32(outline), text);
+        }
+
+        drawList.AddText(position, ImGui.GetColorU32(color), text);
     }
 
     private static Vector4 ForsakenEffectColor(ForsakenEffect effect) => effect switch
