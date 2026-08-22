@@ -1360,6 +1360,9 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawUpdatesPage()
     {
+        DrawCommunityAcknowledgementLauncher();
+        ImGui.Dummy(new Vector2(1.0f, 5.0f));
+
         var available = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         if (available.X >= 980.0f)
