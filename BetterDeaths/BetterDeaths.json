@@ -5,7 +5,7 @@
   "DownloadCount": 4872,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Reduced false dungeon deaths and wipes caused by brief or missing player information. Fixed DMU P1 Arrows analysis so false extra arrows no longer distort the directions and positions. Cleaned up the Analyzer tab and marked it as new.",
+  "Changelog": "Updated the Analyzer presentation.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

@@ -12,6 +12,15 @@ namespace BetterDeaths.Windows;
 
 public sealed partial class RecapWindow
 {
+    private static readonly (string Text, bool Highlight, bool Center)[] WtfDigAcknowledgementParagraphs =
+    [
+        ("Better Deaths has finally come out of beta! We've come very far and it's thanks to all you lovely amazing individuals.", false, false),
+        ("I appreciate the feedback, the countless hours I have spent with you fellow raiders improving and working on the plugin. It will continue to improve as ideas come, and remain open source for the benefit of the community.", false, false),
+        ("Also a special thank you to the amazing Mczub for this genius in raid tools.", true, false),
+        ("Me and the future (possibilities possibilities...) team will remain dedicated to providing only the best as members of the raiding community. All feedback is appreciated to continue development and give you the tools you deserve.", false, false),
+        ("Thank you all \u2665", true, true),
+    ];
+
     private readonly WtfDigAnalyzerController wtfDigAnalyzer = new();
     private long? selectedWtfDigLocalPullNumber;
     private long? selectedWtfDigLocalPullCapturedAtTicks;
@@ -45,7 +54,10 @@ public sealed partial class RecapWindow
             selectedBlackHoleTether = 0;
         }
         ImGui.TextColored(ModernAccentColor, "WTF.DIG Analyzer");
-        ImGui.Dummy(new Vector2(1.0f, 5.0f));
+        ImGui.TextColored(LeadUpGoldColor with { W = 0.88f }, "Powered by Mczub");
+        ImGui.Dummy(new Vector2(1.0f, 7.0f));
+        DrawWtfDigAcknowledgement();
+        ImGui.Dummy(new Vector2(1.0f, 9.0f));
 
         DrawWtfDigSourceSelector(state);
         state = wtfDigAnalyzer.Snapshot();
@@ -131,6 +143,87 @@ public sealed partial class RecapWindow
             DrawWtfDigMutedWrapped("Analyzing sends the FFLogs report code to WTF.DIG's service, which retrieves the requested log data from FFLogs.");
             DrawWtfDigMutedWrapped("FFLogs position snapshots are estimates. Use the original log and recording as the source of truth.");
         }
+    }
+
+    private static void DrawWtfDigAcknowledgement()
+    {
+        var style = ImGui.GetStyle();
+        var start = ImGui.GetCursorScreenPos();
+        var width = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var padding = new Vector2(14.0f, 12.0f);
+        var textWidth = MathF.Max(ImGui.GetFontSize() * 8.0f, width - (padding.X * 2.0f));
+        var lineHeight = ImGui.GetTextLineHeight();
+        var paragraphGap = MathF.Max(8.0f, style.ItemSpacing.Y * 1.15f);
+        var wrappedParagraphs = WtfDigAcknowledgementParagraphs
+            .Select(paragraph => (
+                paragraph.Highlight,
+                paragraph.Center,
+                Lines: WrapTextForWidth(paragraph.Text, textWidth)))
+            .ToArray();
+        var textHeight = wrappedParagraphs.Sum(paragraph => paragraph.Lines.Count * lineHeight) +
+            (paragraphGap * Math.Max(0, wrappedParagraphs.Length - 1));
+        var height = textHeight + (padding.Y * 2.0f);
+        var end = start + new Vector2(width, height);
+        var drawList = ImGui.GetWindowDrawList();
+        var pulse = (MathF.Sin((float)ImGui.GetTime() * 2.4f) + 1.0f) * 0.5f;
+        var fill = ActiveThemeUsesLightPanels()
+            ? BlendColors(ModernPanelAltColor, LeadUpGoldColor, 0.08f) with { W = 0.78f }
+            : BlendColors(ModernPanelAltColor, LeadUpGoldColor, 0.10f) with { W = 0.58f };
+        var border = BlendColors(
+            LeadUpGoldColor,
+            new Vector4(1.0f, 0.97f, 0.76f, 1.0f),
+            pulse * 0.32f) with { W = 0.72f + (pulse * 0.24f) };
+        var innerBorder = BlendColors(LeadUpGoldColor, ModernTextColor, 0.18f) with { W = 0.36f + (pulse * 0.18f) };
+
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 6.0f);
+        drawList.AddRect(
+            start + new Vector2(0.5f),
+            end - new Vector2(0.5f),
+            ImGui.GetColorU32(border),
+            6.0f,
+            ImDrawFlags.None,
+            1.5f + (pulse * 1.2f));
+        drawList.AddRect(
+            start + new Vector2(3.0f),
+            end - new Vector2(3.0f),
+            ImGui.GetColorU32(innerBorder),
+            4.0f,
+            ImDrawFlags.None,
+            1.0f);
+
+        var shimmerWidth = MathF.Min(110.0f, MathF.Max(28.0f, width * 0.24f));
+        var shimmerTravel = (MathF.Sin((float)ImGui.GetTime() * 1.15f) + 1.0f) * 0.5f;
+        var shimmerStartX = start.X + 6.0f + ((MathF.Max(0.0f, width - shimmerWidth - 12.0f)) * shimmerTravel);
+        var shimmerColor = border with { W = 0.48f + (pulse * 0.30f) };
+        drawList.AddLine(
+            new Vector2(shimmerStartX, start.Y + 1.0f),
+            new Vector2(shimmerStartX + shimmerWidth, start.Y + 1.0f),
+            ImGui.GetColorU32(shimmerColor),
+            2.0f);
+        drawList.AddLine(
+            new Vector2(end.X - (shimmerStartX - start.X) - shimmerWidth, end.Y - 1.0f),
+            new Vector2(end.X - (shimmerStartX - start.X), end.Y - 1.0f),
+            ImGui.GetColorU32(shimmerColor with { W = shimmerColor.W * 0.72f }),
+            1.5f);
+
+        var textY = start.Y + padding.Y;
+        foreach (var paragraph in wrappedParagraphs)
+        {
+            var color = paragraph.Highlight ? GetChangelogHighlightTextColor() : ModernTextColor;
+            foreach (var line in paragraph.Lines)
+            {
+                var lineWidth = ImGui.CalcTextSize(line).X;
+                var textX = paragraph.Center
+                    ? start.X + ((width - lineWidth) * 0.5f)
+                    : start.X + padding.X;
+                drawList.AddText(new Vector2(textX, textY), ImGui.GetColorU32(color), line);
+                textY += lineHeight;
+            }
+
+            textY += paragraphGap;
+        }
+
+        ImGui.Dummy(new Vector2(width, height));
     }
 
     private static void DrawWtfDigMutedWrapped(string text)
