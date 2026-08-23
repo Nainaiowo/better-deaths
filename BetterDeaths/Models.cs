@@ -154,6 +154,20 @@ public sealed record ReplayMechanicSnapshot(
     uint RawState,
     bool IsKnown);
 
+public sealed record ReplayAnalyzerEventSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string EventType,
+    uint SourceEntityId,
+    string SourceName,
+    uint AbilityId,
+    string AbilityName,
+    bool HasSourcePosition,
+    float X,
+    float Y,
+    float Z,
+    float Rotation);
+
 public sealed record ReplayWorldMarkerSnapshot(
     DateTime SeenAtUtc,
     float PullElapsedSeconds,
@@ -376,6 +390,8 @@ public sealed record PullDeathSnapshot(
     public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];
 
     public IReadOnlyList<ReplayMechanicSnapshot> ReplayMechanics { get; init; } = [];
+
+    public IReadOnlyList<ReplayAnalyzerEventSnapshot> ReplayAnalyzerEvents { get; init; } = [];
 
     public IReadOnlyList<ReplayWorldMarkerSnapshot> ReplayWorldMarkers { get; init; } = [];
 

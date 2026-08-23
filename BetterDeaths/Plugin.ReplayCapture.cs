@@ -2171,7 +2171,7 @@ public sealed partial class Plugin
             packet.SeenAtUtc,
             CalculatePullElapsed(packet.SeenAtUtc),
             durationSeconds,
-            $"{rawEventKind}:{packet.ActionId}:{packet.Sequence}",
+            $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.ActionId}:{packet.Sequence}",
             sourceName,
             shape,
             center.X,
@@ -2213,7 +2213,7 @@ public sealed partial class Plugin
                 packet.SeenAtUtc,
                 CalculatePullElapsed(packet.SeenAtUtc),
                 durationSeconds,
-                $"{rawEventKind}:{packet.ActionId}:{packet.Sequence}:{member.MemberKey}",
+                $"{rawEventKind}:{packet.CasterEntityId:X8}:{packet.ActionId}:{packet.Sequence}:{member.MemberKey}",
                 sourceName,
                 shape,
                 member.Position.X,
@@ -2678,6 +2678,59 @@ public sealed partial class Plugin
         ClampRecentReplayMechanicEnd(tower.SourceKey, packet.SeenAtUtc);
         activeDmuP2PathOfLightTowersByIndex.Remove(tower.Index);
     }
+
+    private void CaptureReplayAnalyzerEvent(RawActionEffectPacket packet)
+    {
+        if (!IsDmuReplayCaptureContext() || !IsWtfDigAnalyzerSignal(packet.ActionId))
+        {
+            return;
+        }
+
+        var hasSourcePosition = TryGetReplayActionSourcePose(
+            packet,
+            out var position,
+            out var rotation,
+            out var sourceName);
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            sourceName = string.IsNullOrWhiteSpace(packet.CasterName)
+                ? GetEntityDisplayName(packet.CasterEntityId)
+                : packet.CasterName;
+        }
+
+        var snapshot = new ReplayAnalyzerEventSnapshot(
+            packet.SeenAtUtc,
+            CalculatePullElapsed(packet.SeenAtUtc),
+            "cast",
+            packet.CasterEntityId,
+            sourceName,
+            packet.ActionId,
+            GetActionName(packet.ActionId),
+            hasSourcePosition,
+            position.X,
+            position.Y,
+            position.Z,
+            rotation);
+        var duplicate = recentReplayAnalyzerEvents.LastOrDefault(entry =>
+            entry.SourceEntityId == snapshot.SourceEntityId &&
+            entry.AbilityId == snapshot.AbilityId &&
+            Math.Abs((entry.SeenAtUtc - snapshot.SeenAtUtc).TotalMilliseconds) <= 100);
+        if (duplicate is null)
+        {
+            recentReplayAnalyzerEvents.Add(snapshot);
+        }
+    }
+
+    private static bool IsWtfDigAnalyzerSignal(uint actionId) => actionId is
+        47764 or // Mystery Magic
+        47780 or // Mana Charge
+        47781 or // Mana Release
+        47801 or // Tele-Trouncing
+        47804 or // Forsaken
+        47843 or // Ultima Blaster
+        47867 or // Black Hole
+        49884 or // Kefka Says
+        50067;   // Flood of Naught
 
     private void CaptureReplayDmuP2PathOfLightActivationEvidence(
         RawActionEffectPacket packet,
@@ -3882,6 +3935,17 @@ public sealed partial class Plugin
         return GetRecentReplayMechanics(GetCurrentPullReplayStartAtUtc(endAtUtc), endAtUtc);
     }
 
+    private IReadOnlyList<ReplayAnalyzerEventSnapshot> GetCurrentPullReplayAnalyzerEvents(DateTime endAtUtc)
+    {
+        var startAtUtc = GetCurrentPullReplayStartAtUtc(endAtUtc);
+        return recentReplayAnalyzerEvents
+            .Where(snapshot => snapshot.SeenAtUtc >= startAtUtc && snapshot.SeenAtUtc <= endAtUtc)
+            .OrderBy(snapshot => snapshot.SeenAtUtc)
+            .ThenBy(snapshot => snapshot.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(snapshot => snapshot.AbilityId)
+            .ToList();
+    }
+
     private IReadOnlyList<ReplayWorldMarkerSnapshot> GetRecentReplayWorldMarkers(DateTime startAtUtc, DateTime endAtUtc)
     {
         if (recentReplayWorldMarkers.Count == 0 || endAtUtc < startAtUtc)
@@ -4009,6 +4073,17 @@ public sealed partial class Plugin
                 recentReplayMechanicsBySource.Remove(sourceKey);
             }
         }
+    }
+
+    private void PruneRecentReplayAnalyzerEvents(DateTime now)
+    {
+        if (recentReplayAnalyzerEvents.Count == 0)
+        {
+            return;
+        }
+
+        var cutoff = GetCurrentPullReplayStartAtUtc(now);
+        recentReplayAnalyzerEvents.RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
     }
 
     private void PruneRecentReplayWorldMarkers(DateTime now)

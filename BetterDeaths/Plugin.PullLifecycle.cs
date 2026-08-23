@@ -109,6 +109,7 @@ public sealed partial class Plugin
         var replayPositions = GetCurrentPullReplayPositions(now);
         var replayMarkers = GetCurrentPullReplayMarkers(now);
         var replayMechanics = GetCurrentPullReplayMechanics(now);
+        var replayAnalyzerEvents = GetCurrentPullReplayAnalyzerEvents(now);
         var replayWorldMarkers = GetCurrentPullReplayWorldMarkers(now);
         var replayMitigations = GetCurrentPullReplayMitigations(now);
         var replayDebuffs = GetCurrentPullReplayDebuffs(now);
@@ -130,6 +131,7 @@ public sealed partial class Plugin
             ReplayPositions = replayPositions,
             ReplayMarkers = replayMarkers,
             ReplayMechanics = replayMechanics,
+            ReplayAnalyzerEvents = replayAnalyzerEvents,
             ReplayWorldMarkers = replayWorldMarkers,
             ReplayMitigations = replayMitigations,
             ReplayDebuffs = replayDebuffs,
@@ -201,6 +203,7 @@ public sealed partial class Plugin
         recentReplayPositionsByActor.Clear();
         recentReplayMarkersByActor.Clear();
         recentReplayMechanicsBySource.Clear();
+        recentReplayAnalyzerEvents.Clear();
         recentReplayWorldMarkers.Clear();
         recentReplayMitigations.Clear();
         recentReplayDebuffs.Clear();

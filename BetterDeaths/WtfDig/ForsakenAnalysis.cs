@@ -512,7 +512,7 @@ internal sealed class ForsakenAnalyzer(IWtfDigEventSource client)
         }
 
         AddCloneAndCleaveData(report, fight, center, abilityNames, players, samples, deadAt, enemyCasts, damage, resolutions);
-        return new ForsakenAnalysis(fight, allResolutions, center, rotation);
+        return new ForsakenAnalysis(fight, resolutions, center, rotation);
     }
 
     private static void AddCloneAndCleaveData(

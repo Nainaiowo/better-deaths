@@ -8,8 +8,7 @@ internal static class ReplayDebuffSourceCorrectionPolicy
 {
     internal const float CorrectionWindowSeconds = 0.75f;
 
-    internal static bool IsSupportedStatus(uint statusId) =>
-        statusId is 4876 or 4877 or 4878 or 4879 or 5079 or 5080 or 5081 or 5082;
+    internal static bool CanReconcileStatusSource(uint statusId) => statusId != 0;
 
     internal static IReadOnlyList<ReplayDebuffSnapshot> NormalizeForAnalysis(
         IEnumerable<ReplayDebuffSnapshot> changes)
@@ -26,7 +25,6 @@ internal static class ReplayDebuffSourceCorrectionPolicy
 
         return ordered
             .Where(change => change.Status.SourceId != 0 ||
-                !IsSupportedStatus(change.Status.Id) ||
                 !HasKnownSourceApplicationNear(change, knownSourceApplications))
             .ToArray();
     }

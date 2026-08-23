@@ -72,7 +72,7 @@ public sealed partial class Plugin
         DateTime seenAtUtc,
         bool active)
     {
-        if (ReplayDebuffSourceCorrectionPolicy.IsSupportedStatus(observedStatus.Id) &&
+        if (ReplayDebuffSourceCorrectionPolicy.CanReconcileStatusSource(observedStatus.Id) &&
             observedStatus.SourceId == 0 &&
             HasRecentKnownReplayDebuffSource(member.MemberKey, observedStatus.Id, seenAtUtc))
         {
@@ -80,7 +80,7 @@ public sealed partial class Plugin
             return;
         }
 
-        if (ReplayDebuffSourceCorrectionPolicy.IsSupportedStatus(observedStatus.Id) &&
+        if (ReplayDebuffSourceCorrectionPolicy.CanReconcileStatusSource(observedStatus.Id) &&
             active &&
             observedStatus.SourceId != 0)
         {

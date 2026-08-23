@@ -348,6 +348,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<string, List<ReplayPositionSnapshot>> recentReplayPositionsByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMarkerSnapshot>> recentReplayMarkersByActor = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ReplayMechanicSnapshot>> recentReplayMechanicsBySource = new(StringComparer.Ordinal);
+    private readonly List<ReplayAnalyzerEventSnapshot> recentReplayAnalyzerEvents = [];
     private readonly List<ReplayWorldMarkerSnapshot> recentReplayWorldMarkers = [];
     private readonly List<ReplayMitigationSnapshot> recentReplayMitigations = [];
     private readonly List<ReplayDebuffSnapshot> recentReplayDebuffs = [];

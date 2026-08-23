@@ -3,10 +3,22 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace BetterDeaths.WtfDig;
+
+internal enum WtfDigLocalDataQuality
+{
+    Exact,
+    Estimated,
+    Unavailable,
+}
+
+internal sealed record WtfDigLocalAnalyzerAvailability(
+    WtfDigLocalDataQuality Quality,
+    string Summary);
 
 internal sealed class LocalPullEventSource : IWtfDigEventSource
 {
@@ -71,20 +83,31 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
     };
 
     private readonly IReadOnlyList<LocalEvent> events;
+    private readonly IReadOnlySet<int> friendlyActorIds;
+    private readonly IReadOnlyDictionary<int, string> actorNames;
 
     private LocalPullEventSource(
         FflogsReportSummary report,
         FflogsFight fight,
-        IReadOnlyList<LocalEvent> events)
+        IReadOnlyList<LocalEvent> events,
+        IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> analyzerAvailability)
     {
         Report = report;
         Fight = fight;
         this.events = events;
+        friendlyActorIds = report.Actors
+            .Where(actor => actor.Type is "Player" or "Pet")
+            .Select(actor => actor.Id)
+            .ToHashSet();
+        actorNames = report.Actors.ToDictionary(actor => actor.Id, actor => actor.Name);
+        AnalyzerAvailability = analyzerAvailability;
     }
 
     internal FflogsReportSummary Report { get; }
 
     internal FflogsFight Fight { get; }
+
+    internal IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> AnalyzerAvailability { get; }
 
     internal static LocalPullEventSource Create(PullDeathSnapshot pull)
     {
@@ -97,16 +120,105 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var filter = string.IsNullOrWhiteSpace(query.FilterExpression)
+            ? null
+            : ParseFilterExpression(query.FilterExpression);
         var matching = events
             .Where(entry => entry.Event.Timestamp >= query.StartTime && entry.Event.Timestamp <= query.EndTime)
-            .Where(entry => query.DataType is null || entry.DataType == query.DataType)
-            .Where(entry => query.DataType != FflogsEventDataType.Casts || entry.Hostility == query.HostilityType)
+            .Where(entry => MatchesDataType(entry.Event, query.DataType, query.HostilityType))
             .Where(entry => query.AbilityId is null || entry.Event.AbilityGameID == query.AbilityId)
+            .Where(entry => filter is null || filter(entry.Event))
             .OrderBy(entry => entry.Event.Timestamp)
             .Select(entry => entry.Event)
             .ToArray();
         return Task.FromResult<IReadOnlyList<FflogsEvent>>(matching);
     }
+
+    private bool MatchesDataType(
+        FflogsEvent entry,
+        FflogsEventDataType? dataType,
+        FflogsHostilityType hostilityType)
+    {
+        var wantFriendly = hostilityType == FflogsHostilityType.Friendlies;
+        var sourceIsFriendly = entry.SourceID is { } sourceId && friendlyActorIds.Contains(sourceId);
+        var targetIsFriendly = entry.TargetID is { } targetId && friendlyActorIds.Contains(targetId);
+        return dataType switch
+        {
+            FflogsEventDataType.Casts => IsCastEvent(entry.Type) && sourceIsFriendly == wantFriendly,
+            FflogsEventDataType.DamageTaken => IsDamageEvent(entry.Type) && targetIsFriendly == wantFriendly,
+            FflogsEventDataType.Debuffs => IsDebuffEvent(entry.Type) && targetIsFriendly == wantFriendly,
+            FflogsEventDataType.Buffs => IsBuffEvent(entry.Type) && targetIsFriendly == wantFriendly,
+            FflogsEventDataType.Deaths => string.Equals(entry.Type, "death", StringComparison.Ordinal) && targetIsFriendly == wantFriendly,
+            FflogsEventDataType.CombatantInfo => false,
+            null when IsDamageEvent(entry.Type) || string.Equals(entry.Type, "death", StringComparison.Ordinal) =>
+                targetIsFriendly == wantFriendly,
+            null => true,
+            _ => false,
+        };
+    }
+
+    private Func<FflogsEvent, bool> ParseFilterExpression(string expression)
+    {
+        var clauses = Regex.Split(expression, @"\s+or\s+", RegexOptions.IgnoreCase)
+            .Select(ParseFilterClause)
+            .ToArray();
+        return entry => clauses.Any(clause => clause(entry));
+    }
+
+    private Func<FflogsEvent, bool> ParseFilterClause(string rawClause)
+    {
+        var clause = rawClause.Trim();
+        var match = Regex.Match(clause, "^type\\s*=\\s*'([^']*)'$", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var type = match.Groups[1].Value;
+            return entry => string.Equals(entry.Type, type, StringComparison.Ordinal);
+        }
+
+        match = Regex.Match(
+            clause,
+            @"^ability\.id\s*(?:=\s*(\d+)|in\s*\(([^)]*)\))$",
+            RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var values = match.Groups[1].Success
+                ? new[] { match.Groups[1].Value }
+                : match.Groups[2].Value.Split(',');
+            var abilityIds = values
+                .Select(value => uint.Parse(value.Trim(), CultureInfo.InvariantCulture))
+                .ToHashSet();
+            return entry => entry.AbilityGameID is { } abilityId && abilityIds.Contains(abilityId);
+        }
+
+        match = Regex.Match(
+            clause,
+            @"^source\.name\s*(?:=\s*'([^']*)'|in\s*\(([^)]*)\))$",
+            RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var values = match.Groups[1].Success
+                ? new[] { match.Groups[1].Value }
+                : match.Groups[2].Value.Split(',');
+            var names = values
+                .Select(value => value.Trim().Trim('\''))
+                .ToHashSet(StringComparer.Ordinal);
+            return entry => entry.SourceID is { } sourceId &&
+                actorNames.TryGetValue(sourceId, out var name) &&
+                names.Contains(name);
+        }
+
+        throw new InvalidOperationException($"Local pull query cannot evaluate filter clause: {clause}");
+    }
+
+    private static bool IsCastEvent(string type) => type is "begincast" or "cast";
+
+    private static bool IsDamageEvent(string type) => type is "damage" or "calculateddamage";
+
+    private static bool IsDebuffEvent(string type) => type is
+        "applydebuff" or "removedebuff" or "applydebuffstack" or "removedebuffstack" or "refreshdebuff";
+
+    private static bool IsBuffEvent(string type) => type is
+        "applybuff" or "removebuff" or "applybuffstack" or "removebuffstack" or "refreshbuff";
 
     private sealed class Builder
     {
@@ -115,6 +227,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private readonly ActorIndex actors = new();
         private readonly List<LocalEvent> output = [];
         private readonly Dictionary<int, ReplayPositionSnapshot[]> positionTracks = [];
+        private readonly Dictionary<int, ReplayMechanicSnapshot[]> mechanicPositionTracks = [];
         private readonly List<KnownDamage> knownDamage = [];
 
         internal Builder(PullDeathSnapshot pull)
@@ -132,6 +245,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             AddMarkers();
             AddKnownDamageAndDeaths();
             AddMechanics();
+            AddAnalyzerEvents();
             AddMissingAnalyzerAnchors();
 
             var durationMs = Math.Max(
@@ -163,7 +277,52 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             return new LocalPullEventSource(
                 report,
                 fight,
-                output.OrderBy(entry => entry.Event.Timestamp).ToArray());
+                output.OrderBy(entry => entry.Event.Timestamp).ToArray(),
+                BuildAnalyzerAvailability());
+        }
+
+        private IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> BuildAnalyzerAvailability()
+        {
+            return WtfDigAnalyzerCatalog.All.ToDictionary(
+                analyzer => analyzer.Key,
+                analyzer => HasExactAnalyzerAnchor(analyzer.AnchorAbilityId)
+                    ? new WtfDigLocalAnalyzerAvailability(
+                        WtfDigLocalDataQuality.Exact,
+                        "The mechanic timing was recorded directly in this pull.")
+                    : HasAnalyzerFallbackEvidence(analyzer.Key)
+                        ? new WtfDigLocalAnalyzerAvailability(
+                            WtfDigLocalDataQuality.Estimated,
+                            "This pull is usable, but its mechanic timing is estimated from nearby fight data.")
+                        : new WtfDigLocalAnalyzerAvailability(
+                            WtfDigLocalDataQuality.Unavailable,
+                            "This pull does not contain enough recorded data for this mechanic."),
+                StringComparer.Ordinal);
+        }
+
+        private bool HasExactAnalyzerAnchor(uint abilityId)
+        {
+            return pull.ReplayAnalyzerEvents.Any(entry =>
+                    entry.AbilityId == abilityId &&
+                    string.Equals(entry.EventType, "cast", StringComparison.OrdinalIgnoreCase)) ||
+                pull.ReplayMechanics.Any(mechanic =>
+                    mechanic.RawEventId == abilityId &&
+                    !IsPositionOnlyObject(mechanic));
+        }
+
+        private bool HasAnalyzerFallbackEvidence(string analyzerKey)
+        {
+            return analyzerKey switch
+            {
+                "arrows" => replayDebuffs.Any(change => change.Status.Id is
+                    4876 or 4877 or 4878 or 4879 or 5079 or 5080 or 5081 or 5082),
+                "forsaken" => pull.ReplayMechanics.Any(mechanic => mechanic.RawEventId is
+                    47806 or 47808 or 47809 or 47810 or 47836 or 47837),
+                "kefka-lc" => false,
+                "black-hole" => pull.ReplayMechanics.Any(mechanic => mechanic.RawEventId == BlackHoleAnalyzer.NothingnessId) ||
+                    replayDebuffs.Any(change => change.Status.Id is 5452 or 5453 or 5454),
+                "kefka-says" => pull.ReplayMechanics.Any(mechanic => mechanic.RawEventId == 47892),
+                _ => false,
+            };
         }
 
         private void IndexActors()
@@ -195,6 +354,11 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             {
                 actors.GetMechanicSource(mechanic);
             }
+
+            foreach (var analyzerEvent in pull.ReplayAnalyzerEvents)
+            {
+                actors.GetCombatSource(analyzerEvent.SourceEntityId, analyzerEvent.SourceName);
+            }
         }
 
         private void BuildPositionTracks()
@@ -202,6 +366,15 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             foreach (var group in pull.ReplayPositions.GroupBy(actors.GetPositionActor))
             {
                 positionTracks[group.Key] = group.OrderBy(position => position.PullElapsedSeconds).ToArray();
+            }
+
+            foreach (var group in pull.ReplayMechanics
+                .Where(IsPositionOnlyObject)
+                .GroupBy(actors.GetMechanicSource))
+            {
+                mechanicPositionTracks[group.Key] = group
+                    .OrderBy(position => position.PullElapsedSeconds)
+                    .ToArray();
             }
         }
 
@@ -385,6 +558,11 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             var castKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mechanic in mechanics)
             {
+                if (IsPositionOnlyObject(mechanic))
+                {
+                    continue;
+                }
+
                 if (IsForsakenCloneDrop(mechanic))
                 {
                     AddForsakenCloneDrop(mechanic, castKeys);
@@ -565,6 +743,14 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     .FirstOrDefault(),
                 "Kefka");
             AddMissingAnchor(
+                ForsakenAnalyzer.ForsakenCastGameId,
+                pull.ReplayMechanics
+                    .Where(mechanic => mechanic.RawEventId is 47806 or 47808 or 47809 or 47810)
+                    .Select(mechanic => (float?)(mechanic.PullElapsedSeconds - 6.0f))
+                    .OrderBy(value => value)
+                    .FirstOrDefault(),
+                "Kefka");
+            AddMissingAnchor(
                 BlackHoleAnalyzer.BlackHoleCastId,
                 pull.ReplayMechanics
                     .Where(mechanic => mechanic.RawEventId == BlackHoleAnalyzer.NothingnessId)
@@ -580,6 +766,38 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     .OrderBy(value => value)
                     .FirstOrDefault(),
                 "Kefka");
+        }
+
+        private void AddAnalyzerEvents()
+        {
+            foreach (var analyzerEvent in pull.ReplayAnalyzerEvents.OrderBy(entry => entry.PullElapsedSeconds))
+            {
+                var sourceId = actors.GetCombatSource(analyzerEvent.SourceEntityId, analyzerEvent.SourceName);
+                var timestamp = ToMilliseconds(analyzerEvent.PullElapsedSeconds);
+                if (output.Any(entry =>
+                    IsCastEvent(entry.Event.Type) &&
+                    entry.Event.SourceID == sourceId &&
+                    entry.Event.AbilityGameID == analyzerEvent.AbilityId &&
+                    Math.Abs(entry.Event.Timestamp - timestamp) <= 100))
+                {
+                    continue;
+                }
+
+                output.Add(new LocalEvent(
+                    new FflogsEvent
+                    {
+                        Timestamp = timestamp,
+                        Type = string.IsNullOrWhiteSpace(analyzerEvent.EventType) ? "cast" : analyzerEvent.EventType,
+                        SourceID = sourceId,
+                        SourceInstance = sourceId,
+                        AbilityGameID = analyzerEvent.AbilityId,
+                        SourceResources = analyzerEvent.HasSourcePosition
+                            ? ToResources(analyzerEvent.X, analyzerEvent.Z, analyzerEvent.Rotation)
+                            : ResourceAt(sourceId, analyzerEvent.PullElapsedSeconds),
+                    },
+                    FflogsEventDataType.Casts,
+                    FflogsHostilityType.Enemies));
+            }
         }
 
         private void AddMissingAnchor(uint actionId, float? elapsedSeconds, string sourceName)
@@ -932,7 +1150,25 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             }
 
             var snapshot = PositionAt(id, elapsedSeconds);
-            return snapshot is null ? null : ToResources(snapshot);
+            if (snapshot is not null)
+            {
+                return ToResources(snapshot);
+            }
+
+            var mechanicPosition = MechanicPositionAt(id, elapsedSeconds);
+            return mechanicPosition is null
+                ? null
+                : ToResources(mechanicPosition.X, mechanicPosition.Z, mechanicPosition.Rotation);
+        }
+
+        private ReplayMechanicSnapshot? MechanicPositionAt(int actorId, float elapsedSeconds)
+        {
+            if (!mechanicPositionTracks.TryGetValue(actorId, out var track) || track.Length == 0)
+            {
+                return null;
+            }
+
+            return NearestAt(track, elapsedSeconds, position => position.PullElapsedSeconds);
         }
 
         private ReplayPositionSnapshot? PositionAt(int actorId, float elapsedSeconds)
@@ -979,6 +1215,11 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             foreach (var mechanic in pull.ReplayMechanics.Where(mechanic => mechanic.RawEventId != 0))
             {
                 abilities[mechanic.RawEventId] = AbilityName(mechanic.RawEventId, mechanic.Label);
+            }
+
+            foreach (var analyzerEvent in pull.ReplayAnalyzerEvents.Where(entry => entry.AbilityId != 0))
+            {
+                abilities[analyzerEvent.AbilityId] = AbilityName(analyzerEvent.AbilityId, analyzerEvent.AbilityName);
             }
 
             foreach (var change in replayDebuffs)
@@ -1103,12 +1344,22 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 }
             }
 
-            foreach (var entityId in HexTokens(mechanic.SourceKey))
+            var entity = MechanicSourceEntity(mechanic.SourceKey);
+            if (entity != 0)
             {
-                if (byEntity.TryGetValue(entityId, out var existing))
+                if (byEntity.TryGetValue(entity, out var existing))
                 {
                     return existing;
                 }
+
+                return GetOrAdd(
+                    $"enemy:{entity:X8}",
+                    SourceName(mechanic.SourceName),
+                    false,
+                    2000,
+                    0,
+                    string.Empty,
+                    entity);
             }
 
             if (byEntity.TryGetValue(mechanic.RawState, out var rawStateActor) && !byId[rawStateActor].Friendly)
@@ -1126,25 +1377,36 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 }
             }
 
-            var entity = HexTokens(mechanic.SourceKey).FirstOrDefault();
             return GetOrAdd(
-                entity == 0 ? $"mechanic:{name}" : $"enemy:{entity:X8}",
+                $"mechanic:{name}",
                 name,
                 false,
                 2000,
                 0,
                 string.Empty,
-                entity);
+                0);
         }
 
         internal int GetCombatSource(uint entityId, string name)
         {
-            if (entityId != 0 && byEntity.TryGetValue(entityId, out var existing))
+            var cleanName = SourceName(name);
+            if (entityId != 0)
             {
-                return existing;
+                if (byEntity.TryGetValue(entityId, out var existing))
+                {
+                    return existing;
+                }
+
+                return GetOrAdd(
+                    $"enemy:{entityId:X8}",
+                    cleanName,
+                    false,
+                    2000,
+                    0,
+                    string.Empty,
+                    entityId);
             }
 
-            var cleanName = SourceName(name);
             if (byName.TryGetValue(cleanName, out var named))
             {
                 var enemy = named.FirstOrDefault(id => !byId[id].Friendly);
@@ -1277,6 +1539,9 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         mechanic.RawEventKind.Contains("cast", StringComparison.OrdinalIgnoreCase) ||
         mechanic.RawEventKind.Contains("predicted", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsPositionOnlyObject(ReplayMechanicSnapshot mechanic) =>
+        string.Equals(mechanic.RawEventKind, "object", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsForsakenTargetEvidence(ReplayMechanicSnapshot mechanic) =>
         string.Equals(
             mechanic.RawEventKind,
@@ -1353,6 +1618,51 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         }
     }
 
+    private static uint MechanicSourceEntity(string sourceKey)
+    {
+        var tokens = sourceKey.Split(':', StringSplitOptions.RemoveEmptyEntries);
+        var sourceIndex = tokens.Length > 2 && string.Equals(tokens[1], "cast", StringComparison.OrdinalIgnoreCase)
+            ? 2
+            : 1;
+        return sourceIndex < tokens.Length &&
+            tokens[sourceIndex].Length == 8 &&
+            uint.TryParse(tokens[sourceIndex], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var entityId)
+                ? entityId
+                : 0;
+    }
+
     private static string? FirstHexToken(string value) => value.Split(':', StringSplitOptions.RemoveEmptyEntries)
         .FirstOrDefault(token => token.Length == 8 && uint.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _));
+
+    private static T NearestAt<T>(IReadOnlyList<T> track, float elapsedSeconds, Func<T, float> time)
+    {
+        var low = 0;
+        var high = track.Count - 1;
+        while (low <= high)
+        {
+            var middle = low + ((high - low) / 2);
+            if (time(track[middle]) < elapsedSeconds)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        if (low <= 0)
+        {
+            return track[0];
+        }
+
+        if (low >= track.Count)
+        {
+            return track[^1];
+        }
+
+        return Math.Abs(time(track[low]) - elapsedSeconds) < Math.Abs(time(track[low - 1]) - elapsedSeconds)
+            ? track[low]
+            : track[low - 1];
+    }
 }

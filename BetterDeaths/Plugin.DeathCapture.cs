@@ -442,6 +442,7 @@ public sealed partial class Plugin
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
         TrackPossibleMitigationActionUse(packet);
+        CaptureReplayAnalyzerEvent(packet);
         var replayMechanicCaptureRevisionBeforeSpecializedHandlers = replayMechanicCaptureRevision;
         CaptureReplayBlackHoleBlast(packet);
         var hadActiveReplayMechanic = HasActiveReplayMechanicForAction(packet);
@@ -2829,6 +2830,7 @@ public sealed partial class Plugin
         PruneRecentReplayPositions(now);
         PruneRecentReplayMarkers(now);
         PruneRecentReplayMechanics(now);
+        PruneRecentReplayAnalyzerEvents(now);
         PruneRecentReplayWorldMarkers(now);
         PruneRecentReplayMitigations(now);
         PruneRecentReplayDebuffs(now);

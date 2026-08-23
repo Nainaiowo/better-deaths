@@ -84,6 +84,8 @@ public sealed partial class RecapWindow
 
         state = wtfDigAnalyzer.Snapshot();
 
+        DrawWtfDigLocalDataQuality(state);
+
         if (!string.IsNullOrWhiteSpace(state.Error))
         {
             ImGui.Dummy(new Vector2(1.0f, 4.0f));
@@ -96,6 +98,11 @@ public sealed partial class RecapWindow
         {
             ImGui.Dummy(new Vector2(1.0f, 8.0f));
             DrawWtfDigReportBar(state);
+            if (state.Source == WtfDigAnalyzerSource.LocalPull && state.Analysis is not null)
+            {
+                ImGui.Dummy(new Vector2(1.0f, 5.0f));
+                DrawWtfDigReplayJump(state.Analysis);
+            }
         }
 
         if (state.Loading)
@@ -145,6 +152,72 @@ public sealed partial class RecapWindow
         {
             DrawWtfDigMutedWrapped("Analyzing sends the FFLogs report code to WTF.DIG's service, which retrieves the requested log data from FFLogs.");
             DrawWtfDigMutedWrapped("FFLogs position snapshots are estimates. Use the original log and recording as the source of truth.");
+        }
+    }
+
+    private void DrawWtfDigReplayJump(object analysis)
+    {
+        var targetSeconds = analysis switch
+        {
+            ArrowsAnalysis arrows when arrows.Waves.Count > 0 =>
+                arrows.Waves[Math.Clamp(selectedArrowWave < 0 ? 0 : selectedArrowWave, 0, arrows.Waves.Count - 1)].Time,
+            ForsakenAnalysis forsaken when forsaken.Resolutions.Count > 0 =>
+                forsaken.Resolutions[Math.Clamp(selectedForsakenResolution, 0, forsaken.Resolutions.Count - 1)].SnapshotTime,
+            LimitCutAnalysis { FinalBlastTime: { } finalBlastTime } => finalBlastTime,
+            BlackHoleAnalysis blackHole when blackHole.Tethers.Count > 0 =>
+                blackHole.Tethers[Math.Clamp(selectedBlackHoleTether, 0, blackHole.Tethers.Count - 1)].Time,
+            P4Analysis { KefkaSaysTime: { } kefkaSaysTime } => kefkaSaysTime,
+            _ => 0.0,
+        };
+        if (DrawThemedActionButton("Open this moment in Replay", "WtfDigOpenReplay"))
+        {
+            OpenWtfDigReplayAt((float)targetSeconds);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Opens the full Better Deaths replay near the mechanic currently shown here.");
+        }
+    }
+
+    private void OpenWtfDigReplayAt(float pullElapsedSeconds)
+    {
+        var summary = plugin.RecordedPulls.FirstOrDefault(candidate =>
+            candidate.PullNumber == selectedWtfDigLocalPullNumber &&
+            candidate.CapturedAtUtc.Ticks == selectedWtfDigLocalPullCapturedAtTicks);
+        if (summary is null)
+        {
+            return;
+        }
+
+        selectedReplayPullKey = BuildRecordedPullKey(summary);
+        replayFocusDeathSelection = null;
+        currentMainPage = MainPage.Replay;
+        var replayId = BuildReplayViewerId(summary);
+        replayScrubSecondsByDeathId[replayId] = MathF.Max(0.0f, pullElapsedSeconds - 2.0f);
+        replayPlayingByDeathId[replayId] = false;
+    }
+
+    private static void DrawWtfDigLocalDataQuality(WtfDigAnalyzerViewState state)
+    {
+        if (state.Source != WtfDigAnalyzerSource.LocalPull ||
+            !state.LocalAvailability.TryGetValue(state.Analyzer.Key, out var availability) ||
+            availability.Quality == WtfDigLocalDataQuality.Unavailable)
+        {
+            return;
+        }
+
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        var label = availability.Quality == WtfDigLocalDataQuality.Exact
+            ? "Recorded mechanic data"
+            : "Estimated timing from nearby fight data";
+        var color = availability.Quality == WtfDigLocalDataQuality.Exact
+            ? HealColor
+            : LeadUpGoldColor;
+        ImGui.TextColored(color, label);
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(availability.Summary);
         }
     }
 
@@ -519,6 +592,15 @@ public sealed partial class RecapWindow
             ImGui.Dummy(new Vector2(1.0f, 8.0f));
             DrawForsakenPlayerTable(resolution, new Vector2(0.0f, 0.0f));
         }
+
+        DrawWtfDigInlineLegend(
+        [
+            ("Stack", ForsakenEffectColor(ForsakenEffect.Stack)),
+            ("Spread", ForsakenEffectColor(ForsakenEffect.Spread)),
+            ("Cone", ForsakenEffectColor(ForsakenEffect.Cone)),
+            ("Clone", ForsakenEffectColor(ForsakenEffect.Clone)),
+            ("Cleave", ForsakenEffectColor(ForsakenEffect.Cleave)),
+        ]);
     }
 
     private void DrawArrowsAnalysis(ArrowsAnalysis analysis)
@@ -588,6 +670,15 @@ public sealed partial class RecapWindow
             DrawArrowsTable(shown, slots, Vector2.Zero);
         }
 
+        DrawWtfDigInlineLegend(
+        [
+            ("Up / N", ArrowDirectionColor(0)),
+            ("Right / E", ArrowDirectionColor(1)),
+            ("Down / S", ArrowDirectionColor(2)),
+            ("Left / W", ArrowDirectionColor(3)),
+            ("Sleep start", new Vector4(1.0f, 0.84f, 0.0f, 1.0f)),
+            ("Confused start", new Vector4(1.0f, 0.21f, 0.71f, 1.0f)),
+        ]);
     }
 
     private void DrawLimitCutAnalysis(LimitCutAnalysis analysis, WtfDigAnalyzerSource source)
@@ -638,11 +729,12 @@ public sealed partial class RecapWindow
         }
 
         ImGui.Dummy(new Vector2(1.0f, 4.0f));
-        ImGui.TextColored(LimitCutKefkaRotationColor, "Kefka rotation");
-        ImGui.SameLine();
-        ImGui.TextColored(ModernMutedTextColor, "|");
-        ImGui.SameLine();
-        ImGui.TextColored(LimitCutPlayerRotationColor, "Player rotation");
+        DrawWtfDigInlineLegend(
+        [
+            ("Kefka start and rotation", LimitCutKefkaRotationColor),
+            ("Expected player positions", LimitCutPlayerRotationColor),
+            ("Final clones", DamageColor),
+        ]);
         ImGui.TextDisabled(source == WtfDigAnalyzerSource.LocalPull
             ? "Positions use Better Deaths replay snapshots near the final blast."
             : "Positions are estimated from FFLogs snapshots near the final blast.");
@@ -707,6 +799,14 @@ public sealed partial class RecapWindow
             DrawBlackHoleTable(tether, analysis.Players, Vector2.Zero);
         }
 
+        DrawWtfDigInlineLegend(
+        [
+            ("Unbecoming: hit once", new Vector4(0.36f, 0.61f, 1.0f, 1.0f)),
+            ("Meanest: hit twice or more", new Vector4(0.77f, 0.80f, 1.0f, 1.0f)),
+            ("Primordial Crust", LeadUpGoldColor),
+            ("Black hole", new Vector4(0.63f, 0.42f, 1.0f, 1.0f)),
+            ("Tether holder", ModernTextColor),
+        ]);
     }
 
     private void DrawBlackHoleTetherSelector(BlackHoleAnalysis analysis, ref BlackHoleTether tether)
@@ -874,6 +974,30 @@ public sealed partial class RecapWindow
             }
         }
 
+        DrawWtfDigMutedWrapped("Shows casts, debuffs, and each player's assignment. Check the original log or recording when exact timing matters.");
+    }
+
+    private static void DrawWtfDigInlineLegend(IReadOnlyList<(string Label, Vector4 Color)> items)
+    {
+        ImGui.Dummy(new Vector2(1.0f, 5.0f));
+        var available = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var rowWidth = 0.0f;
+        foreach (var (label, color) in items)
+        {
+            var width = ImGui.CalcTextSize(label).X;
+            var spacing = ImGui.GetStyle().ItemSpacing.X;
+            if (rowWidth > 0.0f && rowWidth + spacing + width <= available)
+            {
+                ImGui.SameLine();
+                rowWidth += spacing + width;
+            }
+            else
+            {
+                rowWidth = width;
+            }
+
+            ImGui.TextColored(color, label);
+        }
     }
 
     private void DrawP4Round(P4Round round, P4RealFake? flood, IReadOnlyList<P4DeathMarker> markers)
@@ -2321,6 +2445,7 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                 Analysis = null,
                 Loading = false,
                 Error = null,
+                LocalAvailability = new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal),
             };
         }
     }
@@ -2350,6 +2475,7 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                 Analysis = null,
                 Loading = false,
                 Error = null,
+                LocalAvailability = new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal),
             };
         }
     }
@@ -2366,6 +2492,7 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                 Source = WtfDigAnalyzerSource.LocalPull,
                 LocalPullNumber = pull.PullNumber,
                 LocalPullCapturedAtTicks = pull.CapturedAtUtc.Ticks,
+                LocalAvailability = new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal),
             };
         }
 
@@ -2387,6 +2514,7 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                 Source = WtfDigAnalyzerSource.Fflogs,
                 LocalPullNumber = null,
                 LocalPullCapturedAtTicks = null,
+                LocalAvailability = new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal),
             };
         }
 
@@ -2589,6 +2717,24 @@ internal sealed class WtfDigAnalyzerController : IDisposable
         WtfDigAnalyzerDefinition analyzer,
         CancellationToken token)
     {
+        var availability = eventSource is LocalPullEventSource localSource
+            ? localSource.AnalyzerAvailability
+            : new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal);
+        if (availability.TryGetValue(analyzer.Key, out var localAvailability) &&
+            localAvailability.Quality == WtfDigLocalDataQuality.Unavailable)
+        {
+            return new WtfDigOperationResult(
+                report,
+                report.Fights,
+                fight,
+                null,
+                localAvailability.Summary,
+                eventSource)
+            {
+                LocalAvailability = availability,
+            };
+        }
+
         object analysis = analyzer.Key switch
         {
             "arrows" => await new ArrowsAnalyzer(eventSource).AnalyzeAsync(report, fight, token).ConfigureAwait(false),
@@ -2608,7 +2754,10 @@ internal sealed class WtfDigAnalyzerController : IDisposable
             _ => null,
         };
         var eligible = eventSource is LocalPullEventSource ? report.Fights : WtfDigAnalyzerCatalog.EligibleFights(report, analyzer);
-        return new WtfDigOperationResult(report, eligible, fight, analysis, error, eventSource);
+        return new WtfDigOperationResult(report, eligible, fight, analysis, error, eventSource)
+        {
+            LocalAvailability = availability,
+        };
     }
 
     private void StartOperation(
@@ -2664,6 +2813,7 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                     Analysis = result.Analysis,
                     Loading = false,
                     Error = result.Error,
+                    LocalAvailability = result.LocalAvailability,
                 };
                 activeEventSource = result.EventSource;
             }
@@ -2709,7 +2859,11 @@ internal sealed record WtfDigAnalyzerViewState(
     FflogsFight? SelectedFight,
     object? Analysis,
     bool Loading,
-    string? Error);
+    string? Error)
+{
+    internal IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> LocalAvailability { get; init; } =
+        new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal);
+}
 
 internal sealed record WtfDigOperationResult(
     FflogsReportSummary Report,
@@ -2717,4 +2871,8 @@ internal sealed record WtfDigOperationResult(
     FflogsFight? SelectedFight,
     object? Analysis,
     string? Error,
-    IWtfDigEventSource? EventSource = null);
+    IWtfDigEventSource? EventSource = null)
+{
+    internal IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> LocalAvailability { get; init; } =
+        new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal);
+}

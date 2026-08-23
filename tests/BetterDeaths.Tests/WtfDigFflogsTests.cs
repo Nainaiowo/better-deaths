@@ -197,6 +197,16 @@ public sealed class WtfDigFflogsTests
     public async Task LocalPull_ForsakenUsesRecordedTowerTargetsInsteadOfPositionGuessing()
     {
         var source = LocalPullEventSource.Create(CreateLocalForsakenEvidencePull());
+        var anchors = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: ForsakenAnalyzer.ForsakenCastGameId),
+            CancellationToken.None);
         var damage = await source.FetchAllEventsAsync(
             new FflogsEventQuery(
                 source.Report.Code,
@@ -210,6 +220,8 @@ public sealed class WtfDigFflogsTests
         var expectedTarget = source.Report.Actors.Single(actor => actor.Name == "Actual Soaker").Id;
         var guessedTarget = source.Report.Actors.Single(actor => actor.Name == "Nearby Player").Id;
 
+        Assert.Single(anchors, entry => entry.Type == "cast");
+        Assert.Equal(WtfDigLocalDataQuality.Estimated, source.AnalyzerAvailability["forsaken"].Quality);
         Assert.Contains(damage, entry => entry.Type == "calculateddamage" && entry.TargetID == expectedTarget);
         Assert.DoesNotContain(damage, entry => entry.TargetID == guessedTarget);
     }
@@ -251,6 +263,202 @@ public sealed class WtfDigFflogsTests
         Assert.Equal(10500, resolvedCleave.SourceResources!.X);
         Assert.Equal(10100, resolvedCleave.SourceResources.Y);
         Assert.Equal((-1.25 * 100.0) - (150.0 * Math.PI), resolvedCleave.SourceResources.Facing, 4);
+    }
+
+    [Fact]
+    public async Task LocalPull_BlackHoleKeepsDistinctObjectsAndOnlyReturnsRequestedTethers()
+    {
+        var source = LocalPullEventSource.Create(CreateLocalBlackHolePull());
+
+        var tethers = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FilterExpression: "type='tether'"),
+            CancellationToken.None);
+        var objectCasts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: 19512),
+            CancellationToken.None);
+
+        Assert.Equal(2, tethers.Count);
+        Assert.Equal(2, tethers.Select(entry => entry.SourceID).Distinct().Count());
+        Assert.Equal(2, tethers.Select(entry => entry.SourceInstance).Distinct().Count());
+        Assert.All(tethers, entry => Assert.Equal("tether", entry.Type));
+        Assert.Empty(objectCasts);
+    }
+
+    [Fact]
+    public async Task LocalPull_BlackHoleAnalysisKeepsEveryBeamAndTetherHolder()
+    {
+        var source = LocalPullEventSource.Create(CreateLocalBlackHolePull());
+
+        var analysis = await new BlackHoleAnalyzer(source)
+            .AnalyzeAsync(source.Report, source.Fight, CancellationToken.None);
+
+        var tether = Assert.Single(analysis.Tethers);
+        Assert.Equal(2, tether.Beams.Count);
+        Assert.Equal(2, tether.Beams.Select(beam => beam.Instance).Distinct().Count());
+        Assert.Equal(2, tether.Beams.Select(beam => beam.Origin).Distinct().Count());
+        Assert.All(tether.Beams, beam => Assert.NotNull(beam.TetherHolder));
+    }
+
+    [Fact]
+    public async Task LocalPull_FiltersCastsBySourceNameLikeWtfDig()
+    {
+        var source = LocalPullEventSource.Create(CreateLocalBlackHolePull());
+
+        var bossCasts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                FilterExpression: "source.name in ('Kefka', 'Chaos', 'Exdeath')"),
+            CancellationToken.None);
+
+        Assert.NotEmpty(bossCasts);
+        Assert.All(bossCasts, entry => Assert.Equal(47867u, entry.AbilityGameID));
+    }
+
+    [Fact]
+    public async Task LocalPull_UsesExactAnalyzerTimelineEventInsteadOfAddingAnEstimatedAnchor()
+    {
+        var pull = CreateLocalArrowPull() with
+        {
+            ReplayAnalyzerEvents =
+            [
+                new ReplayAnalyzerEventSnapshot(
+                    new DateTime(2026, 8, 21, 12, 2, 28, DateTimeKind.Utc),
+                    148,
+                    "cast",
+                    0x40000001,
+                    "Kefka",
+                    47801,
+                    "Tele-Trouncing",
+                    true,
+                    101,
+                    0,
+                    99,
+                    0.5f),
+            ],
+        };
+        var source = LocalPullEventSource.Create(pull);
+
+        var casts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: 47801),
+            CancellationToken.None);
+
+        var cast = Assert.Single(casts);
+        Assert.Equal(148_000, cast.Timestamp);
+        Assert.Equal(10_100, cast.SourceResources!.X);
+        Assert.Equal(9_900, cast.SourceResources.Y);
+        Assert.Equal(WtfDigLocalDataQuality.Exact, source.AnalyzerAvailability["arrows"].Quality);
+        Assert.Equal(WtfDigLocalDataQuality.Unavailable, source.AnalyzerAvailability["kefka-says"].Quality);
+    }
+
+    [Fact]
+    public void LocalPull_LabelsOlderFallbackDataAsEstimated()
+    {
+        var arrows = LocalPullEventSource.Create(CreateLocalArrowPull());
+        var blackHole = LocalPullEventSource.Create(CreateLocalBlackHolePull());
+
+        Assert.Equal(WtfDigLocalDataQuality.Estimated, arrows.AnalyzerAvailability["arrows"].Quality);
+        Assert.Equal(WtfDigLocalDataQuality.Estimated, blackHole.AnalyzerAvailability["black-hole"].Quality);
+    }
+
+    [Fact]
+    public async Task LocalPull_DoesNotMistakeLegacyEightDigitSequencesForActorIds()
+    {
+        var pull = CreateLocalForsakenEvidencePull();
+        var template = pull.ReplayMechanics[0];
+        pull = pull with
+        {
+            ReplayMechanics =
+            [
+                template with
+                {
+                    SourceKey = "legacy-target:47868:12345678:nearby-player",
+                    RawEventKind = "legacy-target",
+                    RawEventId = 47868,
+                    PullElapsedSeconds = 9,
+                },
+                template with
+                {
+                    SourceKey = "legacy-target:47868:87654321:actual-soaker",
+                    RawEventKind = "legacy-target",
+                    RawEventId = 47868,
+                    PullElapsedSeconds = 10,
+                },
+            ],
+        };
+        var source = LocalPullEventSource.Create(pull);
+
+        var damage = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.DamageTaken,
+                FflogsHostilityType.Friendlies,
+                AbilityId: 47868),
+            CancellationToken.None);
+
+        Assert.NotEmpty(damage);
+        Assert.Single(damage.Select(entry => entry.SourceID).Distinct());
+    }
+
+    [Fact]
+    public async Task LocalPull_KeepsSameNamedCombatSourcesSeparateWhenEntityIdsDiffer()
+    {
+        var pull = CreateLocalForsakenEvidencePull();
+        var evidence = pull.ReplayMechanics[1];
+        pull = pull with
+        {
+            ReplayMechanics =
+            [
+                evidence,
+                evidence with
+                {
+                    SourceKey = "dmu-p2-path-of-light-activation:2:40000002:101:actual-soaker",
+                    PullElapsedSeconds = 10,
+                },
+            ],
+        };
+        var source = LocalPullEventSource.Create(pull);
+
+        var damage = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.DamageTaken,
+                FflogsHostilityType.Friendlies,
+                AbilityId: 47806),
+            CancellationToken.None);
+
+        var calculated = damage.Where(entry => entry.Type == "calculateddamage").ToArray();
+        Assert.Equal(2, calculated.Length);
+        Assert.Equal(2, calculated.Select(entry => entry.SourceID).Distinct().Count());
     }
 
     private static PullDeathSnapshot CreateLocalArrowPull()
@@ -456,6 +664,61 @@ public sealed class WtfDigFflogsTests
                     47837,
                     0x40000002),
             ],
+        };
+    }
+
+    private static PullDeathSnapshot CreateLocalBlackHolePull()
+    {
+        var startedAt = new DateTime(2026, 8, 21, 15, 0, 0, DateTimeKind.Utc);
+        ReplayPositionSnapshot Player(float seconds, string key, string name, uint entityId, float x, float z, int partyIndex) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, key, name, ReplayActorKind.Player,
+                partyIndex, entityId, 34, "SAM", x, 0, z, 0,
+                100_000, 0, 100_000, false, true);
+        ReplayMechanicSnapshot Mechanic(
+            float seconds,
+            string sourceKey,
+            string sourceName,
+            ReplayMechanicShape shape,
+            float x,
+            float z,
+            float rotation,
+            float length,
+            string rawEventKind,
+            uint actionId,
+            uint rawState) =>
+            new(
+                startedAt.AddSeconds(seconds), seconds, 1.0f, sourceKey, sourceName,
+                shape, x, 0, z, rotation, 2, length, 4, 0,
+                actionId == 47868 ? "Nothingness" : "Black Hole",
+                rawEventKind, actionId, rawState, true);
+
+        return new PullDeathSnapshot(
+            startedAt.AddSeconds(30),
+            "Wipe",
+            1363,
+            "Dancing Mad",
+            30,
+            [])
+        {
+            PullNumber = 15,
+            ReplayPositions =
+            [
+                Player(10, "member-1", "First Holder", 0x10000001, 100, 90, 0),
+                Player(10, "member-2", "Second Holder", 0x10000002, 100, 110, 1),
+                Player(12, "member-1", "First Holder", 0x10000001, 100, 90, 0),
+                Player(12, "member-2", "Second Holder", 0x10000002, 100, 110, 1),
+            ],
+            ReplayMechanics =
+            [
+                Mechanic(9, "object:40000011", "Black Hole", ReplayMechanicShape.Circle, 90, 90, 0, 0, "object", 19512, 0x40000011),
+                Mechanic(9, "object:40000012", "Black Hole", ReplayMechanicShape.Circle, 110, 110, 0, 0, "object", 19512, 0x40000012),
+                Mechanic(10, "black-hole-tether:40000011:10000001", "Black Hole -> First Holder", ReplayMechanicShape.Tether, 95, 90, MathF.PI / 2, 10, "black-hole-tether", 1, 0),
+                Mechanic(10, "black-hole-tether:40000012:10000002", "Black Hole -> Second Holder", ReplayMechanicShape.Tether, 105, 110, -MathF.PI / 2, 10, "black-hole-tether", 1, 0),
+                Mechanic(12, "black-hole-blast:40000011:member-1", "Black Hole -> First Holder", ReplayMechanicShape.Line, 95, 90, MathF.PI / 2, 10, "black-hole-blast", 47868, 50_000),
+                Mechanic(12, "black-hole-blast:40000012:member-2", "Black Hole -> Second Holder", ReplayMechanicShape.Line, 105, 110, -MathF.PI / 2, 10, "black-hole-blast", 47868, 50_000),
+            ],
+            ReplayDebuffsCaptured = true,
         };
     }
 

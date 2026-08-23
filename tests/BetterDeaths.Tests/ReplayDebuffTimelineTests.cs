@@ -101,6 +101,7 @@ public sealed class ReplayDebuffTimelineTests
         Assert.NotNull(pull);
         Assert.Empty(pull.ReplayDebuffs);
         Assert.False(pull.ReplayDebuffsCaptured);
+        Assert.Empty(pull.ReplayAnalyzerEvents);
     }
 
     private static ReplayDebuffSnapshot CreateChange(
