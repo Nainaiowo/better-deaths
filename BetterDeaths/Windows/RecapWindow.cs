@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.0";
+    private const string CurrentChangelogVersion = "1.0.0.1";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -19907,6 +19907,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.1");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Fixed DMU P2 Forsaken replays so Past and Future clone cleaves face the correct directions.");
+        DrawHighlightedChangelogBullet("Improved the Analyzer with larger, resizable diagrams, remembered sizing, compact information panels, and responsive layouts for smaller windows.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added the WTF.DIG Analyzer for supported DMU mechanics.");
