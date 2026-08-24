@@ -8423,7 +8423,8 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         var normalizedMechanics = NormalizeReplayDmuP2EndTimeline(
             NormalizeReplayDmuP2ForsakenCleaveTimeline(
-                rawMechanics.Select(NormalizeReplayMechanicForDisplay).ToList()),
+                rawMechanics.Select(NormalizeReplayMechanicForDisplay).ToList(),
+                positions),
             positions);
         var mechanics = NormalizeReplayPathOfLightTowerTimeline(normalizedMechanics)
             .ToList();
@@ -8790,19 +8791,23 @@ public sealed partial class RecapWindow : Window, IDisposable
     }
 
     private static IReadOnlyList<ReplayMechanicSnapshot> NormalizeReplayDmuP2ForsakenCleaveTimeline(
-        IReadOnlyList<ReplayMechanicSnapshot> mechanics)
+        IReadOnlyList<ReplayMechanicSnapshot> mechanics,
+        IReadOnlyList<ReplayPositionSnapshot> positions)
     {
-        var cloneDrops = mechanics
+        var normalizedMechanics = mechanics
+            .Select(mechanic => ForsakenCleavePosePolicy.UseCompletionPose(mechanic, positions))
+            .ToArray();
+        var cloneDrops = normalizedMechanics
             .Where(IsReplayDmuP2ForsakenCloneDrop)
             .ToArray();
         if (cloneDrops.Length == 0)
         {
-            return mechanics;
+            return normalizedMechanics;
         }
 
         var replacements = new Dictionary<string, ReplayMechanicSnapshot>(StringComparer.Ordinal);
         var supersededCastKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var cleave in mechanics.Where(IsReplayDmuP2ForsakenCleaveResolve))
+        foreach (var cleave in normalizedMechanics.Where(IsReplayDmuP2ForsakenCleaveResolve))
         {
             if (!TryGetReplayMechanicSourceEntityId(cleave, out var sourceEntityId))
             {
@@ -8822,7 +8827,7 @@ public sealed partial class RecapWindow : Window, IDisposable
                 continue;
             }
 
-            var matchingCasts = mechanics
+            var matchingCasts = normalizedMechanics
                 .Where(candidate =>
                     IsReplayCastSnapshot(candidate) &&
                     candidate.RawEventId == cleave.RawEventId &&
@@ -8857,10 +8862,10 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         if (replacements.Count == 0)
         {
-            return mechanics;
+            return normalizedMechanics;
         }
 
-        return mechanics
+        return normalizedMechanics
             .Where(mechanic => !supersededCastKeys.Contains(mechanic.SourceKey))
             .Select(mechanic => replacements.GetValueOrDefault(mechanic.SourceKey, mechanic))
             .ToArray();

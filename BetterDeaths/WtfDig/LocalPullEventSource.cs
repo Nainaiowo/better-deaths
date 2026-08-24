@@ -22,7 +22,6 @@ internal sealed record WtfDigLocalAnalyzerAvailability(
 
 internal sealed class LocalPullEventSource : IWtfDigEventSource
 {
-    private const float CastPredictionGraceSeconds = 0.6f;
     private const uint RealFakeStatusId = 2056;
     private const uint PathOfLightActionId = 47806;
 
@@ -827,8 +826,10 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private void AddCast(ReplayMechanicSnapshot mechanic, ISet<string> castKeys, bool predicted)
         {
             var sourceId = actors.GetMechanicSource(mechanic);
-            var timestamp = ToMilliseconds(mechanic.PullElapsedSeconds +
-                (predicted ? Math.Max(0, mechanic.DurationSeconds - CastPredictionGraceSeconds) : 0));
+            var eventSeconds = predicted
+                ? ForsakenCleavePosePolicy.PredictedResultElapsedSeconds(mechanic)
+                : mechanic.PullElapsedSeconds;
+            var timestamp = ToMilliseconds(eventSeconds);
             var roundedTime = (long)Math.Round(timestamp / 100.0);
             var key = $"{sourceId}:{mechanic.RawEventId}:{roundedTime}";
             if (!castKeys.Add(key))
@@ -844,7 +845,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     SourceID = sourceId,
                     AbilityGameID = mechanic.RawEventId,
                     SourceInstance = sourceId,
-                    SourceResources = ResourceAt(sourceId, mechanic.PullElapsedSeconds) ?? MechanicSourceResources(mechanic),
+                    SourceResources = ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
                 },
                 FflogsEventDataType.Casts,
                 FflogsHostilityType.Enemies));

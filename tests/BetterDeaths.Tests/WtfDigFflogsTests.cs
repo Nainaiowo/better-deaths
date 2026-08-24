@@ -266,6 +266,62 @@ public sealed class WtfDigFflogsTests
     }
 
     [Fact]
+    public async Task LocalPull_ForsakenPredictedCleaveUsesCompletionFacingWhenNoResultPacketExists()
+    {
+        var pull = CreateLocalForsakenClonePull();
+        pull = pull with
+        {
+            ReplayMechanics = pull.ReplayMechanics
+                .Where(mechanic => mechanic.RawEventKind != "dmu-p2-all-things-ending")
+                .ToArray(),
+        };
+        var source = LocalPullEventSource.Create(pull);
+
+        var cleaveCasts = await source.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                source.Report.Code,
+                source.Fight.Id,
+                source.Fight.StartTime,
+                source.Fight.EndTime,
+                FflogsEventDataType.Casts,
+                FflogsHostilityType.Enemies,
+                AbilityId: 47837),
+            CancellationToken.None);
+
+        var predictedCleave = Assert.Single(cleaveCasts, entry => entry.Type == "cast");
+        Assert.Equal(15_000, predictedCleave.Timestamp);
+        Assert.Equal(10500, predictedCleave.SourceResources!.X);
+        Assert.Equal(10100, predictedCleave.SourceResources.Y);
+        Assert.Equal((-1.25 * 100.0) - (150.0 * Math.PI), predictedCleave.SourceResources.Facing, 4);
+    }
+
+    [Fact]
+    public void ForsakenCleavePose_UsesRecordedPoseNearPredictedResult()
+    {
+        var pull = CreateLocalForsakenClonePull();
+        var cast = pull.ReplayMechanics.Single(mechanic => mechanic.RawEventKind == "bossmod-cast");
+
+        var normalized = ForsakenCleavePosePolicy.UseCompletionPose(cast, pull.ReplayPositions);
+
+        Assert.Equal(105, normalized.X);
+        Assert.Equal(101, normalized.Z);
+        Assert.Equal(1.25f, normalized.Rotation);
+        Assert.Equal(cast.SeenAtUtc, normalized.SeenAtUtc);
+        Assert.Equal(cast.DurationSeconds, normalized.DurationSeconds);
+    }
+
+    [Fact]
+    public void ForsakenCleavePose_KeepsCapturedPoseWithoutANearbySourceSample()
+    {
+        var pull = CreateLocalForsakenClonePull();
+        var cast = pull.ReplayMechanics.Single(mechanic => mechanic.RawEventKind == "bossmod-cast");
+
+        var normalized = ForsakenCleavePosePolicy.UseCompletionPose(cast, []);
+
+        Assert.Same(cast, normalized);
+    }
+
+    [Fact]
     public async Task LocalPull_BlackHoleKeepsDistinctObjectsAndOnlyReturnsRequestedTethers()
     {
         var source = LocalPullEventSource.Create(CreateLocalBlackHolePull());
@@ -619,6 +675,8 @@ public sealed class WtfDigFflogsTests
             ReplayPositions =
             [
                 Position(5, "clone", "Future Fragment", ReplayActorKind.Enemy, 0x40000002, 100, 100, 0, 2000),
+                Position(10, "clone", "Future Fragment", ReplayActorKind.Enemy, 0x40000002, 100, 100, 0.25f, 2000),
+                Position(15, "clone", "Future Fragment", ReplayActorKind.Enemy, 0x40000002, 105, 101, 1.25f, 2000),
                 Position(5, "nearby", "Nearby Player", ReplayActorKind.Player, 0x10000001, 101, 100, 0, 0),
                 Position(5, "actual-bait", "Actual Bait", ReplayActorKind.Player, 0x10000002, 112, 99, 0, 1),
             ],

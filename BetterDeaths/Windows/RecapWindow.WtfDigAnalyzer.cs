@@ -30,6 +30,7 @@ public sealed partial class RecapWindow
     private long? selectedWtfDigLocalPullNumber;
     private long? selectedWtfDigLocalPullCapturedAtTicks;
     private int selectedForsakenResolution;
+    private int? selectedForsakenCleave;
     private int forsakenViewIndex = 1;
     private bool alignForsakenTowers = true;
     private bool showForsakenCleaveSnapshot = true;
@@ -54,6 +55,7 @@ public sealed partial class RecapWindow
         {
             displayedWtfDigAnalysis = state.Analysis;
             selectedForsakenResolution = 0;
+            selectedForsakenCleave = null;
             forsakenViewIndex = 1;
             selectedArrowWave = -1;
             selectedBlackHoleTether = 0;
@@ -291,6 +293,7 @@ public sealed partial class RecapWindow
             {
                 wtfDigAnalyzer.SelectAnalyzer(analyzer);
                 selectedForsakenResolution = 0;
+                selectedForsakenCleave = null;
             }
 
             if (ImGui.IsItemHovered())
@@ -484,6 +487,7 @@ public sealed partial class RecapWindow
                         {
                             wtfDigAnalyzer.SelectFight(fight.Id);
                             selectedForsakenResolution = 0;
+                            selectedForsakenCleave = null;
                         }
 
                         if (isSelected)
@@ -568,6 +572,7 @@ public sealed partial class RecapWindow
             if (DrawThemedToggleButton(label, $"ForsakenSet{index}", index == selectedForsakenResolution, width))
             {
                 selectedForsakenResolution = index;
+                selectedForsakenCleave = null;
                 forsakenViewIndex = 1;
                 resolution = candidate;
             }
@@ -1999,6 +2004,7 @@ public sealed partial class RecapWindow
                 if (DrawThemedToggleButton(label, $"ForsakenView{value}", forsakenViewIndex == value))
                 {
                     forsakenViewIndex = value;
+                    selectedForsakenCleave = null;
                 }
             }
         }
@@ -2069,6 +2075,9 @@ public sealed partial class RecapWindow
     {
         var start = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##ForsakenArena", new Vector2(size, size));
+        var arenaHovered = ImGui.IsItemHovered();
+        var arenaClicked = ImGui.IsItemClicked(ImGuiMouseButton.Left);
+        var mousePosition = ImGui.GetIO().MousePos;
         var drawList = ImGui.GetWindowDrawList();
         var end = start + new Vector2(size, size);
         var center = start + new Vector2(size * 0.5f);
@@ -2095,12 +2104,43 @@ public sealed partial class RecapWindow
 
         var showTowers = forsakenViewIndex is 1 or 2;
         var showClones = forsakenViewIndex is 0 or 2;
+        if (selectedForsakenCleave is { } selectedIndex && selectedIndex >= resolution.Cleaves.Count)
+        {
+            selectedForsakenCleave = null;
+        }
+
+        int? cleaveUnderMouse = null;
+        if (arenaHovered && showTowers && showForsakenCleaveSnapshot)
+        {
+            cleaveUnderMouse = resolution.Cleaves
+                .Select((cleave, index) => (Index: index, Distance: Vector2.Distance(mousePosition, ToScreen(cleave.Origin))))
+                .Where(candidate => candidate.Distance <= 12.0f)
+                .OrderBy(candidate => candidate.Distance)
+                .Select(candidate => (int?)candidate.Index)
+                .FirstOrDefault();
+            if (cleaveUnderMouse is not null)
+            {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            }
+        }
+
+        if (arenaClicked && cleaveUnderMouse is { } clickedIndex)
+        {
+            selectedForsakenCleave = selectedForsakenCleave == clickedIndex ? null : clickedIndex;
+        }
+
         if (showTowers)
         {
-            foreach (var cleave in resolution.Cleaves)
+            for (var index = 0; index < resolution.Cleaves.Count; index++)
             {
-                DrawForsakenSector(drawList, ToScreen, cleave.Origin, cleave.Frontal ? cleave.FacingRadians : cleave.FacingRadians + Math.PI,
+                var cleave = resolution.Cleaves[index];
+                var heading = cleave.Frontal ? cleave.FacingRadians : cleave.FacingRadians + Math.PI;
+                DrawForsakenSector(drawList, ToScreen, cleave.Origin, heading,
                     Math.PI / 2, extent + 3.0f, DamageColor with { W = 0.08f }, DamageColor with { W = 0.34f });
+                if (selectedForsakenCleave == index)
+                {
+                    DrawForsakenCleaveBoundary(drawList, ToScreen, cleave.Origin, heading, extent + 3.0f);
+                }
             }
         }
 
@@ -2155,21 +2195,38 @@ public sealed partial class RecapWindow
                     DrawForsakenPlayerToken(drawList, ToScreen(ghost.Position), ghost.Job, null, false, true);
                 }
 
-                foreach (var cleave in resolution.Cleaves)
+                for (var index = 0; index < resolution.Cleaves.Count; index++)
                 {
+                    var cleave = resolution.Cleaves[index];
                     var point = ToScreen(cleave.Origin);
+                    var selected = selectedForsakenCleave == index;
                     drawList.AddQuadFilled(
                         point + new Vector2(0.0f, -6.0f),
                         point + new Vector2(6.0f, 0.0f),
                         point + new Vector2(0.0f, 6.0f),
                         point + new Vector2(-6.0f, 0.0f),
-                        ImGui.GetColorU32(DamageColor with { W = 0.74f }));
+                        ImGui.GetColorU32(new Vector4(0.10f, 0.05f, 0.05f, 0.92f)));
+                    var diamondColor = ImGui.GetColorU32(selected ? LimitCutPlayerRotationColor : DamageColor);
+                    var diamondThickness = selected ? 2.5f : 1.5f;
+                    var top = point + new Vector2(0.0f, -6.0f);
+                    var right = point + new Vector2(6.0f, 0.0f);
+                    var bottom = point + new Vector2(0.0f, 6.0f);
+                    var left = point + new Vector2(-6.0f, 0.0f);
+                    drawList.AddLine(top, right, diamondColor, diamondThickness);
+                    drawList.AddLine(right, bottom, diamondColor, diamondThickness);
+                    drawList.AddLine(bottom, left, diamondColor, diamondThickness);
+                    drawList.AddLine(left, top, diamondColor, diamondThickness);
                 }
             }
 
             foreach (var player in resolution.Players.Where(player => player.Position is not null))
             {
                 DrawForsakenPlayerToken(drawList, ToScreen(player.Position!.Value), player.Job, player, player.DiedThisSet || player.DoubleHit, false);
+            }
+
+            if (showForsakenCleaveSnapshot)
+            {
+                DrawSelectedForsakenCleaveBait(drawList, ToScreen, resolution);
             }
         }
         else
@@ -2181,6 +2238,96 @@ public sealed partial class RecapWindow
         }
 
         ImGui.PopClipRect();
+    }
+
+    private void DrawSelectedForsakenCleaveBait(
+        ImDrawListPtr drawList,
+        Func<Vector2, Vector2> toScreen,
+        ForsakenResolution resolution)
+    {
+        if (selectedForsakenCleave is not { } index ||
+            index < 0 ||
+            index >= resolution.Cleaves.Count)
+        {
+            return;
+        }
+
+        var cleave = resolution.Cleaves[index];
+        var origin = toScreen(cleave.Origin);
+        const float reach = 28.0f;
+        var facingEnd = toScreen(cleave.Origin + new Vector2(
+            (float)(reach * Math.Sin(cleave.FacingRadians)),
+            (float)(reach * Math.Cos(cleave.FacingRadians))));
+        DrawDashedLine(drawList, origin, facingEnd, LimitCutPlayerRotationColor, 5.0f, 4.0f, 1.75f);
+
+        if (cleave.Bait is not { } bait)
+        {
+            return;
+        }
+
+        var baitPoint = toScreen(bait.Position);
+        DrawDashedCircle(drawList, baitPoint, 11.5f, LimitCutPlayerRotationColor, 24, 2.0f);
+        DrawForsakenPlayerToken(drawList, baitPoint, bait.Job, null, false, false);
+    }
+
+    private static void DrawForsakenCleaveBoundary(
+        ImDrawListPtr drawList,
+        Func<Vector2, Vector2> toScreen,
+        Vector2 origin,
+        double heading,
+        float radius)
+    {
+        var first = heading - (Math.PI / 2.0);
+        var second = heading + (Math.PI / 2.0);
+        drawList.AddLine(
+            toScreen(origin + new Vector2((float)(radius * Math.Sin(first)), (float)(radius * Math.Cos(first)))),
+            toScreen(origin + new Vector2((float)(radius * Math.Sin(second)), (float)(radius * Math.Cos(second)))),
+            ImGui.GetColorU32(DamageColor with { W = 0.88f }),
+            2.0f);
+    }
+
+    private static void DrawDashedLine(
+        ImDrawListPtr drawList,
+        Vector2 start,
+        Vector2 end,
+        Vector4 color,
+        float dashLength,
+        float gapLength,
+        float thickness)
+    {
+        var delta = end - start;
+        var length = delta.Length();
+        if (length <= 0.01f)
+        {
+            return;
+        }
+
+        var direction = delta / length;
+        for (var offset = 0.0f; offset < length; offset += dashLength + gapLength)
+        {
+            drawList.AddLine(
+                start + (direction * offset),
+                start + (direction * MathF.Min(length, offset + dashLength)),
+                ImGui.GetColorU32(color),
+                thickness);
+        }
+    }
+
+    private static void DrawDashedCircle(
+        ImDrawListPtr drawList,
+        Vector2 center,
+        float radius,
+        Vector4 color,
+        int segments,
+        float thickness)
+    {
+        for (var index = 0; index < segments; index += 2)
+        {
+            var start = (MathF.Tau * index) / segments;
+            var end = (MathF.Tau * (index + 1)) / segments;
+            drawList.PathArcTo(center, radius, start, end, 2);
+            drawList.PathStroke(ImGui.GetColorU32(color), ImDrawFlags.None, thickness);
+        }
     }
 
     private static void DrawForsakenSector(
