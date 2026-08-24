@@ -381,6 +381,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float ReplayCanvasSide { get; set; }
 
+    public float WtfDigAnalyzerMapSide { get; set; }
+
     public ReplayOverlayDockSide ReplayMitigationOverlayDockSide { get; set; } = ReplayOverlayDockSide.Right;
 
     public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;

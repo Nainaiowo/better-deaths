@@ -224,7 +224,6 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const int MaxReplayMarkerBadgesPerActor = 3;
     private const string ReplayPathOfLightRawEventKind = "dmu-p2-path-of-light";
     private const string ReplayDmuP2EndPredictionRawEventKind = "dmu-p2-end-predicted";
-    private const string ReplayDmuP2ForsakenCleavePredictionRawEventKind = "dmu-p2-forsaken-cleave-predicted";
     private const string ReplayDmuP1FlagrantFireRawEventKind = "dmu-p1-flagrant-fire";
     private const string ReplayDmuP5ArenaHoleRawEventKind = "dmu-p5-arena-hole";
     private const float ReplayDmuP2EndPredictionSeconds = 6.6f;
@@ -8794,81 +8793,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMechanicSnapshot> mechanics,
         IReadOnlyList<ReplayPositionSnapshot> positions)
     {
-        var normalizedMechanics = mechanics
-            .Select(mechanic => ForsakenCleavePosePolicy.UseCompletionPose(mechanic, positions))
-            .ToArray();
-        var cloneDrops = normalizedMechanics
-            .Where(IsReplayDmuP2ForsakenCloneDrop)
-            .ToArray();
-        if (cloneDrops.Length == 0)
-        {
-            return normalizedMechanics;
-        }
-
-        var replacements = new Dictionary<string, ReplayMechanicSnapshot>(StringComparer.Ordinal);
-        var supersededCastKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var cleave in normalizedMechanics.Where(IsReplayDmuP2ForsakenCleaveResolve))
-        {
-            if (!TryGetReplayMechanicSourceEntityId(cleave, out var sourceEntityId))
-            {
-                continue;
-            }
-
-            var drop = cloneDrops
-                .Where(candidate =>
-                    TryGetReplayMechanicSourceEntityId(candidate, out var candidateSourceEntityId) &&
-                    candidateSourceEntityId == sourceEntityId &&
-                    candidate.SeenAtUtc < cleave.SeenAtUtc &&
-                    cleave.SeenAtUtc - candidate.SeenAtUtc <= TimeSpan.FromSeconds(15))
-                .OrderByDescending(candidate => candidate.SeenAtUtc)
-                .FirstOrDefault();
-            if (drop is null)
-            {
-                continue;
-            }
-
-            var matchingCasts = normalizedMechanics
-                .Where(candidate =>
-                    IsReplayCastSnapshot(candidate) &&
-                    candidate.RawEventId == cleave.RawEventId &&
-                    TryGetReplayMechanicSourceEntityId(candidate, out var candidateSourceEntityId) &&
-                    candidateSourceEntityId == sourceEntityId &&
-                    candidate.SeenAtUtc <= cleave.SeenAtUtc &&
-                    cleave.SeenAtUtc - candidate.SeenAtUtc <= TimeSpan.FromSeconds(7))
-                .OrderBy(candidate => candidate.SeenAtUtc)
-                .ToArray();
-            var startedAtUtc = matchingCasts.Length > 0
-                ? matchingCasts[0].SeenAtUtc
-                : cleave.SeenAtUtc.AddSeconds(-Math.Max(0.05f, cleave.DurationSeconds));
-            foreach (var cast in matchingCasts)
-            {
-                supersededCastKeys.Add(cast.SourceKey);
-            }
-
-            var durationSeconds = Math.Max(0.05f, (float)(cleave.SeenAtUtc - startedAtUtc).TotalSeconds);
-            replacements[cleave.SourceKey] = cleave with
-            {
-                SeenAtUtc = startedAtUtc,
-                PullElapsedSeconds = cleave.PullElapsedSeconds - durationSeconds,
-                DurationSeconds = durationSeconds,
-                SourceKey = $"{ReplayDmuP2ForsakenCleavePredictionRawEventKind}:{sourceEntityId:X8}:{drop.RawEventId}:{cleave.SeenAtUtc.Ticks}",
-                Rotation = ReplayEncounterModules.GetDmuP2ForsakenCleaveRotation(cleave.Rotation, drop.RawEventId),
-                Label = ReplayEncounterModules.IsDmuP2ForsakenPastEndAction(drop.RawEventId)
-                    ? "All Things Ending (Past's End)"
-                    : "All Things Ending (Future's End)",
-                RawEventKind = ReplayDmuP2ForsakenCleavePredictionRawEventKind,
-            };
-        }
-
-        if (replacements.Count == 0)
-        {
-            return normalizedMechanics;
-        }
-
-        return normalizedMechanics
-            .Where(mechanic => !supersededCastKeys.Contains(mechanic.SourceKey))
-            .Select(mechanic => replacements.GetValueOrDefault(mechanic.SourceKey, mechanic))
-            .ToArray();
+        return ForsakenCleavePosePolicy.NormalizeTimeline(mechanics, positions);
     }
 
     private static bool IsReplayDmuP2ForsakenCloneDrop(ReplayMechanicSnapshot mechanic)
@@ -8878,29 +8803,6 @@ public sealed partial class RecapWindow : Window, IDisposable
                 mechanic.RawEventKind,
                 ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind,
                 StringComparison.Ordinal);
-    }
-
-    private static bool IsReplayDmuP2ForsakenCleaveResolve(ReplayMechanicSnapshot mechanic)
-    {
-        return mechanic.RawEventId is 47836 or 47837 &&
-            string.Equals(mechanic.RawEventKind, "dmu-p2-all-things-ending", StringComparison.Ordinal);
-    }
-
-    private static bool IsReplayCastSnapshot(ReplayMechanicSnapshot mechanic)
-    {
-        return mechanic.RawEventKind.Contains("cast", StringComparison.OrdinalIgnoreCase) ||
-            mechanic.RawEventKind.Contains("predicted", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryGetReplayMechanicSourceEntityId(
-        ReplayMechanicSnapshot mechanic,
-        out uint sourceEntityId)
-    {
-        sourceEntityId = 0;
-        var parts = mechanic.SourceKey.Split(':');
-        return parts.Length >= 2 &&
-            uint.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out sourceEntityId) &&
-            sourceEntityId != 0;
     }
 
     private static bool TryGetReplayActorKeyFromSourceKey(

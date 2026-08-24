@@ -12,6 +12,10 @@ namespace BetterDeaths.Windows;
 
 public sealed partial class RecapWindow
 {
+    private const float WtfDigMapDefaultSide = 680.0f;
+    private const float WtfDigMapMinSide = 280.0f;
+    private const float WtfDigMapMaxSide = 820.0f;
+    private const float WtfDigTableMinWidth = 260.0f;
     private static readonly Vector4 LimitCutKefkaRotationColor = new(0.94f, 0.53f, 0.03f, 1.0f);
     private static readonly Vector4 LimitCutPlayerRotationColor = new(0.50f, 0.84f, 0.88f, 1.0f);
     private static readonly Vector2[] WtfDigTextOutlineOffsets =
@@ -42,6 +46,7 @@ public sealed partial class RecapWindow
     private bool showBlackHoleBosses = true;
     private int wtfDigWaymarkPresetIndex;
     private object? displayedWtfDigAnalysis;
+    private bool wtfDigMapResizeDragging;
 
     private void DrawWtfDigAnalyzerPage()
     {
@@ -582,21 +587,11 @@ public sealed partial class RecapWindow
         DrawForsakenSummary(resolution, analysis.Rotation);
         DrawForsakenControls(resolution);
 
-        var contentWidth = ImGui.GetContentRegionAvail().X;
-        var mapSize = GetWtfDigMapSize(contentWidth);
-        if (contentWidth >= 820.0f)
-        {
-            DrawForsakenArena(resolution, mapSize);
-            ImGui.SameLine(0.0f, 12.0f);
-            var tableWidth = MathF.Max(260.0f, ImGui.GetContentRegionAvail().X);
-            DrawForsakenPlayerTable(resolution, new Vector2(tableWidth, mapSize));
-        }
-        else
-        {
-            DrawForsakenArena(resolution, mapSize);
-            ImGui.Dummy(new Vector2(1.0f, 8.0f));
-            DrawForsakenPlayerTable(resolution, new Vector2(0.0f, 0.0f));
-        }
+        DrawWtfDigMapTableLayout(
+            "Forsaken",
+            MeasureForsakenTableWidth(resolution),
+            mapSize => DrawForsakenArena(resolution, mapSize),
+            tableSize => DrawForsakenPlayerTable(resolution, tableSize));
 
         DrawWtfDigInlineLegend(
         [
@@ -660,20 +655,11 @@ public sealed partial class RecapWindow
             : analysis.Waves[selectedArrowWave].Arrows;
         var slots = ArrowsAnalyzer.ExpectedSlots(strategies[Math.Clamp(arrowStrategyIndex, 0, strategies.Length - 1)].Item2);
         ImGui.Dummy(new Vector2(1.0f, 6.0f));
-        var contentWidth = ImGui.GetContentRegionAvail().X;
-        var mapSize = GetWtfDigMapSize(contentWidth);
-        if (contentWidth >= 820.0f)
-        {
-            DrawArrowsArena(shown, showArrowStarts ? analysis.Starts : [], slots, mapSize);
-            ImGui.SameLine(0.0f, 12.0f);
-            DrawArrowsTable(shown, slots, new Vector2(MathF.Max(260.0f, ImGui.GetContentRegionAvail().X), mapSize));
-        }
-        else
-        {
-            DrawArrowsArena(shown, showArrowStarts ? analysis.Starts : [], slots, mapSize);
-            ImGui.Dummy(new Vector2(1.0f, 8.0f));
-            DrawArrowsTable(shown, slots, Vector2.Zero);
-        }
+        DrawWtfDigMapTableLayout(
+            "Arrows",
+            MeasureArrowsTableWidth(shown, slots),
+            mapSize => DrawArrowsArena(shown, showArrowStarts ? analysis.Starts : [], slots, mapSize),
+            tableSize => DrawArrowsTable(shown, slots, tableSize));
 
         DrawWtfDigInlineLegend(
         [
@@ -718,20 +704,11 @@ public sealed partial class RecapWindow
         }
 
         ImGui.Dummy(new Vector2(1.0f, 6.0f));
-        var contentWidth = ImGui.GetContentRegionAvail().X;
-        var mapSize = GetWtfDigMapSize(contentWidth);
-        if (contentWidth >= 820.0f)
-        {
-            DrawLimitCutArena(analysis, mapSize);
-            ImGui.SameLine(0.0f, 12.0f);
-            DrawLimitCutTable(analysis.Players, new Vector2(MathF.Max(260.0f, ImGui.GetContentRegionAvail().X), mapSize));
-        }
-        else
-        {
-            DrawLimitCutArena(analysis, mapSize);
-            ImGui.Dummy(new Vector2(1.0f, 8.0f));
-            DrawLimitCutTable(analysis.Players, Vector2.Zero);
-        }
+        DrawWtfDigMapTableLayout(
+            "LimitCut",
+            MeasureLimitCutTableWidth(analysis.Players),
+            mapSize => DrawLimitCutArena(analysis, mapSize),
+            tableSize => DrawLimitCutTable(analysis.Players, tableSize));
 
         ImGui.Dummy(new Vector2(1.0f, 4.0f));
         DrawWtfDigInlineLegend(
@@ -789,20 +766,11 @@ public sealed partial class RecapWindow
             ImGui.TextColored(LeadUpGoldColor, $"{actualSoaks} soaks (expected {expectedSoaks})");
         }
 
-        var contentWidth = ImGui.GetContentRegionAvail().X;
-        var mapSize = GetWtfDigMapSize(contentWidth);
-        if (contentWidth >= 820.0f)
-        {
-            DrawBlackHoleArena(tether, analysis.Players, mapSize);
-            ImGui.SameLine(0.0f, 12.0f);
-            DrawBlackHoleTable(tether, analysis.Players, new Vector2(MathF.Max(260.0f, ImGui.GetContentRegionAvail().X), mapSize));
-        }
-        else
-        {
-            DrawBlackHoleArena(tether, analysis.Players, mapSize);
-            ImGui.Dummy(new Vector2(1.0f, 8.0f));
-            DrawBlackHoleTable(tether, analysis.Players, Vector2.Zero);
-        }
+        DrawWtfDigMapTableLayout(
+            "BlackHole",
+            MeasureBlackHoleTableWidth(tether, analysis.Players),
+            mapSize => DrawBlackHoleArena(tether, analysis.Players, mapSize),
+            tableSize => DrawBlackHoleTable(tether, analysis.Players, tableSize));
 
         DrawWtfDigInlineLegend(
         [
@@ -1243,6 +1211,7 @@ public sealed partial class RecapWindow
             .ToDictionary(state => state.ActorId, state => state.Position!.Value);
         var origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##BlackHoleArena", new Vector2(size, size));
+        ImGui.SetItemAllowOverlap();
         var drawList = ImGui.GetWindowDrawList();
         var end = origin + new Vector2(size, size);
         var center = origin + new Vector2(size * 0.5f);
@@ -1551,13 +1520,13 @@ public sealed partial class RecapWindow
             .ToArray();
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         if (ImGui.BeginChild("##BlackHoleTablePanel", size, true, OptionalScrollbarFlags) &&
-            ImGui.BeginTable("##BlackHoleTable", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+            ImGui.BeginTable("##BlackHoleTable", 5, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
-            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 52.0f);
-            ImGui.TableSetupColumn("Role", ImGuiTableColumnFlags.WidthStretch, 1.2f);
-            ImGui.TableSetupColumn("Soaked", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-            ImGui.TableSetupColumn("State", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-            ImGui.TableSetupColumn("Crust", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Role", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Soaked", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("State", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Crust", ImGuiTableColumnFlags.WidthFixed);
             ImGui.TableHeadersRow();
             foreach (var state in states)
             {
@@ -1570,17 +1539,10 @@ public sealed partial class RecapWindow
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(player?.Role.Label ?? "-");
                 ImGui.TableNextColumn();
-                var soakLabel = state.SoakCount == 0
-                    ? "-"
-                    : $"{state.SoakCount}{(state.HitsThisTether > 0 ? state.TetherThisTether ? " held" : " clipped" : string.Empty)}";
+                var soakLabel = FormatBlackHoleSoakLabel(state);
                 ImGui.TextColored(state.LethalThisTether ? DamageColor : state.HitsThisTether > 0 ? LeadUpGoldColor : ModernMutedTextColor, soakLabel);
                 ImGui.TableNextColumn();
-                var stateLabel = state.Level switch
-                {
-                    NothingLevel.Unbecoming => "Unbecoming",
-                    NothingLevel.Meanest => "Meanest",
-                    _ => "-",
-                };
+                var stateLabel = FormatBlackHoleStateLabel(state);
                 ImGui.TextUnformatted(stateLabel);
                 ImGui.TableNextColumn();
                 ImGui.TextColored(state.Crust ? LeadUpGoldColor : state.CleansedThisTether ? HealColor : ModernMutedTextColor,
@@ -1605,6 +1567,7 @@ public sealed partial class RecapWindow
     {
         var origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##LimitCutArena", new Vector2(size, size));
+        ImGui.SetItemAllowOverlap();
         var drawList = ImGui.GetWindowDrawList();
         var end = origin + new Vector2(size, size);
         var center = origin + new Vector2(size * 0.5f);
@@ -1740,13 +1703,13 @@ public sealed partial class RecapWindow
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         if (ImGui.BeginChild("##LimitCutTablePanel", size, true, OptionalScrollbarFlags) &&
-            ImGui.BeginTable("##LimitCutTable", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+            ImGui.BeginTable("##LimitCutTable", 5, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
-            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthFixed, 28.0f);
-            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 52.0f);
-            ImGui.TableSetupColumn("Stood", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Off by", ImGuiTableColumnFlags.WidthFixed, 60.0f);
+            ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Stood", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Off by", ImGuiTableColumnFlags.WidthFixed);
             ImGui.TableHeadersRow();
             foreach (var player in players)
             {
@@ -1758,9 +1721,9 @@ public sealed partial class RecapWindow
                     player.Job,
                     player.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
                 ImGui.TableNextColumn();
-                ImGui.TextDisabled(player.Angle is { } stood ? $"{Math.Round(stood * 2) / 2:0.#} deg" : "-");
+                ImGui.TextDisabled(FormatLimitCutAngle(player.Angle));
                 ImGui.TableNextColumn();
-                ImGui.TextDisabled(player.ExpectedAngle is { } target ? $"{Math.Round(target * 2) / 2:0.#} deg" : "-");
+                ImGui.TextDisabled(FormatLimitCutAngle(player.ExpectedAngle));
                 ImGui.TableNextColumn();
                 var color = player.AngleError switch
                 {
@@ -1769,7 +1732,7 @@ public sealed partial class RecapWindow
                     < 22.5 => LeadUpGoldColor,
                     _ => DamageColor,
                 };
-                ImGui.TextColored(color, player.AngleError is { } error ? $"{Math.Round(error * 2) / 2:0.#} deg" : "-");
+                ImGui.TextColored(color, FormatLimitCutAngle(player.AngleError));
             }
 
             ImGui.EndTable();
@@ -1794,6 +1757,7 @@ public sealed partial class RecapWindow
     {
         var origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##ArrowsArena", new Vector2(size, size));
+        ImGui.SetItemAllowOverlap();
         var drawList = ImGui.GetWindowDrawList();
         var end = origin + new Vector2(size, size);
         var center = origin + new Vector2(size * 0.5f);
@@ -1855,13 +1819,13 @@ public sealed partial class RecapWindow
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelAltColor, currentMainWindowBackgroundOpacity));
         if (ImGui.BeginChild("##ArrowsTablePanel", size, true, OptionalScrollbarFlags) &&
-            ImGui.BeginTable("##ArrowsTable", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+            ImGui.BeginTable("##ArrowsTable", 5, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
         {
-            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 48.0f);
-            ImGui.TableSetupColumn("Wave", ImGuiTableColumnFlags.WidthFixed, 44.0f);
-            ImGui.TableSetupColumn("Direction", ImGuiTableColumnFlags.WidthStretch, 0.9f);
-            ImGui.TableSetupColumn("Position", ImGuiTableColumnFlags.WidthStretch, 1.1f);
-            ImGui.TableSetupColumn("Error", ImGuiTableColumnFlags.WidthFixed, 54.0f);
+            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Wave", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Direction", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Position", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Error", ImGuiTableColumnFlags.WidthFixed);
             ImGui.TableHeadersRow();
             foreach (var arrow in arrows.OrderBy(entry => entry.Wave).ThenBy(entry => entry.Job.Role).ThenBy(entry => entry.Job.Abbreviation))
             {
@@ -1874,7 +1838,7 @@ public sealed partial class RecapWindow
                 ImGui.TableNextColumn();
                 ImGui.TextColored(ArrowDirectionColor(arrow.DirectionIndex), ArrowDirectionLabel(arrow.DirectionIndex));
                 ImGui.TableNextColumn();
-                ImGui.TextDisabled(arrow.Position is { } point ? $"{point.X:F1}, {point.Y:F1}" : "-");
+                ImGui.TextDisabled(FormatArrowPosition(arrow.Position));
                 ImGui.TableNextColumn();
                 var errorColor = error switch
                 {
@@ -1883,7 +1847,7 @@ public sealed partial class RecapWindow
                     null => ModernMutedTextColor,
                     _ => DamageColor,
                 };
-                ImGui.TextColored(errorColor, error is { } distance ? $"{distance:F1}y" : "-");
+                ImGui.TextColored(errorColor, FormatArrowError(error));
             }
 
             ImGui.EndTable();
@@ -2022,13 +1986,13 @@ public sealed partial class RecapWindow
             if (ImGui.BeginTable(
                     "##ForsakenPlayerTable",
                     5,
-                    ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+                    ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
             {
-                ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 52.0f);
-                ImGui.TableSetupColumn("Assign", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-                ImGui.TableSetupColumn("Tower", ImGuiTableColumnFlags.WidthFixed, 54.0f);
-                ImGui.TableSetupColumn("Took", ImGuiTableColumnFlags.WidthStretch, 1.6f);
-                ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthFixed, 48.0f);
+                ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Assign", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Tower", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Took", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Stacks", ImGuiTableColumnFlags.WidthFixed);
                 ImGui.TableHeadersRow();
                 foreach (var player in resolution.Players)
                 {
@@ -2038,24 +2002,17 @@ public sealed partial class RecapWindow
                         player.Job,
                         player.Died ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation);
                     ImGui.TableNextColumn();
-                    var assignment = FormatForsakenAssignment(player.Assignment);
-                    if (player.ReassignedTo is { } reassigned)
-                    {
-                        assignment += $" -> {FormatForsakenAssignment(reassigned)}";
-                    }
-
-                    ImGui.TextUnformatted(assignment);
+                    ImGui.TextUnformatted(FormatForsakenAssignmentLabel(player));
                     ImGui.TableNextColumn();
                     ImGui.TextColored(player.SoakedTower ? HealColor : ModernMutedTextColor, player.SoakedTower ? "Yes" : "-");
                     ImGui.TableNextColumn();
-                    if (player.Taken.Count == 0)
+                    var taken = FormatForsakenTaken(player);
+                    if (taken == "-")
                     {
-                        ImGui.TextDisabled("-");
+                        ImGui.TextDisabled(taken);
                     }
                     else
                     {
-                        var taken = string.Join(", ", player.Taken.Select(hit =>
-                            $"{hit.Label ?? FormatForsakenEffect(hit.Effect)} {Math.Round(hit.Damage / 1000.0):N0}k"));
                         ImGui.TextColored(player.DoubleHit ? DamageColor : ModernTextColor, taken);
                     }
 
@@ -2075,9 +2032,11 @@ public sealed partial class RecapWindow
     {
         var start = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##ForsakenArena", new Vector2(size, size));
+        ImGui.SetItemAllowOverlap();
         var arenaHovered = ImGui.IsItemHovered();
-        var arenaClicked = ImGui.IsItemClicked(ImGuiMouseButton.Left);
         var mousePosition = ImGui.GetIO().MousePos;
+        var arenaClicked = ImGui.IsItemClicked(ImGuiMouseButton.Left) &&
+                           !IsWtfDigMapResizeCorner(mousePosition, start, size);
         var drawList = ImGui.GetWindowDrawList();
         var end = start + new Vector2(size, size);
         var center = start + new Vector2(size * 0.5f);
@@ -2523,12 +2482,232 @@ public sealed partial class RecapWindow
         _ => "Other",
     };
 
-    private static string FormatWtfDigTime(double seconds) => $"{Math.Max(0, (int)seconds) / 60}:{Math.Max(0, (int)seconds) % 60:00}";
-    private static float GetWtfDigMapSize(float contentWidth)
+    private void DrawWtfDigMapTableLayout(
+        string idSuffix,
+        float preferredTableWidth,
+        Action<float> drawMap,
+        Action<Vector2> drawTable)
     {
-        var desired = contentWidth >= 820.0f ? contentWidth * 0.52f : contentWidth;
-        return MathF.Min(560.0f, MathF.Max(1.0f, desired));
+        var contentWidth = MathF.Max(1.0f, ImGui.GetContentRegionAvail().X);
+        var style = ImGui.GetStyle();
+        var gap = MathF.Max(style.ItemSpacing.X, style.FramePadding.X * 2.0f);
+        var tableWidth = MathF.Min(contentWidth, MathF.Max(WtfDigTableMinWidth, preferredTableWidth));
+        var sideBySide = contentWidth >= WtfDigMapMinSide + gap + tableWidth;
+        var maxVisibleMapSide = sideBySide
+            ? MathF.Min(WtfDigMapMaxSide, contentWidth - gap - tableWidth)
+            : MathF.Min(WtfDigMapMaxSide, contentWidth);
+        var preferredMapSide = float.IsFinite(configuration.WtfDigAnalyzerMapSide) &&
+                               configuration.WtfDigAnalyzerMapSide >= WtfDigMapMinSide
+            ? configuration.WtfDigAnalyzerMapSide
+            : WtfDigMapDefaultSide;
+        var mapSide = MathF.Min(preferredMapSide, maxVisibleMapSide);
+        var mapStart = ImGui.GetCursorScreenPos();
+
+        drawMap(mapSide);
+        if (sideBySide)
+        {
+            ImGui.SameLine(0.0f, gap);
+            drawTable(new Vector2(tableWidth, mapSide));
+        }
+        else
+        {
+            ImGui.Dummy(new Vector2(1.0f, MathF.Max(1.0f, style.ItemSpacing.Y)));
+            drawTable(new Vector2(tableWidth, 0.0f));
+        }
+
+        var resizeState = SubmitWtfDigMapResizeHandles(idSuffix, mapStart, mapSide, maxVisibleMapSide);
+        DrawReplayCanvasResizeHandleVisuals(
+            ImGui.GetWindowDrawList(),
+            mapStart,
+            new Vector2(mapSide),
+            resizeState);
     }
+
+    private ReplayCanvasResizeState SubmitWtfDigMapResizeHandles(
+        string idSuffix,
+        Vector2 mapStart,
+        float mapSide,
+        float maxSide)
+    {
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        var mapSize = new Vector2(mapSide);
+        var hovered = false;
+        var active = false;
+
+        SubmitWtfDigMapResizeHandle(idSuffix, ReplayCanvasResizeCorner.TopLeft, mapStart, mapSize, maxSide, ref hovered, ref active);
+        SubmitWtfDigMapResizeHandle(idSuffix, ReplayCanvasResizeCorner.TopRight, mapStart, mapSize, maxSide, ref hovered, ref active);
+        SubmitWtfDigMapResizeHandle(idSuffix, ReplayCanvasResizeCorner.BottomLeft, mapStart, mapSize, maxSide, ref hovered, ref active);
+        SubmitWtfDigMapResizeHandle(idSuffix, ReplayCanvasResizeCorner.BottomRight, mapStart, mapSize, maxSide, ref hovered, ref active);
+
+        if (!active && wtfDigMapResizeDragging)
+        {
+            wtfDigMapResizeDragging = false;
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.SetCursorScreenPos(cursorBefore);
+        return new ReplayCanvasResizeState(hovered, active);
+    }
+
+    private void SubmitWtfDigMapResizeHandle(
+        string idSuffix,
+        ReplayCanvasResizeCorner corner,
+        Vector2 mapStart,
+        Vector2 mapSize,
+        float maxSide,
+        ref bool hovered,
+        ref bool active)
+    {
+        var handleSize = new Vector2(ReplayCanvasResizeHandleSize);
+        var handleStart = corner switch
+        {
+            ReplayCanvasResizeCorner.TopLeft => mapStart,
+            ReplayCanvasResizeCorner.TopRight => new Vector2(mapStart.X + mapSize.X - handleSize.X, mapStart.Y),
+            ReplayCanvasResizeCorner.BottomLeft => new Vector2(mapStart.X, mapStart.Y + mapSize.Y - handleSize.Y),
+            ReplayCanvasResizeCorner.BottomRight => mapStart + mapSize - handleSize,
+            _ => mapStart,
+        };
+
+        ImGui.SetCursorScreenPos(handleStart);
+        ImGui.InvisibleButton($"##WtfDigMapResize{idSuffix}{corner}", handleSize);
+        var handleHovered = ImGui.IsItemHovered();
+        var handleActive = ImGui.IsItemActive();
+        hovered |= handleHovered;
+        active |= handleActive;
+
+        if (handleHovered || handleActive)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+        }
+
+        if (!handleActive)
+        {
+            return;
+        }
+
+        wtfDigMapResizeDragging = true;
+        var resizeDelta = GetReplayCanvasResizeDelta(corner, ImGui.GetIO().MouseDelta);
+        if (MathF.Abs(resizeDelta) <= 0.001f)
+        {
+            return;
+        }
+
+        var minimumSide = MathF.Min(WtfDigMapMinSide, maxSide);
+        var newSide = Math.Clamp(mapSize.X + resizeDelta, minimumSide, maxSide);
+        if (MathF.Abs(configuration.WtfDigAnalyzerMapSide - newSide) > 0.1f)
+        {
+            configuration.WtfDigAnalyzerMapSide = newSide;
+        }
+    }
+
+    private static float MeasureBlackHoleTableWidth(
+        BlackHoleTether tether,
+        IReadOnlyList<BlackHolePlayerInfo> players)
+    {
+        var info = players.ToDictionary(player => player.ActorId);
+        return MeasureWtfDigTableWidth(
+            ("Job", tether.States.Select(state => info.TryGetValue(state.ActorId, out var player)
+                ? state.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation
+                : "?"), 10.0f),
+            ("Role", tether.States.Select(state => info.GetValueOrDefault(state.ActorId)?.Role.Label ?? "-"), 0.0f),
+            ("Soaked", tether.States.Select(FormatBlackHoleSoakLabel), 0.0f),
+            ("State", tether.States.Select(FormatBlackHoleStateLabel), 0.0f),
+            ("Crust", tether.States.Select(state => state.Crust ? "Yes" : "Cleansed"), 0.0f));
+    }
+
+    private static float MeasureLimitCutTableWidth(IReadOnlyList<LimitCutPlayer> players) =>
+        MeasureWtfDigTableWidth(
+            ("#", players.Select(player => player.Number?.ToString(CultureInfo.InvariantCulture) ?? "?"), 0.0f),
+            ("Job", players.Select(player => player.Dead ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation), 10.0f),
+            ("Stood", players.Select(player => FormatLimitCutAngle(player.Angle)), 0.0f),
+            ("Target", players.Select(player => FormatLimitCutAngle(player.ExpectedAngle)), 0.0f),
+            ("Off by", players.Select(player => FormatLimitCutAngle(player.AngleError)), 0.0f));
+
+    private static float MeasureArrowsTableWidth(
+        IReadOnlyList<ArrowDrop> arrows,
+        IReadOnlyList<Vector2> expectedSlots) =>
+        MeasureWtfDigTableWidth(
+            ("Job", arrows.Select(arrow => arrow.Job.Abbreviation), 10.0f),
+            ("Wave", arrows.Select(arrow => arrow.Wave.ToString(CultureInfo.InvariantCulture)), 0.0f),
+            ("Direction", arrows.Select(arrow => ArrowDirectionLabel(arrow.DirectionIndex)), 0.0f),
+            ("Position", arrows.Select(arrow => FormatArrowPosition(arrow.Position)), 0.0f),
+            ("Error", arrows.Select(arrow => FormatArrowError(ArrowsAnalyzer.Error(arrow.Position, expectedSlots))), 0.0f));
+
+    private static float MeasureForsakenTableWidth(ForsakenResolution resolution) =>
+        MeasureWtfDigTableWidth(
+            ("Job", resolution.Players.Select(player => player.Died ? $"{player.Job.Abbreviation} X" : player.Job.Abbreviation), 10.0f),
+            ("Assign", resolution.Players.Select(FormatForsakenAssignmentLabel), 0.0f),
+            ("Tower", resolution.Players.Select(player => player.SoakedTower ? "Yes" : "-"), 0.0f),
+            ("Took", resolution.Players.Select(FormatForsakenTaken), 0.0f),
+            ("Stacks", resolution.Players.Select(player => player.TroubleStacks?.ToString(CultureInfo.InvariantCulture) ?? "-"), 0.0f));
+
+    private static float MeasureWtfDigTableWidth(
+        params (string Header, IEnumerable<string> Values, float ExtraWidth)[] columns)
+    {
+        var style = ImGui.GetStyle();
+        var width = 2.0f + (style.WindowPadding.X * 2.0f) + style.ScrollbarSize;
+        foreach (var column in columns)
+        {
+            var columnWidth = ImGui.CalcTextSize(column.Header).X;
+            foreach (var value in column.Values)
+            {
+                columnWidth = MathF.Max(columnWidth, ImGui.CalcTextSize(value).X + column.ExtraWidth);
+            }
+
+            width += MathF.Ceiling(columnWidth) + (style.CellPadding.X * 2.0f);
+        }
+
+        return MathF.Max(WtfDigTableMinWidth, width);
+    }
+
+    private static bool IsWtfDigMapResizeCorner(Vector2 position, Vector2 mapStart, float mapSide)
+    {
+        var insetX = position.X - mapStart.X;
+        var insetY = position.Y - mapStart.Y;
+        var nearHorizontalEdge = insetX <= ReplayCanvasResizeHandleSize ||
+                                 insetX >= mapSide - ReplayCanvasResizeHandleSize;
+        var nearVerticalEdge = insetY <= ReplayCanvasResizeHandleSize ||
+                               insetY >= mapSide - ReplayCanvasResizeHandleSize;
+        return nearHorizontalEdge && nearVerticalEdge;
+    }
+
+    private static string FormatBlackHoleSoakLabel(BlackHolePlayerState state) => state.SoakCount == 0
+        ? "-"
+        : $"{state.SoakCount}{(state.HitsThisTether > 0 ? state.TetherThisTether ? " held" : " clipped" : string.Empty)}";
+
+    private static string FormatBlackHoleStateLabel(BlackHolePlayerState state) => state.Level switch
+    {
+        NothingLevel.Unbecoming => "Unbecoming",
+        NothingLevel.Meanest => "Meanest",
+        _ => "-",
+    };
+
+    private static string FormatLimitCutAngle(double? angle) => angle is { } value
+        ? $"{Math.Round(value * 2) / 2:0.#} deg"
+        : "-";
+
+    private static string FormatArrowPosition(Vector2? position) => position is { } point
+        ? $"{point.X:F1}, {point.Y:F1}"
+        : "-";
+
+    private static string FormatArrowError(float? error) => error is { } distance
+        ? $"{distance:F1}y"
+        : "-";
+
+    private static string FormatForsakenAssignmentLabel(ForsakenPlayerSnapshot player)
+    {
+        var assignment = FormatForsakenAssignment(player.Assignment);
+        return player.ReassignedTo is { } reassigned
+            ? $"{assignment} -> {FormatForsakenAssignment(reassigned)}"
+            : assignment;
+    }
+
+    private static string FormatForsakenTaken(ForsakenPlayerSnapshot player) => player.Taken.Count == 0
+        ? "-"
+        : string.Join(", ", player.Taken.Select(hit =>
+            $"{hit.Label ?? FormatForsakenEffect(hit.Effect)} {Math.Round(hit.Damage / 1000.0):N0}k"));
+
+    private static string FormatWtfDigTime(double seconds) => $"{Math.Max(0, (int)seconds) / 60}:{Math.Max(0, (int)seconds) % 60:00}";
     private static string ForsakenSlotName(int index) => new[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }[Math.Clamp(index, 0, 7)];
 }
 

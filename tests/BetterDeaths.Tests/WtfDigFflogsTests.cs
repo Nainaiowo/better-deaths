@@ -296,6 +296,58 @@ public sealed class WtfDigFflogsTests
     }
 
     [Fact]
+    public void ForsakenReplay_PredictedPastCleaveFacesRearWhenNoResultPacketExists()
+    {
+        var pull = CreateLocalForsakenClonePull();
+        pull = pull with
+        {
+            ReplayMechanics = pull.ReplayMechanics
+                .Where(mechanic => mechanic.RawEventKind != "dmu-p2-all-things-ending")
+                .ToArray(),
+        };
+
+        var normalized = ForsakenCleavePosePolicy.NormalizeTimeline(pull.ReplayMechanics, pull.ReplayPositions);
+        var cleave = Assert.Single(normalized, mechanic => mechanic.RawEventKind == "bossmod-cast");
+
+        Assert.Equal(1.25f + MathF.PI, cleave.Rotation, 4);
+        Assert.Equal("All Things Ending (Past's End)", cleave.Label);
+    }
+
+    [Fact]
+    public void ForsakenReplay_PredictedFutureCleaveKeepsFrontFacing()
+    {
+        var pull = CreateLocalForsakenClonePull();
+        var mechanics = pull.ReplayMechanics
+            .Where(mechanic => mechanic.RawEventKind != "dmu-p2-all-things-ending")
+            .Select(mechanic => mechanic.RawEventKind == ReplayEncounterModules.DmuP2ForsakenCloneDropRawEventKind
+                ? mechanic with { RawEventId = 47832, Label = "Future's End" }
+                : mechanic.RawEventKind == "bossmod-cast"
+                    ? mechanic with { RawEventId = 47836 }
+                    : mechanic)
+            .ToArray();
+
+        var normalized = ForsakenCleavePosePolicy.NormalizeTimeline(mechanics, pull.ReplayPositions);
+        var cleave = Assert.Single(normalized, mechanic => mechanic.RawEventKind == "bossmod-cast");
+
+        Assert.Equal(1.25f, cleave.Rotation, 4);
+        Assert.Equal("All Things Ending (Future's End)", cleave.Label);
+    }
+
+    [Fact]
+    public void ForsakenReplay_ExactPastCleaveSupersedesCastAndFlipsOnlyOnce()
+    {
+        var pull = CreateLocalForsakenClonePull();
+
+        var normalized = ForsakenCleavePosePolicy.NormalizeTimeline(pull.ReplayMechanics, pull.ReplayPositions);
+        var cleave = Assert.Single(normalized, mechanic => mechanic.RawEventId == 47837);
+
+        Assert.Equal(ForsakenCleavePosePolicy.PredictedRawEventKind, cleave.RawEventKind);
+        Assert.Equal(1.25f + MathF.PI, cleave.Rotation, 4);
+        Assert.Equal("All Things Ending (Past's End)", cleave.Label);
+        Assert.Equal(5.0f, cleave.DurationSeconds, 4);
+    }
+
+    [Fact]
     public void ForsakenCleavePose_UsesRecordedPoseNearPredictedResult()
     {
         var pull = CreateLocalForsakenClonePull();
