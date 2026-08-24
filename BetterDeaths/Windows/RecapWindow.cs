@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.293";
+    private const string CurrentChangelogVersion = "1.0.0.0";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -20005,6 +20005,18 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added the WTF.DIG Analyzer for supported DMU mechanics.");
+        DrawWrappedBullet("Analyze recorded Better Deaths pulls directly, or paste a complete FFLogs report or specific pull link.");
+        DrawWrappedBullet("Added data-quality labels and a shortcut to open the selected mechanic in Replay.");
+        DrawHighlightedChangelogBullet("Improved DMU P2 Forsaken replays using recorded mechanic targets instead of positional guesses.");
+        DrawHighlightedChangelogBullet("Corrected Forsaken clone baits and All Things Ending cleaves to use the actual baited player, clone position, and settled direction.");
+        DrawHighlightedChangelogBullet("Reduced false dungeon deaths and wipes caused by brief or missing player information.");
+        DrawWrappedBullet("Added a Thank You message in the Updates tab for V1.0.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v0.1.0.293");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Fixed Forsaken clone-bait cleaves so Replay and the WTF.DIG Analyzer use each clone's settled direction.");
