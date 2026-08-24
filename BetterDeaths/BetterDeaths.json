@@ -5,7 +5,7 @@
   "DownloadCount": 4872,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved local WTF.DIG Analyzer accuracy, mechanic timing, replay navigation, and readability.",
+  "Changelog": "Fixed Forsaken clone-bait directions and added clearer bait tracing in the WTF.DIG Analyzer.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
