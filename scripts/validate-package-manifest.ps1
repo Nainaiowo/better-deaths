@@ -79,57 +79,18 @@ function Get-LiveDownloadCount {
             Where-Object { $_.InternalName -eq $InternalName } |
             Select-Object -First 1
         if ($null -eq $plugin -or $null -eq $plugin.DownloadCount) {
-            Write-Warning "Could not find DownloadCount for $InternalName in $Url."
-            return $null
+            throw "Could not find DownloadCount for $InternalName in $Url."
         }
 
         $downloadCount = [long] $plugin.DownloadCount
         if ($downloadCount -lt 0) {
-            Write-Warning "Puni returned an invalid DownloadCount for ${InternalName}: $downloadCount."
-            return $null
+            throw "Puni returned an invalid DownloadCount for ${InternalName}: $downloadCount."
         }
 
         return $downloadCount
     }
     catch {
-        Write-Warning "Could not read DownloadCount from $Url`: $($_.Exception.Message)"
-        return $null
-    }
-}
-
-function Resolve-PackagedDownloadCountSnapshot {
-    param(
-        [string] $InternalName,
-        [string] $Url,
-        [object] $LegacySnapshot
-    )
-
-    $liveDownloadCount = Get-LiveDownloadCount -InternalName $InternalName -Url $Url
-    if ($null -eq $liveDownloadCount) {
-        if ($LegacySnapshot.HasDownloadCount) {
-            Write-Host "Using legacy DownloadCount fallback $($LegacySnapshot.DownloadCount)."
-        }
-
-        return $LegacySnapshot
-    }
-
-    if ($LegacySnapshot.HasDownloadCount -and $liveDownloadCount -lt $LegacySnapshot.DownloadCount) {
-        Write-Warning "Puni DownloadCount $liveDownloadCount is below legacy baseline $($LegacySnapshot.DownloadCount); using the legacy fallback."
-        return $LegacySnapshot
-    }
-
-    # Puni's live total already includes the imported legacy baseline; only subtract for reporting.
-    if ($LegacySnapshot.HasDownloadCount) {
-        $puniDownloads = $liveDownloadCount - $LegacySnapshot.DownloadCount
-        Write-Host "Using combined DownloadCount $liveDownloadCount (legacy $($LegacySnapshot.DownloadCount) + Puni $puniDownloads)."
-    }
-    else {
-        Write-Host "Using Puni DownloadCount $liveDownloadCount."
-    }
-
-    return [pscustomobject]@{
-        HasDownloadCount = $true
-        DownloadCount = $liveDownloadCount
+        throw "Could not read live DownloadCount from $Url`: $($_.Exception.Message)"
     }
 }
 
@@ -292,11 +253,12 @@ if ($projectSdk -notmatch "^Dalamud\.NET\.Sdk/(?<ApiLevel>\d+)(?:\.|$)") {
 }
 
 $expectedDalamudApiLevel = [int] $Matches.ApiLevel
-$legacyDownloadCountSnapshot = Get-DownloadCountSnapshot -ManifestPath $sourceManifestPath
-$packagedDownloadCountSnapshot = Resolve-PackagedDownloadCountSnapshot `
-    -InternalName $AssemblyName `
-    -Url $RepositoryUrl `
-    -LegacySnapshot $legacyDownloadCountSnapshot
+$liveDownloadCount = Get-LiveDownloadCount -InternalName $AssemblyName -Url $RepositoryUrl
+$packagedDownloadCountSnapshot = [pscustomobject]@{
+    HasDownloadCount = $true
+    DownloadCount = $liveDownloadCount
+}
+Write-Host "Using live combined Puni DownloadCount $liveDownloadCount."
 Assert-JsonPropertyEquals -ManifestPath $sourceManifestPath -PropertyName "InternalName" -ExpectedValue $AssemblyName
 
 Sync-DownloadCountSnapshot -ManifestPath $generatedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot
