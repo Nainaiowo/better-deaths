@@ -6,7 +6,9 @@ param(
     [string] $OutputPath,
 
     [Parameter(Mandatory = $true)]
-    [string] $AssemblyName
+    [string] $AssemblyName,
+
+    [string] $RepositoryUrl = "https://puni.sh/api/repository/nainai"
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +53,83 @@ function Get-DownloadCountSnapshot {
     return [pscustomobject]@{
         HasDownloadCount = $true
         DownloadCount = $downloadCount
+    }
+}
+
+function Get-LiveDownloadCount {
+    param(
+        [string] $InternalName,
+        [string] $Url
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        return $null
+    }
+
+    try {
+        $plugins = Invoke-RestMethod `
+            -Uri $Url `
+            -Headers @{
+                "Cache-Control" = "no-cache"
+                "User-Agent" = "BetterDeaths-Packager"
+            } `
+            -Method Get `
+            -TimeoutSec 15
+        $plugin = @($plugins) |
+            Where-Object { $_.InternalName -eq $InternalName } |
+            Select-Object -First 1
+        if ($null -eq $plugin -or $null -eq $plugin.DownloadCount) {
+            Write-Warning "Could not find DownloadCount for $InternalName in $Url."
+            return $null
+        }
+
+        $downloadCount = [long] $plugin.DownloadCount
+        if ($downloadCount -lt 0) {
+            Write-Warning "Puni returned an invalid DownloadCount for ${InternalName}: $downloadCount."
+            return $null
+        }
+
+        return $downloadCount
+    }
+    catch {
+        Write-Warning "Could not read DownloadCount from $Url`: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Resolve-PackagedDownloadCountSnapshot {
+    param(
+        [string] $InternalName,
+        [string] $Url,
+        [object] $LegacySnapshot
+    )
+
+    $liveDownloadCount = Get-LiveDownloadCount -InternalName $InternalName -Url $Url
+    if ($null -eq $liveDownloadCount) {
+        if ($LegacySnapshot.HasDownloadCount) {
+            Write-Host "Using legacy DownloadCount fallback $($LegacySnapshot.DownloadCount)."
+        }
+
+        return $LegacySnapshot
+    }
+
+    if ($LegacySnapshot.HasDownloadCount -and $liveDownloadCount -lt $LegacySnapshot.DownloadCount) {
+        Write-Warning "Puni DownloadCount $liveDownloadCount is below legacy baseline $($LegacySnapshot.DownloadCount); using the legacy fallback."
+        return $LegacySnapshot
+    }
+
+    # Puni's live total already includes the imported legacy baseline; only subtract for reporting.
+    if ($LegacySnapshot.HasDownloadCount) {
+        $puniDownloads = $liveDownloadCount - $LegacySnapshot.DownloadCount
+        Write-Host "Using combined DownloadCount $liveDownloadCount (legacy $($LegacySnapshot.DownloadCount) + Puni $puniDownloads)."
+    }
+    else {
+        Write-Host "Using Puni DownloadCount $liveDownloadCount."
+    }
+
+    return [pscustomobject]@{
+        HasDownloadCount = $true
+        DownloadCount = $liveDownloadCount
     }
 }
 
@@ -114,7 +193,7 @@ function Assert-MatchingDownloadCountSnapshot {
     }
 
     if ($ExpectedSnapshot.HasDownloadCount -and $actualSnapshot.DownloadCount -ne $ExpectedSnapshot.DownloadCount) {
-        throw "Package manifest DownloadCount $($actualSnapshot.DownloadCount) does not match source snapshot $($ExpectedSnapshot.DownloadCount): $ManifestPath"
+        throw "Package manifest DownloadCount $($actualSnapshot.DownloadCount) does not match expected snapshot $($ExpectedSnapshot.DownloadCount): $ManifestPath"
     }
 }
 
@@ -213,24 +292,28 @@ if ($projectSdk -notmatch "^Dalamud\.NET\.Sdk/(?<ApiLevel>\d+)(?:\.|$)") {
 }
 
 $expectedDalamudApiLevel = [int] $Matches.ApiLevel
-$expectedDownloadCountSnapshot = Get-DownloadCountSnapshot -ManifestPath $sourceManifestPath
+$legacyDownloadCountSnapshot = Get-DownloadCountSnapshot -ManifestPath $sourceManifestPath
+$packagedDownloadCountSnapshot = Resolve-PackagedDownloadCountSnapshot `
+    -InternalName $AssemblyName `
+    -Url $RepositoryUrl `
+    -LegacySnapshot $legacyDownloadCountSnapshot
 Assert-JsonPropertyEquals -ManifestPath $sourceManifestPath -PropertyName "InternalName" -ExpectedValue $AssemblyName
 
-Sync-DownloadCountSnapshot -ManifestPath $generatedManifestPath -ExpectedSnapshot $expectedDownloadCountSnapshot
-Sync-DownloadCountSnapshot -ManifestPath $packagedManifestPath -ExpectedSnapshot $expectedDownloadCountSnapshot
+Sync-DownloadCountSnapshot -ManifestPath $generatedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot
+Sync-DownloadCountSnapshot -ManifestPath $packagedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot
 
 Assert-PackageManifest `
     -ManifestPath $generatedManifestPath `
     -ExpectedInternalName $AssemblyName `
     -ExpectedVersion $expectedVersion `
     -ExpectedDalamudApiLevel $expectedDalamudApiLevel `
-    -ExpectedDownloadCountSnapshot $expectedDownloadCountSnapshot
+    -ExpectedDownloadCountSnapshot $packagedDownloadCountSnapshot
 Assert-PackageManifest `
     -ManifestPath $packagedManifestPath `
     -ExpectedInternalName $AssemblyName `
     -ExpectedVersion $expectedVersion `
     -ExpectedDalamudApiLevel $expectedDalamudApiLevel `
-    -ExpectedDownloadCountSnapshot $expectedDownloadCountSnapshot
+    -ExpectedDownloadCountSnapshot $packagedDownloadCountSnapshot
 
 $zipPath = Join-Path (Join-Path $outputFullPath $AssemblyName) "latest.zip"
 if (-not (Test-Path -LiteralPath $zipPath)) {
@@ -242,7 +325,7 @@ New-Item -ItemType Directory -Path $tempPath | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempPath -Force
     Copy-Item -LiteralPath $thirdPartyNoticeSourcePath -Destination (Join-Path $tempPath "THIRD_PARTY_NOTICES.md") -Force
-    Sync-DownloadCountSnapshot -ManifestPath (Join-Path $tempPath "$AssemblyName.json") -ExpectedSnapshot $expectedDownloadCountSnapshot
+    Sync-DownloadCountSnapshot -ManifestPath (Join-Path $tempPath "$AssemblyName.json") -ExpectedSnapshot $packagedDownloadCountSnapshot
     Compress-Archive -Path (Join-Path $tempPath "*") -DestinationPath $zipPath -Force
     Assert-ExactPackageFiles -DirectoryPath $tempPath -ExpectedAssemblyName $AssemblyName
     Assert-PackageManifest `
@@ -250,9 +333,9 @@ try {
         -ExpectedInternalName $AssemblyName `
         -ExpectedVersion $expectedVersion `
         -ExpectedDalamudApiLevel $expectedDalamudApiLevel `
-        -ExpectedDownloadCountSnapshot $expectedDownloadCountSnapshot
-    if ($expectedDownloadCountSnapshot.HasDownloadCount) {
-        Write-Host "Validated Better Deaths package invariants with DownloadCount snapshot $($expectedDownloadCountSnapshot.DownloadCount)."
+        -ExpectedDownloadCountSnapshot $packagedDownloadCountSnapshot
+    if ($packagedDownloadCountSnapshot.HasDownloadCount) {
+        Write-Host "Validated Better Deaths package invariants with DownloadCount snapshot $($packagedDownloadCountSnapshot.DownloadCount)."
     }
     else {
         Write-Host "Validated Better Deaths package invariants without DownloadCount."
