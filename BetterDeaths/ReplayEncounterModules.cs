@@ -222,6 +222,32 @@ internal static class ReplayEncounterModules
             out actorKey);
     }
 
+    internal static bool TryGetReplayActorKeyFromSourceKey(
+        string sourceKey,
+        IEnumerable<string> actorKeys,
+        out string actorKey)
+    {
+        actorKey = actorKeys
+            .Distinct(StringComparer.Ordinal)
+            .Where(candidate => SourceKeyEndsWithActorIdentity(sourceKey, candidate))
+            .OrderByDescending(candidate => candidate.Length)
+            .FirstOrDefault() ?? string.Empty;
+        return actorKey.Length > 0;
+    }
+
+    private static bool SourceKeyEndsWithActorIdentity(string sourceKey, string actorKey)
+    {
+        if (sourceKey.EndsWith($":{actorKey}", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var identitySeparator = actorKey.LastIndexOf(':');
+        var identity = identitySeparator >= 0 ? actorKey[(identitySeparator + 1)..] : actorKey;
+        return identity.Length > 0 &&
+            sourceKey.EndsWith($":{identity}", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool TryGetDmuP5ArenaHolePosition(uint mapEffectIndex, out float x, out float z)
     {
         var positionIndex = mapEffectIndex - DmuP5ArenaHoleFirstMapEffectIndex;
@@ -687,6 +713,7 @@ internal static class ReplayEncounterModules
         private const uint SpellscatterActionId = 47809;
         private const uint SpellwaveActionId = 47810;
         private const double ForsakenAssignmentPromotionSeconds = 2.0;
+        private const double ForsakenResolveRetentionSeconds = 1.0;
         private const double ForsakenLegacyEndDelaySeconds = 15.0;
         private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
         private static readonly ReplayMarkerResolveGroup[] ForsakenTowerResolveSequence =
@@ -813,7 +840,7 @@ internal static class ReplayEncounterModules
 
             if (cache.ExactResolutions.Count > 0)
             {
-                var exactResolveIndex = cache.ExactResolutions.Count(resolve => resolve.ResolveAtUtc <= selectedAtUtc);
+                var exactResolveIndex = GetRetainedForsakenResolveIndex(cache, selectedAtUtc);
                 if (exactResolveIndex >= cache.ExactResolutions.Count)
                 {
                     return false;
@@ -917,7 +944,14 @@ internal static class ReplayEncounterModules
                 ? 0
                 : Math.Min(
                     ForsakenTowerResolveSequence.Length,
-                    cache.ResolveBatches.Count(resolveAtUtc => resolveAtUtc <= selectedAtUtc));
+                    cache.ResolveBatches.Count(resolveAtUtc =>
+                        resolveAtUtc.AddSeconds(ForsakenResolveRetentionSeconds) <= selectedAtUtc));
+        }
+
+        private static int GetRetainedForsakenResolveIndex(ForsakenReplayCache cache, DateTime selectedAtUtc)
+        {
+            return cache.ExactResolutions.Count(resolve =>
+                resolve.ResolveAtUtc.AddSeconds(ForsakenResolveRetentionSeconds) <= selectedAtUtc);
         }
 
         private static ReplayMarkerSnapshot? GetResolvingForsakenMarker(
@@ -994,7 +1028,7 @@ internal static class ReplayEncounterModules
                 return false;
             }
 
-            var resolveIndex = cache.ExactResolutions.Count(resolve => resolve.ResolveAtUtc <= selectedAtUtc);
+            var resolveIndex = GetRetainedForsakenResolveIndex(cache, selectedAtUtc);
             if (resolveIndex >= cache.ExactResolutions.Count ||
                 !cache.ExactResolutions[resolveIndex].Activations.TryGetValue(marker.ActorKey, out var activation) ||
                 activation.Kind != ForsakenMarkerKind.Cone ||
@@ -1311,9 +1345,7 @@ internal static class ReplayEncounterModules
             IReadOnlyList<string> actorKeys,
             out string actorKey)
         {
-            actorKey = actorKeys.FirstOrDefault(candidate =>
-                mechanic.SourceKey.EndsWith($":{candidate}", StringComparison.Ordinal)) ?? string.Empty;
-            return actorKey.Length > 0;
+            return TryGetReplayActorKeyFromSourceKey(mechanic.SourceKey, actorKeys, out actorKey);
         }
 
         private static bool TryGetPathOfLightActivationTowerIndex(string sourceKey, out int towerIndex)

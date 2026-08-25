@@ -88,8 +88,61 @@ public sealed class DmuReplayDataTests
 
         Assert.True(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, ForsakenStart.AddSeconds(9.95)));
         Assert.False(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, ForsakenStart.AddSeconds(9.95)));
-        Assert.False(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, ForsakenStart.AddSeconds(10.1)));
-        Assert.True(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, ForsakenStart.AddSeconds(10.1)));
+        Assert.True(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, ForsakenStart.AddSeconds(10.9)));
+        Assert.False(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, ForsakenStart.AddSeconds(10.9)));
+        Assert.False(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, ForsakenStart.AddSeconds(11.1)));
+        Assert.True(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, ForsakenStart.AddSeconds(11.1)));
+    }
+
+    [Fact]
+    public void P2ForsakenRetainsBothResolvingConesForOneSecond()
+    {
+        var firstCone = CreateMarker(ForsakenStart, "player:first-cone", "DRK", 0, 717);
+        var yukariCone = CreateMarker(ForsakenStart, "player:yukari-cone", "PCT", 1, 717);
+        var firstNextStack = CreateMarker(ForsakenStart.AddSeconds(10), "player:first-cone", "DRK", 0, 715);
+        var yukariNextStack = CreateMarker(ForsakenStart.AddSeconds(10), "player:yukari-cone", "PCT", 1, 715);
+        var positions = new[]
+        {
+            CreatePosition("player:first-cone", "DRK", 0),
+            CreatePosition("player:yukari-cone", "PCT", 1),
+            CreatePosition("player:first-victim", "WHM", 2),
+            CreatePosition("player:second-victim", "RPR", 3),
+        };
+        var mechanics = new[]
+        {
+            CreateEvidence(ForsakenStart.AddSeconds(9.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:1:40000001:100:first-cone", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(9.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:2:40000002:101:yukari-cone", positions[1].X, positions[1].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(10), 47810,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000003:102:first-victim", positions[2].X, positions[2].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(10), 47810,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000004:103:second-victim", positions[3].X, positions[3].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(19.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:3:40000005:104:first-cone", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(19.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:4:40000006:105:yukari-cone", positions[1].X, positions[1].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(20), 47808,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000007:106:first-cone", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(20), 47808,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000008:107:yukari-cone", positions[1].X, positions[1].Z),
+        };
+        var markers = new[] { firstCone, yukariCone, firstNextStack, yukariNextStack };
+        var module = ReplayEncounterModules.Get(1363);
+        var retainedAt = ForsakenStart.AddSeconds(10.9);
+
+        Assert.True(module.ShouldDisplayReplayMarker(firstCone, markers, positions, mechanics, retainedAt));
+        Assert.True(module.ShouldDisplayReplayMarker(yukariCone, markers, positions, mechanics, retainedAt));
+        Assert.False(module.ShouldDisplayReplayMarker(firstNextStack, markers, positions, mechanics, retainedAt));
+        Assert.False(module.ShouldDisplayReplayMarker(yukariNextStack, markers, positions, mechanics, retainedAt));
     }
 
     [Fact]
@@ -168,14 +221,14 @@ public sealed class DmuReplayDataTests
     [Fact]
     public void P2ForsakenConeUsesTheRecordedVictimInsteadOfTheNearestPlayer()
     {
-        var cone = CreateMarker(ForsakenStart, "cone-player", "RPR", 0, 717);
-        var nearest = CreateMarker(ForsakenStart, "nearest-player", "PLD", 1, 715);
-        var actualVictim = CreateMarker(ForsakenStart, "actual-victim", "WHM", 2, 716);
+        var cone = CreateMarker(ForsakenStart, "player:cone-player", "RPR", 0, 717);
+        var nearest = CreateMarker(ForsakenStart, "player:nearest-player", "PLD", 1, 715);
+        var actualVictim = CreateMarker(ForsakenStart, "player:actual-victim", "WHM", 2, 716);
         var positions = new[]
         {
-            CreatePosition("cone-player", "RPR", 0) with { X = 100, Z = 100 },
-            CreatePosition("nearest-player", "PLD", 1) with { X = 101, Z = 100 },
-            CreatePosition("actual-victim", "WHM", 2) with { X = 112, Z = 100 },
+            CreatePosition("player:cone-player", "RPR", 0) with { X = 100, Z = 100 },
+            CreatePosition("player:nearest-player", "PLD", 1) with { X = 101, Z = 100 },
+            CreatePosition("player:actual-victim", "WHM", 2) with { X = 112, Z = 100 },
         };
         var resolveAt = ForsakenStart.AddSeconds(10);
         var mechanics = new[]
@@ -210,7 +263,7 @@ public sealed class DmuReplayDataTests
             mechanics,
             ForsakenStart.AddSeconds(5),
             out var targetActorKey));
-        Assert.Equal("actual-victim", targetActorKey);
+        Assert.Equal("player:actual-victim", targetActorKey);
     }
 
     [Fact]

@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.2";
+    private const string CurrentChangelogVersion = "1.0.0.3";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -8810,12 +8810,10 @@ public sealed partial class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionSnapshot> actors,
         out string actorKey)
     {
-        actorKey = actors
-            .Select(actor => actor.ActorKey)
-            .Where(candidate => sourceKey.EndsWith($":{candidate}", StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.Length)
-            .FirstOrDefault() ?? string.Empty;
-        return !string.IsNullOrWhiteSpace(actorKey);
+        return ReplayEncounterModules.TryGetReplayActorKeyFromSourceKey(
+            sourceKey,
+            actors.Select(actor => actor.ActorKey),
+            out actorKey);
     }
 
     private static IReadOnlyList<ReplayMechanicSnapshot> NormalizeReplayPathOfLightTowerTimeline(
@@ -19907,6 +19905,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.3");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Fixed DMU P2 Forsaken tower assignments so the correct markers remain visible through resolution.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.2");
         DrawHighlightedChangelogBullet("Small tweaks");
 
