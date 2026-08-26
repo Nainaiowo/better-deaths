@@ -19884,7 +19884,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted("v1.0.0.6");
-        ImGui.TextDisabled("Testing update.");
+        ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added a collapsible recorded-pull sidebar to the Analyzer.");
         DrawWrappedBullet("Cleaned up mitigation chat posts and added new Fun Mode Help wording.");
 
