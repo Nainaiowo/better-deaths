@@ -91,6 +91,7 @@ internal static class ReplayEncounterModules
     internal const string DmuP2PathOfLightActivationRawEventKind = "dmu-p2-path-of-light-activation";
     internal const string DmuP2ForsakenTargetRawEventKind = "dmu-p2-forsaken-target";
     internal const string DmuP2ForsakenCloneDropRawEventKind = "dmu-p2-forsaken-clone-drop";
+    internal const double DmuP2ForsakenResolveRetentionSeconds = 1.0;
     private const uint DmuP2ForsakenStackIconId = 715;
     private const uint DmuP2ForsakenSpreadIconId = 716;
     private const uint DmuP2ForsakenConeIconId = 717;
@@ -220,6 +221,11 @@ internal static class ReplayEncounterModules
             mechanics,
             selectedAtUtc,
             out actorKey);
+    }
+
+    internal static DateTime GetDmuP2ForsakenHandoffAtUtc(DateTime resolveAtUtc)
+    {
+        return resolveAtUtc.AddSeconds(DmuP2ForsakenResolveRetentionSeconds);
     }
 
     internal static bool TryGetReplayActorKeyFromSourceKey(
@@ -713,7 +719,6 @@ internal static class ReplayEncounterModules
         private const uint SpellscatterActionId = 47809;
         private const uint SpellwaveActionId = 47810;
         private const double ForsakenAssignmentPromotionSeconds = 2.0;
-        private const double ForsakenResolveRetentionSeconds = 1.0;
         private const double ForsakenLegacyEndDelaySeconds = 15.0;
         private static readonly ReplayArenaInfo Arena = new(100.0f, 100.0f, 20.0f, ReplayArenaShape.Circle);
         private static readonly ReplayMarkerResolveGroup[] ForsakenTowerResolveSequence =
@@ -945,13 +950,13 @@ internal static class ReplayEncounterModules
                 : Math.Min(
                     ForsakenTowerResolveSequence.Length,
                     cache.ResolveBatches.Count(resolveAtUtc =>
-                        resolveAtUtc.AddSeconds(ForsakenResolveRetentionSeconds) <= selectedAtUtc));
+                        GetDmuP2ForsakenHandoffAtUtc(resolveAtUtc) <= selectedAtUtc));
         }
 
         private static int GetRetainedForsakenResolveIndex(ForsakenReplayCache cache, DateTime selectedAtUtc)
         {
             return cache.ExactResolutions.Count(resolve =>
-                resolve.ResolveAtUtc.AddSeconds(ForsakenResolveRetentionSeconds) <= selectedAtUtc);
+                GetDmuP2ForsakenHandoffAtUtc(resolve.ResolveAtUtc) <= selectedAtUtc);
         }
 
         private static ReplayMarkerSnapshot? GetResolvingForsakenMarker(

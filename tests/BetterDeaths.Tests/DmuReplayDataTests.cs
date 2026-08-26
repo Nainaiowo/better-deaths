@@ -95,6 +95,147 @@ public sealed class DmuReplayDataTests
     }
 
     [Fact]
+    public void P2ForsakenTowerAndAssignmentsShareTheSameHandoff()
+    {
+        var module = ReplayEncounterModules.Get(1363);
+        var (markers, positions, mechanics) = CreateForsakenScenario();
+        var initialStack = markers.Single(marker => marker.ActorKey == "tank-one" && marker.MarkerId == 715);
+        var nextCone = markers.Single(marker => marker.ActorKey == "tank-one" && marker.MarkerId == 717);
+        var resolveAt = ForsakenStart.AddSeconds(10);
+        var handoffAt = ReplayEncounterModules.GetDmuP2ForsakenHandoffAtUtc(resolveAt);
+
+        Assert.Equal(ForsakenStart.AddSeconds(11), handoffAt);
+        Assert.True(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, handoffAt.AddMilliseconds(-1)));
+        Assert.False(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, handoffAt.AddMilliseconds(-1)));
+        Assert.False(module.ShouldDisplayReplayMarker(initialStack, markers, positions, mechanics, handoffAt));
+        Assert.True(module.ShouldDisplayReplayMarker(nextCone, markers, positions, mechanics, handoffAt));
+    }
+
+    [Fact]
+    public void P2ForsakenSecondSetDisplaysBothConesAfterHandoff()
+    {
+        var firstStack = CreateMarker(ForsakenStart, "player:first", "WHM", 0, 715);
+        var secondStack = CreateMarker(ForsakenStart, "player:second", "MCH", 1, 715);
+        var firstCone = CreateMarker(ForsakenStart.AddSeconds(10), "player:first", "WHM", 0, 717);
+        var secondCone = CreateMarker(ForsakenStart.AddSeconds(10), "player:second", "MCH", 1, 717);
+        var positions = new[]
+        {
+            CreatePosition("player:first", "WHM", 0),
+            CreatePosition("player:second", "MCH", 1),
+            CreatePosition("player:first-victim", "SGE", 2),
+            CreatePosition("player:second-victim", "BLM", 3),
+        };
+        var mechanics = new[]
+        {
+            CreateEvidence(ForsakenStart.AddSeconds(9.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:1:40000001:100:first", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(9.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:2:40000002:101:second", positions[1].X, positions[1].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(10), 47808,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000003:102:first", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(10), 47808,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000004:103:second", positions[1].X, positions[1].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(19.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:3:40000005:104:first", positions[0].X, positions[0].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(19.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:4:40000006:105:second", positions[1].X, positions[1].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(20), 47810,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000007:106:first-victim", positions[2].X, positions[2].Z),
+            CreateEvidence(ForsakenStart.AddSeconds(20), 47810,
+                ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+                "dmu-p2-forsaken-target:40000008:107:second-victim", positions[3].X, positions[3].Z),
+        };
+        var markers = new[] { firstStack, secondStack, firstCone, secondCone };
+        var module = ReplayEncounterModules.Get(1363);
+        var selectedAt = ForsakenStart.AddSeconds(11.1);
+
+        var visibleCones = markers.Count(marker =>
+            marker.MarkerId == 717 &&
+            module.ShouldDisplayReplayMarker(marker, markers, positions, mechanics, selectedAt));
+
+        Assert.Equal(2, visibleCones);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void P2ForsakenTowerPairsSwitchTogetherWithoutOverlap(bool includeActivationEvidence)
+    {
+        var firstPair = new[]
+        {
+            CreatePathOfLightTower(ForsakenStart, 1, 9.3f),
+            CreatePathOfLightTower(ForsakenStart.AddMilliseconds(1), 3, 9.3f),
+        };
+        var secondPair = new[]
+        {
+            CreatePathOfLightTower(ForsakenStart.AddSeconds(9.5), 2, 9.8f),
+            CreatePathOfLightTower(ForsakenStart.AddSeconds(9.501), 4, 9.8f),
+        };
+        var mechanics = new List<ReplayMechanicSnapshot>();
+        mechanics.AddRange(firstPair);
+        mechanics.AddRange(secondPair);
+        if (includeActivationEvidence)
+        {
+            mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(9.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:1:40000001:100:first", 100, 100));
+            mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(9.301), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:3:40000002:101:second", 100, 100));
+            mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(19.3), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:2:40000003:102:third", 100, 100));
+            mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(19.301), 47806,
+                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
+                "dmu-p2-path-of-light-activation:4:40000004:103:fourth", 100, 100));
+        }
+
+        mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(10), 47808,
+            ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+            "dmu-p2-forsaken-target:40000005:104:first", 100, 100));
+        mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(10.1), 47810,
+            ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+            "dmu-p2-forsaken-target:40000006:105:second", 100, 100));
+        mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(20), 47810,
+            ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+            "dmu-p2-forsaken-target:40000007:106:third", 100, 100));
+        mechanics.Add(CreateEvidence(ForsakenStart.AddSeconds(20.1), 47810,
+            ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
+            "dmu-p2-forsaken-target:40000008:107:fourth", 100, 100));
+
+        var normalizedTowers = ForsakenTowerTimelinePolicy.NormalizeTimeline(mechanics)
+            .Where(ForsakenTowerTimelinePolicy.IsPathOfLightMechanic)
+            .OrderBy(mechanic => mechanic.SeenAtUtc)
+            .ThenBy(mechanic => mechanic.SourceKey, StringComparer.Ordinal)
+            .ToArray();
+        var expectedHandoff = ReplayEncounterModules.GetDmuP2ForsakenHandoffAtUtc(
+            ForsakenStart.AddSeconds(10.1));
+        var actualHandoff = normalizedTowers
+            .Take(2)
+            .Max(tower => tower.SeenAtUtc.AddSeconds(tower.DurationSeconds));
+
+        Assert.Equal(4, normalizedTowers.Length);
+        Assert.InRange(Math.Abs((actualHandoff - expectedHandoff).TotalMilliseconds), 0, 0.1);
+        Assert.All(normalizedTowers.Take(2), tower =>
+            Assert.True(ForsakenTowerTimelinePolicy.IsActiveAt(tower, actualHandoff.AddMilliseconds(-1))));
+        Assert.All(normalizedTowers.Take(2), tower =>
+            Assert.False(ForsakenTowerTimelinePolicy.IsActiveAt(tower, actualHandoff)));
+        Assert.All(normalizedTowers.Skip(2), tower =>
+        {
+            Assert.Equal(actualHandoff, tower.SeenAtUtc);
+            Assert.False(ForsakenTowerTimelinePolicy.IsActiveAt(tower, actualHandoff.AddMilliseconds(-1)));
+            Assert.True(ForsakenTowerTimelinePolicy.IsActiveAt(tower, actualHandoff));
+        });
+    }
+
+    [Fact]
     public void P2ForsakenRetainsBothResolvingConesForOneSecond()
     {
         var firstCone = CreateMarker(ForsakenStart, "player:first-cone", "DRK", 0, 717);
@@ -431,6 +572,19 @@ public sealed class DmuReplayDataTests
             actionId,
             0,
             true);
+    }
+
+    private static ReplayMechanicSnapshot CreatePathOfLightTower(
+        DateTime seenAtUtc,
+        int towerIndex,
+        float durationSeconds)
+    {
+        return CreateMechanic(seenAtUtc, 47806, ForsakenTowerTimelinePolicy.PathOfLightRawEventKind) with
+        {
+            DurationSeconds = durationSeconds,
+            SourceKey = $"dmu-p2-path-of-light:{towerIndex}:{seenAtUtc.Ticks}",
+            Shape = ReplayMechanicShape.Tower,
+        };
     }
 
     private static ReplayMechanicSnapshot CreateEvidence(

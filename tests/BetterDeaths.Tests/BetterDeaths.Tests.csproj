@@ -20,6 +20,7 @@
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />
     <Compile Include="../../BetterDeaths/GoofyDeathText.cs" Link="GoofyDeathText.cs" />
     <Compile Include="../../BetterDeaths/ForsakenCleavePosePolicy.cs" Link="ForsakenCleavePosePolicy.cs" />
+    <Compile Include="../../BetterDeaths/ForsakenTowerTimelinePolicy.cs" Link="ForsakenTowerTimelinePolicy.cs" />
     <Compile Include="../../BetterDeaths/HpBarFormatting.cs" Link="HpBarFormatting.cs" />
     <Compile Include="../../BetterDeaths/LigmaButtonSequence.cs" Link="LigmaButtonSequence.cs" />
     <Compile Include="../../BetterDeaths/LeadUpDisplayPolicy.cs" Link="LeadUpDisplayPolicy.cs" />

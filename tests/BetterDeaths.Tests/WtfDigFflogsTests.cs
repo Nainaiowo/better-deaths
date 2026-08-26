@@ -135,6 +135,27 @@ public sealed class WtfDigFflogsTests
         Assert.Equal(string.Empty, resolution.Parity);
     }
 
+    [Fact]
+    public void ForsakenConeVictimsDoNotRequireClonePositionData()
+    {
+        var victimIds = ForsakenAnalyzer.ConeVictimIdsAt(
+            [
+                new FflogsEvent
+                {
+                    Timestamp = 10_000,
+                    Type = "calculateddamage",
+                    AbilityGameID = 47810,
+                    TargetID = 42,
+                    SourceResources = null,
+                    TargetResources = new FflogsResources { X = 11200, Y = 10000 },
+                },
+            ],
+            10_000,
+            new Dictionary<uint, string> { [47810] = "Spellwave" });
+
+        Assert.Contains(42, victimIds);
+    }
+
     [Theory]
     [InlineData(1, 1, 1)]
     [InlineData(1, 2, 2)]

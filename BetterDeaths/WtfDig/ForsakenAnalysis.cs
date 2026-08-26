@@ -420,19 +420,10 @@ internal sealed class ForsakenAnalyzer(IWtfDigEventSource client)
             }
         }
 
-        var calculatedDamage = damage
-            .Where(entry => entry.Type == "calculateddamage" && entry.SourceResources is not null)
-            .ToArray();
         foreach (var resolution in resolutions)
         {
             var absoluteMs = fight.StartTime + resolution.ResolveTime * 1000;
-            var coneVictimIds = calculatedDamage
-                .Where(entry =>
-                    Math.Abs(entry.Timestamp - absoluteMs) <= TakenWindowMs &&
-                    NameOf(entry.AbilityGameID) == "spellwave" &&
-                    entry.TargetID is not null)
-                .Select(entry => entry.TargetID!.Value)
-                .ToHashSet();
+            var coneVictimIds = ConeVictimIdsAt(damage, absoluteMs, abilityNames);
             var coneVictims = resolution.Players
                 .Where(player => player.Position is not null && coneVictimIds.Contains(player.ActorId))
                 .ToArray();
@@ -513,6 +504,23 @@ internal sealed class ForsakenAnalyzer(IWtfDigEventSource client)
 
         AddCloneAndCleaveData(report, fight, center, abilityNames, players, samples, deadAt, enemyCasts, damage, resolutions);
         return new ForsakenAnalysis(fight, resolutions, center, rotation);
+    }
+
+    internal static IReadOnlySet<int> ConeVictimIdsAt(
+        IEnumerable<FflogsEvent> damage,
+        double resolveMs,
+        IReadOnlyDictionary<uint, string> abilityNames)
+    {
+        return damage
+            .Where(entry =>
+                entry.Type == "calculateddamage" &&
+                Math.Abs(entry.Timestamp - resolveMs) <= TakenWindowMs &&
+                entry.AbilityGameID is { } abilityId &&
+                abilityNames.TryGetValue(abilityId, out var abilityName) &&
+                string.Equals(abilityName, "Spellwave", StringComparison.OrdinalIgnoreCase) &&
+                entry.TargetID is not null)
+            .Select(entry => entry.TargetID!.Value)
+            .ToHashSet();
     }
 
     private static void AddCloneAndCleaveData(

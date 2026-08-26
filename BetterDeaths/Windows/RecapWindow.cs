@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.3";
+    private const string CurrentChangelogVersion = "1.0.0.4";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -222,7 +222,6 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const ImGuiWindowFlags ReplayCanvasChildFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground;
     private const int MaxReplayTrailPointsPerActor = 24;
     private const int MaxReplayMarkerBadgesPerActor = 3;
-    private const string ReplayPathOfLightRawEventKind = "dmu-p2-path-of-light";
     private const string ReplayDmuP2EndPredictionRawEventKind = "dmu-p2-end-predicted";
     private const string ReplayDmuP1FlagrantFireRawEventKind = "dmu-p1-flagrant-fire";
     private const string ReplayDmuP5ArenaHoleRawEventKind = "dmu-p5-arena-hole";
@@ -8425,7 +8424,7 @@ public sealed partial class RecapWindow : Window, IDisposable
                 rawMechanics.Select(NormalizeReplayMechanicForDisplay).ToList(),
                 positions),
             positions);
-        var mechanics = NormalizeReplayPathOfLightTowerTimeline(normalizedMechanics)
+        var mechanics = ForsakenTowerTimelinePolicy.NormalizeTimeline(normalizedMechanics)
             .ToList();
         if (markers.Count == 0 || positions.Count == 0)
         {
@@ -8703,8 +8702,8 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static ReplayMechanicSnapshot NormalizeReplayMechanicForDisplay(ReplayMechanicSnapshot mechanic)
     {
-        if (IsReplayPathOfLightMechanic(mechanic) &&
-            TryGetReplayPathOfLightTowerIndex(mechanic.SourceKey, out var towerIndex))
+        if (ForsakenTowerTimelinePolicy.IsPathOfLightMechanic(mechanic) &&
+            ForsakenTowerTimelinePolicy.TryGetTowerIndex(mechanic.SourceKey, out var towerIndex))
         {
             var angleDegrees = 180.0f - ((towerIndex - 1) * 45.0f);
             var angleRadians = angleDegrees * MathF.PI / 180.0f;
@@ -8816,116 +8815,6 @@ public sealed partial class RecapWindow : Window, IDisposable
             out actorKey);
     }
 
-    private static IReadOnlyList<ReplayMechanicSnapshot> NormalizeReplayPathOfLightTowerTimeline(
-        IReadOnlyList<ReplayMechanicSnapshot> mechanics)
-    {
-        var passthroughMechanics = new List<ReplayMechanicSnapshot>();
-        var pathOfLightTowers = new List<ReplayMechanicSnapshot>();
-        foreach (var mechanic in mechanics)
-        {
-            if (IsReplayPathOfLightMechanic(mechanic))
-            {
-                pathOfLightTowers.Add(mechanic);
-            }
-            else
-            {
-                passthroughMechanics.Add(mechanic);
-            }
-        }
-
-        if (pathOfLightTowers.Count == 0)
-        {
-            return passthroughMechanics;
-        }
-
-        pathOfLightTowers = ExtendReplayPathOfLightTowersToShapeResolve(pathOfLightTowers, mechanics).ToList();
-
-        var adjustedTowers = new List<ReplayMechanicSnapshot>(pathOfLightTowers.Count);
-        var activeTowers = new List<(ReplayMechanicSnapshot Mechanic, DateTime EndAtUtc)>();
-        var storedTowers = new List<ReplayMechanicSnapshot>();
-
-        foreach (var tower in pathOfLightTowers
-            .OrderBy(mechanic => mechanic.SeenAtUtc)
-            .ThenBy(mechanic => mechanic.SourceKey, StringComparer.Ordinal))
-        {
-            ReleaseStoredPathOfLightTowers(tower.SeenAtUtc);
-            if (activeTowers.Count >= 2)
-            {
-                storedTowers.Add(tower);
-                continue;
-            }
-
-            AddActivePathOfLightTower(tower, tower.SeenAtUtc);
-        }
-
-        ReleaseStoredPathOfLightTowers(DateTime.MaxValue);
-        passthroughMechanics.AddRange(adjustedTowers);
-        return passthroughMechanics;
-
-        void AddActivePathOfLightTower(ReplayMechanicSnapshot tower, DateTime displayStartAtUtc)
-        {
-            var adjustedTower = AdjustReplayPathOfLightTowerStart(tower, displayStartAtUtc);
-            if (adjustedTower is null)
-            {
-                return;
-            }
-
-            adjustedTowers.Add(adjustedTower);
-            activeTowers.Add((adjustedTower, adjustedTower.SeenAtUtc.AddSeconds(Math.Max(0.05f, adjustedTower.DurationSeconds))));
-        }
-
-        void ReleaseStoredPathOfLightTowers(DateTime selectedAtUtc)
-        {
-            while (activeTowers.Any(entry => entry.EndAtUtc <= selectedAtUtc))
-            {
-                var releaseAtUtc = activeTowers
-                    .Where(entry => entry.EndAtUtc <= selectedAtUtc)
-                    .Select(entry => entry.EndAtUtc)
-                    .DefaultIfEmpty(DateTime.MinValue)
-                    .Max();
-                activeTowers.RemoveAll(entry => entry.EndAtUtc <= selectedAtUtc);
-                if (activeTowers.Count != 0 || storedTowers.Count == 0)
-                {
-                    continue;
-                }
-
-                var releaseBatch = storedTowers
-                    .OrderBy(mechanic => mechanic.SeenAtUtc)
-                    .ThenBy(mechanic => mechanic.SourceKey, StringComparer.Ordinal)
-                    .ToList();
-                storedTowers.Clear();
-                foreach (var storedTower in releaseBatch)
-                {
-                    AddActivePathOfLightTower(storedTower, releaseAtUtc);
-                }
-            }
-        }
-    }
-
-    private static ReplayMechanicSnapshot? AdjustReplayPathOfLightTowerStart(
-        ReplayMechanicSnapshot tower,
-        DateTime displayStartAtUtc)
-    {
-        if (displayStartAtUtc <= tower.SeenAtUtc)
-        {
-            return tower;
-        }
-
-        var originalEndAtUtc = tower.SeenAtUtc.AddSeconds(Math.Max(0.05f, tower.DurationSeconds));
-        if (displayStartAtUtc >= originalEndAtUtc)
-        {
-            return null;
-        }
-
-        var startDelaySeconds = (float)(displayStartAtUtc - tower.SeenAtUtc).TotalSeconds;
-        return tower with
-        {
-            SeenAtUtc = displayStartAtUtc,
-            PullElapsedSeconds = tower.PullElapsedSeconds + startDelaySeconds,
-            DurationSeconds = Math.Max(0.05f, (float)(originalEndAtUtc - displayStartAtUtc).TotalSeconds),
-        };
-    }
-
     private static ReplayMarkerInfo ResolveReplayMarkerMechanicInfo(
         ReplayMarkerSnapshot marker,
         IReadOnlyList<ReplayMarkerSnapshot> markers,
@@ -8945,119 +8834,6 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         return marker.SeenAtUtc.AddSeconds(Math.Max(0.05f, markerInfo.DurationSeconds));
-    }
-
-    private static bool IsReplayPathOfLightMechanic(ReplayMechanicSnapshot mechanic)
-    {
-        return string.Equals(mechanic.RawEventKind, ReplayPathOfLightRawEventKind, StringComparison.Ordinal) &&
-            mechanic.Shape == ReplayMechanicShape.Tower;
-    }
-
-    private static bool TryGetReplayPathOfLightTowerIndex(string sourceKey, out int towerIndex)
-    {
-        const string prefix = "dmu-p2-path-of-light:";
-        towerIndex = 0;
-        if (!sourceKey.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var indexEnd = sourceKey.IndexOf(':', prefix.Length);
-        if (indexEnd <= prefix.Length)
-        {
-            return false;
-        }
-
-        return int.TryParse(sourceKey[prefix.Length..indexEnd], CultureInfo.InvariantCulture, out towerIndex) &&
-            towerIndex is >= 1 and <= 8;
-    }
-
-    private static IReadOnlyList<ReplayMechanicSnapshot> ExtendReplayPathOfLightTowersToShapeResolve(
-        IReadOnlyList<ReplayMechanicSnapshot> towers,
-        IReadOnlyList<ReplayMechanicSnapshot> mechanics)
-    {
-        var activations = mechanics
-            .Where(mechanic => string.Equals(
-                mechanic.RawEventKind,
-                ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind,
-                StringComparison.Ordinal))
-            .Select(mechanic => TryGetReplayPathOfLightActivationTowerIndex(mechanic.SourceKey, out var towerIndex)
-                ? (Mechanic: mechanic, TowerIndex: towerIndex)
-                : (Mechanic: (ReplayMechanicSnapshot?)null, TowerIndex: 0))
-            .Where(entry => entry.Mechanic is not null)
-            .Select(entry => (Mechanic: entry.Mechanic!, entry.TowerIndex))
-            .ToArray();
-        if (activations.Length == 0)
-        {
-            return towers;
-        }
-
-        var exactResolveMechanics = mechanics
-            .Where(mechanic =>
-                mechanic.RawEventId is 47808 or 47809 or 47810 &&
-                string.Equals(
-                    mechanic.RawEventKind,
-                    ReplayEncounterModules.DmuP2ForsakenTargetRawEventKind,
-                    StringComparison.Ordinal))
-            .ToArray();
-        var resolveTimes = (exactResolveMechanics.Length > 0
-                ? exactResolveMechanics
-                : mechanics.Where(mechanic =>
-                    mechanic.RawEventId is 47808 or 47809 or 47810 &&
-                    (string.Equals(mechanic.RawEventKind, "dmu-p2-spelldriver", StringComparison.Ordinal) ||
-                        string.Equals(mechanic.RawEventKind, "dmu-p2-spellscatter", StringComparison.Ordinal) ||
-                        string.Equals(mechanic.RawEventKind, "dmu-p2-spellwave", StringComparison.Ordinal))))
-            .Select(mechanic => mechanic.SeenAtUtc)
-            .OrderBy(seenAtUtc => seenAtUtc)
-            .ToArray();
-        if (resolveTimes.Length == 0)
-        {
-            return towers;
-        }
-
-        return towers.Select(tower =>
-        {
-            if (!TryGetReplayPathOfLightTowerIndex(tower.SourceKey, out var towerIndex))
-            {
-                return tower;
-            }
-
-            var currentEndAtUtc = tower.SeenAtUtc.AddSeconds(Math.Max(0.05f, tower.DurationSeconds));
-            var activation = activations
-                .Where(entry => entry.TowerIndex == towerIndex)
-                .OrderBy(entry => Math.Abs((entry.Mechanic.SeenAtUtc - currentEndAtUtc).TotalSeconds))
-                .FirstOrDefault();
-            if (activation.Mechanic is null ||
-                Math.Abs((activation.Mechanic.SeenAtUtc - currentEndAtUtc).TotalSeconds) > 1.0)
-            {
-                return tower;
-            }
-
-            var resolveAtUtc = resolveTimes.FirstOrDefault(candidate =>
-                candidate >= activation.Mechanic.SeenAtUtc &&
-                candidate - activation.Mechanic.SeenAtUtc <= TimeSpan.FromSeconds(2.0));
-            return resolveAtUtc == default || resolveAtUtc <= currentEndAtUtc
-                ? tower
-                : tower with
-                {
-                    DurationSeconds = Math.Max(0.05f, (float)(resolveAtUtc - tower.SeenAtUtc).TotalSeconds),
-                };
-        }).ToList();
-    }
-
-    private static bool TryGetReplayPathOfLightActivationTowerIndex(string sourceKey, out int towerIndex)
-    {
-        var prefix = ReplayEncounterModules.DmuP2PathOfLightActivationRawEventKind + ":";
-        towerIndex = 0;
-        if (!sourceKey.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var indexEnd = sourceKey.IndexOf(':', prefix.Length);
-        return indexEnd > prefix.Length &&
-            int.TryParse(sourceKey[prefix.Length..indexEnd], CultureInfo.InvariantCulture, out towerIndex) &&
-            towerIndex is >= 1 and <= 8;
     }
 
     private static ReplayPositionSnapshot? FindReplayMarkerActorPosition(
@@ -9813,7 +9589,13 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         return mechanics
             .Where(mechanic => mechanic.SeenAtUtc <= selectedAtUtc)
-            .Where(mechanic => selectedAtUtc <= mechanic.SeenAtUtc.AddSeconds(Math.Max(0.05f, mechanic.DurationSeconds)))
+            .Where(mechanic =>
+            {
+                var endAtUtc = mechanic.SeenAtUtc.AddSeconds(Math.Max(0.05f, mechanic.DurationSeconds));
+                return ForsakenTowerTimelinePolicy.IsPathOfLightMechanic(mechanic)
+                    ? ForsakenTowerTimelinePolicy.IsActiveAt(mechanic, selectedAtUtc)
+                    : selectedAtUtc <= endAtUtc;
+            })
             .Where(mechanic => ShouldDisplayReplayMechanic(mechanic, mechanics, markers, positions, selectedAtUtc, replayModule))
             .Select(mechanic => ProjectReplayMechanicToActorState(
                 mechanic,
@@ -19905,6 +19687,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.4");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Fixed DMU P2 Forsaken replays so towers and assignment drawings change together.");
+        DrawHighlightedChangelogBullet("Improved Forsaken Analyzer cone targeting for locally recorded pulls.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.3");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Fixed DMU P2 Forsaken tower assignments so the correct markers remain visible through resolution.");
