@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "0.1.0.294";
+    private const string CurrentChangelogVersion = "1.0.0.6";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19883,7 +19883,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted("v0.1.0.294");
+        ImGui.TextUnformatted("v1.0.0.6");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Added a collapsible recorded-pull sidebar to the Analyzer.");
         DrawWrappedBullet("Cleaned up mitigation chat posts and added new Fun Mode Help wording.");
