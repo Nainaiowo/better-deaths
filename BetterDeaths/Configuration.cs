@@ -355,6 +355,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ReplayPullBrowserCollapsed { get; set; }
 
+    public bool AnalyzerPullBrowserCollapsed { get; set; }
+
     public float PullBrowserWidth { get; set; } = 300.0f;
 
     public float ReviewTimelineWidth { get; set; }

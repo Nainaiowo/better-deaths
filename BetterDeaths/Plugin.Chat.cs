@@ -223,7 +223,7 @@ public sealed partial class Plugin
             .ToList();
         if (defenses.Count > 0)
         {
-            groups.Add($"Player: {FormatStatusList(defenses)}");
+            groups.Add(FormatStatusList(defenses));
         }
 
         groups.AddRange(FormatBossMitigationGroups(selection));

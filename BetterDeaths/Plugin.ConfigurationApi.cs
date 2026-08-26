@@ -259,6 +259,17 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void SetAnalyzerPullBrowserCollapsed(bool collapsed)
+    {
+        if (Configuration.AnalyzerPullBrowserCollapsed == collapsed)
+        {
+            return;
+        }
+
+        Configuration.AnalyzerPullBrowserCollapsed = collapsed;
+        SaveConfiguration();
+    }
+
     public void SetDeathChatChannel(DeathChatChannel channel)
     {
         Configuration.DeathChatChannel = GetChatChannelOption(channel).Channel;

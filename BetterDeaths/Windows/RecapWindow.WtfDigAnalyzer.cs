@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -50,7 +51,69 @@ public sealed partial class RecapWindow
 
     private void DrawWtfDigAnalyzerPage()
     {
-        DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent);
+        var state = wtfDigAnalyzer.Snapshot();
+        if (state.Source != WtfDigAnalyzerSource.LocalPull)
+        {
+            DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent);
+            return;
+        }
+
+        var localPulls = GetWtfDigLocalPulls();
+        EnsureWtfDigLocalPullSelection(localPulls);
+        var pullItems = localPulls
+            .Select(CreateWtfDigReviewPull)
+            .ToArray();
+
+        DrawWorkspacePaddedContent("##WtfDigAnalyzerLocalWorkspace", () =>
+        {
+            var available = ImGui.GetContentRegionAvail();
+            if (available.X >= 860.0f)
+            {
+                if (configuration.AnalyzerPullBrowserCollapsed)
+                {
+                    DrawCollapsedWtfDigPullBrowserDivider(
+                        "WtfDigPullBrowserDivider",
+                        available.Y,
+                        pullItems);
+                }
+                else
+                {
+                    var browserWidth = MathF.Min(300.0f, MathF.Max(230.0f, available.X * 0.28f));
+                    DrawReplayPane(
+                        "##WtfDigPullBrowser",
+                        new Vector2(browserWidth, available.Y),
+                        () => DrawWtfDigPullBrowser(pullItems, "WtfDig"));
+                    DrawVerticalReplayDivider("WtfDigPullBrowserDivider", available.Y);
+                }
+
+                DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent);
+                return;
+            }
+
+            var browserHeight = configuration.AnalyzerPullBrowserCollapsed
+                ? StackedCollapsedPullBrowserHeight
+                : MathF.Min(230.0f, MathF.Max(150.0f, available.Y * 0.30f));
+            DrawReplayPane(
+                "##WtfDigPullBrowserStacked",
+                new Vector2(0.0f, browserHeight),
+                () =>
+                {
+                    if (configuration.AnalyzerPullBrowserCollapsed)
+                    {
+                        DrawCollapsedWtfDigPullBrowser("WtfDig", pullItems);
+                    }
+                    else
+                    {
+                        DrawWtfDigPullBrowser(
+                            pullItems,
+                            "WtfDig",
+                            useVerticalDrawerControls: true,
+                            useCells: true);
+                    }
+                });
+            ImGui.Dummy(new Vector2(1.0f, ReplayPaneGap));
+            DrawReviewPanel("##WtfDigAnalyzerStacked", Vector2.Zero, DrawWtfDigAnalyzerContent);
+        });
     }
 
     private void DrawWtfDigAnalyzerContent()
@@ -82,7 +145,7 @@ public sealed partial class RecapWindow
         ImGui.Dummy(new Vector2(1.0f, 5.0f));
         if (state.Source == WtfDigAnalyzerSource.LocalPull)
         {
-            DrawWtfDigLocalPullInput(state);
+            PrepareWtfDigLocalPullData(state);
         }
         else
         {
@@ -357,55 +420,69 @@ public sealed partial class RecapWindow
         }
     }
 
-    private void DrawWtfDigLocalPullInput(WtfDigAnalyzerViewState state)
+    private RecordedPullSummary[] GetWtfDigLocalPulls()
     {
-        var localPulls = plugin.RecordedPulls
+        return plugin.RecordedPulls
             .Where(summary => ReplayEncounterModules.IsDancingMadUltimate(summary.TerritoryId))
             .OrderByDescending(summary => summary.CapturedAtUtc)
             .ThenByDescending(summary => summary.PullNumber)
             .ToArray();
-        if (localPulls.Length == 0)
+    }
+
+    private RecordedPullSummary? EnsureWtfDigLocalPullSelection(IReadOnlyList<RecordedPullSummary> localPulls)
+    {
+        var selected = localPulls.FirstOrDefault(IsSelectedWtfDigLocalPull);
+        if (selected is not null)
         {
+            return selected;
+        }
+
+        selected = localPulls.FirstOrDefault(summary =>
+            string.Equals(BuildRecordedPullKey(summary), recapReviewSelection.PullKey, StringComparison.Ordinal)) ??
+            localPulls.FirstOrDefault();
+        if (selected is not null)
+        {
+            selectedWtfDigLocalPullNumber = selected.PullNumber;
+            selectedWtfDigLocalPullCapturedAtTicks = selected.CapturedAtUtc.Ticks;
+        }
+        else
+        {
+            selectedWtfDigLocalPullNumber = null;
+            selectedWtfDigLocalPullCapturedAtTicks = null;
+        }
+
+        return selected;
+    }
+
+    private bool IsSelectedWtfDigLocalPull(RecordedPullSummary summary)
+    {
+        return summary.PullNumber == selectedWtfDigLocalPullNumber &&
+            summary.CapturedAtUtc.Ticks == selectedWtfDigLocalPullCapturedAtTicks;
+    }
+
+    private void SelectWtfDigLocalPull(RecordedPullSummary summary)
+    {
+        if (IsSelectedWtfDigLocalPull(summary))
+        {
+            return;
+        }
+
+        selectedWtfDigLocalPullNumber = summary.PullNumber;
+        selectedWtfDigLocalPullCapturedAtTicks = summary.CapturedAtUtc.Ticks;
+        wtfDigAnalyzer.PrepareLocalPull(summary);
+    }
+
+    private void PrepareWtfDigLocalPullData(WtfDigAnalyzerViewState state)
+    {
+        var localPulls = GetWtfDigLocalPulls();
+        var selected = EnsureWtfDigLocalPullSelection(localPulls);
+        if (selected is null)
+        {
+            wtfDigAnalyzer.ClearLocalPull();
             ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
                 ? "Loading Better Deaths pulls..."
                 : "No recorded DMU pulls are available yet.");
             return;
-        }
-
-        var selected = localPulls.FirstOrDefault(summary =>
-            summary.PullNumber == selectedWtfDigLocalPullNumber &&
-            summary.CapturedAtUtc.Ticks == selectedWtfDigLocalPullCapturedAtTicks);
-        if (selected is null)
-        {
-            selected = localPulls.FirstOrDefault(summary =>
-                string.Equals(BuildRecordedPullKey(summary), recapReviewSelection.PullKey, StringComparison.Ordinal)) ?? localPulls[0];
-            selectedWtfDigLocalPullNumber = selected.PullNumber;
-            selectedWtfDigLocalPullCapturedAtTicks = selected.CapturedAtUtc.Ticks;
-        }
-
-        ImGui.TextDisabled("Recorded pull");
-        ImGui.SetNextItemWidth(MathF.Min(470.0f, MathF.Max(220.0f, ImGui.GetContentRegionAvail().X)));
-        if (ImGui.BeginCombo("##WtfDigLocalPullPicker", FormatWtfDigLocalPullLabel(selected)))
-        {
-            foreach (var summary in localPulls)
-            {
-                var isSelected = summary.PullNumber == selected.PullNumber &&
-                    summary.CapturedAtUtc.Ticks == selected.CapturedAtUtc.Ticks;
-                if (ImGui.Selectable(FormatWtfDigLocalPullLabel(summary), isSelected))
-                {
-                    selected = summary;
-                    selectedWtfDigLocalPullNumber = summary.PullNumber;
-                    selectedWtfDigLocalPullCapturedAtTicks = summary.CapturedAtUtc.Ticks;
-                    wtfDigAnalyzer.PrepareLocalPull(summary);
-                }
-
-                if (isSelected)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
-            }
-
-            ImGui.EndCombo();
         }
 
         var identityMatches = state.Source == WtfDigAnalyzerSource.LocalPull &&
@@ -439,9 +516,262 @@ public sealed partial class RecapWindow
         }
     }
 
-    private static string FormatWtfDigLocalPullLabel(RecordedPullSummary pull)
+    private ReviewPull CreateWtfDigReviewPull(RecordedPullSummary summary)
     {
-        return $"Pull {pull.PullNumber} - {WtfDigAnalysisHelpers.FormatDuration(pull.PullElapsedSeconds * 1000.0)} - {pull.CapturedAtUtc.ToLocalTime():g}";
+        return CreateReplayReviewPull(summary) with
+        {
+            Subtitle = FormatRecordedPullCapturedTime(summary),
+        };
+    }
+
+    private void DrawWtfDigPullBrowser(
+        IReadOnlyList<ReviewPull> pulls,
+        string idPrefix,
+        bool useVerticalDrawerControls = false,
+        bool useCells = false)
+    {
+        using var paneIndent = new ImGuiIndentScope(ReviewPaneContentIndent);
+        DrawWtfDigPullBrowserHeader(idPrefix, useVerticalDrawerControls);
+        ImGui.Separator();
+
+        if (ImGui.BeginChild($"##WtfDigPullRows{idPrefix}", Vector2.Zero, false, OptionalScrollbarFlags))
+        {
+            if (pulls.Count == 0)
+            {
+                ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
+                    ? "Loading Better Deaths pulls..."
+                    : "No recorded DMU pulls are available yet.");
+            }
+
+            foreach (var pull in pulls)
+            {
+                var summary = pull.RecordedPull;
+                if (summary is null)
+                {
+                    continue;
+                }
+
+                var selected = IsSelectedWtfDigLocalPull(summary);
+                var rowId = $"WtfDigPullRow{pull.Key}";
+                var clicked = useCells
+                    ? DrawExpandedPullCell(pull, rowId, selected, StackedPullCellRightPadding)
+                    : DrawWidePullListItem(pull, rowId, selected);
+                if (clicked)
+                {
+                    SelectWtfDigLocalPull(summary);
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    SetThemedTooltip(FormatExpandedPullTooltip(pull));
+                }
+
+                if (useCells)
+                {
+                    ImGui.Dummy(new Vector2(1.0f, 6.0f));
+                }
+            }
+
+            DrawReviewPaneBottomPadding();
+        }
+
+        ImGui.EndChild();
+    }
+
+    private void DrawWtfDigPullBrowserHeader(string idPrefix, bool useVerticalDrawerControls)
+    {
+        var startCursor = ImGui.GetCursorPos();
+        ImGui.TextColored(LeadUpGoldColor, "Pulls");
+
+        var style = ImGui.GetStyle();
+        var iconButtonWidth = ImGui.GetFrameHeight();
+        var buttonX = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - iconButtonWidth - PullBrowserHeaderButtonInset;
+        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + style.ItemSpacing.X, buttonX));
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        var collapseIcon = useVerticalDrawerControls
+            ? FontAwesomeIcon.ChevronUp
+            : FontAwesomeIcon.ChevronLeft;
+        if (DrawTransparentIconButton($"CollapseWtfDigPullBrowser{idPrefix}", collapseIcon))
+        {
+            plugin.SetAnalyzerPullBrowserCollapsed(true);
+        }
+
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Collapse pulls");
+        }
+
+        ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
+    }
+
+    private void DrawCollapsedWtfDigPullBrowser(
+        string idPrefix,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        var startCursor = ImGui.GetCursorPos();
+        ImGui.TextColored(LeadUpGoldColor, "Pulls");
+        var iconText = FontAwesomeIcon.ChevronDown.ToIconString();
+        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonX = startCursor.X + MathF.Max(0.0f, ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset);
+        ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X, buttonX));
+        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        if (DrawTransparentIconButton($"ExpandWtfDigPullBrowser{idPrefix}", FontAwesomeIcon.ChevronDown))
+        {
+            plugin.SetAnalyzerPullBrowserCollapsed(false);
+        }
+
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Expand pulls");
+        }
+
+        ImGui.SetCursorPos(new Vector2(startCursor.X, startCursor.Y + ImGui.GetTextLineHeightWithSpacing()));
+        DrawStackedCollapsedWtfDigPullCells(idPrefix, pulls);
+    }
+
+    private void DrawStackedCollapsedWtfDigPullCells(
+        string idPrefix,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        if (pulls.Count == 0)
+        {
+            return;
+        }
+
+        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+        if (rowsHeight <= 0.0f)
+        {
+            return;
+        }
+
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        if (!ImGui.BeginChild($"##StackedCollapsedWtfDigPullCells{idPrefix}", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
+        {
+            ImGui.EndChild();
+            ImGui.PopStyleVar();
+            return;
+        }
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var rowWidth = 0.0f;
+        foreach (var pull in pulls)
+        {
+            var summary = pull.RecordedPull;
+            if (summary is null)
+            {
+                continue;
+            }
+
+            var selected = IsSelectedWtfDigLocalPull(summary);
+            var label = GetCollapsedPullLabel(pull);
+            var width = Math.Clamp(ImGui.CalcTextSize(label).X + 26.0f, 44.0f, 72.0f);
+            var nextWidth = rowWidth <= 0.0f
+                ? width
+                : rowWidth + spacing + width;
+            if (rowWidth > 0.0f && nextWidth > availableWidth)
+            {
+                rowWidth = 0.0f;
+            }
+            else if (rowWidth > 0.0f)
+            {
+                ImGui.SameLine(0.0f, spacing);
+            }
+
+            if (DrawCollapsedPullButton(label, $"StackedCollapsedWtfDigPull{idPrefix}{pull.Key}", selected, width, GetPullGroupColor(pull)))
+            {
+                SelectWtfDigLocalPull(summary);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                SetThemedTooltip(FormatCollapsedPullTooltip(pull));
+            }
+
+            rowWidth = rowWidth <= 0.0f
+                ? width
+                : rowWidth + spacing + width;
+        }
+
+        DrawReviewPaneBottomPadding();
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+    }
+
+    private void DrawCollapsedWtfDigPullBrowserDivider(
+        string id,
+        float height,
+        IReadOnlyList<ReviewPull> pulls)
+    {
+        var position = ImGui.GetCursorScreenPos();
+        var size = new Vector2(PullBrowserCollapsedWidth, height);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        if (ImGui.BeginChild($"##{id}", size, false, OptionalScrollbarFlags))
+        {
+            ImGui.SetCursorPosY(4.0f);
+            ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+            if (DrawCenteredTransparentIconButton($"ExpandWtfDigPullBrowser{id}", FontAwesomeIcon.ChevronRight))
+            {
+                plugin.SetAnalyzerPullBrowserCollapsed(false);
+            }
+
+            ImGui.PopStyleColor();
+            if (ImGui.IsItemHovered())
+            {
+                SetThemedTooltip("Expand pulls");
+            }
+
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            var rowsHeight = MathF.Max(0.0f, ImGui.GetContentRegionAvail().Y);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+            if (ImGui.BeginChild($"##{id}Rows", new Vector2(0.0f, rowsHeight), false, OptionalScrollbarFlags))
+            {
+                foreach (var pull in pulls)
+                {
+                    var summary = pull.RecordedPull;
+                    if (summary is null)
+                    {
+                        continue;
+                    }
+
+                    var selected = IsSelectedWtfDigLocalPull(summary);
+                    var pullLabel = GetCollapsedPullLabel(pull);
+                    if (DrawCollapsedPullRailItem(pullLabel, $"CollapsedWtfDigPullRail{id}{pull.Key}", selected, GetPullGroupColor(pull)))
+                    {
+                        SelectWtfDigLocalPull(summary);
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        SetThemedTooltip(FormatCollapsedPullTooltip(pull));
+                    }
+                }
+
+                DrawReviewPaneBottomPadding();
+            }
+
+            ImGui.EndChild();
+            ImGui.PopStyleVar();
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor();
+
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddLine(
+            new Vector2(position.X + size.X - 1.0f, position.Y),
+            new Vector2(position.X + size.X - 1.0f, position.Y + height),
+            ImGui.GetColorU32(ModernDividerColor),
+            1.0f);
+        ImGui.SameLine(0.0f, ReplayPaneGap);
     }
 
     private void DrawWtfDigReportBar(WtfDigAnalyzerViewState state)
@@ -2795,6 +3125,34 @@ internal sealed class WtfDigAnalyzerController : IDisposable
                 Source = WtfDigAnalyzerSource.LocalPull,
                 LocalPullNumber = summary.PullNumber,
                 LocalPullCapturedAtTicks = summary.CapturedAtUtc.Ticks,
+                Report = null,
+                EligibleFights = [],
+                SelectedFight = null,
+                Analysis = null,
+                Loading = false,
+                Error = null,
+                LocalAvailability = new Dictionary<string, WtfDigLocalAnalyzerAvailability>(StringComparer.Ordinal),
+            };
+        }
+    }
+
+    internal void ClearLocalPull()
+    {
+        lock (sync)
+        {
+            if (state.Source != WtfDigAnalyzerSource.LocalPull ||
+                (state.LocalPullNumber is null && state.Report is null && state.Analysis is null))
+            {
+                return;
+            }
+
+            CancelOperationLocked();
+            activeEventSource = null;
+            pendingLocalPull = null;
+            state = state with
+            {
+                LocalPullNumber = null,
+                LocalPullCapturedAtTicks = null,
                 Report = null,
                 EligibleFights = [],
                 SelectedFight = null,
