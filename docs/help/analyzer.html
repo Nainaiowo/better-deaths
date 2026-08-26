@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WTF.DIG Analyzer | Better Deaths Help</title>
+  <meta name="description" content="Use the Better Deaths WTF.DIG Analyzer for Dancing Mad mechanics including Arrows, Forsaken, Limit Cut, Black Hole, and Kefka Says.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/analyzer.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="WTF.DIG Analyzer | Better Deaths Help">
+  <meta property="og:description" content="Use the Better Deaths WTF.DIG Analyzer for Dancing Mad mechanics including Arrows, Forsaken, Limit Cut, Black Hole, and Kefka Says.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/analyzer.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="analyzer" class="guide-section searchable" data-search-title="WTF.DIG Analyzer" data-search-keywords="analyzer wtfdig mczub dmu dancing mad fflogs link local pull data quality estimated exact replay waymarks arrows strategy merry go round filipino freaky forsaken black hole kefka says limit cut">
+        <div class="section-heading">
+          <p class="eyebrow">Analyzer</p>
+          <h1 class="page-title">Use WTF.DIG analysis inside Better Deaths</h1>
+        <p>The built-in analyzer ports Mczub's WTF.DIG mechanic analysis into a dedicated Better Deaths tab.</p>
+        </div>
+        <div class="source-compare">
+          <article>
+            <span class="source-label">Local Pull</span>
+            <h3>Analyze what Better Deaths recorded</h3>
+            <p>Choose an eligible saved pull. Newly completed pulls become available without restarting the plugin.</p>
+          </article>
+          <article>
+            <span class="source-label">FFLogs</span>
+            <h3>Analyze a report or exact fight</h3>
+            <p>Paste a complete FFLogs report link or a link to a specific fight. The report reference is sent to WTF.DIG's service, which retrieves the requested log from FFLogs.</p>
+          </article>
+        </div>
+        <h3 class="subheading">Set up an analysis</h3>
+        <ol class="workflow compact-workflow">
+          <li><span class="step-number">1</span><div><strong>Choose a source.</strong><p><strong>Better Deaths Pull</strong> reads an eligible saved DMU pull. <strong>FFLogs Link</strong> accepts a full report or a specific fight link.</p></div></li>
+          <li><span class="step-number">2</span><div><strong>Choose a mechanic.</strong><p>Only pulls that reached the selected mechanic are eligible. FFLogs results can be stepped backward or forward between matching fights.</p></div></li>
+          <li><span class="step-number">3</span><div><strong>Choose waymarks.</strong><p>Use <strong>12y Diamond</strong> or <strong>DN/Zenith</strong> to match the party's layout. Kefka Says does not use the arena-waymark selector.</p></div></li>
+          <li><span class="step-number">4</span><div><strong>Read data quality.</strong><p><strong>Recorded mechanic data</strong> means the local pull contains direct mechanic evidence. <strong>Estimated timing from nearby fight data</strong> marks a fallback.</p></div></li>
+          <li><span class="step-number">5</span><div><strong>Compare map and table.</strong><p>The map shows placement; the table provides exact assignments, states, errors, or warnings. Drag a map corner to resize it. The size is remembered.</p></div></li>
+        </ol>
+        <p class="inline-command"><strong>Open this moment in Replay</strong> is available for local pulls and jumps the full replay to just before the currently selected mechanic view.</p>
+
+        <h3 class="subheading">Currently supported Dancing Mad (Ultimate) views</h3>
+        <div class="mechanic-list">
+          <span><b>P1</b> Arrows</span>
+          <span><b>P2</b> Forsaken</span>
+          <span><b>P3</b> Limit Cut</span>
+          <span><b>P3</b> Black Hole</span>
+          <span><b>P4</b> Kefka Says</span>
+        </div>
+        <div class="mechanic-help-list">
+          <details open>
+            <summary><span><b>P1</b> Tele-Portent Arrows</span></summary>
+            <p>Show every arrow wave together or inspect one wave at a time. Choose Merry-go-round, Filipino, or Freaky strategy to change the expected slots, and toggle start positions. The map color-codes arrow direction and start debuffs; the table compares wave, direction, actual position, expected slot, and distance error.</p>
+            <figure class="guide-figure mechanic-figure">
+              <img src="../assets/help-analyzer-p1-arrows.png" alt="WTF.DIG P1 Tele-Portent Arrows analysis showing waves, start positions, directions, expected slots, and errors">
+              <figcaption>All waves with Merry-go-round expectations and start positions enabled.</figcaption>
+            </figure>
+          </details>
+          <details>
+            <summary><span><b>P2</b> Forsaken</span></summary>
+            <p>Step through raidwides and tower sets. The summary shows parity, active tower pair, rotation, effect counts, missed two-person soaks, double hits, and deaths. Rotate towers to SW/SE for a consistent view; toggle the cleave snapshot; switch between Clones, Towers, or Both. The player table shows assignment, tower soak, effects taken, and Trouble stacks. Select a clone cleave on the arena to inspect its bait direction.</p>
+            <figure class="guide-figure mechanic-figure">
+              <img src="../assets/help-analyzer-p2-forsaken.png" alt="WTF.DIG P2 Forsaken analysis showing a tower set, clone cones, towers, assignments, and stacks">
+              <figcaption>A Forsaken tower set with clone and tower results shown together.</figcaption>
+            </figure>
+          </details>
+          <details>
+            <summary><span><b>P3</b> Limit Cut</span></summary>
+            <p>Shows Kefka's starting clone and rotation, the players' rotation, numbered assignments, actual and expected positions, angle error, deaths, and unverified players. Orange guidance belongs to Kefka; cyan guidance belongs to the player rotation.</p>
+            <figure class="guide-figure mechanic-figure">
+              <img src="../assets/help-analyzer-p3-limit-cut.png" alt="WTF.DIG P3 Limit Cut analysis showing Kefka and player rotation arrows, numbered positions, targets, and angle errors">
+              <figcaption>Orange follows Kefka's rotation; cyan follows the players' expected rotation.</figcaption>
+            </figure>
+          </details>
+          <details>
+            <summary><span><b>P3</b> Black Hole</span></summary>
+            <p>Shows party assignments, DSA or SDA ordering, optional boss hitboxes, and each tether grouped under its set. Warning marks identify deaths or too many soaks. The arena shows beams, tether holder, hit players, bosses, black holes, and captured positions; the table tracks soak count, Nothing state, cleanse state, and Primordial Crust.</p>
+            <figure class="guide-figure mechanic-figure">
+              <img src="../assets/help-analyzer-p3-black-hole.png" alt="WTF.DIG P3 Black Hole analysis showing tether-set controls, beams, black holes, assignments, soak counts, and cleanse states">
+              <figcaption>Select a tether within each set to compare its snapshot and player results.</figcaption>
+            </figure>
+          </details>
+          <details>
+            <summary><span><b>P4</b> Kefka Says</span></summary>
+            <p>Shows every debuff round, real or fake Kefka and Neo Exdeath tells, short or long timing, affected jobs, Flood of Naught wound swaps, Chaos calls, deaths, and wipes. The resolution section separates short and long debuffs and follows the mechanic order, calls, and player groups.</p>
+            <figure class="guide-figure mechanic-figure">
+              <img src="../assets/help-analyzer-p4-kefka-says.png" alt="WTF.DIG P4 Kefka Says analysis showing real and fake calls, job assignments, debuff timing, wound swaps, and results">
+              <figcaption>Each round keeps the call, affected jobs, and resolution result together.</figcaption>
+            </figure>
+          </details>
+        </div>
+        <div class="caution-note" role="note">
+          <strong>Analyzer scope</strong>
+          <p>This is a Dancing Mad mechanic analyzer, not a general analyzer for every duty. Position snapshots are estimates; use the original FFLogs report or recording as the final source of truth.</p>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="replay.html#replay"><small>Previous</small><strong>Replay</strong></a>
+        <a class="page-nav-link next" href="widget.html#current-pull"><small>Next</small><strong>Current Pull Widget</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

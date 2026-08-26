@@ -17,6 +17,7 @@
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathDetectionPolicy.cs" Link="DeathDetectionPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DeathChatRecapHeaderParser.cs" Link="DeathChatRecapHeaderParser.cs" />
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />
     <Compile Include="../../BetterDeaths/GoofyDeathText.cs" Link="GoofyDeathText.cs" />
     <Compile Include="../../BetterDeaths/ForsakenCleavePosePolicy.cs" Link="ForsakenCleavePosePolicy.cs" />

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Better Deaths Help Center</title>
+  <meta name="description" content="Learn how to use Better Deaths for FFXIV death review, replay, WTF.DIG analysis, settings, and troubleshooting.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Better Deaths Help Center">
+  <meta property="og:description" content="Learn how to use Better Deaths for FFXIV death review, replay, WTF.DIG analysis, settings, and troubleshooting.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="start" class="hero-section searchable" data-search-title="Start here" data-search-keywords="onboarding begin setup first pull install">
+        <p class="eyebrow">Start here</p>
+        <h1>Turn a wipe into an answer.</h1>
+        <p class="hero-copy">Better Deaths records duty pulls, organizes the deaths, and keeps the fatal hit, HP, mitigation, statuses, and movement together. This guide takes you from your first recorded pull to deeper review tools.</p>
+        <div class="hero-actions">
+          <a class="primary-button" href="index.html#first-review">Review your first pull</a>
+          <a class="text-link" href="troubleshooting.html#troubleshooting">Something is not working</a>
+        </div>
+        <div class="scope-note" role="note">
+          <strong>Where capture works</strong>
+          <span>Better Deaths records supported data inside duties. It does not record overworld combat or PvP.</span>
+        </div>
+      </section>
+
+      <section id="first-review" class="guide-section searchable" data-search-title="Your first death review" data-search-keywords="first pull select death summary leadup workflow">
+        <div class="section-heading">
+          <p class="eyebrow">Onboarding</p>
+          <h2>Your first death review</h2>
+          <p>Finish or reset a pull, then follow the information from broad context to the exact fatal event.</p>
+        </div>
+        <ol class="workflow">
+          <li>
+            <span class="step-number">1</span>
+            <div><strong>Open Better Deaths.</strong><p>Use <code>/bd</code> or <code>/betterdeaths</code>. The newest completed pull appears in Review.</p></div>
+          </li>
+          <li>
+            <span class="step-number">2</span>
+            <div><strong>Choose a pull.</strong><p>The pull list keeps completed pulls in local history. Current Pull shows the attempt that is still in progress.</p></div>
+          </li>
+          <li>
+            <span class="step-number">3</span>
+            <div><strong>Select a death.</strong><p>The death timeline tells you who died, when, their job, and the fatal event. Select a row to open that player's details.</p></div>
+          </li>
+          <li>
+            <span class="step-number">4</span>
+            <div><strong>Read Summary first.</strong><p>Check HP and shields before the fatal event, overkill, damage type, active effects, and expired mitigation.</p></div>
+          </li>
+          <li>
+            <span class="step-number">5</span>
+            <div><strong>Trace the lead-up.</strong><p>Use the event rows to follow damage, healing, HP changes, and statuses back from the KO. Open What-if or Replay when you need more context.</p></div>
+          </li>
+        </ol>
+        <figure class="guide-figure">
+          <img src="../assets/help-review-lead-up.png" alt="Better Deaths Review showing recorded pulls, a death timeline, and an expanded lead-up">
+          <figcaption>Select a death to expand its captured lead-up beneath the timeline.</figcaption>
+        </figure>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link next" href="review.html#review"><small>Next</small><strong>Review and What-if</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

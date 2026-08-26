@@ -378,6 +378,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private long replayMechanicCaptureRevision;
     private readonly List<RecentOwnSharedDeathPost> recentOwnSharedDeathPosts = [];
     private readonly List<PendingSharedDeathPost> pendingSharedDeathPosts = [];
+    private readonly Dictionary<SharedRecapChatKey, PendingSharedRecapHeader> pendingSharedRecapHeaders = [];
     private readonly List<PartyDeathRecord> pendingDeathRecapLinks = [];
     private readonly Queue<QueuedChatMessage> queuedChatMessages = [];
     private readonly object rawCombatQueueLock = new();
@@ -751,6 +752,7 @@ public sealed partial class Plugin : IDalamudPlugin
             FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
+            PrunePendingSharedRecapHeaders(now);
             ResolvePendingSharedDeathPosts(now);
             MaybeBackfillRecordedPullDeathMemberNames(now);
             ApplyPendingPuniRepositoryMigration();

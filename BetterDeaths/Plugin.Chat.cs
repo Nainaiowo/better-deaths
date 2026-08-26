@@ -46,6 +46,7 @@ namespace BetterDeaths;
 public sealed partial class Plugin
 {
     private const int PendingSharedDeathPostSeconds = 15;
+    private const int PendingSharedRecapHeaderSeconds = 5;
     private const int MaxSharedDeathPostPullCandidates = 3;
 
     private static readonly Regex SharedDamageDeathPostRegex = new(
@@ -101,42 +102,61 @@ public sealed partial class Plugin
 
     public void PrintDeathInformationToChat(PartyDeathRecord death)
     {
+        var selection = DeathDisplaySelector.Select(death);
+        RememberOwnSharedDeathPost(death);
+        foreach (var line in BuildDeathInformationChatLines(death, selection))
+        {
+            QueueChat(Configuration.DeathChatChannel, line);
+        }
+
+        if (selection.Events.Count > 0)
+        {
+            QueueDeathRecapLinkMessage(death);
+        }
+    }
+
+    public IReadOnlyList<string> GetDeathInformationChatPreviewLines(PartyDeathRecord death)
+    {
+        return BuildDeathInformationChatLines(death, DeathDisplaySelector.Select(death));
+    }
+
+    private IReadOnlyList<string> BuildDeathInformationChatLines(
+        PartyDeathRecord death,
+        DeathDisplaySelection selection)
+    {
         var timer = FormatCombatTimer(death.PullElapsedSeconds);
         var playerLabel = $"{FormatPlayerDisplayName(death)} ({death.ClassJobName})";
-        var prefix = GetChatBrandingPrefix();
-        var selection = DeathDisplaySelector.Select(death);
+        var lines = new List<string>
+        {
+            $"{GetChatBrandingPrefix()}{SharedRecapPrefix} {timer} {playerLabel}",
+        };
         var causeEvents = selection.Events;
         if (causeEvents.Count == 0)
         {
-            RememberOwnSharedDeathPost(death);
             var hpSuffix = selection.Snapshot is null
                 ? string.Empty
                 : $" HP: {FormatDeathChatHp(selection.Snapshot.CurrentHp, selection.Snapshot.ShieldHp, selection.Snapshot.MaxHp)}.";
             var koLabel = death.EnvironmentalAssessment is { EnvironmentSourceDeath: true }
                 ? "Walled"
                 : "non-hit KO";
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {koLabel}.{hpSuffix}");
-            QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
-            QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
-            return;
-        }
-
-        RememberOwnSharedDeathPost(death);
-        var damageEvents = causeEvents
-            .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
-            .ToList();
-        if (damageEvents.Count > 0)
-        {
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatDamageLine(damageEvents, selection.Snapshot)}");
+            lines.Add($"Fatal: {koLabel}.{hpSuffix}");
         }
         else
         {
-            QueueChat(Configuration.DeathChatChannel, $"{prefix}{SharedRecapPrefix} {timer} {playerLabel}: {FormatDeathChatCauseLine(causeEvents[0], selection.Snapshot)}");
+            var damageEvents = causeEvents
+            .Where(cause => cause.Kind == DeathEventKind.Damage && cause.Amount > 0)
+            .ToList();
+            lines.Add(damageEvents.Count > 0
+                ? $"Fatal: {FormatDeathChatDamageLine(damageEvents, selection.Snapshot)}"
+                : $"Fatal: {FormatDeathChatCauseLine(causeEvents[0], selection.Snapshot)}");
         }
 
-        QueueChat(Configuration.DeathChatChannel, $"Active mits: {FormatDeathStatusList(death, selection)}.");
-        QueueChat(Configuration.DeathChatChannel, $"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
-        QueueDeathRecapLinkMessage(death);
+        lines.Add($"Active mits: {FormatDeathStatusList(death, selection)}.");
+        lines.Add($"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
+
+        return lines
+            .SelectMany(PrepareChatMessageLines)
+            .ToList();
     }
 
     public void QueueBetterDeathsChatMessage(string message)
@@ -144,9 +164,19 @@ public sealed partial class Plugin
         QueueChat(Configuration.DeathChatChannel, $"{GetChatBrandingPrefix()}{message}");
     }
 
+    public IReadOnlyList<string> GetBetterDeathsChatMessagePreviewLines(string message)
+    {
+        return PrepareChatMessageLines($"{GetChatBrandingPrefix()}{message}");
+    }
+
     public void QueuePlainChatMessage(string message)
     {
         QueueChat(Configuration.DeathChatChannel, message);
+    }
+
+    public static IReadOnlyList<string> GetPlainChatMessagePreviewLines(string message)
+    {
+        return PrepareChatMessageLines(message);
     }
 
     public void PostLigmaEchoMessage(string message, int? soundEffect)
@@ -506,44 +536,131 @@ public sealed partial class Plugin
     {
         try
         {
-            if (!TryParseSharedDeathPost(message.OriginalMessage.ExtractText(), out var post) &&
-                !TryParseSharedDeathPost(message.Message.TextValue, out post))
+            var originalText = message.OriginalMessage.ExtractText();
+            var displayText = message.Message.TextValue;
+            if (TryParseSharedDeathPost(originalText, out var post) ||
+                TryParseSharedDeathPost(displayText, out post))
             {
+                ProcessSharedDeathPost(post);
                 return;
             }
 
-            if (IsRecentOwnSharedDeathPost(post))
+            var chatKey = GetSharedRecapChatKey(message);
+            if (TryParseSharedRecapHeader(originalText, out var header) ||
+                TryParseSharedRecapHeader(displayText, out header))
             {
-                AddDebugLog("Ignored own shared Better Deaths recap chat post.");
-                return;
-            }
-
-            if (FindSharedDeathPost(post) is { } death)
-            {
-                if (!HasDeathRecapDetails(death))
+                var headerPost = CreateHeaderSharedDeathPost(header);
+                if (IsRecentOwnSharedDeathPost(headerPost))
                 {
-                    AddDebugLog($"Shared Better Deaths recap for {death.MemberName} has no detail panel to link.");
+                    AddDebugLog("Ignored own shared Better Deaths recap chat header.");
                     return;
                 }
 
-                QueueDetectedSharedRecapLink(death);
-                AddDebugLog($"Linked shared Better Deaths recap for {death.MemberName}.");
+                pendingSharedRecapHeaders[chatKey] = new PendingSharedRecapHeader(
+                    header,
+                    DateTime.UtcNow.AddSeconds(PendingSharedRecapHeaderSeconds));
                 return;
             }
 
-            if (HasSharedDeathPostDetailLoadInProgress(post))
+            if (TryParsePendingSharedFatalLine(chatKey, originalText, out post) ||
+                TryParsePendingSharedFatalLine(chatKey, displayText, out post))
             {
-                QueuePendingSharedDeathPost(post);
-                AddDebugLog($"Loading saved pull details for shared Better Deaths recap from {post.MemberName}.");
-                return;
+                pendingSharedRecapHeaders.Remove(chatKey);
+                ProcessSharedDeathPost(post);
             }
-
-            AddDebugLog($"Shared Better Deaths recap did not match a captured death for {post.MemberName}.");
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not process shared Better Deaths chat recap.");
         }
+    }
+
+    private void ProcessSharedDeathPost(SharedDeathPost post)
+    {
+        if (IsRecentOwnSharedDeathPost(post))
+        {
+            AddDebugLog("Ignored own shared Better Deaths recap chat post.");
+            return;
+        }
+
+        if (FindSharedDeathPost(post) is { } death)
+        {
+            if (!HasDeathRecapDetails(death))
+            {
+                AddDebugLog($"Shared Better Deaths recap for {death.MemberName} has no detail panel to link.");
+                return;
+            }
+
+            QueueDetectedSharedRecapLink(death);
+            AddDebugLog($"Linked shared Better Deaths recap for {death.MemberName}.");
+            return;
+        }
+
+        if (HasSharedDeathPostDetailLoadInProgress(post))
+        {
+            QueuePendingSharedDeathPost(post);
+            AddDebugLog($"Loading saved pull details for shared Better Deaths recap from {post.MemberName}.");
+            return;
+        }
+
+        AddDebugLog($"Shared Better Deaths recap did not match a captured death for {post.MemberName}.");
+    }
+
+    private static SharedRecapChatKey GetSharedRecapChatKey(IHandleableChatMessage message)
+    {
+        var sender = SanitizeChatText(message.OriginalSender.ExtractText());
+        if (string.IsNullOrWhiteSpace(sender))
+        {
+            sender = SanitizeChatText(message.Sender.TextValue);
+        }
+
+        return new SharedRecapChatKey(message.LogKind, sender);
+    }
+
+    private static bool TryParseSharedRecapHeader(string text, out DeathChatRecapHeader header)
+    {
+        return DeathChatRecapHeaderParser.TryParse(SanitizeChatText(text), out header);
+    }
+
+    private bool TryParsePendingSharedFatalLine(
+        SharedRecapChatKey chatKey,
+        string text,
+        out SharedDeathPost post)
+    {
+        post = default;
+        if (!pendingSharedRecapHeaders.TryGetValue(chatKey, out var pending) ||
+            pending.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            pendingSharedRecapHeaders.Remove(chatKey);
+            return false;
+        }
+
+        var cleaned = SanitizeChatText(text);
+        return DeathChatRecapHeaderParser.TryCombineFatalLine(pending.Header, cleaned, out var combined) &&
+            TryParseSharedDeathPost(combined, out post);
+    }
+
+    private void PrunePendingSharedRecapHeaders(DateTime now)
+    {
+        foreach (var key in pendingSharedRecapHeaders
+                     .Where(entry => entry.Value.ExpiresAtUtc <= now)
+                     .Select(entry => entry.Key)
+                     .ToList())
+        {
+            pendingSharedRecapHeaders.Remove(key);
+        }
+    }
+
+    private static SharedDeathPost CreateHeaderSharedDeathPost(DeathChatRecapHeader header)
+    {
+        return new SharedDeathPost(
+            header.ElapsedSeconds,
+            header.MemberName,
+            header.ClassJobName,
+            null,
+            null,
+            null,
+            null);
     }
 
     private static string FormatCause(CombatEventRecord? cause)
@@ -684,7 +801,9 @@ public sealed partial class Plugin
     {
         var now = DateTime.UtcNow;
         PruneRecentOwnSharedDeathPosts(now);
-        return recentOwnSharedDeathPosts.Any(entry => PostsMatch(entry.Post, post));
+        return recentOwnSharedDeathPosts.Any(entry =>
+            PostsMatch(entry.Post, post) ||
+            IsHeaderOnlySharedDeathPost(post) && SharedDeathPostIdentityMatches(entry.Post, post));
     }
 
     private void PruneRecentOwnSharedDeathPosts(DateTime now)
@@ -1080,13 +1199,26 @@ public sealed partial class Plugin
 
     private static bool PostsMatch(SharedDeathPost left, SharedDeathPost right)
     {
-        return left.ElapsedSeconds == right.ElapsedSeconds &&
-            string.Equals(left.MemberName, right.MemberName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(left.ClassJobName, right.ClassJobName, StringComparison.OrdinalIgnoreCase) &&
+        return SharedDeathPostIdentityMatches(left, right) &&
             ActionNamesMatch(left.ActionName, right.ActionName) &&
             string.Equals(left.SourceName, right.SourceName, StringComparison.OrdinalIgnoreCase) &&
             left.Amount == right.Amount &&
             left.HitCount == right.HitCount;
+    }
+
+    private static bool SharedDeathPostIdentityMatches(SharedDeathPost left, SharedDeathPost right)
+    {
+        return left.ElapsedSeconds == right.ElapsedSeconds &&
+            string.Equals(left.MemberName, right.MemberName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(left.ClassJobName, right.ClassJobName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHeaderOnlySharedDeathPost(SharedDeathPost post)
+    {
+        return post.ActionName is null &&
+            post.SourceName is null &&
+            post.Amount is null &&
+            post.HitCount is null;
     }
 
     private static string FormatActionNameForDisplay(CombatEventRecord combatEvent)
@@ -1237,13 +1369,18 @@ public sealed partial class Plugin
     private void QueueChat(DeathChatChannel channel, string message)
     {
         var effectiveChannel = GetChatChannelOption(channel).Channel;
-        foreach (var line in SplitChatMessage(SanitizeChatText(message)))
+        foreach (var line in PrepareChatMessageLines(message))
         {
             queuedChatMessages.Enqueue(
                 effectiveChannel == DeathChatChannel.SystemMessage
                     ? QueuedChatMessage.Local(BuildSystemMessageEntry(line), DateTime.MinValue)
                     : QueuedChatMessage.Outgoing(effectiveChannel, line));
         }
+    }
+
+    private static IReadOnlyList<string> PrepareChatMessageLines(string message)
+    {
+        return SplitChatMessage(SanitizeChatText(message)).ToList();
     }
 
     private void FlushQueuedChatMessages(DateTime now)
@@ -1404,6 +1541,14 @@ public sealed partial class Plugin
 
     private readonly record struct PendingSharedDeathPost(
         SharedDeathPost Post,
+        DateTime ExpiresAtUtc);
+
+    private readonly record struct SharedRecapChatKey(
+        XivChatType ChatType,
+        string Sender);
+
+    private readonly record struct PendingSharedRecapHeader(
+        DeathChatRecapHeader Header,
         DateTime ExpiresAtUtc);
 
     private readonly record struct QueuedChatMessage(

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Troubleshooting | Better Deaths Help</title>
+  <meta name="description" content="Troubleshoot Better Deaths capture, replay, Analyzer, widget, stored data, commands, and terminology.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/troubleshooting.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Troubleshooting | Better Deaths Help">
+  <meta property="og:description" content="Troubleshoot Better Deaths capture, replay, Analyzer, widget, stored data, commands, and terminology.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/troubleshooting.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="troubleshooting" class="guide-section searchable" data-search-title="Troubleshooting" data-search-keywords="troubleshooting missing pull no replay old data incomplete markers debuffs fflogs widget redaction two hp bars arrow snapshot panels overlay estimated timing">
+        <div class="section-heading">
+          <p class="eyebrow">Troubleshooting</p>
+          <h1 class="page-title">Common questions</h1>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>No pull or death appeared</summary>
+            <p>Confirm you were inside a duty, not PvP or the overworld, and that <strong>Options → Capture → Capture party</strong> is enabled. A completed pull is saved after combat ends or the duty resets.</p>
+          </details>
+          <details>
+            <summary>I selected one minute, but an older pull shows less</summary>
+            <p>The display choice cannot recreate history that was not captured. Pulls recorded before longer capture was added may only contain their original lead-up.</p>
+          </details>
+          <details>
+            <summary>Replay is missing a marker, debuff, or mechanic drawing</summary>
+            <p>Older pulls may lack newer replay fields. Supported fights have encounter-specific drawings; unsupported fights rely on general captured data and may be less complete. Record a new pull before treating it as a current capture bug.</p>
+          </details>
+          <details>
+            <summary>Why do I see two HP bars with an arrow?</summary>
+            <p>Part of that event arrived in a different snapshot, so Better Deaths cannot safely combine the before-hit and after-hit HP into one bar. The arrow points toward the after-hit state and follows your Newest or Oldest timeline order.</p>
+          </details>
+          <details>
+            <summary>Party HP and Active Effects moved over the arena</summary>
+            <p>Replay changes layout when the window no longer has enough side space. The two panels share rows over the arena until more horizontal room is available, then return to separate, vertically stacked panels beside it.</p>
+          </details>
+          <details>
+            <summary>The arena or player position is slightly off</summary>
+            <p>Replay and FFLogs positions are snapshots rather than video. Interpolation and missing samples can shift what you see. Use a recording or the original log when exact placement matters.</p>
+          </details>
+          <details>
+            <summary>Open in Replay is unavailable</summary>
+            <p>The replay needs a saved pull with replay detail. Finish the current pull first. Older pulls recorded before that detail was captured may not have enough information to open.</p>
+          </details>
+          <details>
+            <summary>Name Redaction is on, but a saved file still has names</summary>
+            <p>Name Redaction changes presentation. It does not rewrite every original name already stored in local pull files.</p>
+          </details>
+          <details>
+            <summary>An FFLogs link is not analyzing</summary>
+            <p>Use a complete report link or a link to a specific fight. The selected fight must be Dancing Mad (Ultimate), reach the supported mechanic, and be available to the WTF.DIG service.</p>
+          </details>
+          <details>
+            <summary>The Analyzer says timing is estimated</summary>
+            <p>The pull did not contain the preferred mechanic timing marker. Better Deaths aligned the view using nearby recorded fight data instead, so treat exact timing and positions with more caution.</p>
+          </details>
+          <details>
+            <summary>The Current Pull widget is missing</summary>
+            <p>Enable it under <strong>Options → Current Pull Widget</strong> or toggle it with <code>/bdwidget</code>. The widget is separate from the main Better Deaths window.</p>
+          </details>
+        </div>
+      </section>
+
+      <section id="commands" class="guide-section searchable" data-search-title="Commands" data-search-keywords="commands slash bd betterdeaths bdwidget betterdeathswidget">
+        <div class="section-heading">
+          <p class="eyebrow">Commands</p>
+          <h2>Open the right view quickly</h2>
+        </div>
+        <div class="command-list">
+          <div><code>/betterdeaths</code><code>/bd</code><span>Open the main Better Deaths window.</span></div>
+          <div><code>/betterdeathswidget</code><code>/bdwidget</code><span>Toggle the Current Pull widget.</span></div>
+        </div>
+      </section>
+
+      <section id="glossary" class="guide-section searchable" data-search-title="Glossary" data-search-keywords="glossary overkill shield snapshot mitigation debuff lead-up fatal event non-hit ko recorded mechanic data">
+        <div class="section-heading">
+          <p class="eyebrow">Glossary</p>
+          <h2>Terms used in Better Deaths</h2>
+        </div>
+        <dl class="glossary">
+          <div><dt>Fatal event</dt><dd>The captured hit or event associated with the KO.</dd></div>
+          <div><dt>Overkill</dt><dd>The amount by which the captured killing damage exceeded HP before the hit. Captured shield value is shown alongside it for context.</dd></div>
+          <div><dt>Lead-up</dt><dd>The captured timeline before a death.</dd></div>
+          <div><dt>Snapshot</dt><dd>A recorded state at a moment in time, such as HP, position, or active statuses.</dd></div>
+          <div><dt>Non-hit KO</dt><dd>A death without a normal captured damage hit, such as certain encounter failures or forced deaths.</dd></div>
+          <div><dt>Recorded mechanic data</dt><dd>The Analyzer found the mechanic's preferred captured timing information instead of estimating it from nearby fight events.</dd></div>
+          <div><dt>Target mitigation</dt><dd>An effect applied to the player receiving damage rather than a party-wide or enemy effect.</dd></div>
+          <div><dt>Expired mitigation</dt><dd>An effect that ended near the death but is not counted as active on the selected hit.</dd></div>
+        </dl>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="settings.html#options"><small>Previous</small><strong>Settings</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

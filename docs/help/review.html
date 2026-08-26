@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review and What-if | Better Deaths Help</title>
+  <meta name="description" content="Understand Better Deaths pull review, death summaries, lead-up timelines, HP and shields, and What-if mitigation.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/review.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Review and What-if | Better Deaths Help">
+  <meta property="og:description" content="Understand Better Deaths pull review, death summaries, lead-up timelines, HP and shields, and What-if mitigation.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/review.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="review" class="guide-section searchable" data-search-title="Review deaths and the lead-up timeline" data-search-keywords="review pulls search filter clear collapse resize summary fatal event multi hit hp shields overkill enemy hp environmental non hit lead-up heal timers focused detailed newest oldest chat replay">
+        <div class="section-heading">
+          <p class="eyebrow">Review</p>
+          <h1 class="page-title">Understand why the death happened</h1>
+          <p>Review is the main workspace. It separates the order of deaths from the evidence attached to the selected player.</p>
+        </div>
+
+        <h3 class="subheading first-subheading">The three parts of Review</h3>
+        <div class="topic-grid three-up">
+          <article>
+            <h3>Pulls</h3>
+            <p>Choose the active Current pull or a completed pull. Search by the name of a player who died, filter by duty, collapse the pull list, or use its saved group colors to distinguish separate duty instances.</p>
+          </article>
+          <article>
+            <h3>Death Timeline</h3>
+            <p>Shows death order, pull time, player, job, and fatal event. Clicking a death selects it and opens that player's lead-up directly beneath the row.</p>
+          </article>
+          <article>
+            <h3>Selected Death</h3>
+            <p>Summary explains the captured outcome. What-if tests alternate mitigation. <strong>Open in Replay</strong> jumps to the saved pull near that death.</p>
+          </article>
+        </div>
+
+        <h3 class="subheading">Working with pulls and panes</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Search Player name</strong><span>Only shows pulls containing a captured death whose player name matches the search.</span></div>
+          <div class="setting-row"><strong>Duty filter</strong><span>Limits recorded pulls to one duty. The same filter is available in Review and Replay.</span></div>
+          <div class="setting-row"><strong>Collapse Pulls</strong><span>Uses a narrow pull rail when you need more room for the timeline and selected-death details.</span></div>
+          <div class="setting-row"><strong>Resize panes</strong><span>Drag the dividers between the timeline and details. In a stacked layout, drag the horizontal dividers. Better Deaths remembers the sizes.</span></div>
+          <div class="setting-row"><strong>Delete pull history</strong><span>The trash button requires <kbd>Ctrl</kbd> + click and clears stored death recaps. This cannot be undone.</span></div>
+        </div>
+
+        <h3 class="subheading">Reading the selected death</h3>
+        <div class="topic-grid">
+          <article>
+            <h3>Fatal event or events</h3>
+            <p>The red event is the captured hit or event tied to the KO. Damage is shown after mitigation. A multi-hit fatal sequence can contain more than one event rather than pretending only the final line mattered.</p>
+          </article>
+          <article>
+            <h3>HP + shields</h3>
+            <p>The killing row ends at 0 HP. The darker part of the bar preserves the HP lost to the hit, and shield loss receives its own darker overlay. Hover a bar for exact before, damage, and after values.</p>
+          </article>
+          <article>
+            <h3>Mitigation context</h3>
+            <p>Active mitigation, shields, enemy damage-downs, and target effects show what applied at the snapshot. Expired effects provide nearby context without claiming they covered the hit.</p>
+          </article>
+          <article>
+            <h3>Enemy HP at death</h3>
+            <p>When enemy HP was captured, Summary lists its percentage at the time of death. Hover it for exact HP and the captured entity identifier.</p>
+          </article>
+          <article>
+            <h3>Non-hit and environmental KOs</h3>
+            <p>If no normal damaging hit explains the KO, Better Deaths labels the result as a wall, environmental death, scripted KO, reconnect spawn KO, or another non-hit KO when the evidence supports it.</p>
+          </article>
+          <article>
+            <h3>Chat post</h3>
+            <p>Hover the <strong>?</strong> beside <strong>Post information to chat</strong> to preview the exact recap lines. The preview follows the current Name Redaction and chat-branding settings. Choose a channel, then <kbd>Ctrl</kbd> + click the button to post it. Other Better Deaths users present can receive a local pull link with the recap.</p>
+          </article>
+        </div>
+        <figure class="guide-figure narrow-figure">
+          <img src="../assets/help-selected-death.png" alt="Better Deaths Selected Death Summary showing HP and shields, overkill, fatal event, active effects, enemy HP, and expired mitigation">
+          <figcaption>Summary keeps the fatal result and its mitigation context together.</figcaption>
+        </figure>
+
+        <h3 class="subheading">Using the lead-up</h3>
+        <p class="muted-line">Click the selected timeline row again to collapse or reopen its lead-up. Drag the bottom edge to change how much vertical space it uses.</p>
+        <div class="setting-table">
+          <div class="setting-row"><strong>Timers</strong><span>Shows or hides buff and debuff countdowns beside the captured status icons.</span></div>
+          <div class="setting-row"><strong>Heals</strong><span>Shows or hides healing event rows. This changes presentation only and does not alter reconstructed HP.</span></div>
+          <div class="setting-row"><strong>Damage rows</strong><span>Show source, HP and shields, post-mitigation damage, damage type, critical/direct-hit flags when known, and captured statuses around the event.</span></div>
+          <div class="setting-row"><strong>HP-only rows</strong><span>Preserve observed HP movement even when no certain damage or healing event can be assigned to that exact snapshot.</span></div>
+          <div class="setting-row"><strong>Before / after bars</strong><span>Two small bars with an arrow mean some result data was missing or arrived in a different snapshot. The arrow points toward the after-hit state, following Newest or Oldest order.</span></div>
+        </div>
+
+        <div class="setting-table">
+          <div class="setting-row"><strong>Focused</strong><span>Keeps the selected-death view concise while retaining the information needed to understand it.</span></div>
+          <div class="setting-row"><strong>Detailed</strong><span>Shows the fuller breakdown for deeper analysis.</span></div>
+          <div class="setting-row"><strong>Newest</strong><span>Places the death first, then works backward through the lead-up.</span></div>
+          <div class="setting-row"><strong>Oldest</strong><span>Presents the full lead-up in time order before reaching the death.</span></div>
+          <div class="setting-row"><strong>10s / 30s / 1m</strong><span>Changes how much captured history Review displays. Older pulls may contain less than the selected duration.</span></div>
+        </div>
+
+      </section>
+
+      <section id="what-if" class="guide-section searchable" data-search-title="What-if mitigation" data-search-keywords="what if mitigation feint addle reprisal targeted survival estimate">
+        <div class="section-heading">
+          <p class="eyebrow">What-if</p>
+          <h2>Test a different mitigation plan</h2>
+          <p>What-if replays the selected fatal damage through mitigation choices that were available in the captured context.</p>
+        </div>
+        <div class="split-guide">
+          <div>
+            <ol class="compact-steps">
+              <li><strong>Select a death</strong> with a captured damaging fatal event.</li>
+              <li><strong>Open What-if</strong> beside Summary.</li>
+              <li><strong>Select mitigation</strong> to see the projected damage and survival result change.</li>
+              <li><strong>Check targeting.</strong> A targeted tool only helps when the selected player could receive that application.</li>
+            </ol>
+            <div class="setting-table compact-table">
+              <div class="setting-row"><strong>Available list</strong><span>Only captured abilities with a calculable reduction are shown. Effects already active on the hit are left out of the extra-mitigation choices.</span></div>
+              <div class="setting-row"><strong>Damage type</strong><span>Physical-only and magical-only reductions apply only when the fatal damage type matches.</span></div>
+              <div class="setting-row"><strong>Repeated tools</strong><span>Equivalent status effects do not stack in What-if. Selecting the same mitigation from another source replaces the earlier selection instead of applying the percentage twice.</span></div>
+              <div class="setting-row"><strong>Chat controls</strong><span>The shared <strong>?</strong> previews both messages. Available mits follows the selected death's captured options, while Outcome updates with the mitigation choices currently checked. Select a channel, then <kbd>Ctrl</kbd> + click <strong>Send available mits</strong> or <strong>Send outcome</strong>.</span></div>
+            </div>
+            <div class="caution-note" role="note">
+              <strong>An estimate, not a verdict</strong>
+              <p>The result depends on captured timing, damage type, status data, shields, and target eligibility. Use it to compare options, then confirm the plan with the party.</p>
+            </div>
+          </div>
+          <figure class="guide-figure compact-figure">
+            <img src="../assets/help-what-if.png" alt="Better Deaths What-if tab with selected mitigation choices and a projected survival result">
+            <figcaption>Select tools to update the projected outcome.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="index.html#start"><small>Previous</small><strong>Start here</strong></a>
+        <a class="page-nav-link next" href="replay.html#replay"><small>Next</small><strong>Replay</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

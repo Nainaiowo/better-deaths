@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Current Pull Widget | Better Deaths Help</title>
+  <meta name="description" content="Configure and use the Better Deaths Current Pull Widget, display modes, death table, preview, and recap popup.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/widget.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Current Pull Widget | Better Deaths Help">
+  <meta property="og:description" content="Configure and use the Better Deaths Current Pull Widget, display modes, death table, preview, and recap popup.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/widget.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="current-pull" class="guide-section searchable" data-search-title="Current Pull Widget" data-search-keywords="current pull widget concise normal popup recap button death live last pull review move resize opacity icons preview scroll">
+        <div class="section-heading">
+          <p class="eyebrow">Current Pull Widget</p>
+          <h1 class="page-title">Track deaths without opening Review</h1>
+          <p>The widget is a separate window that stays visible over gameplay. It follows the active pull and adds each recorded death to a compact, chronological table.</p>
+        </div>
+
+        <h3 class="subheading first-subheading">What the table shows</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Title</strong><span>Shows Current pull, the duty name, and pull timer. After a wipe or reset, it changes to Last Pull Review and includes the saved pull number when available.</span></div>
+          <div class="setting-row"><strong>Time</strong><span>The pull timer when each death occurred. Rows remain ordered from the earliest death to the latest.</span></div>
+          <div class="setting-row"><strong>Player</strong><span>Job icon and captured or redacted name. Concise mode uses initials. Hover for the available full-name and initials context.</span></div>
+          <div class="setting-row"><strong>Event</strong><span>The fatal event and damage. Multi-hit deaths are combined into a hit count and total damage; hover the entry for the individual fatal events.</span></div>
+          <div class="setting-row"><strong>Overkill</strong><span>A compact overkill value such as 186.9k, Exact for an exactly lethal hit, or Non-hit KO when the captured hit was not itself lethal. Hover for exact damage, HP, shield, and overkill values.</span></div>
+          <div class="setting-row"><strong>Mits/Debuffs</strong><span>Captured player mitigation and debuffs plus boss damage-down effects associated with the death. Hover an icon for its name, source, stacks, and remaining time when available.</span></div>
+        </div>
+
+        <h3 class="subheading">Display modes</h3>
+        <div class="topic-grid">
+          <article>
+            <h3>Normal</h3>
+            <p>Shows player names, fatal-event wording and damage, and all mitigation/debuff icons. Icons wrap to additional rows when the column needs more room.</p>
+          </article>
+          <article>
+            <h3>Concise</h3>
+            <p>Uses player initials and damage-only event summaries. It fits as many status icons as the column allows, then shows <strong>+x</strong>; hover that count to see the hidden icons.</p>
+          </article>
+        </div>
+
+        <h3 class="subheading">Opening and positioning it</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Show it</strong><span>Enable <strong>Options &gt; Current Pull Widget &gt; Show current pull widget</strong>, or toggle it with <code>/bdwidget</code> or <code>/betterdeathswidget</code>.</span></div>
+          <div class="setting-row"><strong>Move it</strong><span>Drag the Better Deaths Widget title bar to place it over your game UI.</span></div>
+          <div class="setting-row"><strong>Resize it</strong><span>Drag either lower corner. Content stays inside the window and can be scrolled when the table is taller than the available space.</span></div>
+          <div class="setting-row"><strong>Close it</strong><span>Closing the separate widget window also turns off its Show current pull widget setting.</span></div>
+          <div class="setting-row"><strong>No deaths yet</strong><span>The widget remains available and shows that no deaths have been recorded for the pull.</span></div>
+          <div class="setting-row"><strong>After the pull</strong><span>Last Pull Review keeps the most recently completed wipe or reset visible until the next duty pull begins.</span></div>
+        </div>
+
+        <h3 class="subheading">Widget settings and preview</h3>
+        <p>Options contains a background-opacity slider that changes only the window background, an independent 12–32 px widget icon-size control, and the Normal/Concise selector. The static preview uses example pull data, so you can adjust the widget outside combat. The global scrollbar option changes whether its scrollbar is drawn; mouse-wheel scrolling still works when the scrollbar is hidden.</p>
+        <figure class="guide-figure compact-figure">
+          <img src="../assets/help-current-pull-widget.png" alt="Better Deaths Current Pull Widget settings showing opacity, icon size, display mode, and a concise preview">
+          <figcaption>The example preview uses the same compact table as the live widget.</figcaption>
+        </figure>
+
+        <div class="caution-note" role="note">
+          <strong>The widget is a quick summary</strong>
+          <p>It does not replace Review. Open the recorded pull when you need the complete fatal sequence, lead-up timeline, HP history, What-if calculation, or Replay.</p>
+        </div>
+
+        <h3 class="subheading">Death recap popup</h3>
+        <p>The death recap popup is separate from the widget. It is an optional local button that appears after your own death and opens that exact death in Review. It normally lasts 30 seconds; Options can keep it visible in duties or everywhere.</p>
+        <figure class="guide-figure popup-figure">
+          <img src="../assets/help-death-popup.png" alt="Better Deaths death recap popup with an Open latest recap button">
+          <figcaption>The popup opens the latest available personal death recap.</figcaption>
+        </figure>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="analyzer.html#analyzer"><small>Previous</small><strong>WTF.DIG Analyzer</strong></a>
+        <a class="page-nav-link next" href="settings.html#options"><small>Next</small><strong>Settings</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

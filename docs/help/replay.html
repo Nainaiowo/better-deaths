@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Replay | Better Deaths Help</title>
+  <meta name="description" content="Learn Better Deaths Replay playback, arena controls, Party HP, Active Effects, mitigation, and debuff views.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/replay.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Replay | Better Deaths Help">
+  <meta property="og:description" content="Learn Better Deaths Replay playback, arena controls, Party HP, Active Effects, mitigation, and debuff views.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/replay.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="replay" class="guide-section searchable" data-search-title="Death Replay" data-search-keywords="replay playback scrub death markers skull speed trails arena positions movement mechanics party hp active effects debuffs mitigation zoom pan resize names classes waymark opacity focus beta">
+        <div class="section-heading">
+          <div class="heading-line"><p class="eyebrow">Replay</p><span class="status-badge">Beta</span></div>
+          <h1 class="page-title">See the pull in motion</h1>
+          <p>Replay uses captured positions, waymarks, statuses, and mechanic data to rebuild the attempt on a timeline.</p>
+        </div>
+        <div class="topic-grid three-up">
+          <article>
+            <h3>Navigate the pull</h3>
+            <p>Play or pause, scrub the timeline, and zoom or pan the arena. The selected death gives you a useful starting point, but the replay covers the recorded pull.</p>
+          </article>
+          <article>
+            <h3>Party HP</h3>
+            <p><strong>Show HP</strong> opens the resizable Party HP window with job icon, name, HP percentage, and shields. The window updates with replay time.</p>
+          </article>
+          <article>
+            <h3>Active Effects</h3>
+            <p>The resizable effects window can show Mitigations, Debuffs, or a split view. Timed effects count down and disappear when their captured duration ends.</p>
+          </article>
+        </div>
+
+        <h3 class="subheading">Playback and timeline controls</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Play / Pause</strong><span>Starts or stops the replay from the current timeline position.</span></div>
+          <div class="setting-row"><strong>Reset</strong><span>Returns to the beginning of the captured replay range and stops playback.</span></div>
+          <div class="setting-row"><strong>Death</strong><span>Returns to the currently focused death. Review's <strong>Open in Replay</strong> chooses that death automatically.</span></div>
+          <div class="setting-row"><strong>0.5x / 1x / 2x</strong><span>Changes playback speed without changing the captured timing.</span></div>
+          <div class="setting-row"><strong>Trails</strong><span>Shows recent movement trails behind actors.</span></div>
+          <div class="setting-row"><strong>Timeline</strong><span>Click or drag to scrub. Skull markers are recorded deaths; hover for player names or click a skull to focus that death and jump just before it.</span></div>
+        </div>
+
+        <h3 class="subheading">Arena and display controls</h3>
+        <div class="topic-grid">
+          <article>
+            <h3>Resize</h3>
+            <p>Drag an arena corner to set the replay size. The chosen size is saved. The canvas and status panels keep separate stored sizes.</p>
+          </article>
+          <article>
+            <h3>Zoom and pan</h3>
+            <p>Use the Zoom slider or mouse wheel over the arena. While zoomed in, drag the arena to pan. Returning to 1x recenters it.</p>
+          </article>
+          <article>
+            <h3>Focus a player</h3>
+            <p>Click a player token to keep that actor's label visible. Click empty arena space to clear the focus.</p>
+          </article>
+          <article>
+            <h3>Labels and waymarks</h3>
+            <p><strong>Show names</strong> respects Name Redaction. <strong>Show classes</strong> adds job abbreviations. World marker opacity changes A/B/C/D and 1/2/3/4 visibility.</p>
+          </article>
+        </div>
+
+        <h3 class="subheading">Party HP and Active Effects</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Enough side space</strong><span>Party HP and Active Effects stack vertically beside the arena as separate, independently resizable panels.</span></div>
+          <div class="setting-row"><strong>Limited side space</strong><span>The panels move over the arena and share one resizable container by rows so neither view consumes the entire replay.</span></div>
+          <div class="setting-row"><strong>Party HP</strong><span>Shows job icon, redacted or captured name, HP percentage, shield percentage, and a synchronized HP/shield bar. Dead players show 0.</span></div>
+          <div class="setting-row"><strong>Mits mode</strong><span>Shows active captured mitigation, its owner, remaining time, and related child effects when available.</span></div>
+          <div class="setting-row"><strong>Debuffs mode</strong><span>Shows every active captured player debuff, stacks, owner, and remaining duration when one exists. Untimed debuffs disappear when the removal was captured.</span></div>
+          <div class="setting-row"><strong>Split mode</strong><span>Shows mitigations above debuffs. Drag the internal horizontal divider to change their share; the ratio is remembered.</span></div>
+        </div>
+        <figure class="guide-figure">
+          <img src="../assets/help-replay.png" alt="Better Deaths Replay showing playback controls, death markers, a Forsaken arena snapshot, and Active Effects in Split mode">
+          <figcaption>Replay keeps the arena, mechanic drawings, scrubber, and synchronized Active Effects in one view.</figcaption>
+        </figure>
+        <div class="caution-note" role="note">
+          <strong>Why a replay may look incomplete</strong>
+          <p>Supported encounters receive richer mechanic drawings. General replay still uses the data your client captured, but it may not know a mechanic's exact name or shape. Older pulls cannot gain fields that were not recorded when they happened.</p>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="review.html#review"><small>Previous</small><strong>Review and What-if</strong></a>
+        <a class="page-nav-link next" href="analyzer.html#analyzer"><small>Next</small><strong>WTF.DIG Analyzer</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

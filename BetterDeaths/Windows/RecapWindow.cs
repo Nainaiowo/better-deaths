@@ -123,7 +123,8 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.4";
+    private const string CurrentChangelogVersion = "1.0.0.5";
+    private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
     private const string KofiUrl = "https://ko-fi.com/nainaiowo";
@@ -912,7 +913,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             DrawModernTopHeader();
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
-            DrawModernFunModeControls("Top");
+            DrawModernHeaderUtilityControls("Top");
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
             DrawModernTopNavigation(navigationItems);
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
@@ -928,7 +929,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             DrawModernCompactHeader(navigationItems);
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
-            DrawModernFunModeControls("Compact");
+            DrawModernHeaderUtilityControls("Compact");
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
         }
 
@@ -1106,16 +1107,46 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawMainNavigationCombo(navigationItems);
     }
 
-    private void DrawModernFunModeControls(string idSuffix)
+    private void DrawModernHeaderUtilityControls(string idSuffix)
     {
         var funModeEnabled = configuration.GoofyMode;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
         var switchWidth = GetThemedSwitchWidth("Fun Mode");
         var ligmaWidth = funModeEnabled ? GetThemedActionButtonWidth("Ligma") : 0.0f;
-        var totalWidth = switchWidth +
-            (funModeEnabled ? ligmaWidth + ImGui.GetStyle().ItemSpacing.X : 0.0f);
+        var funControlsWidth = switchWidth +
+            (funModeEnabled ? ligmaWidth + spacing : 0.0f);
+        var helpIcon = FontAwesomeIcon.QuestionCircle.ToIconString();
+        var fullHelpLabel = $"{helpIcon} Help";
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var fullHelpWidth = GetThemedActionButtonWidth(fullHelpLabel);
+        var compactHelpWidth = GetThemedActionButtonWidth(helpIcon);
+        var helpLabel = funControlsWidth + spacing + fullHelpWidth <= availableWidth
+            ? fullHelpLabel
+            : helpIcon;
+        var helpWidth = string.Equals(helpLabel, fullHelpLabel, StringComparison.Ordinal)
+            ? fullHelpWidth
+            : compactHelpWidth;
+        var left = ImGui.GetCursorPosX();
         var right = ImGui.GetWindowContentRegionMax().X - ModernShellPadding;
-        ImGui.SetCursorPosX(MathF.Max(ImGui.GetCursorPosX(), right - totalWidth));
+        var totalWidth = funControlsWidth + spacing + helpWidth;
 
+        if (totalWidth > availableWidth)
+        {
+            ImGui.SetCursorPosX(MathF.Max(left, right - compactHelpWidth));
+            DrawHelpCenterButton(idSuffix, helpIcon, compactHelpWidth);
+            ImGui.SetCursorPosX(MathF.Max(left, right - funControlsWidth));
+            DrawFunModeControls(idSuffix, funModeEnabled, ligmaWidth);
+            return;
+        }
+
+        ImGui.SetCursorPosX(MathF.Max(left, right - totalWidth));
+        DrawFunModeControls(idSuffix, funModeEnabled, ligmaWidth);
+        ImGui.SameLine();
+        DrawHelpCenterButton(idSuffix, helpLabel, helpWidth);
+    }
+
+    private void DrawFunModeControls(string idSuffix, bool funModeEnabled, float ligmaWidth)
+    {
         if (funModeEnabled)
         {
             DrawLigmaButton(idSuffix, ligmaWidth);
@@ -1130,6 +1161,52 @@ public sealed partial class RecapWindow : Window, IDisposable
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip("Uses intentionally unserious wording in local death reviews. Combat data and calculations are unchanged.");
+        }
+    }
+
+    private void DrawHelpCenterButton(string idSuffix, string label, float width)
+    {
+        if (DrawThemedToggleButton(label, $"OpenHelpCenter{idSuffix}", selected: false, width))
+        {
+            OpenHelpCenterUrl(GetHelpCenterUrl(currentMainPage));
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Open the Help Center for this section in your browser.");
+        }
+    }
+
+    private static string GetHelpCenterUrl(MainPage page)
+    {
+        return page switch
+        {
+            MainPage.Review => $"{HelpCenterUrl}review.html#review",
+            MainPage.Replay => $"{HelpCenterUrl}replay.html#replay",
+            MainPage.Analyzer => $"{HelpCenterUrl}analyzer.html#analyzer",
+            MainPage.Example => $"{HelpCenterUrl}index.html#first-review",
+            MainPage.Customize => $"{HelpCenterUrl}settings.html#customize",
+            MainPage.Options => $"{HelpCenterUrl}settings.html#options",
+            MainPage.Data or MainPage.Feedback => $"{HelpCenterUrl}settings.html#data",
+            MainPage.Debug => $"{HelpCenterUrl}troubleshooting.html#troubleshooting",
+            _ => HelpCenterUrl,
+        };
+    }
+
+    private static void OpenHelpCenterUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Could not open the Better Deaths Help Center.");
+            Plugin.ChatGui.Print($"[Better Deaths] Could not open the Help Center. URL: {url}");
         }
     }
 
@@ -6384,17 +6461,26 @@ public sealed partial class RecapWindow : Window, IDisposable
         const string postInformationLabel = "Post information to chat";
         var channelButtonMax = DrawDeathChatChannelCombo(buttonId);
         var contentRight = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        var controlSpacing = ImGui.GetStyle().ItemSpacing.X;
+        const float previewMarkerReserveWidth = 20.0f;
         var postInformationWidth = GetThemedActionButtonWidth(postInformationLabel);
-        var canFitPostInformationInline = channelButtonMax.X + ImGui.GetStyle().ItemSpacing.X + postInformationWidth <= contentRight;
+        var canFitPostInformationInline =
+            channelButtonMax.X + controlSpacing + postInformationWidth + controlSpacing + previewMarkerReserveWidth <= contentRight;
         if (canFitPostInformationInline)
         {
             ImGui.SameLine();
         }
 
+        var postRowAvailableWidth = ImGui.GetContentRegionAvail().X;
+        var canFitPreviewMarkerInline = postRowAvailableWidth >=
+            MathF.Min(postInformationWidth, 92.0f) + controlSpacing + previewMarkerReserveWidth;
+        var availablePostButtonWidth = canFitPreviewMarkerInline
+            ? MathF.Max(1.0f, postRowAvailableWidth - controlSpacing - previewMarkerReserveWidth)
+            : postRowAvailableWidth;
         if (DrawThemedActionButton(
                 postInformationLabel,
                 $"PostInfo{buttonId}",
-                canFitPostInformationInline ? postInformationWidth : MathF.Min(postInformationWidth, ImGui.GetContentRegionAvail().X)) &&
+                MathF.Min(postInformationWidth, availablePostButtonWidth)) &&
             ImGui.GetIO().KeyCtrl)
         {
             plugin.PrintDeathInformationToChat(death);
@@ -6403,6 +6489,15 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             SetThemedTooltip("Ctrl+click to post. Other Better Deaths users present will see a link to this pull.");
         }
+
+        if (canFitPreviewMarkerInline)
+        {
+            ImGui.SameLine(0.0f, controlSpacing);
+        }
+
+        DrawQuestionTooltipMarker(
+            $"PostInformationPreview{buttonId}",
+            () => DrawDeathInformationChatPreviewTooltip(death));
 
         if (!IsFocusedReviewMode())
         {
@@ -6416,6 +6511,22 @@ public sealed partial class RecapWindow : Window, IDisposable
             resolved.SummaryMitigationDebuffStatusSources);
         ImGui.Separator();
         DrawExpiredMitigations(resolved, $"{death.MemberKey}{death.SeenAtUtc.Ticks}Summary");
+    }
+
+    private void DrawDeathInformationChatPreviewTooltip(PartyDeathRecord death)
+    {
+        var lines = plugin.GetDeathInformationChatPreviewLines(death);
+        BeginThemedTooltip();
+        ImGui.TextColored(LeadUpGoldColor, "Example:");
+        var wrapWidth = MathF.Min(560.0f, MathF.Max(260.0f, ImGui.GetIO().DisplaySize.X - 80.0f));
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + wrapWidth);
+        foreach (var line in lines)
+        {
+            ImGui.TextWrapped(line);
+        }
+
+        ImGui.PopTextWrapPos();
+        EndThemedTooltip();
     }
 
     private void DrawEnvironmentalDeathContext(PartyDeathRecord death)
@@ -7417,9 +7528,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var spacing = ImGui.GetStyle().ItemSpacing.X;
+        const float previewMarkerReserveWidth = 20.0f;
         var availableButtonWidth = MathF.Min(GetThemedActionButtonWidth("Send available mits"), availableWidth);
         var outcomeButtonWidth = MathF.Min(GetThemedActionButtonWidth("Send outcome"), availableWidth);
         var canFitTwoButtons = availableWidth >= availableButtonWidth + outcomeButtonWidth + spacing;
+        var canFitPreviewMarkerInline = availableWidth >=
+            availableButtonWidth + outcomeButtonWidth + (spacing * 2.0f) + previewMarkerReserveWidth;
 
         ImGui.BeginDisabled(options.Count == 0);
         if (DrawThemedActionButton("Send available mits", $"WhatIfAvailableMits{controlId}", canFitTwoButtons ? availableButtonWidth : availableWidth) &&
@@ -7455,6 +7569,15 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndDisabled();
+
+        if (canFitTwoButtons && canFitPreviewMarkerInline)
+        {
+            ImGui.SameLine(0.0f, spacing);
+        }
+
+        DrawQuestionTooltipMarker(
+            $"WhatIfChatPreview{controlId}",
+            () => DrawWhatIfChatPreviewTooltip(options, selectedOptions, damageEvents, observedDamage, hpDisplay));
         ImGui.Spacing();
     }
 
@@ -7462,8 +7585,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         string label,
         IReadOnlyList<PossibleMitigationSnapshot> options)
     {
-        plugin.QueueBetterDeathsChatMessage(
-            $"{label}: {FormatPossibleMitigationChatOptions(options)}.");
+        plugin.QueueBetterDeathsChatMessage(BuildWhatIfMitigationChatMessage(label, options));
     }
 
     private void QueueWhatIfSelectedMitigationOutcomeChat(
@@ -7472,13 +7594,85 @@ public sealed partial class RecapWindow : Window, IDisposable
         ulong? observedDamage,
         EventHpDisplay hpDisplay)
     {
-        plugin.QueueBetterDeathsChatMessage(
-            $"Outcome with selected mits: {FormatPossibleMitigationChatOptions(selectedOptions)}.");
+        plugin.QueueBetterDeathsChatMessage(BuildWhatIfMitigationChatMessage("Outcome with selected mits", selectedOptions));
 
         if (BuildWhatIfOutcomeChatLine(damageEvents, observedDamage, hpDisplay, selectedOptions) is { } outcomeLine)
         {
             plugin.QueuePlainChatMessage(outcomeLine);
         }
+    }
+
+    private void DrawWhatIfChatPreviewTooltip(
+        IReadOnlyList<PossibleMitigationSnapshot> options,
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay)
+    {
+        BeginThemedTooltip();
+        ImGui.TextColored(LeadUpGoldColor, "Example:");
+        var wrapWidth = MathF.Min(640.0f, MathF.Max(280.0f, ImGui.GetIO().DisplaySize.X - 80.0f));
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + wrapWidth);
+
+        DrawLeadUpLabel("Send available mits");
+        DrawChatPreviewLines(GetWhatIfAvailableMitigationChatPreviewLines(options));
+
+        ImGui.Spacing();
+        DrawLeadUpLabel("Send outcome");
+        if (selectedOptions.Count == 0 || observedDamage is null || damageEvents.Count == 0)
+        {
+            ImGui.TextDisabled("Select mitigation to preview the outcome message.");
+        }
+        else
+        {
+            DrawChatPreviewLines(GetWhatIfOutcomeChatPreviewLines(
+                selectedOptions,
+                damageEvents,
+                observedDamage,
+                hpDisplay));
+        }
+
+        ImGui.PopTextWrapPos();
+        EndThemedTooltip();
+    }
+
+    private IReadOnlyList<string> GetWhatIfAvailableMitigationChatPreviewLines(
+        IReadOnlyList<PossibleMitigationSnapshot> options)
+    {
+        return plugin.GetBetterDeathsChatMessagePreviewLines(
+            BuildWhatIfMitigationChatMessage("Available mits", options));
+    }
+
+    private IReadOnlyList<string> GetWhatIfOutcomeChatPreviewLines(
+        IReadOnlyList<PossibleMitigationSnapshot> selectedOptions,
+        IReadOnlyList<CombatEventRecord> damageEvents,
+        ulong? observedDamage,
+        EventHpDisplay hpDisplay)
+    {
+        var lines = plugin.GetBetterDeathsChatMessagePreviewLines(
+                BuildWhatIfMitigationChatMessage("Outcome with selected mits", selectedOptions))
+            .ToList();
+        if (BuildWhatIfOutcomeChatLine(damageEvents, observedDamage, hpDisplay, selectedOptions) is { } outcomeLine)
+        {
+            lines.AddRange(Plugin.GetPlainChatMessagePreviewLines(outcomeLine));
+        }
+
+        return lines;
+    }
+
+    private static void DrawChatPreviewLines(IReadOnlyList<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            ImGui.TextWrapped(line);
+        }
+    }
+
+    private string BuildWhatIfMitigationChatMessage(
+        string label,
+        IReadOnlyList<PossibleMitigationSnapshot> options)
+    {
+        return $"{label}: {FormatPossibleMitigationChatOptions(options)}.";
     }
 
     private string FormatPossibleMitigationChatOptions(IReadOnlyList<PossibleMitigationSnapshot> options)
@@ -19687,6 +19881,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.5");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added a full Help Center with section-aware access from the plugin.");
+        DrawHighlightedChangelogBullet("Improved chat recap readability and added live previews for recap and What-if messages.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.4");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Fixed DMU P2 Forsaken replays so towers and assignment drawings change together.");
