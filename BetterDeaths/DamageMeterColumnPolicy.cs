@@ -72,4 +72,22 @@ internal static class DamageMeterColumnPolicy
         columns.Insert(Math.Min(targetIndex, columns.Count), source);
         return true;
     }
+
+    public static bool PlaceBefore(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn target)
+    {
+        var targetIndex = columns.IndexOf(target);
+        if (targetIndex < 0)
+        {
+            return false;
+        }
+
+        var sourceIndex = columns.IndexOf(source);
+        if (sourceIndex >= 0)
+        {
+            return Move(columns, source, target);
+        }
+
+        columns.Insert(targetIndex, source);
+        return true;
+    }
 }

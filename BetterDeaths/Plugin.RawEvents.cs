@@ -74,6 +74,8 @@ public sealed partial class Plugin
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
+
+        public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
 
     private sealed record RawActionEffectTarget(
@@ -156,6 +158,8 @@ public sealed partial class Plugin
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
+
+        public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
 
     private sealed record RawEffectResultStatus(
@@ -186,6 +190,8 @@ public sealed partial class Plugin
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
+
+        public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
 
     private sealed record RawMapEffectPacket(
@@ -397,6 +403,7 @@ public sealed partial class Plugin
         {
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
+            ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
         };
         EnqueueRawActorControlPacket(packet);
     }
@@ -448,6 +455,7 @@ public sealed partial class Plugin
         {
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
+            ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
         };
         EnqueueRawEffectResultPacket(rawPacket);
     }
@@ -618,6 +626,7 @@ public sealed partial class Plugin
             AnimationTargetEntityId = GetEntityId(header->AnimationTargetId),
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
+            ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
         };
         EnqueueRawActionEffectPacket(packet);
     }

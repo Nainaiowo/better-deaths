@@ -77,7 +77,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string RecordedPullDetailMigrationTempSuffix = ".migration.tmp";
     private const int RecordedPullHistorySchemaVersion = 3;
     private const int RecordedPullIndexSchemaVersion = 7;
-    private const int CurrentConfigurationVersion = 5;
+    private const int CurrentConfigurationVersion = 6;
     internal const int PullGroupColorPaletteSize = 8;
     private static readonly TimeSpan RecentPullGroupRestoreWindow = TimeSpan.FromHours(3);
     private const int RecordedPullHistoryRollingBackupCount = 5;
@@ -318,6 +318,7 @@ public sealed partial class Plugin : IDalamudPlugin
     [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
+    [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
     [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
@@ -396,6 +397,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Queue<RawActorControlPacket> rawActorControlPackets = [];
     private readonly Queue<RawMapEffectPacket> rawMapEffectPackets = [];
     private readonly DamageParsing.DamageParsingModule damageParsingModule = new();
+    private readonly object recordedDamageEncounterLock = new();
+    private IReadOnlyList<RecordedDamageEncounter> recordedDamageEncounters = [];
+    private long nextRecordedDamageEncounterNumber = 1;
     private readonly Dictionary<uint, ActiveDmuP2PathOfLightTower> activeDmuP2PathOfLightTowersByIndex = [];
     private readonly HashSet<uint> activeDmuP5ArenaHoleIndices = [];
     private readonly Dictionary<string, ActiveReplayMechanic> activeReplayMechanicsByKey = new(StringComparer.Ordinal);
@@ -567,10 +571,22 @@ public sealed partial class Plugin : IDalamudPlugin
     internal DamageParsing.DamageEncounterSnapshot? LastDamageEncounter =>
         damageParsingModule.LastEncounter;
 
+    internal IReadOnlyList<RecordedDamageEncounter> RecordedDamageEncounters
+    {
+        get
+        {
+            lock (recordedDamageEncounterLock)
+            {
+                return recordedDamageEncounters;
+            }
+        }
+    }
+
     public unsafe Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         NormalizeUserConfiguration();
+        LoadRecordedDamageEncounters();
         damageParsingModule.PeriodicEventsResolved = parsed =>
             QueueDamageMeterParsedDebug("PeriodicResolved", parsed);
         BeginLoadRecordedPullHistory();
@@ -607,17 +623,18 @@ public sealed partial class Plugin : IDalamudPlugin
         });
         CommandManager.AddHandler(WidgetCommandName, new CommandInfo(OnWidgetCommand)
         {
-            HelpMessage = "Toggle the Better Deaths current pull widget.",
+            HelpMessage = "Toggle the Better Deaths death widget.",
         });
         CommandManager.AddHandler(ShortWidgetCommandName, new CommandInfo(OnWidgetCommand)
         {
-            HelpMessage = "Toggle the Better Deaths current pull widget.",
+            HelpMessage = "Toggle the Better Deaths death widget.",
         });
 
         actionEffectHook = GameInteropProvider.HookFromAddress<ActionEffectHandler.Delegates.Receive>(
             ActionEffectHandler.MemberFunctionPointers.Receive,
             OnReceiveActionEffect);
         actionEffectHook.Enable();
+        TryInitializeServerFrameTiming();
 
         try
         {
@@ -727,6 +744,7 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyStarted;
         mapEffectHook?.Dispose();
+        serverFrameHook?.Dispose();
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();

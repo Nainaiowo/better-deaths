@@ -51,7 +51,7 @@
         <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
         <a href="meter.html#meter">Damage Meter</a>
         <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
-        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <a href="widget.html#current-pull">Death Widget</a>
         <p class="nav-label">Setup</p>
         <a href="settings.html#options">Options</a>
         <a href="settings.html#customize">Customize</a>
@@ -73,13 +73,13 @@
         <div class="section-heading">
           <p class="eyebrow">Damage Meter</p>
           <h1 class="page-title">Follow damage without leaving Better Deaths</h1>
-          <p>The Meter records combat damage inside duties and updates while the encounter is active. When combat ends, the completed result remains available as Last pull.</p>
+          <p>The Widgets tab places the Death Widget on the left and DPS Meter on the right. The Meter records combat damage inside duties and saves completed encounters in its own browser.</p>
         </div>
 
         <div class="topic-grid three-up">
           <article>
-            <h3>Live and Last pull</h3>
-            <p><strong>Live</strong> follows the active encounter. <strong>Last pull</strong> keeps the most recently completed encounter available while the next attempt begins.</p>
+            <h3>Encounter browser</h3>
+            <p><strong>Live encounter</strong> follows active combat. Completed damage encounters appear beneath it, while <strong>Example</strong> provides a redacted report preview outside combat.</p>
           </article>
           <article>
             <h3>Party and All</h3>
@@ -93,7 +93,11 @@
 
         <h3 class="subheading">How the numbers are handled</h3>
         <div class="setting-table labeled">
-          <div class="setting-row"><strong>Widget</strong><span>Opens a resizable meter that shows the current encounter and falls back to the last completed pull while idle. Add, remove, or drag its columns into your preferred order from the DPS Meter tab.</span></div>
+          <div class="setting-row"><strong>Widget</strong><span>Opens a resizable meter that shows the current encounter and falls back to the latest completed encounter while idle.</span></div>
+          <div class="setting-row"><strong>Preview</strong><span>Uses the same renderer as the separate widget. It remains available outside combat and updates immediately as columns or display mode change.</span></div>
+          <div class="setting-row"><strong>Columns</strong><span>Drag active columns to reorder them and select X to remove one. Select + on an available column, click its tile, or drag it into the active row to add it.</span></div>
+          <div class="setting-row"><strong>Display</strong><span><strong>Normal</strong> keeps full labels and player names. <strong>Concise</strong> uses initials, shorter headers, and tighter column widths.</span></div>
+          <div class="setting-row"><strong>Clear history</strong><span>Ctrl+click the trash icon in the encounter browser. Damage encounter history is stored separately from Review pulls.</span></div>
           <div class="setting-row"><strong>Damage</strong><span>Uses the amount reported by the game after mitigation, blocking, parrying, and other reductions.</span></div>
           <div class="setting-row"><strong>DPS</strong><span>Your personal damage divided by the time from the first recorded combat event through the latest party damage event.</span></div>
           <div class="setting-row"><strong>rDPS</strong><span>Your raid contribution. Damage gained from another player's raid buffs is moved back to the player who provided those buffs. Your personal DPS remains available beside it.</span></div>

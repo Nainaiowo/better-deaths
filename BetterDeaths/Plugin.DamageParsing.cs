@@ -28,6 +28,7 @@ public sealed partial class Plugin
     {
         try
         {
+            var damageSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc;
             var source = CaptureDamageActorIdentity(packet.CasterEntityId, packet.CasterName);
             var sourceOwner = source.OwnerEntityId == 0
                 ? null
@@ -66,12 +67,13 @@ public sealed partial class Plugin
             var actionCategoryId = GetActionCategoryId(packet.ActionId);
             var statusApplications = BuildDamageStatusApplications(
                 packet,
+                damageSeenAtUtc,
                 source,
                 sourceOwner,
                 sourceStatuses);
             var damagePacket = new DamageActionPacket(
                 packet.Sequence,
-                packet.SeenAtUtc,
+                damageSeenAtUtc,
                 packet.ActionSequence,
                 source,
                 packet.ActionId,
@@ -102,6 +104,7 @@ public sealed partial class Plugin
 
     private IReadOnlyList<DamageStatusApplication> BuildDamageStatusApplications(
         RawActionEffectPacket packet,
+        DateTime damageSeenAtUtc,
         DamageActorIdentity source,
         DamageActorIdentity? sourceOwner,
         IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
@@ -137,7 +140,7 @@ public sealed partial class Plugin
                     effect.Value,
                     packet.ActionId,
                     GetActionName(packet.ActionId),
-                    packet.SeenAtUtc,
+                    damageSeenAtUtc,
                     0.0f,
                     isRemoval) with
                 {
@@ -190,6 +193,7 @@ public sealed partial class Plugin
 
     private void ObserveDamageEffectResult(RawEffectResultPacket packet)
     {
+        var damageSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc;
         var targetEntityId = NormalizeActorEntityId(packet.TargetId != 0 ? packet.TargetId : packet.ActorId);
         if (targetEntityId == 0)
         {
@@ -207,7 +211,7 @@ public sealed partial class Plugin
                 status.EffectId,
                 0,
                 string.Empty,
-                packet.SeenAtUtc,
+                damageSeenAtUtc,
                 status.Duration,
                 false);
             damageParsingModule.ObserveStatus(application);
@@ -217,6 +221,7 @@ public sealed partial class Plugin
 
     private void ParseDamageActorControl(RawActorControlPacket packet)
     {
+        var damageSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc;
         if (packet.Category == ActorControlDotCategory && packet.Param2 > 0)
         {
             var target = CaptureDamageActorIdentity(packet.EntityId, string.Empty);
@@ -232,7 +237,7 @@ public sealed partial class Plugin
 
             var tick = new PeriodicDamageTick(
                 packet.Sequence,
-                packet.SeenAtUtc,
+                damageSeenAtUtc,
                 target,
                 statusId,
                 statusId == 0 ? string.Empty : GetStatusName(statusId),
@@ -249,7 +254,7 @@ public sealed partial class Plugin
             if (packet.Param2 is > 0 and <= ushort.MaxValue &&
                 !TryObserveDamageActorControlStatus(packet, packet.Param2, isRemoval: false))
             {
-                damageParsingModule.RefreshStatus(packet.EntityId, packet.Param2, packet.SeenAtUtc);
+                damageParsingModule.RefreshStatus(packet.EntityId, packet.Param2, damageSeenAtUtc);
             }
 
             return;
@@ -294,7 +299,7 @@ public sealed partial class Plugin
             statusId,
             0,
             string.Empty,
-            packet.SeenAtUtc,
+            packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc,
             rawStatus?.RemainingTime ?? 0.0f,
             isRemoval) with
         {
@@ -505,6 +510,7 @@ public sealed partial class Plugin
         {
             packet.Sequence,
             packet.SeenAtUtc,
+            ServerSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc,
             packet.ActionSequence,
             packet.CasterEntityId,
             packet.CasterName,
@@ -540,6 +546,7 @@ public sealed partial class Plugin
         {
             packet.Sequence,
             packet.SeenAtUtc,
+            ServerSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc,
             packet.Category,
             packet.Param1,
             packet.Param2,
@@ -643,6 +650,11 @@ public sealed partial class Plugin
     private DamageEncounterSnapshot? EndDamageEncounter(DateTime endedAtUtc, string reason)
     {
         var ended = damageParsingModule.EndEncounter(endedAtUtc, reason);
+        if (ended is not null)
+        {
+            RecordCompletedDamageEncounter(ended);
+        }
+
         if (ShouldSaveDamageMeterDebug())
         {
             QueueDebugCaptureRecord("DamageMeterEncounterEnd", new

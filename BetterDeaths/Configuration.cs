@@ -387,9 +387,11 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool DamageMeterShowAllCombatants { get; set; }
 
-    public bool DamageMeterShowLastEncounter { get; set; }
-
     public bool ShowDamageMeterWidget { get; set; }
+
+    public WidgetDisplayMode DamageMeterWidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;
+
+    public bool DamageMeterBrowserCollapsed { get; set; }
 
     public List<DamageMeterColumn> DamageMeterColumns { get; set; } = DamageMeterColumnPolicy.CreateDefault();
 

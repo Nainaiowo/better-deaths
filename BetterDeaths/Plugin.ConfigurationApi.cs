@@ -288,6 +288,25 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void SetDamageMeterBrowserCollapsed(bool collapsed)
+    {
+        if (Configuration.DamageMeterBrowserCollapsed == collapsed)
+        {
+            return;
+        }
+
+        Configuration.DamageMeterBrowserCollapsed = collapsed;
+        SaveConfiguration();
+    }
+
+    public void SetDamageMeterWidgetDisplayMode(WidgetDisplayMode mode)
+    {
+        Configuration.DamageMeterWidgetDisplayMode = Enum.IsDefined(mode)
+            ? mode
+            : WidgetDisplayMode.Normal;
+        SaveConfiguration();
+    }
+
     public void SetDeathChatChannel(DeathChatChannel channel)
     {
         Configuration.DeathChatChannel = GetChatChannelOption(channel).Channel;
@@ -612,6 +631,12 @@ public sealed partial class Plugin
         if (!Enum.IsDefined(Configuration.ReviewDisplayMode))
         {
             Configuration.ReviewDisplayMode = ReviewDisplayMode.Focused;
+            changed = true;
+        }
+
+        if (!Enum.IsDefined(Configuration.DamageMeterWidgetDisplayMode))
+        {
+            Configuration.DamageMeterWidgetDisplayMode = WidgetDisplayMode.Normal;
             changed = true;
         }
 

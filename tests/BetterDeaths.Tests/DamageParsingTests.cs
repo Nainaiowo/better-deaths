@@ -254,6 +254,23 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void EncounterDpsUsesTheFullFractionalDuration()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1_000_000)));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1_356_123)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddMilliseconds(43_879),
+            actionId: 101));
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(43.879, snapshot.DurationSeconds, 3);
+        Assert.Equal(53_695.91, snapshot.DamagePerSecond, 2);
+    }
+
+    [Fact]
     public void CommitsBufferedOpenerWhenCombatBecomesActive()
     {
         var module = new DamageParsingModule();

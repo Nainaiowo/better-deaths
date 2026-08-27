@@ -1185,10 +1185,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             MainPage.Review => $"{HelpCenterUrl}review.html#review",
             MainPage.Replay => $"{HelpCenterUrl}replay.html#replay",
-            MainPage.DamageMeter => $"{HelpCenterUrl}meter.html#meter",
+            MainPage.Widgets => $"{HelpCenterUrl}meter.html#meter",
             MainPage.Analyzer => $"{HelpCenterUrl}analyzer.html#analyzer",
             MainPage.Example => $"{HelpCenterUrl}index.html#first-review",
-            MainPage.Customize => $"{HelpCenterUrl}settings.html#customize",
             MainPage.Options => $"{HelpCenterUrl}settings.html#options",
             MainPage.Data or MainPage.Feedback => $"{HelpCenterUrl}settings.html#data",
             MainPage.Debug => $"{HelpCenterUrl}troubleshooting.html#troubleshooting",
@@ -1315,10 +1314,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
-            new("DPS Meter", MainPage.DamageMeter, BadgeText: ThemeNewBadgeText),
+            new("Widgets", MainPage.Widgets, BadgeText: ThemeNewBadgeText),
             new("Analyzer", MainPage.Analyzer, BadgeText: ThemeNewBadgeText),
-            new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
-            new("Options", MainPage.Options),
+            new("Options", MainPage.Options, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
             new("Updates", MainPage.Updates, ShouldHighlightChangelogTab()),
         };
@@ -1377,17 +1375,14 @@ public sealed partial class RecapWindow : Window, IDisposable
             case MainPage.Replay:
                 DrawReplayPage();
                 break;
-            case MainPage.DamageMeter:
-                DrawDamageMeterPage();
+            case MainPage.Widgets:
+                DrawWidgetsPage();
                 break;
             case MainPage.Analyzer:
                 DrawWtfDigAnalyzerPage();
                 break;
             case MainPage.Example:
                 DrawExamplePullTab();
-                break;
-            case MainPage.Customize:
-                DrawCustomizePage();
                 break;
             case MainPage.Options:
                 DrawOptionsPage();
@@ -1412,32 +1407,28 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
     }
 
-    private void DrawCustomizePage()
-    {
-        DrawReviewPanel("##CustomizeAppearance", Vector2.Zero, DrawCustomizeTab);
-    }
-
     private void DrawOptionsPage()
     {
         var available = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.X;
-        if (available.X >= 980.0f)
+        if (available.X >= 900.0f)
         {
-            var leftWidth = MathF.Max(420.0f, (available.X - spacing) * 0.48f);
+            var leftWidth = MathF.Max(420.0f, (available.X - spacing) * 0.5f);
             DrawReviewPanel(
                 "##OptionsSettings",
                 new Vector2(leftWidth, available.Y),
                 DrawOptionsTab);
             ImGui.SameLine();
             DrawReviewPanel(
-                "##OptionsWidget",
+                "##OptionsCustomize",
                 Vector2.Zero,
-                DrawWidgetTab);
+                DrawCustomizeTab);
             return;
         }
 
         DrawReviewPanel("##OptionsSettingsStacked", new Vector2(0.0f, MathF.Min(360.0f, MathF.Max(240.0f, available.Y * 0.48f))), DrawOptionsTab);
-        DrawReviewPanel("##OptionsWidgetStacked", Vector2.Zero, DrawWidgetTab);
+        ImGui.Dummy(new Vector2(1.0f, WorkspacePaneGap));
+        DrawReviewPanel("##OptionsCustomizeStacked", Vector2.Zero, DrawCustomizeTab);
     }
 
     private void DrawUpdatesPage()
@@ -17200,7 +17191,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawCompactSettingLabel(
             "Icon size",
             "CustomizeIconSizeHelp",
-            "Controls action and status icons in Review. Current Pull Widget icon sizing remains in Options.");
+            "Controls action and status icons in Review. Death Widget icon sizing is in Widgets.");
         ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X);
         ImGui.SetCursorPosY(headerStartY);
         DrawCustomizeIconSizePreview(iconSize);
@@ -17624,13 +17615,13 @@ public sealed partial class RecapWindow : Window, IDisposable
             ("Bar border", customTheme.BarBorder, "Health and shield bar outline."));
         DrawCustomThemeColorGroup(
             "Widget",
-            ("Widget background", customTheme.WidgetWindowBackground, "Current pull widget window background."),
-            ("Widget title", customTheme.WidgetTitleBackground, "Current pull widget title bar."),
-            ("Widget title active", customTheme.WidgetTitleActiveBackground, "Current pull widget active title bar."),
-            ("Widget border", customTheme.WidgetBorder, "Current pull widget border."),
-            ("Resize grip", customTheme.WidgetResizeGrip, "Current pull widget resize grip."),
-            ("Resize grip hover", customTheme.WidgetResizeGripHover, "Hovered current pull widget resize grip."),
-            ("Resize grip active", customTheme.WidgetResizeGripActive, "Active current pull widget resize grip."));
+            ("Widget background", customTheme.WidgetWindowBackground, "Death Widget window background."),
+            ("Widget title", customTheme.WidgetTitleBackground, "Death Widget title bar."),
+            ("Widget title active", customTheme.WidgetTitleActiveBackground, "Death Widget active title bar."),
+            ("Widget border", customTheme.WidgetBorder, "Death Widget border."),
+            ("Resize grip", customTheme.WidgetResizeGrip, "Death Widget resize grip."),
+            ("Resize grip hover", customTheme.WidgetResizeGripHover, "Hovered death widget resize grip."),
+            ("Resize grip active", customTheme.WidgetResizeGripActive, "Active death widget resize grip."));
         DrawCustomThemeColorGroup(
             "Updates / notices",
             ("Update banner", customTheme.UpdateBannerBackground, "Update banner background."),
@@ -18001,12 +17992,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawWidgetTab()
     {
-        DrawModernSectionTitle("Current Pull Widget", "Preview");
+        DrawModernSectionTitle("Death Widget", "Preview");
         DrawSubtleSeparator();
         ImGui.Spacing();
 
         var showCurrentPullWidget = configuration.ShowCurrentPullWidget;
-        if (DrawThemedCheckbox("Show current pull widget", ref showCurrentPullWidget))
+        if (DrawThemedCheckbox("Show death widget", ref showCurrentPullWidget))
         {
             plugin.SetShowCurrentPullWidget(showCurrentPullWidget);
         }
@@ -18027,7 +18018,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             plugin.SetCurrentPullWidgetBackgroundOpacity(widgetBackgroundOpacity);
         }
 
-        DrawSettingsTooltip("Controls only the Current Pull widget background. Text, icons, tables, and HP bars stay fully visible. The lower limit keeps enough contrast over gameplay.");
+        DrawSettingsTooltip("Controls only the Death Widget background. Text, icons, tables, and HP bars stay fully visible. The lower limit keeps enough contrast over gameplay.");
 
         var widgetIconSize = GetWidgetIconSize();
         if (ImGui.SliderFloat(
@@ -18040,7 +18031,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             plugin.SetWidgetIconSize(widgetIconSize);
         }
 
-        DrawSettingsTooltip("Controls only the Current Pull widget job and mitigation/debuff icon sizes.");
+        DrawSettingsTooltip("Controls only the Death Widget job and mitigation/debuff icon sizes.");
 
         DrawWidgetDisplayModeSetting();
 
@@ -18125,7 +18116,10 @@ public sealed partial class RecapWindow : Window, IDisposable
         return titleHeight;
     }
 
-    private static void DrawWidgetPreviewChrome(BetterDeathsUiTheme theme, float titleHeight)
+    private static void DrawWidgetPreviewChrome(
+        BetterDeathsUiTheme theme,
+        float titleHeight,
+        string title = "Better Deaths Widget")
     {
         var drawList = ImGui.GetWindowDrawList();
         var position = ImGui.GetWindowPos();
@@ -18133,7 +18127,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         var end = position + size;
         var textPosition = position + new Vector2(8.0f, MathF.Max(0.0f, (titleHeight - ImGui.GetTextLineHeight()) * 0.5f));
 
-        drawList.AddText(textPosition, ImGui.GetColorU32(theme.ModernTextColor), "Better Deaths Widget");
+        drawList.AddText(textPosition, ImGui.GetColorU32(theme.ModernTextColor), title);
         DrawWidgetPreviewTitleControls(theme, position, size, titleHeight);
         DrawWidgetPreviewResizeGrip(theme, position, size, left: true);
         DrawWidgetPreviewResizeGrip(theme, position, size, left: false);
@@ -19601,10 +19595,9 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         Review,
         Replay,
-        DamageMeter,
+        Widgets,
         Analyzer,
         Example,
-        Customize,
         Options,
         Data,
         Feedback,
@@ -20584,7 +20577,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         ImGui.TextUnformatted("v0.1.0.117");
         ImGui.TextDisabled("Testing widget polish.");
-        DrawBreathingGoldBullet("Current pull widget text is indented while the table stays full width.");
+        DrawBreathingGoldBullet("Death Widget text is indented while the table stays full width.");
 
         ImGui.Separator();
 
@@ -20620,7 +20613,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Multi-cause rows now separate the expand arrow from row selection.");
         DrawWrappedBullet("Expanded timeline rows now keep hover and click highlights across the full row.");
         DrawWrappedBullet("Now no longer duplicates a saved last pull, while the widget still keeps the quick view.");
-        DrawWrappedBullet("Current pull widget now uses the newer UI, and removes redundant wording.");
+        DrawWrappedBullet("Death Widget now uses the newer UI, and removes redundant wording.");
         DrawWrappedBullet("Recap popup opacity can now be adjusted in Customize.");
         DrawWrappedBullet("Health and hit tooltips are shorter.");
         DrawWrappedBullet("Chat recap messages send faster, with the link posted last.");
@@ -20730,12 +20723,12 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.97");
         ImGui.TextDisabled("Improved widget readability, chat summaries, and mitigation display.");
-        DrawBreathingGoldBullet("Current Pull widget now has Normal and Concise display options.");
+        DrawBreathingGoldBullet("Death Widget now has Normal and Concise display options.");
         DrawBreathingGoldBullet("Active mitigations/debuffs Mit% now uses physical and magic icons instead of P/M letter prefixes.");
-        DrawWrappedBullet("Current Pull widget now labels the status column as Mits/Debuffs and concise view caps visible status icons at three with a +x count.");
+        DrawWrappedBullet("Death Widget now labels the status column as Mits/Debuffs and concise view caps visible status icons at three with a +x count.");
         DrawWrappedBullet("Chat-posted recaps now shorten HP before hit/KO by removing the max HP value while keeping the percentage.");
         DrawWrappedBullet("Example Pull and Widget preview now use a smaller redacted Sigmascape V4.0 Pull 127-style example.");
-        DrawWrappedBullet("Current Pull widget hides the visual scrollbar while keeping mouse-wheel scrolling available.");
+        DrawWrappedBullet("Death Widget hides the visual scrollbar while keeping mouse-wheel scrolling available.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.90");
@@ -20840,9 +20833,9 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.73");
-        ImGui.TextDisabled("Improved Current Pull widget readability.");
-        DrawBreathingGoldBullet("Current Pull widget now includes an Overkill column.");
-        DrawBreathingGoldBullet("Current Pull widget now includes a Mits column with player mitigation/debuff and boss damage-down icons.");
+        ImGui.TextDisabled("Improved Death Widget readability.");
+        DrawBreathingGoldBullet("Death Widget now includes an Overkill column.");
+        DrawBreathingGoldBullet("Death Widget now includes a Mits column with player mitigation/debuff and boss damage-down icons.");
         DrawBreathingGoldBullet("Widget cause and overkill numbers now use compact values like 3k, 186.9k, and 1.3m.");
         DrawWrappedBullet("Removed the widget # column to make room for mitigation icons while keeping deaths ordered by time.");
         DrawWrappedBullet("Widget mitigation icons wrap inside the Mits column and have their own icon-size slider.");
@@ -20880,7 +20873,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted("v0.1.0.70");
         ImGui.TextDisabled("Improved recap readability and widget controls.");
         DrawBreathingGoldBullet("Visible overkill amount now appears beneath the HP + shields bar.");
-        DrawBreathingGoldBullet("Current Pull widget now shows job icons next to player names and can switch between full names and initials.");
+        DrawBreathingGoldBullet("Death Widget now shows job icons next to player names and can switch between full names and initials.");
         DrawWrappedBullet("Recap tables now center headers and compact values while keeping long cause/status text readable.");
         DrawWrappedBullet("Debug tab is now hidden by default and can be revealed from the bottom of Settings under Developer tools.");
 
@@ -20907,8 +20900,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawWrappedBullet("Updated the Notes tab feature summary to better describe the current review tools.");
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.66");
-        ImGui.TextDisabled("Improved Current Pull widget readability.");
-        DrawBreathingGoldBullet("Current Pull widget now uses a compact widget-only death table instead of the full recap layout.");
+        ImGui.TextDisabled("Improved Death Widget readability.");
+        DrawBreathingGoldBullet("Death Widget now uses a compact widget-only death table instead of the full recap layout.");
         DrawWrappedBullet("Multi-hit deaths are summarized into one total line in the widget, with full hit details kept in the tooltip.");
         DrawWrappedBullet("Widget content now clips and scrolls inside the widget instead of overflowing during busy pulls.");
         DrawWrappedBullet("Widget preview now uses the same compact renderer as the live widget.");
@@ -20961,15 +20954,15 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.59");
-        ImGui.TextDisabled("Improved Current Pull widget customization.");
+        ImGui.TextDisabled("Improved Death Widget customization.");
         DrawBreathingGoldBullet("Added a Widget tab with settings and an example preview.");
-        DrawBreathingGoldBullet("Added a background opacity slider for the Current Pull widget.");
+        DrawBreathingGoldBullet("Added a background opacity slider for the Death Widget.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("v0.1.0.58");
         ImGui.TextDisabled("Improved live pull visibility and death timeline consistency.");
-        DrawBreathingGoldBullet("Added an optional Current Pull widget for watching deaths during live combat.");
-        DrawBreathingGoldBullet("Added /bdwidget and /betterdeathswidget to toggle the Current Pull widget.");
+        DrawBreathingGoldBullet("Added an optional Death Widget for watching deaths during live combat.");
+        DrawBreathingGoldBullet("Added /bdwidget and /betterdeathswidget to toggle the Death Widget.");
         DrawWrappedBullet("Updated death timeline likely causes to match the captured hits/events shown in player death details.");
         DrawWrappedBullet("Centered death timeline headers and key columns for cleaner reading.");
         DrawWrappedBullet("Changed recorded pull reset timestamps to display in local time.");

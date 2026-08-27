@@ -77,4 +77,27 @@ public sealed class DamageMeterColumnPolicyTests
             DamageMeterColumn.Rank,
         ], columns);
     }
+
+    [Fact]
+    public void PlaceBeforeAddsAnInactiveColumnAtTheDropTarget()
+    {
+        List<DamageMeterColumn> columns =
+        [
+            DamageMeterColumn.PlayerName,
+            DamageMeterColumn.TotalDamage,
+        ];
+
+        var changed = DamageMeterColumnPolicy.PlaceBefore(
+            columns,
+            DamageMeterColumn.CriticalHitPercent,
+            DamageMeterColumn.TotalDamage);
+
+        Assert.True(changed);
+        Assert.Equal(
+        [
+            DamageMeterColumn.PlayerName,
+            DamageMeterColumn.CriticalHitPercent,
+            DamageMeterColumn.TotalDamage,
+        ], columns);
+    }
 }
