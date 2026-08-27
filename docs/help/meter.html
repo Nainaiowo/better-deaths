@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Damage Meter | Better Deaths Help</title>
+  <meta name="description" content="Learn how Better Deaths measures live and completed encounter damage, DPS, actions, pets, limit breaks, and damage-over-time effects.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/meter.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Damage Meter | Better Deaths Help">
+  <meta property="og:description" content="Read live or completed encounter damage, DPS, and ability breakdowns inside Better Deaths.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/meter.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/icon.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span><strong>Better Deaths</strong><small>Help Center</small></span>
+    </a>
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="meter.html#meter">Damage Meter</a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Current Pull Widget</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the duty, pull, and the value you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="meter" class="guide-section searchable" data-search-title="Damage Meter" data-search-keywords="damage meter dps live last pull party all combatants actions abilities pets limit break dots exact estimated attribution">
+        <div class="section-heading">
+          <p class="eyebrow">Damage Meter</p>
+          <h1 class="page-title">Follow damage without leaving Better Deaths</h1>
+          <p>The Meter records combat damage inside duties and updates while the encounter is active. When combat ends, the completed result remains available as Last pull.</p>
+        </div>
+
+        <div class="topic-grid three-up">
+          <article>
+            <h3>Live and Last pull</h3>
+            <p><strong>Live</strong> follows the active encounter. <strong>Last pull</strong> keeps the most recently completed encounter available while the next attempt begins.</p>
+          </article>
+          <article>
+            <h3>Party and All</h3>
+            <p><strong>Party</strong> is the normal ranking and includes party members, their recognized pets, the party limit break, and unattributed outgoing damage. <strong>All</strong> also shows enemies and other combatants.</p>
+          </article>
+          <article>
+            <h3>Ability details</h3>
+            <p>Use the arrow beside a combatant to expand their actions. Each action shows damage, DPS, share, critical-hit rate, and direct-hit rate.</p>
+          </article>
+        </div>
+
+        <h3 class="subheading">How the numbers are handled</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Damage</strong><span>Uses the amount reported by the game after mitigation, blocking, parrying, and other reductions.</span></div>
+          <div class="setting-row"><strong>DPS</strong><span>Divides recorded damage by the active recorded span, from the first retained combat result through the latest one.</span></div>
+          <div class="setting-row"><strong>Pets</strong><span>Damage from a recognized pet or companion is included under its owner while the pet's individual actions remain visible in the breakdown.</span></div>
+          <div class="setting-row"><strong>Limit break</strong><span>Party limit break damage appears as its own source instead of being assigned to the player who pressed it.</span></div>
+          <div class="setting-row"><strong>Misses and immunity</strong><span>Missed, resisted, blocked, parried, and invulnerable results are retained. Only actual damage increases the total.</span></div>
+        </div>
+
+        <div class="caution-note" role="note">
+          <strong>Why an estimated split may appear</strong>
+          <p>The game reports ordinary damage-over-time effects as one combined tick. Better Deaths keeps that combined encounter damage exact, then uses the active effects and previously observed solo ticks to estimate how much belongs to each source. If no reliable owner exists, the damage remains visible as unattributed instead of being assigned to the wrong player.</p>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="replay.html#replay"><small>Previous</small><strong>Replay</strong></a>
+        <a class="page-nav-link next" href="analyzer.html#analyzer"><small>Next</small><strong>WTF.DIG Analyzer</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>
+    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

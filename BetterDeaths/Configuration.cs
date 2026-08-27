@@ -385,6 +385,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public float WtfDigAnalyzerMapSide { get; set; }
 
+    public bool DamageMeterShowAllCombatants { get; set; }
+
+    public bool DamageMeterShowLastEncounter { get; set; }
+
     public ReplayOverlayDockSide ReplayMitigationOverlayDockSide { get; set; } = ReplayOverlayDockSide.Right;
 
     public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;

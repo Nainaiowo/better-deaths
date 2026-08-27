@@ -59,7 +59,22 @@ public sealed partial class Plugin
         Vector3 TargetPosition,
         RawCombatSnapshot? SourceSnapshot,
         IReadOnlyList<RawActionEffectTarget> Targets,
-        IReadOnlyList<RawActorPoseSnapshot> ReplayPoses);
+        IReadOnlyList<RawActorPoseSnapshot> ReplayPoses)
+    {
+        public byte ActionType { get; init; }
+
+        public ushort SourceSequence { get; init; }
+
+        public ushort SpellId { get; init; }
+
+        public byte AnimationVariation { get; init; }
+
+        public uint AnimationTargetEntityId { get; init; }
+
+        public bool CaptureForReview { get; init; }
+
+        public bool CaptureForDamageParsing { get; init; }
+    }
 
     private sealed record RawActionEffectTarget(
         int TargetIndex,
@@ -108,7 +123,10 @@ public sealed partial class Plugin
         uint Param1,
         uint Param3,
         uint Param4,
-        uint Value);
+        uint Value)
+    {
+        public uint Param2 { get; init; }
+    }
 
     private sealed record RawCombatLogMessage(
         long Sequence,
@@ -133,7 +151,12 @@ public sealed partial class Plugin
         byte ShieldPercent,
         byte EffectCount,
         byte IsReplay,
-        IReadOnlyList<RawEffectResultStatus> Statuses);
+        IReadOnlyList<RawEffectResultStatus> Statuses)
+    {
+        public bool CaptureForReview { get; init; }
+
+        public bool CaptureForDamageParsing { get; init; }
+    }
 
     private sealed record RawEffectResultStatus(
         byte EffectIndex,
@@ -158,7 +181,12 @@ public sealed partial class Plugin
         ulong TargetId,
         byte Param9,
         RawCombatSnapshot? TargetSnapshot,
-        RawCombatSnapshot? SourceSnapshot);
+        RawCombatSnapshot? SourceSnapshot)
+    {
+        public bool CaptureForReview { get; init; }
+
+        public bool CaptureForDamageParsing { get; init; }
+    }
 
     private sealed record RawMapEffectPacket(
         long Sequence,
@@ -304,7 +332,13 @@ public sealed partial class Plugin
         byte param9)
     {
         var now = DateTime.UtcNow;
-        if (!ShouldAcceptRawCombatCapture(now))
+        var captureForReview = ShouldAcceptRawCombatCapture(now);
+        var captureForDamageParsing = ShouldAcceptDamageParserCapture(now) &&
+            category is ActorControlGainEffectCategory or
+                ActorControlLoseEffectCategory or
+                ActorControlUpdateEffectCategory or
+                ActorControlDotCategory;
+        if (!captureForReview && !captureForDamageParsing)
         {
             return;
         }
@@ -320,7 +354,7 @@ public sealed partial class Plugin
             ? NormalizeActorEntityId(param3)
             : 0;
 
-        EnqueueRawActorControlPacket(new RawActorControlPacket(
+        var packet = new RawActorControlPacket(
             GetNextRawActorControlSequence(),
             now,
             entityId,
@@ -335,14 +369,21 @@ public sealed partial class Plugin
             param8,
             targetId,
             param9,
-            shouldCaptureSnapshots ? CaptureRawCombatSnapshot(entityId, playerOnly: true) : null,
-            sourceEntityId == 0 ? null : CaptureRawCombatSnapshot(sourceEntityId)));
+            captureForReview && shouldCaptureSnapshots ? CaptureRawCombatSnapshot(entityId, playerOnly: true) : null,
+            captureForReview && sourceEntityId != 0 ? CaptureRawCombatSnapshot(sourceEntityId) : null)
+        {
+            CaptureForReview = captureForReview,
+            CaptureForDamageParsing = captureForDamageParsing,
+        };
+        EnqueueRawActorControlPacket(packet);
     }
 
     private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
     {
         var now = DateTime.UtcNow;
-        if (!ShouldAcceptRawCombatCapture(now) ||
+        var captureForReview = ShouldAcceptRawCombatCapture(now);
+        var captureForDamageParsing = ShouldAcceptDamageParserCapture(now);
+        if ((!captureForReview && !captureForDamageParsing) ||
             actionIntegrityData == IntPtr.Zero)
         {
             return;
@@ -368,7 +409,7 @@ public sealed partial class Plugin
                 effect.SourceActorId));
         }
 
-        EnqueueRawEffectResultPacket(new RawEffectResultPacket(
+        var rawPacket = new RawEffectResultPacket(
             GetNextRawEffectResultSequence(),
             now,
             targetId,
@@ -380,7 +421,12 @@ public sealed partial class Plugin
             packet->DamageShield,
             packet->EffectCount,
             isReplay,
-            statuses));
+            statuses)
+        {
+            CaptureForReview = captureForReview,
+            CaptureForDamageParsing = captureForDamageParsing,
+        };
+        EnqueueRawEffectResultPacket(rawPacket);
     }
 
     private void EnqueueRawMapEffect(uint index, ushort stateLow, ushort stateHigh)
@@ -407,7 +453,9 @@ public sealed partial class Plugin
         GameObjectId* targetEntityIds)
     {
         var now = DateTime.UtcNow;
-        if (!ShouldAcceptRawCombatCapture(now) ||
+        var captureForReview = ShouldAcceptRawCombatCapture(now);
+        var captureForDamageParsing = ShouldAcceptDamageParserCapture(now);
+        if ((!captureForReview && !captureForDamageParsing) ||
             header is null ||
             effects is null ||
             targetEntityIds is null ||
@@ -417,18 +465,21 @@ public sealed partial class Plugin
         }
 
         var sequence = GetNextRawActionEffectSequence();
-        var sourceSnapshot = CaptureRawCombatSnapshot(casterEntityId);
+        RawCombatSnapshot? sourceSnapshot = captureForReview ? CaptureRawCombatSnapshot(casterEntityId) : null;
         var replayPoses = new List<RawActorPoseSnapshot>();
         var replayPoseKeys = new HashSet<string>(StringComparer.Ordinal);
-        AddRawActorPoseSnapshot(
-            replayPoses,
-            replayPoseKeys,
-            casterEntityId,
-            now,
-            sequence,
-            header->GlobalSequence,
-            -1,
-            ReplayPositionSampleSource.ActionEffectSource);
+        if (captureForReview)
+        {
+            AddRawActorPoseSnapshot(
+                replayPoses,
+                replayPoseKeys,
+                casterEntityId,
+                now,
+                sequence,
+                header->GlobalSequence,
+                -1,
+                ReplayPositionSampleSource.ActionEffectSource);
+        }
         var targetCount = Math.Min((int)header->NumTargets, MaxActionEffectTargets);
         var targets = new List<RawActionEffectTarget>(targetCount);
         for (var targetIndex = 0; targetIndex < targetCount; targetIndex++)
@@ -449,7 +500,10 @@ public sealed partial class Plugin
                     (uint)effect.Param1,
                     (uint)effect.Param3,
                     (uint)effect.Param4,
-                    (uint)effect.Value));
+                    (uint)effect.Value)
+                {
+                    Param2 = effect.Param2,
+                });
             }
 
             if (rawEffects.Count == 0)
@@ -458,19 +512,23 @@ public sealed partial class Plugin
             }
 
             var targetId = targetEntityIds[targetIndex];
-            AddRawActorPoseSnapshot(
-                replayPoses,
-                replayPoseKeys,
-                GetEntityIdFromRawTargetId(targetId),
-                now,
-                sequence,
-                header->GlobalSequence,
-                targetIndex,
-                ReplayPositionSampleSource.ActionEffectTarget);
+            if (captureForReview)
+            {
+                AddRawActorPoseSnapshot(
+                    replayPoses,
+                    replayPoseKeys,
+                    GetEntityIdFromRawTargetId(targetId),
+                    now,
+                    sequence,
+                    header->GlobalSequence,
+                    targetIndex,
+                    ReplayPositionSampleSource.ActionEffectTarget);
+            }
+
             targets.Add(new RawActionEffectTarget(
                 targetIndex,
                 new RawTargetId(targetId.Id, targetId.ObjectId),
-                CaptureRawCombatSnapshot(targetId, playerOnly: true),
+                captureForReview ? CaptureRawCombatSnapshot(targetId, playerOnly: true) : null,
                 rawEffects));
         }
 
@@ -479,12 +537,20 @@ public sealed partial class Plugin
             return;
         }
 
+        if (sourceSnapshot is null &&
+            captureForDamageParsing &&
+            targets.Any(target => target.Effects.Any(effect => effect.Type is 14 or 15)))
+        {
+            sourceSnapshot = CaptureRawCombatSnapshot(casterEntityId);
+        }
+
         var capturedTargetPosition = targetPos is null ? Vector3.Zero : *targetPos;
         var hasTargetPosition = targetPos is not null && IsUsableReplayPosition(capturedTargetPosition);
         var hasCasterPose = false;
         var casterPosition = Vector3.Zero;
         var casterRotation = 0.0f;
-        if (IsDmuReplayCaptureContext() &&
+        if (captureForReview &&
+            IsDmuReplayCaptureContext() &&
             IsDmuCasterPoseReplayAction(header->ActionId) &&
             TryGetReplayObjectPose(casterEntityId, out var capturedCasterPosition, out var capturedCasterRotation, out _))
         {
@@ -493,7 +559,7 @@ public sealed partial class Plugin
             casterRotation = capturedCasterRotation;
         }
 
-        EnqueueRawActionEffectPacket(new RawActionEffectPacket(
+        var packet = new RawActionEffectPacket(
             sequence,
             now,
             header->GlobalSequence,
@@ -507,7 +573,17 @@ public sealed partial class Plugin
             capturedTargetPosition,
             sourceSnapshot,
             targets,
-            replayPoses));
+            replayPoses)
+        {
+            ActionType = header->ActionType,
+            SourceSequence = header->SourceSequence,
+            SpellId = header->SpellId,
+            AnimationVariation = header->AnimationVariation,
+            AnimationTargetEntityId = GetEntityId(header->AnimationTargetId),
+            CaptureForReview = captureForReview,
+            CaptureForDamageParsing = captureForDamageParsing,
+        };
+        EnqueueRawActionEffectPacket(packet);
     }
 
     private void AddRawActorPoseSnapshot(
@@ -732,8 +808,16 @@ public sealed partial class Plugin
         actionPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in actionPackets)
         {
-            AddActionEffectReplayPoseSamples(packet);
-            ResolveRawActionEffectPacket(packet);
+            if (packet.CaptureForDamageParsing)
+            {
+                ParseDamageActionEffectPacket(packet);
+            }
+
+            if (packet.CaptureForReview)
+            {
+                AddActionEffectReplayPoseSamples(packet);
+                ResolveRawActionEffectPacket(packet);
+            }
         }
 
         var combatLogMessages = DrainRawCombatLogMessages(now);
@@ -747,14 +831,30 @@ public sealed partial class Plugin
         effectResultPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in effectResultPackets)
         {
-            ResolveRawEffectResultPacket(packet);
+            if (packet.CaptureForDamageParsing)
+            {
+                ObserveDamageEffectResult(packet);
+            }
+
+            if (packet.CaptureForReview)
+            {
+                ResolveRawEffectResultPacket(packet);
+            }
         }
 
         var actorControlPackets = DrainRawActorControlPackets(now);
         actorControlPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in actorControlPackets)
         {
-            ResolveRawActorControlPacket(packet);
+            if (packet.CaptureForDamageParsing)
+            {
+                ParseDamageActorControl(packet);
+            }
+
+            if (packet.CaptureForReview)
+            {
+                ResolveRawActorControlPacket(packet);
+            }
         }
     }
 

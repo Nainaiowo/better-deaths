@@ -117,6 +117,28 @@ public sealed partial class Plugin
         return iconId;
     }
 
+    private uint GetActionCategoryId(uint actionId)
+    {
+        if (actionCategoryCache.TryGetValue(actionId, out var cachedCategoryId))
+        {
+            return cachedCategoryId;
+        }
+
+        var categoryId = 0u;
+        try
+        {
+            var action = DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId);
+            categoryId = action?.ActionCategory.RowId ?? 0u;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not load action category for {ActionId}.", actionId);
+        }
+
+        actionCategoryCache[actionId] = categoryId;
+        return categoryId;
+    }
+
     private string GetStatusName(uint statusId)
     {
         if (statusNameCache.TryGetValue(statusId, out var cachedName))
@@ -163,6 +185,56 @@ public sealed partial class Plugin
 
         statusIconCache[statusId] = iconId;
         return iconId;
+    }
+
+    private bool IsPeriodicDamageStatus(uint statusId)
+    {
+        if (periodicDamageStatusCache.TryGetValue(statusId, out var cached))
+        {
+            return cached;
+        }
+
+        var isPeriodic = false;
+        try
+        {
+            var status = DataManager.GetExcelSheet<Status>(Dalamud.Game.ClientLanguage.English)?.GetRowOrDefault(statusId);
+            var description = status?.Description.ExtractText() ?? string.Empty;
+            isPeriodic = ContainsAny(description,
+                "damage over time",
+                "sustaining damage",
+                "suffering damage over time",
+                "taking damage over time",
+                "periodic damage");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not classify periodic damage status {StatusId}.", statusId);
+        }
+
+        periodicDamageStatusCache[statusId] = isPeriodic;
+        return isPeriodic;
+    }
+
+    private bool IsReactiveDamageStatus(uint statusId)
+    {
+        if (reactiveDamageStatusCache.TryGetValue(statusId, out var cached))
+        {
+            return cached;
+        }
+
+        var isReactive = DamageParsing.ReactiveDamageStatusPolicy.IsKnown(statusId);
+        reactiveDamageStatusCache[statusId] = isReactive;
+        return isReactive;
+    }
+
+    private static bool ContainsAny(string value, params string[] candidates)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return candidates.Any(candidate => value.Contains(candidate, StringComparison.OrdinalIgnoreCase));
     }
 
     private bool IsReplayPlayerDebuffStatus(uint statusId)

@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.6";
+    private const string CurrentChangelogVersion = "1.0.0.7";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -1185,6 +1185,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             MainPage.Review => $"{HelpCenterUrl}review.html#review",
             MainPage.Replay => $"{HelpCenterUrl}replay.html#replay",
+            MainPage.DamageMeter => $"{HelpCenterUrl}meter.html#meter",
             MainPage.Analyzer => $"{HelpCenterUrl}analyzer.html#analyzer",
             MainPage.Example => $"{HelpCenterUrl}index.html#first-review",
             MainPage.Customize => $"{HelpCenterUrl}settings.html#customize",
@@ -1314,6 +1315,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
+            new("Meter", MainPage.DamageMeter),
             new("Analyzer", MainPage.Analyzer, BadgeText: ThemeNewBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Options", MainPage.Options),
@@ -1374,6 +1376,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             case MainPage.Replay:
                 DrawReplayPage();
+                break;
+            case MainPage.DamageMeter:
+                DrawDamageMeterPage();
                 break;
             case MainPage.Analyzer:
                 DrawWtfDigAnalyzerPage();
@@ -19596,6 +19601,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         Review,
         Replay,
+        DamageMeter,
         Analyzer,
         Example,
         Customize,
@@ -19883,6 +19889,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.7");
+        ImGui.TextDisabled("Testing update.");
+        DrawHighlightedChangelogBullet("Added a live Damage Meter with player totals, DPS, damage share, and ability breakdowns.");
+        DrawWrappedBullet("Improved periodic-damage attribution and encounter cleanup.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.6");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added a collapsible recorded-pull sidebar to the Analyzer.");

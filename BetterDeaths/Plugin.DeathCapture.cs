@@ -101,7 +101,7 @@ public sealed partial class Plugin
         PrunePendingDeathCandidates(now);
         TrackDebugStatusSnapshots(currentMembers, now);
         UpdatePostResetDeathSuppression();
-        if (ShouldAcceptRawCombatCapture(now))
+        if (ShouldAcceptRawCombatCapture(now) || ShouldAcceptDamageParserCapture(now))
         {
             ResolveRawCombatQueues(now);
         }
@@ -221,7 +221,7 @@ public sealed partial class Plugin
     private void FinalizePendingDeathsForDutyReset(DateTime now)
     {
         PrunePendingDeathCandidates(now);
-        if (ShouldAcceptRawCombatCapture(now))
+        if (ShouldAcceptRawCombatCapture(now) || ShouldAcceptDamageParserCapture(now))
         {
             ResolveRawCombatQueues(now);
         }

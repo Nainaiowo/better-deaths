@@ -74,8 +74,14 @@ public sealed partial class Plugin
         deathRecapPopupWindow.RefreshVisibility();
     }
 
-    private void ArchiveCurrentPullForReview(string reason, bool suppressResetStateDeaths = true)
+    private void ArchiveCurrentPullForReview(
+        string reason,
+        bool suppressResetStateDeaths = true,
+        DateTime? endedAtUtc = null)
     {
+        var resolvedEndAtUtc = endedAtUtc ?? DateTime.UtcNow;
+        ResolveRawCombatQueues(resolvedEndAtUtc);
+        EndDamageEncounter(resolvedEndAtUtc, reason);
         if (currentDeaths.Count > 0)
         {
             CaptureCurrentPullSnapshot(reason);
@@ -85,7 +91,7 @@ public sealed partial class Plugin
 
         if (pullStartedAtUtc is not null || lastKnownPullElapsedSeconds > 0.0f)
         {
-            ResetCurrentPull(suppressResetStateDeaths);
+            ResetCurrentPull(suppressResetStateDeaths, resetDamageParser: false);
             return;
         }
 
@@ -152,8 +158,15 @@ public sealed partial class Plugin
         return true;
     }
 
-    private void ResetCurrentPull(bool suppressResetStateDeaths = true)
+    private void ResetCurrentPull(
+        bool suppressResetStateDeaths = true,
+        bool resetDamageParser = true)
     {
+        if (resetDamageParser)
+        {
+            EndDamageEncounter(DateTime.UtcNow, "Pull reset");
+        }
+
         currentDeaths.Clear();
         ClearLivePullCaptureState();
         if (suppressResetStateDeaths)
@@ -266,6 +279,13 @@ public sealed partial class Plugin
             lastInCombatAtUtc,
             now,
             PostCombatCaptureGrace);
+    }
+
+    private bool ShouldAcceptDamageParserCapture(DateTime now)
+    {
+        return CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            IsDutyCaptureActive(),
+            IsPvPCaptureBlocked());
     }
 
     private bool IsEffectiveInCombat()
@@ -402,7 +422,9 @@ public sealed partial class Plugin
         {
             if (currentPullClosedForReview)
             {
-                ResetCurrentPull(suppressResetStateDeaths: false);
+                ResetCurrentPull(
+                    suppressResetStateDeaths: false,
+                    resetDamageParser: false);
             }
 
             lastInCombatAtUtc = now;
@@ -432,7 +454,10 @@ public sealed partial class Plugin
             var closeAtUtc = CaptureTimingPolicy.GetPullCloseTime(lastInCombatAtUtc!.Value, PostCombatCaptureGrace);
             lastKnownPullElapsedSeconds = CalculatePullElapsed(closeAtUtc);
             combatTimerRunning = false;
-            ArchiveCurrentPullForReview("Combat ended", suppressResetStateDeaths: false);
+            ArchiveCurrentPullForReview(
+                "Combat ended",
+                suppressResetStateDeaths: false,
+                endedAtUtc: closeAtUtc);
             return;
         }
 

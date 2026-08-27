@@ -369,8 +369,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly HashSet<string> postResetSuppressedDeadMemberKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> actionNameCache = new();
     private readonly Dictionary<uint, uint> actionIconCache = new();
+    private readonly Dictionary<uint, uint> actionCategoryCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
     private readonly Dictionary<uint, uint> statusIconCache = new();
+    private readonly Dictionary<uint, bool> periodicDamageStatusCache = new();
+    private readonly Dictionary<uint, bool> reactiveDamageStatusCache = new();
     private readonly Dictionary<uint, bool> replayDebuffStatusCache = new();
     private readonly Dictionary<uint, string> classJobNameCache = new();
     private readonly Dictionary<uint, string> territoryNameCache = new();
@@ -389,6 +392,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Queue<RawEffectResultPacket> rawEffectResultPackets = [];
     private readonly Queue<RawActorControlPacket> rawActorControlPackets = [];
     private readonly Queue<RawMapEffectPacket> rawMapEffectPackets = [];
+    private readonly DamageParsing.DamageParsingModule damageParsingModule = new();
     private readonly Dictionary<uint, ActiveDmuP2PathOfLightTower> activeDmuP2PathOfLightTowersByIndex = [];
     private readonly HashSet<uint> activeDmuP5ArenaHoleIndices = [];
     private readonly Dictionary<string, ActiveReplayMechanic> activeReplayMechanicsByKey = new(StringComparer.Ordinal);
@@ -554,10 +558,18 @@ public sealed partial class Plugin : IDalamudPlugin
         ? CalculatePullElapsed(DateTime.UtcNow)
         : lastKnownPullElapsedSeconds;
 
+    internal DamageParsing.DamageEncounterSnapshot? CurrentDamageEncounter =>
+        damageParsingModule.GetCurrentEncounter();
+
+    internal DamageParsing.DamageEncounterSnapshot? LastDamageEncounter =>
+        damageParsingModule.LastEncounter;
+
     public unsafe Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         NormalizeUserConfiguration();
+        damageParsingModule.PeriodicEventsResolved = parsed =>
+            QueueDamageMeterParsedDebug("PeriodicResolved", parsed);
         BeginLoadRecordedPullHistory();
         deathChatLinkPayload = ChatGui.AddChatLinkHandler(0, OnDeathChatLinkClick);
 
@@ -664,6 +676,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         disposing = true;
         CaptureCurrentPullSnapshot("Plugin unloaded");
+        EndDamageEncounter(DateTime.UtcNow, "Plugin unloaded");
         SaveRecordedPullHistory();
         _ = WaitForRecordedPullSave(TimeSpan.FromSeconds(10));
         recordedPullDetailLoadCts.Cancel();
@@ -747,7 +760,14 @@ public sealed partial class Plugin : IDalamudPlugin
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);
             PrunePendingDeathRecapLinks(now);
+            if (ShouldAcceptRawCombatCapture(now) || ShouldAcceptDamageParserCapture(now))
+            {
+                ResolveRawCombatQueues(now);
+            }
+
             UpdateCombatTimerState(now);
+            damageParsingModule.SetCombatActive(IsEffectiveInCombat(), now);
+            damageParsingModule.FlushPendingPeriodicTicks(now);
             RefreshPartyState();
             FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);

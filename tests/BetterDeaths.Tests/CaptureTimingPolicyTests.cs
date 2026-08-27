@@ -37,6 +37,20 @@ public sealed class CaptureTimingPolicyTests
         Assert.False(accepted);
     }
 
+    [Fact]
+    public void DamageParserCanStageDutyPacketsBeforeCombatIsReported()
+    {
+        Assert.True(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: true,
+            isPvPCaptureBlocked: false));
+        Assert.False(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: false,
+            isPvPCaptureBlocked: false));
+        Assert.False(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: true,
+            isPvPCaptureBlocked: true));
+    }
+
     [Theory]
     [InlineData(0.0, true)]
     [InlineData(2.999, true)]
