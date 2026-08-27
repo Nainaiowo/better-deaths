@@ -85,8 +85,6 @@ public sealed partial class RecapWindow
 
         DrawDamageMeterWidgetSettings();
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
-        DrawDamageMeterDataSettings();
-        ImGui.Dummy(new Vector2(1.0f, 10.0f));
         DrawDamageMeterColumnSettings();
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
         DrawDamageMeterPreview();
@@ -108,28 +106,6 @@ public sealed partial class RecapWindow
         DrawTextSelectorSeparator();
         DrawDamageMeterDisplayModeSegment(WidgetDisplayMode.Concise);
         DrawSettingsTooltip("Normal shows full names and labels. Concise uses player initials and tighter columns.");
-    }
-
-    private void DrawDamageMeterDataSettings()
-    {
-        ImGui.TextColored(ModernAccentColor, "Data");
-        ImGui.TextUnformatted("Combatants");
-        ImGui.SameLine();
-        var allCombatants = configuration.DamageMeterShowAllCombatants;
-        var partyWidth = GetThemedActionButtonWidth("Party");
-        if (DrawThemedToggleButton("Party", "DamageMeterParty", !allCombatants, partyWidth))
-        {
-            configuration.DamageMeterShowAllCombatants = false;
-            plugin.SaveConfiguration();
-        }
-
-        ImGui.SameLine();
-        var allWidth = GetThemedActionButtonWidth("All");
-        if (DrawThemedToggleButton("All", "DamageMeterAll", allCombatants, allWidth))
-        {
-            configuration.DamageMeterShowAllCombatants = true;
-            plugin.SaveConfiguration();
-        }
     }
 
     private void DrawDamageMeterDisplayModeSegment(WidgetDisplayMode mode)
@@ -653,10 +629,9 @@ public sealed partial class RecapWindow
             var visibleDps = snapshot.DurationSeconds > 0.0
                 ? visibleTotal / snapshot.DurationSeconds
                 : 0.0;
-            var scope = configuration.DamageMeterShowAllCombatants ? "All" : "Party";
             var title = configuration.DamageMeterWidgetDisplayMode == WidgetDisplayMode.Concise
                 ? $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | {FormatDamageMeterNumber(visibleDps)} DPS"
-                : $"{state} | {scope} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}";
+                : $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}";
             DrawModernWidgetTitle(title);
             ImGui.Spacing();
         }
@@ -673,9 +648,7 @@ public sealed partial class RecapWindow
     private List<DamageSourceSummary> GetVisibleDamageMeterSources(DamageEncounterSnapshot snapshot)
     {
         return snapshot.Sources
-            .Where(source => configuration.DamageMeterShowAllCombatants ||
-                source.Source.IsPartyMember ||
-                source.Source.IsLimitBreak)
+            .Where(source => DamageMeterCombatantPolicy.ShouldDisplay(source.Source))
             .OrderByDescending(source => source.TotalDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -689,9 +662,7 @@ public sealed partial class RecapWindow
     {
         if (sources.Count == 0)
         {
-            ImGui.TextDisabled(configuration.DamageMeterShowAllCombatants
-                ? "No damage sources were recorded."
-                : "No party damage was recorded.");
+            ImGui.TextDisabled("No player damage was recorded.");
             return;
         }
 
@@ -906,7 +877,7 @@ public sealed partial class RecapWindow
                 if (ImGui.IsItemHovered())
                 {
                     SetThemedTooltip(
-                        "rDPS is shown on player rows because raid-buff contribution comes from damage dealt by the whole party.");
+                        "rDPS is shown on player rows because raid-buff contribution comes from damage dealt by other recorded players.");
                 }
 
                 break;

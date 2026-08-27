@@ -80,6 +80,30 @@ public sealed class RaidDamageCalculatorTests
     }
 
     [Fact]
+    public void AlliancePlayersParticipateInRaidDamageCredit()
+    {
+        var allianceDealer = Dealer with { IsPartyMember = false };
+        var allianceBuffer = Buffer with { IsPartyMember = false };
+        var damageEvent = CreateEvent(105) with
+        {
+            Source = allianceDealer,
+            AttributedSource = allianceDealer,
+            SourceStatuses = [Status(0x4A1, allianceBuffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var sources = new[]
+        {
+            SourceSummary(allianceDealer, 105),
+            SourceSummary(allianceBuffer, 0),
+        };
+
+        var result = RaidDamageCalculator.Calculate([damageEvent], sources);
+
+        Assert.Equal(5.0, Received(result, allianceDealer), 6);
+        Assert.Equal(5.0, Given(result, allianceBuffer), 6);
+    }
+
+    [Fact]
     public void OverlappingPercentageBuffsUseLogWeightedCredit()
     {
         var damageEvent = CreateEvent(441) with

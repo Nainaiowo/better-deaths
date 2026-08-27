@@ -38,7 +38,7 @@ internal static class RaidDamageCalculator
             }
 
             var recipient = damageEvent.AttributedSource ?? damageEvent.Source;
-            if (!recipient.IsPartyMember || recipient.IsLimitBreak)
+            if (!IsPlayerCombatant(recipient) || recipient.IsLimitBreak)
             {
                 continue;
             }
@@ -58,7 +58,7 @@ internal static class RaidDamageCalculator
                 rateSamples);
             var externalDamageBuffs = effects
                 .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier &&
-                    IsExternalPartyBuff(effect.Source, recipient))
+                    IsExternalPlayerBuff(effect.Source, recipient))
                 .ToList();
             var damageAfterPercentageBuffs = RedistributePercentageDamage(
                 damageEvent.Amount,
@@ -139,10 +139,10 @@ internal static class RaidDamageCalculator
         var guaranteedCritical = RaidBuffPolicy.IsGuaranteedCritical(damageEvent);
         var guaranteedDirectHit = RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent);
         var externalCriticalBuffs = allCriticalBuffs
-            .Where(effect => IsExternalPartyBuff(effect.Source, recipient))
+            .Where(effect => IsExternalPlayerBuff(effect.Source, recipient))
             .ToList();
         var externalDirectHitBuffs = allDirectHitBuffs
-            .Where(effect => IsExternalPartyBuff(effect.Source, recipient))
+            .Where(effect => IsExternalPlayerBuff(effect.Source, recipient))
             .ToList();
         if (externalCriticalBuffs.Count == 0 && externalDirectHitBuffs.Count == 0)
         {
@@ -424,12 +424,17 @@ internal static class RaidDamageCalculator
         }
     }
 
-    private static bool IsExternalPartyBuff(
+    private static bool IsExternalPlayerBuff(
         DamageActorIdentity provider,
         DamageActorIdentity recipient)
     {
-        return provider.IsPartyMember &&
+        return IsPlayerCombatant(provider) &&
             !string.Equals(GetActorKey(provider), GetActorKey(recipient), StringComparison.Ordinal);
+    }
+
+    private static bool IsPlayerCombatant(DamageActorIdentity actor)
+    {
+        return actor.IsPlayer || actor.IsPartyMember;
     }
 
     private static BaseRates ObserveAndEstimateBaseRates(

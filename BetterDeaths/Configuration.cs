@@ -385,8 +385,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public float WtfDigAnalyzerMapSide { get; set; }
 
-    public bool DamageMeterShowAllCombatants { get; set; }
-
     public bool ShowDamageMeterWidget { get; set; }
 
     public WidgetDisplayMode DamageMeterWidgetDisplayMode { get; set; } = WidgetDisplayMode.Normal;

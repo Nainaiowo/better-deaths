@@ -18,6 +18,7 @@
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageModels.cs" Link="DamageParsing/DamageModels.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterPreviewData.cs" Link="DamageParsing/DamageMeterPreviewData.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterCombatantPolicy.cs" Link="DamageParsing/DamageMeterCombatantPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParsingModule.cs" Link="DamageParsing/DamageParsingModule.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/GroundDamageStatusPolicy.cs" Link="DamageParsing/GroundDamageStatusPolicy.cs" />
