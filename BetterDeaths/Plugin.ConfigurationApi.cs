@@ -52,6 +52,13 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void SetShowDamageMeterWidget(bool open)
+    {
+        Configuration.ShowDamageMeterWidget = open;
+        damageMeterWidgetWindow.IsOpen = open;
+        SaveConfiguration();
+    }
+
     public void SetCurrentPullWidgetBackgroundOpacity(float opacity)
     {
         Configuration.CurrentPullWidgetBackgroundOpacity = Math.Clamp(
@@ -112,6 +119,17 @@ public sealed partial class Plugin
         }
 
         Configuration.ShowCurrentPullWidget = false;
+        SaveConfiguration();
+    }
+
+    public void NotifyDamageMeterWidgetClosed()
+    {
+        if (disposing || !Configuration.ShowDamageMeterWidget)
+        {
+            return;
+        }
+
+        Configuration.ShowDamageMeterWidget = false;
         SaveConfiguration();
     }
 

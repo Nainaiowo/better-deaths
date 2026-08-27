@@ -323,6 +323,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem = new("BetterDeaths");
     private readonly RecapWindow recapWindow;
     private readonly CurrentPullWidgetWindow currentPullWidgetWindow;
+    private readonly DamageMeterWidgetWindow damageMeterWidgetWindow;
     private readonly DeathRecapPopupWindow deathRecapPopupWindow;
     private readonly List<PartyMemberSnapshot> currentMembers = [];
     private readonly List<PartyDeathRecord> currentDeaths = [];
@@ -588,6 +589,12 @@ public sealed partial class Plugin : IDalamudPlugin
         };
         windowSystem.AddWindow(currentPullWidgetWindow);
 
+        damageMeterWidgetWindow = new DamageMeterWidgetWindow(this, recapWindow)
+        {
+            IsOpen = Configuration.ShowDamageMeterWidget,
+        };
+        windowSystem.AddWindow(damageMeterWidgetWindow);
+
         CommandManager.AddHandler(MainCommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Toggle Better Deaths.",
@@ -766,7 +773,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             UpdateCombatTimerState(now);
-            damageParsingModule.SetCombatActive(IsEffectiveInCombat(), now);
+            damageParsingModule.SetCombatActive(combatTimerRunning, now);
             damageParsingModule.FlushPendingPeriodicTicks(now);
             RefreshPartyState();
             FlushDebugCaptureFile(now);

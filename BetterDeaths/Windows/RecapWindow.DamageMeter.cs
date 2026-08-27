@@ -36,13 +36,7 @@ public sealed partial class RecapWindow
             return;
         }
 
-        var sources = snapshot.Sources
-            .Where(source => configuration.DamageMeterShowAllCombatants ||
-                source.Source.IsPartyMember ||
-                source.Source.IsLimitBreak)
-            .OrderByDescending(source => source.TotalDamage)
-            .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var sources = GetVisibleDamageMeterSources(snapshot);
         var visibleTotal = sources.Aggregate(0UL, (total, source) => total + source.TotalDamage);
         DrawDamageMeterSummary(snapshot, sources, visibleTotal, useLast);
         ImGui.Dummy(new Vector2(1.0f, 7.0f));
@@ -89,6 +83,22 @@ public sealed partial class RecapWindow
             SetThemedTooltip("No completed encounter is available.");
         }
 
+        ImGui.SameLine(0.0f, spacing);
+        var widgetWidth = GetThemedActionButtonWidth("Widget");
+        if (DrawThemedToggleButton(
+                "Widget",
+                "DamageMeterWidget",
+                configuration.ShowDamageMeterWidget,
+                widgetWidth))
+        {
+            plugin.SetShowDamageMeterWidget(!configuration.ShowDamageMeterWidget);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip("Show or hide the compact damage meter window.");
+        }
+
         var allCombatants = configuration.DamageMeterShowAllCombatants;
         var partyWidth = GetThemedActionButtonWidth("Party");
         var allWidth = GetThemedActionButtonWidth("All");
@@ -115,6 +125,140 @@ public sealed partial class RecapWindow
             configuration.DamageMeterShowAllCombatants = true;
             plugin.SaveConfiguration();
         }
+    }
+
+    internal void DrawDamageMeterWidgetContent()
+    {
+        ApplyConfiguredTheme();
+        using var widgetStyle = new ModernWidgetScope();
+
+        var current = plugin.CurrentDamageEncounter;
+        var snapshot = current ?? plugin.LastDamageEncounter;
+        if (snapshot is null)
+        {
+            using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
+            {
+                DrawModernWidgetTitle("Waiting for combat");
+                ImGui.Spacing();
+                ImGui.TextDisabled("No damage recorded yet.");
+            }
+
+            return;
+        }
+
+        var sources = GetVisibleDamageMeterSources(snapshot);
+        var visibleTotal = sources.Aggregate(0UL, (total, source) => total + source.TotalDamage);
+        using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
+        {
+            var visibleDps = snapshot.DurationSeconds > 0.0
+                ? visibleTotal / snapshot.DurationSeconds
+                : 0.0;
+            var scope = configuration.DamageMeterShowAllCombatants ? "All" : "Party";
+            var state = current is null ? "Last pull" : "Live";
+            DrawModernWidgetTitle(
+                $"{state} | {scope} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}");
+            ImGui.Spacing();
+        }
+
+        if (ImGui.BeginChild("##DamageMeterWidgetScroll", Vector2.Zero, false, OptionalScrollbarFlags))
+        {
+            DrawDamageMeterWidgetTable(snapshot, sources, visibleTotal);
+            DrawReviewPaneBottomPadding();
+        }
+
+        ImGui.EndChild();
+    }
+
+    private List<DamageSourceSummary> GetVisibleDamageMeterSources(DamageEncounterSnapshot snapshot)
+    {
+        return snapshot.Sources
+            .Where(source => configuration.DamageMeterShowAllCombatants ||
+                source.Source.IsPartyMember ||
+                source.Source.IsLimitBreak)
+            .OrderByDescending(source => source.TotalDamage)
+            .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void DrawDamageMeterWidgetTable(
+        DamageEncounterSnapshot snapshot,
+        IReadOnlyList<DamageSourceSummary> sources,
+        ulong visibleTotal)
+    {
+        if (sources.Count == 0)
+        {
+            ImGui.TextDisabled(configuration.DamageMeterShowAllCombatants
+                ? "No damage sources were recorded."
+                : "No party damage was recorded.");
+            return;
+        }
+
+        const ImGuiTableFlags flags = ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.BordersInnerV;
+        if (!ImGui.BeginTable("##DamageMeterWidgetRows", 5, flags))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthFixed, 30.0f);
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 2.0f);
+        ImGui.TableSetupColumn("Damage", ImGuiTableColumnFlags.WidthStretch, 1.05f);
+        ImGui.TableSetupColumn("DPS", ImGuiTableColumnFlags.WidthStretch, 0.9f);
+        ImGui.TableSetupColumn("Share", ImGuiTableColumnFlags.WidthStretch, 1.15f);
+        DrawCenteredTableHeader("#", "Player", "Damage", "DPS", "Share");
+
+        for (var index = 0; index < sources.Count; index++)
+        {
+            DrawDamageMeterWidgetRow(snapshot, sources[index], visibleTotal, index + 1);
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawDamageMeterWidgetRow(
+        DamageEncounterSnapshot snapshot,
+        DamageSourceSummary source,
+        ulong visibleTotal,
+        int rank)
+    {
+        const float iconSize = 20.0f;
+        ImGui.TableNextRow(ImGuiTableRowFlags.None, iconSize + 8.0f);
+        ImGui.TableNextColumn();
+        DrawCenteredText(rank.ToString());
+
+        ImGui.TableNextColumn();
+        var iconId = GetClassJobIconId(source.Source.ClassJobId);
+        if (iconId != 0)
+        {
+            DrawGameIcon(iconId, iconSize, source.Source.Name);
+            ImGui.SameLine();
+        }
+
+        var displayName = source.Source.IsPlayer
+            ? FormatKnownPlayerName(source.Source.Name)
+            : source.Source.Name;
+        ImGui.TextUnformatted(displayName);
+
+        ImGui.TableNextColumn();
+        DrawCenteredText(FormatAmount(source.TotalDamage));
+        ImGui.TableNextColumn();
+        DrawCenteredText(FormatDamageMeterNumber(
+            snapshot.DurationSeconds > 0.0 ? source.TotalDamage / snapshot.DurationSeconds : 0.0));
+        ImGui.TableNextColumn();
+        DrawDamageMeterShareBar(source.TotalDamage, visibleTotal);
+    }
+
+    private static void DrawDamageMeterShareBar(ulong damage, ulong total)
+    {
+        var fraction = total == 0 ? 0.0f : (float)Math.Clamp(damage / (double)total, 0.0, 1.0);
+        var label = total == 0 ? "-" : $"{damage * 100.0 / total:F1}%";
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
+        ImGui.PushStyleColor(ImGuiCol.PlotHistogram, ModernAccentColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, GetReadableTextColorForBackground(
+            fraction >= 0.45f ? ModernAccentColor : ModernFrameColor));
+        ImGui.ProgressBar(fraction, new Vector2(-1.0f, ImGui.GetFrameHeight()), label);
+        ImGui.PopStyleColor(3);
     }
 
     private static void DrawDamageMeterSummary(
@@ -300,8 +444,17 @@ public sealed partial class RecapWindow
         var directDamageHits = Math.Max(0, hits - periodicHits);
         ImGui.TableNextColumn();
         DrawCenteredText(directDamageHits == 0 ? "-" : $"{criticalHits * 100.0 / directDamageHits:F1}%", color);
+        if (ImGui.IsItemHovered() && directDamageHits > 0)
+        {
+            SetThemedTooltip($"{criticalHits:N0} critical hits out of {directDamageHits:N0} eligible hits.");
+        }
+
         ImGui.TableNextColumn();
         DrawCenteredText(directDamageHits == 0 ? "-" : $"{directHits * 100.0 / directDamageHits:F1}%", color);
+        if (ImGui.IsItemHovered() && directDamageHits > 0)
+        {
+            SetThemedTooltip($"{directHits:N0} direct hits out of {directDamageHits:N0} eligible hits.");
+        }
     }
 
     private static string GetDamageMeterSourceKey(DamageActorIdentity source)

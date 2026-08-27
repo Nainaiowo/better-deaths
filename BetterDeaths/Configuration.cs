@@ -389,6 +389,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool DamageMeterShowLastEncounter { get; set; }
 
+    public bool ShowDamageMeterWidget { get; set; }
+
     public ReplayOverlayDockSide ReplayMitigationOverlayDockSide { get; set; } = ReplayOverlayDockSide.Right;
 
     public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;

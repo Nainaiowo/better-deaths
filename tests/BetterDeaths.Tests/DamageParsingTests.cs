@@ -201,8 +201,8 @@ public sealed class DamageParsingTests
 
         Assert.NotNull(ended);
         Assert.Same(ended, module.LastEncounter);
-        Assert.Equal(5.0, ended.DurationSeconds);
-        Assert.Equal(300.0, ended.DamagePerSecond);
+        Assert.Equal(10.0, ended.DurationSeconds);
+        Assert.Equal(150.0, ended.DamagePerSecond);
         Assert.Equal("Combat ended", ended.EndReason);
         Assert.Null(module.GetCurrentEncounter());
 
@@ -276,6 +276,39 @@ public sealed class DamageParsingTests
         Assert.Equal(5.0, first.DurationSeconds);
         Assert.Equal(300.0, first.DamagePerSecond);
         Assert.Same(first, unchanged);
+    }
+
+    [Fact]
+    public void ExplicitCombatLifecycleKeepsLiveDpsRunningBetweenDamageEvents()
+    {
+        var module = new DamageParsingModule();
+        module.Process(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)),
+            allowAutomaticEncounterStart: false);
+        module.SetCombatActive(true, SeenAtUtc.AddMilliseconds(100));
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(
+            module.GetCurrentEncounter(SeenAtUtc.AddSeconds(5)));
+
+        Assert.Equal(5.0, snapshot.DurationSeconds);
+        Assert.Equal(200.0, snapshot.DamagePerSecond);
+    }
+
+    [Fact]
+    public void ExplicitCombatLifecycleIncludesCombatBeforeTheFirstDamageEvent()
+    {
+        var module = new DamageParsingModule();
+        module.SetCombatActive(true, SeenAtUtc.AddSeconds(-2));
+        module.Process(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)),
+            allowAutomaticEncounterStart: false);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(
+            module.GetCurrentEncounter(SeenAtUtc.AddSeconds(5)));
+
+        Assert.Equal(7.0, snapshot.DurationSeconds);
+        Assert.Equal(SeenAtUtc.AddSeconds(-2), snapshot.StartedAtUtc);
+        Assert.Equal(1000.0 / 7.0, snapshot.DamagePerSecond, precision: 6);
     }
 
     [Fact]

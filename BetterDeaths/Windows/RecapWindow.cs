@@ -19891,7 +19891,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("v1.0.0.7");
         ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Added a live Damage Meter with player totals, DPS, damage share, and ability breakdowns.");
+        DrawHighlightedChangelogBullet("Added a live Damage Meter and compact widget with player totals, DPS, damage share, and ability breakdowns.");
         DrawWrappedBullet("Improved periodic-damage attribution and encounter cleanup.");
 
         ImGui.Separator();

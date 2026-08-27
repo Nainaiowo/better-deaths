@@ -18,6 +18,7 @@ internal sealed class DamageParsingModule
     private readonly List<PendingPeriodicTick> pendingPeriodicTicks = [];
     private readonly List<StagedDamageBatch> stagedDamageBatches = [];
     private DateTime? startedAtUtc;
+    private DateTime? combatStartedAtUtc;
     private DateTime? latestEventAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
@@ -28,6 +29,7 @@ internal sealed class DamageParsingModule
     private DamageEncounterSnapshot? cachedCurrentEncounter;
     private long mutationRevision;
     private long cachedCurrentEncounterRevision = -1;
+    private long cachedCurrentEncounterTimeBucket = -1;
 
     public Action<IReadOnlyList<ParsedDamageEvent>>? PeriodicEventsResolved { get; set; }
 
@@ -126,15 +128,27 @@ internal sealed class DamageParsingModule
             if (active)
             {
                 PrunePreEncounterState(seenAtUtc);
+                if (!combatActive)
+                {
+                    combatStartedAtUtc = seenAtUtc;
+                    cachedCurrentEncounterTimeBucket = -1;
+                }
+
                 combatActive = true;
                 ActivateStagedEncounter();
                 FlushPendingPeriodicTicksCore(seenAtUtc, force: false);
                 return;
             }
 
+            if (combatActive)
+            {
+                cachedCurrentEncounterTimeBucket = -1;
+            }
+
+            combatActive = false;
             if (startedAtUtc is null)
             {
-                combatActive = false;
+                combatStartedAtUtc = null;
             }
 
             PrunePreEncounterState(seenAtUtc);
@@ -151,22 +165,34 @@ internal sealed class DamageParsingModule
 
     public DamageEncounterSnapshot? GetCurrentEncounter()
     {
+        return GetCurrentEncounter(null);
+    }
+
+    internal DamageEncounterSnapshot? GetCurrentEncounter(DateTime? nowUtc)
+    {
         lock (syncRoot)
         {
-            FlushPendingPeriodicTicksCore(DateTime.UtcNow, force: false);
+            var currentTime = nowUtc ?? DateTime.UtcNow;
+            FlushPendingPeriodicTicksCore(currentTime, force: false);
             if (startedAtUtc is null || latestEventAtUtc is null)
             {
                 return null;
             }
 
+            var snapshotAtUtc = usesExplicitCombatLifecycle && combatActive
+                ? currentTime > latestEventAtUtc.Value ? currentTime : latestEventAtUtc.Value
+                : latestEventAtUtc.Value;
+            var timeBucket = snapshotAtUtc.Ticks / TimeSpan.TicksPerSecond;
             if (cachedCurrentEncounter is not null &&
-                cachedCurrentEncounterRevision == mutationRevision)
+                cachedCurrentEncounterRevision == mutationRevision &&
+                cachedCurrentEncounterTimeBucket == timeBucket)
             {
                 return cachedCurrentEncounter;
             }
 
-            cachedCurrentEncounter = BuildSnapshot(latestEventAtUtc.Value, null, string.Empty, includeEvents: false);
+            cachedCurrentEncounter = BuildSnapshot(snapshotAtUtc, null, string.Empty, includeEvents: false);
             cachedCurrentEncounterRevision = mutationRevision;
+            cachedCurrentEncounterTimeBucket = timeBucket;
             return cachedCurrentEncounter;
         }
     }
@@ -182,7 +208,9 @@ internal sealed class DamageParsingModule
                 return null;
             }
 
-            var effectiveEnd = latestEventAtUtc.Value;
+            var effectiveEnd = endedAtUtc > latestEventAtUtc.Value
+                ? endedAtUtc
+                : latestEventAtUtc.Value;
             lastEncounter = BuildSnapshot(effectiveEnd, effectiveEnd, reason, includeEvents: true);
             ClearCurrentEncounter();
             return lastEncounter;
@@ -244,6 +272,7 @@ internal sealed class DamageParsingModule
         stagedDamageBatches.Clear();
         periodicDamageTracker.Clear();
         startedAtUtc = null;
+        combatStartedAtUtc = null;
         latestEventAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
@@ -251,6 +280,7 @@ internal sealed class DamageParsingModule
         duplicateEventCount = 0;
         cachedCurrentEncounter = null;
         cachedCurrentEncounterRevision = -1;
+        cachedCurrentEncounterTimeBucket = -1;
     }
 
     private IReadOnlyList<ParsedDamageEvent> FlushPendingPeriodicTicksCore(
@@ -414,8 +444,11 @@ internal sealed class DamageParsingModule
                 continue;
             }
 
-            startedAtUtc = startedAtUtc is null || damageEvent.SeenAtUtc < startedAtUtc
-                ? damageEvent.SeenAtUtc
+            var eventStartAtUtc = combatStartedAtUtc is { } combatStart && combatStart < damageEvent.SeenAtUtc
+                ? combatStart
+                : damageEvent.SeenAtUtc;
+            startedAtUtc = startedAtUtc is null || eventStartAtUtc < startedAtUtc
+                ? eventStartAtUtc
                 : startedAtUtc;
             latestEventAtUtc = latestEventAtUtc is null || damageEvent.SeenAtUtc > latestEventAtUtc
                 ? damageEvent.SeenAtUtc

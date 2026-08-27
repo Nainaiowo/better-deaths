@@ -534,6 +534,21 @@ public sealed partial class Plugin
                 UnattributedDamage = ended?.UnattributedDamage ?? 0,
                 DurationSeconds = ended?.DurationSeconds ?? 0.0,
                 PacketCount = ended?.PacketCount ?? 0,
+                Sources = ended?.Sources.Select(source => new
+                {
+                    SourceEntityId = source.Source.EntityId,
+                    SourceName = source.Source.Name,
+                    source.TotalDamage,
+                    source.Swings,
+                    source.Hits,
+                    source.Misses,
+                    source.Resists,
+                    source.InvulnerableHits,
+                    source.CriticalHits,
+                    source.DirectHits,
+                    source.CriticalDirectHits,
+                    source.PeriodicHits,
+                }),
             });
         }
 
