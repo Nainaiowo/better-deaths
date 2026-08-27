@@ -19,16 +19,26 @@ public sealed partial class RecapWindow
     private void DrawWidgetsPage()
     {
         var available = ImGui.GetContentRegionAvail();
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
         if (available.X >= 900.0f)
         {
-            var leftWidth = MathF.Max(480.0f, (available.X - spacing) * 0.5f);
+            var dividerWidth = ReviewPaneDividerWidth + (WorkspacePaneGap * 2.0f);
+            var contentWidth = MathF.Max(0.0f, available.X - dividerWidth);
+            var leftWidth = MathF.Max(480.0f, contentWidth * 0.5f);
+            if (ImGui.BeginChild(
+                    "##DamageMeterWorkspaceColumn",
+                    new Vector2(leftWidth, available.Y),
+                    false,
+                    ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+            {
+                DrawDamageMeterWorkspace();
+            }
+
+            ImGui.EndChild();
+            DrawVerticalReviewDivider("WidgetsWorkspaceDivider", available.Y);
             DrawReviewPanel(
                 "##DeathWidgetSettings",
-                new Vector2(leftWidth, available.Y),
+                Vector2.Zero,
                 DrawWidgetTab);
-            ImGui.SameLine();
-            DrawDamageMeterWorkspace();
             return;
         }
 
@@ -140,7 +150,7 @@ public sealed partial class RecapWindow
 
         configuration.DamageMeterColumns = DamageMeterColumnPolicy.Normalize(configuration.DamageMeterColumns);
         ImGui.TextColored(ModernAccentColor, "Widget columns");
-        ImGui.TextColored(ModernMutedTextColor, "Drag to reorder. Select X to remove a column.");
+        ImGui.TextColored(ModernMutedTextColor, "Drag to reorder or add. Select X to remove a column.");
         ImGui.Dummy(new Vector2(1.0f, 3.0f));
 
         var columns = configuration.DamageMeterColumns;
@@ -217,7 +227,7 @@ public sealed partial class RecapWindow
         }
     }
 
-    private bool DrawDamageMeterColumnTile(DamageMeterColumn column, bool isActiveColumn, bool canRemove)
+    private unsafe bool DrawDamageMeterColumnTile(DamageMeterColumn column, bool isActiveColumn, bool canRemove)
     {
         var label = GetDamageMeterColumnLabel(column);
         var size = new Vector2(GetDamageMeterColumnTileWidth(column), ImGui.GetFrameHeight() + 6.0f);
@@ -296,7 +306,7 @@ public sealed partial class RecapWindow
         if (ImGui.BeginDragDropSource())
         {
             draggingDamageMeterColumn = column;
-            ImGui.SetDragDropPayload(DamageMeterColumnDragPayload, [1]);
+            ImGui.SetDragDropPayload(DamageMeterColumnDragPayload, BitConverter.GetBytes((int)column));
             ImGui.TextUnformatted(label);
             ImGui.EndDragDropSource();
         }
@@ -304,7 +314,7 @@ public sealed partial class RecapWindow
         if (ImGui.BeginDragDropTarget())
         {
             var payload = ImGui.AcceptDragDropPayload(DamageMeterColumnDragPayload);
-            if (isActiveColumn && !payload.IsNull && draggingDamageMeterColumn is { } source &&
+            if (isActiveColumn && TryReadDamageMeterColumnPayload(payload, out var source) &&
                 DamageMeterColumnPolicy.PlaceBefore(configuration.DamageMeterColumns, source, column))
             {
                 draggingDamageMeterColumn = null;
@@ -315,6 +325,26 @@ public sealed partial class RecapWindow
         }
 
         return clicked && (!isActiveColumn || closeHovered && canRemove);
+    }
+
+    private static unsafe bool TryReadDamageMeterColumnPayload(
+        ImGuiPayloadPtr payload,
+        out DamageMeterColumn column)
+    {
+        column = default;
+        if (payload.IsNull || payload.Data is null || payload.DataSize != sizeof(int))
+        {
+            return false;
+        }
+
+        var value = *(int*)payload.Data;
+        if (!Enum.IsDefined(typeof(DamageMeterColumn), value))
+        {
+            return false;
+        }
+
+        column = (DamageMeterColumn)value;
+        return true;
     }
 
     private static float GetDamageMeterColumnTileWidth(DamageMeterColumn column)
