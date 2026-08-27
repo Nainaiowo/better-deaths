@@ -141,6 +141,8 @@ internal sealed class PeriodicDamageTracker
         {
             ActionId = selected.StatusId,
             ActionName = selected.StatusName,
+            ActionCategoryId = 0,
+            IsAutoAttack = false,
             AttributedSource = selected.Source,
             AttributionQuality = candidates.Count == 1
                 ? DamageAttributionQuality.Exact
@@ -166,6 +168,11 @@ internal sealed class PeriodicDamageTracker
             {
                 var matchingStatus = matchingStatuses.FirstOrDefault(status =>
                     status.Application.Source.EntityId == tick.Source.EntityId);
+                if (matchingStatus is not null)
+                {
+                    matchingStatus.LastTickAtUtc = tick.SeenAtUtc;
+                }
+
                 ConsumeLateTickIfNeeded(matchingStatus, tick.SeenAtUtc);
                 return [CreateEvent(
                     tick,
@@ -179,6 +186,7 @@ internal sealed class PeriodicDamageTracker
             if (matchingStatuses.Count > 0)
             {
                 var selectedStatus = matchingStatuses[0];
+                selectedStatus.LastTickAtUtc = tick.SeenAtUtc;
                 ConsumeLateTickIfNeeded(selectedStatus, tick.SeenAtUtc);
                 var selected = selectedStatus.Application;
                 return [CreateEvent(
@@ -262,15 +270,21 @@ internal sealed class PeriodicDamageTracker
 
     private List<TrackedStatus> FindGroundStatuses(PeriodicDamageTick tick)
     {
-        return statuses.Values
-            .Where(status => status.Application.Target.EntityId == tick.Target.EntityId &&
-                status.Application.StatusId == tick.StatusId &&
+        var candidates = statuses.Values
+            .Where(status => status.Application.StatusId == tick.StatusId &&
                 IsActiveAt(
                     status,
                     tick.SeenAtUtc,
                     allowDeferredApplication: true,
                     allowLatePeriodicTick: true))
-            .OrderByDescending(status => status.Application.SeenAtUtc)
+            .ToList();
+        var targetStatuses = candidates
+            .Where(status => status.Application.Target.EntityId == tick.Target.EntityId)
+            .ToList();
+        return (targetStatuses.Count > 0 ? targetStatuses : candidates)
+            .OrderBy(status => status.LastTickAtUtc ?? status.Application.SeenAtUtc.AddSeconds(-3.0))
+            .ThenBy(status => status.Application.SeenAtUtc)
+            .ThenBy(status => status.Application.Source.EntityId)
             .ToList();
     }
 
@@ -417,6 +431,25 @@ internal sealed class PeriodicDamageTracker
                 SnapshotKey = !string.IsNullOrWhiteSpace(existingApplication.SnapshotKey)
                     ? existingApplication.SnapshotKey
                     : application.SnapshotKey,
+                Parameter = application.Parameter != 0
+                    ? application.Parameter
+                    : existingApplication.Parameter,
+                DamageType = application.DamageType != 0
+                    ? application.DamageType
+                    : existingApplication.DamageType,
+                ElementType = application.ElementType != 0
+                    ? application.ElementType
+                    : existingApplication.ElementType,
+                SourceStatuses = existingApplication.HasSourceStatusSnapshot
+                    ? existingApplication.SourceStatuses
+                    : application.SourceStatuses,
+                TargetStatuses = existingApplication.HasTargetStatusSnapshot
+                    ? existingApplication.TargetStatuses
+                    : application.TargetStatuses,
+                HasSourceStatusSnapshot = existingApplication.HasSourceStatusSnapshot ||
+                    application.HasSourceStatusSnapshot,
+                HasTargetStatusSnapshot = existingApplication.HasTargetStatusSnapshot ||
+                    application.HasTargetStatusSnapshot,
             };
         }
         else
@@ -472,8 +505,14 @@ internal sealed class PeriodicDamageTracker
             AttributedSource = source,
             AttributionQuality = quality,
             IsPeriodic = true,
+            DamageType = status?.DamageType ?? 0,
+            ElementType = status?.ElementType ?? 0,
             StatusId = statusId,
             StatusIconId = statusIconId,
+            SourceStatuses = status?.SourceStatuses ?? [],
+            TargetStatuses = status?.TargetStatuses ?? [],
+            HasSourceStatusSnapshot = status?.HasSourceStatusSnapshot ?? false,
+            HasTargetStatusSnapshot = status?.HasTargetStatusSnapshot ?? false,
         };
     }
 

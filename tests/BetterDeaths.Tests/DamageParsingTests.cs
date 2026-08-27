@@ -152,6 +152,44 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void TracksDeathsAndTheLargestHitForWidgetColumns()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 400)],
+            actionId: 100,
+            actionName: "First action"));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 900)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(1),
+            actionId: 101,
+            actionName: "Largest action"));
+        module.RecordDeath(Source);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources);
+        var largestAction = Assert.Single(source.Actions, action => action.ActionId == 101);
+
+        Assert.Equal(1, source.Deaths);
+        Assert.Equal(900ul, source.MaxHitAmount);
+        Assert.Equal("Largest action", source.MaxHitActionName);
+        Assert.Equal(900ul, largestAction.MaxHitAmount);
+    }
+
+    [Fact]
+    public void DeathOutsideAnEncounterDoesNotLeakIntoTheNextPull()
+    {
+        var module = new DamageParsingModule();
+        module.RecordDeath(Source);
+        module.Process(CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 400)));
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(0, Assert.Single(snapshot.Sources).Deaths);
+    }
+
+    [Fact]
     public void DeduplicatesTheSameDecodedEvent()
     {
         var module = new DamageParsingModule();
@@ -201,8 +239,8 @@ public sealed class DamageParsingTests
 
         Assert.NotNull(ended);
         Assert.Same(ended, module.LastEncounter);
-        Assert.Equal(10.0, ended.DurationSeconds);
-        Assert.Equal(150.0, ended.DamagePerSecond);
+        Assert.Equal(5.0, ended.DurationSeconds);
+        Assert.Equal(300.0, ended.DamagePerSecond);
         Assert.Equal("Combat ended", ended.EndReason);
         Assert.Null(module.GetCurrentEncounter());
 
@@ -279,36 +317,80 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void ExplicitCombatLifecycleKeepsLiveDpsRunningBetweenDamageEvents()
+    public void ExplicitCombatLifecycleStopsLiveDpsAtTheLatestAlliedEvent()
     {
         var module = new DamageParsingModule();
         module.Process(
             CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)),
             allowAutomaticEncounterStart: false);
         module.SetCombatActive(true, SeenAtUtc.AddMilliseconds(100));
+        module.Process(
+            CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddSeconds(5),
+                actionId: 101),
+            allowAutomaticEncounterStart: false);
 
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(
-            module.GetCurrentEncounter(SeenAtUtc.AddSeconds(5)));
+            module.GetCurrentEncounter(SeenAtUtc.AddSeconds(10)));
 
         Assert.Equal(5.0, snapshot.DurationSeconds);
-        Assert.Equal(200.0, snapshot.DamagePerSecond);
+        Assert.Equal(300.0, snapshot.DamagePerSecond);
     }
 
     [Fact]
-    public void ExplicitCombatLifecycleIncludesCombatBeforeTheFirstDamageEvent()
+    public void ExplicitCombatLifecycleUsesRecordedEventsForEncounterBounds()
     {
         var module = new DamageParsingModule();
         module.SetCombatActive(true, SeenAtUtc.AddSeconds(-2));
         module.Process(
             CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)),
             allowAutomaticEncounterStart: false);
+        module.Process(
+            CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddSeconds(5),
+                actionId: 101),
+            allowAutomaticEncounterStart: false);
+        module.SetCombatActive(false, SeenAtUtc.AddSeconds(6));
 
-        var snapshot = Assert.IsType<DamageEncounterSnapshot>(
-            module.GetCurrentEncounter(SeenAtUtc.AddSeconds(5)));
+        var ended = Assert.IsType<DamageEncounterSnapshot>(
+            module.EndEncounter(SeenAtUtc.AddSeconds(9), "Combat ended"));
 
-        Assert.Equal(7.0, snapshot.DurationSeconds);
-        Assert.Equal(SeenAtUtc.AddSeconds(-2), snapshot.StartedAtUtc);
-        Assert.Equal(1000.0 / 7.0, snapshot.DamagePerSecond, precision: 6);
+        Assert.Equal(SeenAtUtc, ended.StartedAtUtc);
+        Assert.Equal(SeenAtUtc.AddSeconds(5), ended.EndedAtUtc);
+        Assert.Equal(5.0, ended.DurationSeconds);
+        Assert.Equal(300.0, ended.DamagePerSecond, precision: 6);
+    }
+
+    [Fact]
+    public void EncounterDurationEndsAtLatestAlliedOutgoingEvent()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+            source: Source with { IsPartyMember = true }));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(5),
+            actionId: 101,
+            source: Source with { IsPartyMember = true }));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 250)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(7),
+            actionId: 102,
+            source: new DamageActorIdentity(0x4001, "Enemy", 0, string.Empty, false, 0)));
+
+        var ended = Assert.IsType<DamageEncounterSnapshot>(
+            module.EndEncounter(SeenAtUtc.AddSeconds(10), "Combat ended"));
+
+        Assert.Equal(SeenAtUtc.AddSeconds(5), ended.EndedAtUtc);
+        Assert.Equal(5.0, ended.DurationSeconds);
+        Assert.Equal(1750ul, ended.TotalDamage);
     }
 
     [Fact]
@@ -333,6 +415,35 @@ public sealed class DamageParsingTests
         Assert.Equal(pet.EntityId, damageEvent.Source.EntityId);
         Assert.Equal(owner, damageEvent.AttributedSource);
         Assert.Equal(400ul, source.TotalDamage);
+    }
+
+    [Fact]
+    public void RetainsPetOwnershipWhenLaterPacketsHaveIncompleteIdentityData()
+    {
+        var module = new DamageParsingModule();
+        var owner = new DamageActorIdentity(0x1001, "Owner", 0, string.Empty, true, 27)
+        {
+            IsPartyMember = true,
+        };
+        var pet = new DamageActorIdentity(0x3001, "Pet", 0x1001, "Owner", false, 0)
+        {
+            IsPet = true,
+        };
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 400)],
+            source: pet,
+            sourceOwner: owner));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 300)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(1),
+            actionId: 101,
+            source: new DamageActorIdentity(0x3001, "Entity 00003001", 0, string.Empty, false, 0)));
+
+        var source = Assert.Single(Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).Sources);
+
+        Assert.Equal(owner.EntityId, source.Source.EntityId);
+        Assert.Equal(700ul, source.TotalDamage);
     }
 
     [Fact]
@@ -710,6 +821,127 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void RotatesSourceLessGroundTicksAcrossDueOwners()
+    {
+        const uint statusId = 0x1234;
+        var module = new DamageParsingModule();
+        var secondSource = Source with { EntityId = 0x1002, Name = "Second source" };
+        module.ObserveStatus(CreatePeriodicStatus(Source, statusId, "Ground fire"));
+        module.ObserveStatus(CreatePeriodicStatus(secondSource, statusId, "Ground fire") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+        });
+
+        var first = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            450,
+            1,
+            SeenAtUtc.AddSeconds(3)) with
+        {
+            StatusId = statusId,
+            StatusName = "Ground fire",
+        }));
+        var second = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            460,
+            2,
+            SeenAtUtc.AddSeconds(6)) with
+        {
+            StatusId = statusId,
+            StatusName = "Ground fire",
+        }));
+
+        Assert.Equal(Source.EntityId, first.AttributedSource?.EntityId);
+        Assert.Equal(secondSource.EntityId, second.AttributedSource?.EntityId);
+        Assert.Equal(DamageAttributionQuality.Estimated, first.AttributionQuality);
+        Assert.Equal(DamageAttributionQuality.Estimated, second.AttributionQuality);
+    }
+
+    [Fact]
+    public void ExactGroundTickAdvancesThatOwnersSchedule()
+    {
+        const uint statusId = 0x1234;
+        var module = new DamageParsingModule();
+        var secondSource = Source with { EntityId = 0x1002, Name = "Second source" };
+        module.ObserveStatus(CreatePeriodicStatus(Source, statusId, "Ground fire"));
+        module.ObserveStatus(CreatePeriodicStatus(secondSource, statusId, "Ground fire") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+        });
+
+        Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            450,
+            1,
+            SeenAtUtc.AddSeconds(3)) with
+        {
+            StatusId = statusId,
+            StatusName = "Ground fire",
+            Source = Source,
+        }));
+        var sourceLess = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            460,
+            2,
+            SeenAtUtc.AddSeconds(6)) with
+        {
+            StatusId = statusId,
+            StatusName = "Ground fire",
+        }));
+
+        Assert.Equal(secondSource.EntityId, sourceLess.AttributedSource?.EntityId);
+    }
+
+    [Fact]
+    public void GroundTickCanResolveFromStatusHeldByTheCaster()
+    {
+        const uint statusId = 0x01F5;
+        var module = new DamageParsingModule();
+        module.ObserveStatus(CreatePeriodicStatus(Source, statusId, "Doton") with
+        {
+            Target = Source,
+        });
+
+        var damageEvent = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            450,
+            1,
+            SeenAtUtc.AddSeconds(3)) with
+        {
+            StatusId = statusId,
+            StatusName = "Doton",
+        }));
+
+        Assert.Equal(Source.EntityId, damageEvent.AttributedSource?.EntityId);
+        Assert.Equal(Target.EntityId, damageEvent.Target.EntityId);
+        Assert.Equal(DamageAttributionQuality.Exact, damageEvent.AttributionQuality);
+    }
+
+    [Fact]
+    public void TargetHeldGroundStatusTakesPriorityOverAnUnrelatedTarget()
+    {
+        const uint statusId = 0x035D;
+        var module = new DamageParsingModule();
+        var unrelatedTarget = Target with { EntityId = 0x4002, Name = "Other target" };
+        var secondSource = Source with { EntityId = 0x1002, Name = "Second source" };
+        module.ObserveStatus(CreatePeriodicStatus(Source, statusId, "Wildfire") with
+        {
+            Target = unrelatedTarget,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(secondSource, statusId, "Wildfire") with
+        {
+            Target = Target,
+        });
+
+        var damageEvent = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            450,
+            1,
+            SeenAtUtc.AddSeconds(3)) with
+        {
+            StatusId = statusId,
+            StatusName = "Wildfire",
+        }));
+
+        Assert.Equal(secondSource.EntityId, damageEvent.AttributedSource?.EntityId);
+        Assert.Equal(DamageAttributionQuality.Exact, damageEvent.AttributionQuality);
+    }
+
+    [Fact]
     public void LearnsAnUnfamiliarGroundEffectFromItsPacketStatusId()
     {
         const uint statusId = 0x1234;
@@ -911,13 +1143,19 @@ public sealed class DamageParsingTests
             false,
             true,
             false));
-        var packet = CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0x80, 250));
+        var packet = CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0x80, 250)) with
+        {
+            ActionCategoryId = 1,
+            IsAutoAttack = true,
+        };
 
         var damageEvent = Assert.Single(module.Process(packet));
 
         Assert.Equal(defender, damageEvent.AttributedSource);
         Assert.Equal(Source, damageEvent.Target);
         Assert.Equal("Counter", damageEvent.ActionName);
+        Assert.Equal(0u, damageEvent.ActionCategoryId);
+        Assert.False(damageEvent.IsAutoAttack);
         Assert.Equal(DamageAttributionQuality.Exact, damageEvent.AttributionQuality);
     }
 

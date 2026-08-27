@@ -11,15 +11,17 @@ internal sealed class DamageParsingModule
     private readonly object syncRoot = new();
     private readonly DirectDamageParser parser = new();
     private readonly PeriodicDamageTracker periodicDamageTracker = new();
+    private readonly RaidBuffTracker raidBuffTracker = new();
     private readonly List<ParsedDamageEvent> events = [];
     private readonly HashSet<string> eventIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<uint, DamageActorIdentity> knownActors = [];
     private readonly Dictionary<string, MutableDamageSource> sources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutableDamageTarget> targets = new(StringComparer.Ordinal);
     private readonly List<PendingPeriodicTick> pendingPeriodicTicks = [];
     private readonly List<StagedDamageBatch> stagedDamageBatches = [];
     private DateTime? startedAtUtc;
-    private DateTime? combatStartedAtUtc;
     private DateTime? latestEventAtUtc;
+    private DateTime? latestAlliedEventAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
@@ -50,11 +52,13 @@ internal sealed class DamageParsingModule
     {
         lock (syncRoot)
         {
+            packet = NormalizeActors(packet);
             usesExplicitCombatLifecycle |= !allowAutomaticEncounterStart;
             FlushPendingPeriodicTicksCore(packet.SeenAtUtc, force: false);
             PrunePreEncounterState(packet.SeenAtUtc);
             var parsed = parser.Parse(packet)
                 .Select(periodicDamageTracker.ResolveReactiveDamage)
+                .Select(raidBuffTracker.ApplyFallback)
                 .ToList();
             if (parsed.Count > 0)
             {
@@ -74,6 +78,7 @@ internal sealed class DamageParsingModule
     {
         lock (syncRoot)
         {
+            application = NormalizeActors(application);
             FlushPendingPeriodicTicksCore(application.SeenAtUtc, force: false);
             PrunePreEncounterState(application.SeenAtUtc);
             ObserveStatusCore(application);
@@ -87,6 +92,7 @@ internal sealed class DamageParsingModule
             FlushPendingPeriodicTicksCore(seenAtUtc, force: false);
             PrunePreEncounterState(seenAtUtc);
             periodicDamageTracker.Refresh(targetEntityId, statusId, seenAtUtc);
+            raidBuffTracker.Refresh(targetEntityId, statusId, seenAtUtc);
             MarkPreEncounterActivity(seenAtUtc);
         }
     }
@@ -97,6 +103,7 @@ internal sealed class DamageParsingModule
     {
         lock (syncRoot)
         {
+            tick = NormalizeActors(tick);
             usesExplicitCombatLifecycle |= !allowAutomaticEncounterStart;
             FlushPendingPeriodicTicksCore(tick.SeenAtUtc, force: false);
             PrunePreEncounterState(tick.SeenAtUtc);
@@ -120,6 +127,28 @@ internal sealed class DamageParsingModule
         }
     }
 
+    public void RecordDeath(DamageActorIdentity actor)
+    {
+        lock (syncRoot)
+        {
+            if (startedAtUtc is null)
+            {
+                return;
+            }
+
+            actor = RememberActor(actor);
+            var sourceKey = GetActorKey(actor);
+            if (!sources.TryGetValue(sourceKey, out var source))
+            {
+                source = new MutableDamageSource(actor);
+                sources[sourceKey] = source;
+            }
+
+            source.RecordDeath(actor);
+            mutationRevision++;
+        }
+    }
+
     public void SetCombatActive(bool active, DateTime seenAtUtc)
     {
         lock (syncRoot)
@@ -130,7 +159,6 @@ internal sealed class DamageParsingModule
                 PrunePreEncounterState(seenAtUtc);
                 if (!combatActive)
                 {
-                    combatStartedAtUtc = seenAtUtc;
                     cachedCurrentEncounterTimeBucket = -1;
                 }
 
@@ -146,11 +174,6 @@ internal sealed class DamageParsingModule
             }
 
             combatActive = false;
-            if (startedAtUtc is null)
-            {
-                combatStartedAtUtc = null;
-            }
-
             PrunePreEncounterState(seenAtUtc);
         }
     }
@@ -179,9 +202,7 @@ internal sealed class DamageParsingModule
                 return null;
             }
 
-            var snapshotAtUtc = usesExplicitCombatLifecycle && combatActive
-                ? currentTime > latestEventAtUtc.Value ? currentTime : latestEventAtUtc.Value
-                : latestEventAtUtc.Value;
+            var snapshotAtUtc = latestAlliedEventAtUtc ?? latestEventAtUtc.Value;
             var timeBucket = snapshotAtUtc.Ticks / TimeSpan.TicksPerSecond;
             if (cachedCurrentEncounter is not null &&
                 cachedCurrentEncounterRevision == mutationRevision &&
@@ -208,9 +229,7 @@ internal sealed class DamageParsingModule
                 return null;
             }
 
-            var effectiveEnd = endedAtUtc > latestEventAtUtc.Value
-                ? endedAtUtc
-                : latestEventAtUtc.Value;
+            var effectiveEnd = latestAlliedEventAtUtc ?? latestEventAtUtc.Value;
             lastEncounter = BuildSnapshot(effectiveEnd, effectiveEnd, reason, includeEvents: true);
             ClearCurrentEncounter();
             return lastEncounter;
@@ -233,6 +252,24 @@ internal sealed class DamageParsingModule
             : [];
         var sourceSnapshots = sources.Values
             .Select(source => source.ToSnapshot())
+            .OrderByDescending(source => source.TotalDamage)
+            .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var raidAdjustments = RaidDamageCalculator.Calculate(events, sourceSnapshots);
+        sourceSnapshots = sourceSnapshots
+            .Select(source => ApplyRaidAdjustment(source, raidAdjustments))
+            .ToList();
+        foreach (var adjustment in raidAdjustments.Values.Where(adjustment =>
+                     sourceSnapshots.All(source =>
+                         !string.Equals(
+                             RaidDamageCalculator.GetActorKey(source.Source),
+                             RaidDamageCalculator.GetActorKey(adjustment.Source),
+                             StringComparison.Ordinal))))
+        {
+            sourceSnapshots.Add(CreateRaidOnlySource(adjustment));
+        }
+
+        sourceSnapshots = sourceSnapshots
             .OrderByDescending(source => source.TotalDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -259,6 +296,49 @@ internal sealed class DamageParsingModule
             UnattributedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.UnattributedDamage),
             ExactDamage = sourceSnapshots.Aggregate(0UL, (total, source) =>
                 total + source.TotalDamage - source.EstimatedDamage - source.UnattributedDamage),
+            RaidAdjustedDamage = sourceSnapshots.Sum(source => source.RaidAdjustedDamage),
+        };
+    }
+
+    private static DamageSourceSummary ApplyRaidAdjustment(
+        DamageSourceSummary source,
+        IReadOnlyDictionary<string, RaidDamageAdjustment> adjustments)
+    {
+        if (!adjustments.TryGetValue(RaidDamageCalculator.GetActorKey(source.Source), out var adjustment))
+        {
+            return source with { RaidAdjustedDamage = source.TotalDamage };
+        }
+
+        return source with
+        {
+            ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
+            RaidBuffDamageGiven = adjustment.RaidBuffDamageGiven,
+            RaidAdjustedDamage = Math.Max(
+                0.0,
+                source.TotalDamage - adjustment.ExternalBuffDamageReceived + adjustment.RaidBuffDamageGiven),
+        };
+    }
+
+    private static DamageSourceSummary CreateRaidOnlySource(RaidDamageAdjustment adjustment)
+    {
+        return new DamageSourceSummary(
+            adjustment.Source,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            [])
+        {
+            RaidAdjustedDamage = adjustment.RaidBuffDamageGiven,
+            ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
+            RaidBuffDamageGiven = adjustment.RaidBuffDamageGiven,
         };
     }
 
@@ -266,14 +346,16 @@ internal sealed class DamageParsingModule
     {
         events.Clear();
         eventIds.Clear();
+        knownActors.Clear();
         sources.Clear();
         targets.Clear();
         pendingPeriodicTicks.Clear();
         stagedDamageBatches.Clear();
         periodicDamageTracker.Clear();
+        raidBuffTracker.Clear();
         startedAtUtc = null;
-        combatStartedAtUtc = null;
         latestEventAtUtc = null;
+        latestAlliedEventAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
         packetCount = 0;
@@ -327,7 +409,9 @@ internal sealed class DamageParsingModule
 
     private IReadOnlyList<ParsedDamageEvent> ProcessPeriodicTickCore(PendingPeriodicTick entry)
     {
-        var parsed = periodicDamageTracker.Process(entry.Tick);
+        var parsed = periodicDamageTracker.Process(entry.Tick)
+            .Select(raidBuffTracker.ApplyFallback)
+            .ToList();
         if (parsed.Count == 0)
         {
             return parsed;
@@ -341,6 +425,7 @@ internal sealed class DamageParsingModule
     private void ObserveStatusCore(DamageStatusApplication application)
     {
         periodicDamageTracker.Observe(application);
+        raidBuffTracker.Observe(application);
         MarkPreEncounterActivity(application.SeenAtUtc);
     }
 
@@ -403,6 +488,7 @@ internal sealed class DamageParsingModule
         pendingPeriodicTicks.RemoveAll(entry => entry.Tick.SeenAtUtc < cutoff);
         stagedDamageBatches.Clear();
         periodicDamageTracker.Clear();
+        raidBuffTracker.Clear();
         latestPreEncounterActivityAtUtc = null;
     }
 
@@ -444,11 +530,8 @@ internal sealed class DamageParsingModule
                 continue;
             }
 
-            var eventStartAtUtc = combatStartedAtUtc is { } combatStart && combatStart < damageEvent.SeenAtUtc
-                ? combatStart
-                : damageEvent.SeenAtUtc;
-            startedAtUtc = startedAtUtc is null || eventStartAtUtc < startedAtUtc
-                ? eventStartAtUtc
+            startedAtUtc = startedAtUtc is null || damageEvent.SeenAtUtc < startedAtUtc
+                ? damageEvent.SeenAtUtc
                 : startedAtUtc;
             latestEventAtUtc = latestEventAtUtc is null || damageEvent.SeenAtUtc > latestEventAtUtc
                 ? damageEvent.SeenAtUtc
@@ -456,6 +539,12 @@ internal sealed class DamageParsingModule
             events.Add(damageEvent);
 
             var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
+            if (IsAlliedMeterSource(attributedSource) &&
+                (latestAlliedEventAtUtc is null || damageEvent.SeenAtUtc > latestAlliedEventAtUtc))
+            {
+                latestAlliedEventAtUtc = damageEvent.SeenAtUtc;
+            }
+
             var sourceKey = GetActorKey(attributedSource);
             if (!sources.TryGetValue(sourceKey, out var source))
             {
@@ -482,6 +571,113 @@ internal sealed class DamageParsingModule
         return actor.EntityId != 0
             ? $"entity:{actor.EntityId:X8}"
             : $"name:{actor.Name}";
+    }
+
+    private DamageActionPacket NormalizeActors(DamageActionPacket packet)
+    {
+        var sourceOwner = packet.SourceOwner is null
+            ? null
+            : RememberActor(packet.SourceOwner);
+        var source = RememberActor(packet.Source);
+        if (source.IsPet && sourceOwner is null && source.OwnerEntityId != 0)
+        {
+            knownActors.TryGetValue(source.OwnerEntityId, out sourceOwner);
+        }
+
+        var sourceStatuses = NormalizeActors(packet.SourceStatuses);
+        var targets = packet.Targets
+            .Select(target => target with
+            {
+                Target = RememberActor(target.Target),
+                TargetStatuses = NormalizeActors(target.TargetStatuses),
+            })
+            .ToList();
+        var applications = packet.StatusApplications
+            .Select(NormalizeActors)
+            .ToList();
+        return packet with
+        {
+            Source = source,
+            SourceOwner = sourceOwner,
+            SourceStatuses = sourceStatuses,
+            Targets = targets,
+            StatusApplications = applications,
+        };
+    }
+
+    private DamageStatusApplication NormalizeActors(DamageStatusApplication application)
+    {
+        return application with
+        {
+            Target = RememberActor(application.Target),
+            Source = RememberActor(application.Source),
+            SourceStatuses = NormalizeActors(application.SourceStatuses),
+            TargetStatuses = NormalizeActors(application.TargetStatuses),
+        };
+    }
+
+    private PeriodicDamageTick NormalizeActors(PeriodicDamageTick tick)
+    {
+        return tick with
+        {
+            Target = RememberActor(tick.Target),
+            Source = tick.Source is null ? null : RememberActor(tick.Source),
+        };
+    }
+
+    private IReadOnlyList<DamageStatusSnapshot> NormalizeActors(
+        IReadOnlyList<DamageStatusSnapshot> statuses)
+    {
+        return statuses.Count == 0
+            ? statuses
+            : statuses
+                .Select(status => status with { Source = RememberActor(status.Source) })
+                .ToList();
+    }
+
+    private DamageActorIdentity RememberActor(DamageActorIdentity actor)
+    {
+        if (actor.EntityId == 0)
+        {
+            return actor;
+        }
+
+        if (!knownActors.TryGetValue(actor.EntityId, out var known))
+        {
+            knownActors[actor.EntityId] = actor;
+            return actor;
+        }
+
+        var actorName = IsGenericActorName(actor.Name) && !IsGenericActorName(known.Name)
+            ? known.Name
+            : actor.Name;
+        var ownerEntityId = actor.OwnerEntityId != 0 ? actor.OwnerEntityId : known.OwnerEntityId;
+        var ownerName = actor.OwnerEntityId != 0 && !string.IsNullOrWhiteSpace(actor.OwnerName)
+            ? actor.OwnerName
+            : known.OwnerEntityId == ownerEntityId && !string.IsNullOrWhiteSpace(known.OwnerName)
+                ? known.OwnerName
+                : actor.OwnerName;
+        var merged = actor with
+        {
+            Name = actorName,
+            OwnerEntityId = ownerEntityId,
+            OwnerName = ownerName,
+            IsPlayer = actor.IsPlayer || known.IsPlayer,
+            ClassJobId = actor.ClassJobId != 0 ? actor.ClassJobId : known.ClassJobId,
+            BaseId = actor.BaseId != 0 ? actor.BaseId : known.BaseId,
+            ObjectKind = actor.ObjectKind != 0 ? actor.ObjectKind : known.ObjectKind,
+            SubKind = actor.SubKind != 0 ? actor.SubKind : known.SubKind,
+            IsPet = actor.IsPet || known.IsPet,
+            IsLimitBreak = actor.IsLimitBreak || known.IsLimitBreak,
+            IsPartyMember = actor.IsPartyMember || known.IsPartyMember,
+        };
+        knownActors[actor.EntityId] = merged;
+        return merged;
+    }
+
+    private static bool IsAlliedMeterSource(DamageActorIdentity source)
+    {
+        return source.IsPartyMember || source.IsPlayer || source.IsLimitBreak;
     }
 
     private sealed record PendingPeriodicTick(
@@ -521,6 +717,16 @@ internal sealed class DamageParsingModule
             }
 
             action.Add(damageEvent);
+        }
+
+        public void RecordDeath(DamageActorIdentity actor)
+        {
+            if (GetIdentityQuality(actor) > GetIdentityQuality(source))
+            {
+                source = actor;
+            }
+
+            totals.RecordDeath();
         }
 
         public DamageSourceSummary ToSnapshot()
@@ -595,6 +801,9 @@ internal sealed class DamageParsingModule
         private ulong estimatedDamage;
         private ulong unattributedDamage;
         private int periodicHits;
+        private ulong maxHitAmount;
+        private string maxHitActionName = string.Empty;
+        private int deaths;
         private bool isAutoAttack;
         private uint actionCategoryId;
 
@@ -621,6 +830,12 @@ internal sealed class DamageParsingModule
                     criticalDirectHits += damageEvent.Critical && damageEvent.DirectHit ? 1 : 0;
                     blockedHits += damageEvent.Blocked ? 1 : 0;
                     parriedHits += damageEvent.Parried ? 1 : 0;
+                    if (damageEvent.Amount > maxHitAmount)
+                    {
+                        maxHitAmount = damageEvent.Amount;
+                        maxHitActionName = damageEvent.ActionName;
+                    }
+
                     break;
                 case DamageEventOutcome.Miss:
                     misses++;
@@ -632,6 +847,11 @@ internal sealed class DamageParsingModule
                     invulnerableHits++;
                     break;
             }
+        }
+
+        public void RecordDeath()
+        {
+            deaths++;
         }
 
         public DamageActionSummary ToActionSnapshot(uint actionId, string actionName)
@@ -657,6 +877,7 @@ internal sealed class DamageParsingModule
                 EstimatedDamage = estimatedDamage,
                 UnattributedDamage = unattributedDamage,
                 PeriodicHits = periodicHits,
+                MaxHitAmount = maxHitAmount,
             };
         }
 
@@ -683,6 +904,9 @@ internal sealed class DamageParsingModule
                 EstimatedDamage = estimatedDamage,
                 UnattributedDamage = unattributedDamage,
                 PeriodicHits = periodicHits,
+                MaxHitAmount = maxHitAmount,
+                MaxHitActionName = maxHitActionName,
+                Deaths = deaths,
             };
         }
 

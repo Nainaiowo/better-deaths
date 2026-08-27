@@ -21,7 +21,11 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/GroundDamageStatusPolicy.cs" Link="DamageParsing/GroundDamageStatusPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageTracker.cs" Link="DamageParsing/PeriodicDamageTracker.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffPolicy.cs" Link="DamageParsing/RaidBuffPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffTracker.cs" Link="DamageParsing/RaidBuffTracker.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/RaidDamageCalculator.cs" Link="DamageParsing/RaidDamageCalculator.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ReactiveDamageStatusPolicy.cs" Link="DamageParsing/ReactiveDamageStatusPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageMeterColumnPolicy.cs" Link="DamageMeterColumnPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathDetectionPolicy.cs" Link="DeathDetectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathChatRecapHeaderParser.cs" Link="DeathChatRecapHeaderParser.cs" />
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />

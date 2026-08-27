@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Damage Meter | Better Deaths Help</title>
-  <meta name="description" content="Learn how Better Deaths measures live and completed encounter damage, DPS, actions, pets, limit breaks, and damage-over-time effects.">
+  <meta name="description" content="Learn how Better Deaths measures live and completed encounter damage, personal DPS, raid-contributing DPS, actions, pets, limit breaks, and damage-over-time effects.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/meter.html">
   <link rel="icon" href="../assets/icon.png" type="image/png">
@@ -93,9 +93,10 @@
 
         <h3 class="subheading">How the numbers are handled</h3>
         <div class="setting-table labeled">
-          <div class="setting-row"><strong>Widget</strong><span>Opens a compact, resizable meter that shows the current encounter and falls back to the last completed pull while idle.</span></div>
+          <div class="setting-row"><strong>Widget</strong><span>Opens a resizable meter that shows the current encounter and falls back to the last completed pull while idle. Add, remove, or drag its columns into your preferred order from the DPS Meter tab.</span></div>
           <div class="setting-row"><strong>Damage</strong><span>Uses the amount reported by the game after mitigation, blocking, parrying, and other reductions.</span></div>
-          <div class="setting-row"><strong>DPS</strong><span>Divides recorded damage by the full captured encounter span, including the time between the final hit and the pull closing.</span></div>
+          <div class="setting-row"><strong>DPS</strong><span>Your personal damage divided by the time from the first recorded combat event through the latest party damage event.</span></div>
+          <div class="setting-row"><strong>rDPS</strong><span>Your raid contribution. Damage gained from another player's raid buffs is moved back to the player who provided those buffs. Your personal DPS remains available beside it.</span></div>
           <div class="setting-row"><strong>Pets</strong><span>Damage from a recognized pet or companion is included under its owner while the pet's individual actions remain visible in the breakdown.</span></div>
           <div class="setting-row"><strong>Limit break</strong><span>Party limit break damage appears as its own source instead of being assigned to the player who pressed it.</span></div>
           <div class="setting-row"><strong>Misses and immunity</strong><span>Missed, resisted, blocked, parried, and invulnerable results are retained. Only actual damage increases the total.</span></div>
@@ -104,6 +105,11 @@
         <div class="caution-note" role="note">
           <strong>Why an estimated split may appear</strong>
           <p>The game reports ordinary damage-over-time effects as one combined tick. Better Deaths keeps that combined encounter damage exact, then uses the active effects and previously observed solo ticks to estimate how much belongs to each source. If no reliable owner exists, the damage remains visible as unattributed instead of being assigned to the wrong player.</p>
+        </div>
+
+        <div class="caution-note" role="note">
+          <strong>How raid-buff credit is calculated</strong>
+          <p>Percentage buffs use the statuses captured on each hit. Critical-hit and direct-hit buffs also use the player's observed unbuffed rates, so their live value may settle as more attacks are recorded. Moving this credit changes each player's rDPS, but it does not change the party's total damage.</p>
         </div>
       </section>
 

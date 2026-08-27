@@ -350,9 +350,32 @@ public sealed partial class Plugin
             ActorControlTargetIconCategory or
             ActorControlHotCategory or
             ActorControlDotCategory;
-        var sourceEntityId = category is ActorControlHotCategory or ActorControlDotCategory
-            ? NormalizeActorEntityId(param3)
-            : 0;
+        var damageStatusCategory = category is ActorControlGainEffectCategory or
+            ActorControlLoseEffectCategory or
+            ActorControlUpdateEffectCategory;
+        var targetSnapshot = captureForReview && shouldCaptureSnapshots
+            ? CaptureRawCombatSnapshot(entityId, playerOnly: true)
+            : null;
+        if (targetSnapshot is null && captureForDamageParsing && damageStatusCategory)
+        {
+            targetSnapshot = CaptureRawCombatSnapshot(entityId);
+        }
+
+        var sourceEntityId = category switch
+        {
+            ActorControlHotCategory or ActorControlDotCategory => NormalizeActorEntityId(param3),
+            ActorControlGainEffectCategory or ActorControlLoseEffectCategory => NormalizeActorEntityId(param3),
+            ActorControlUpdateEffectCategory => NormalizeActorEntityId(
+                targetSnapshot?.Statuses.FirstOrDefault(status => status.StatusId == param2)?.SourceId ?? 0),
+            _ => 0u,
+        };
+        var sourceSnapshot = captureForReview &&
+            (category is ActorControlHotCategory or ActorControlDotCategory) &&
+            sourceEntityId != 0
+                ? CaptureRawCombatSnapshot(sourceEntityId)
+                : captureForDamageParsing && damageStatusCategory && sourceEntityId != 0
+                    ? CaptureRawCombatSnapshot(sourceEntityId, relevantDamageStatusesOnly: true)
+                    : null;
 
         var packet = new RawActorControlPacket(
             GetNextRawActorControlSequence(),
@@ -369,8 +392,8 @@ public sealed partial class Plugin
             param8,
             targetId,
             param9,
-            captureForReview && shouldCaptureSnapshots ? CaptureRawCombatSnapshot(entityId, playerOnly: true) : null,
-            captureForReview && sourceEntityId != 0 ? CaptureRawCombatSnapshot(sourceEntityId) : null)
+            targetSnapshot,
+            sourceSnapshot)
         {
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
@@ -465,7 +488,11 @@ public sealed partial class Plugin
         }
 
         var sequence = GetNextRawActionEffectSequence();
-        RawCombatSnapshot? sourceSnapshot = captureForReview ? CaptureRawCombatSnapshot(casterEntityId) : null;
+        RawCombatSnapshot? sourceSnapshot = captureForReview
+            ? CaptureRawCombatSnapshot(casterEntityId)
+            : captureForDamageParsing
+                ? CaptureRawCombatSnapshot(casterEntityId, relevantDamageStatusesOnly: true)
+                : null;
         var replayPoses = new List<RawActorPoseSnapshot>();
         var replayPoseKeys = new HashSet<string>(StringComparer.Ordinal);
         if (captureForReview)
@@ -525,10 +552,18 @@ public sealed partial class Plugin
                     ReplayPositionSampleSource.ActionEffectTarget);
             }
 
+            var targetSnapshot = captureForReview
+                ? CaptureRawCombatSnapshot(targetId, playerOnly: true)
+                : null;
+            if (targetSnapshot is null && captureForDamageParsing)
+            {
+                targetSnapshot = CaptureRawCombatSnapshot(targetId, relevantDamageStatusesOnly: true);
+            }
+
             targets.Add(new RawActionEffectTarget(
                 targetIndex,
                 new RawTargetId(targetId.Id, targetId.ObjectId),
-                captureForReview ? CaptureRawCombatSnapshot(targetId, playerOnly: true) : null,
+                targetSnapshot,
                 rawEffects));
         }
 
@@ -537,10 +572,11 @@ public sealed partial class Plugin
             return;
         }
 
-        if (sourceSnapshot is null &&
-            captureForDamageParsing &&
+        if (captureForDamageParsing &&
+            !captureForReview &&
             targets.Any(target => target.Effects.Any(effect => effect.Type is 14 or 15)))
         {
+            // Periodic attribution uses the complete source status set as its snapshot profile.
             sourceSnapshot = CaptureRawCombatSnapshot(casterEntityId);
         }
 

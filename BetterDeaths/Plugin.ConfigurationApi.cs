@@ -640,6 +640,14 @@ public sealed partial class Plugin
             changed = true;
         }
 
+        var damageMeterColumns = DamageMeterColumnPolicy.Normalize(Configuration.DamageMeterColumns);
+        if (Configuration.DamageMeterColumns is null ||
+            !Configuration.DamageMeterColumns.SequenceEqual(damageMeterColumns))
+        {
+            Configuration.DamageMeterColumns = damageMeterColumns;
+            changed = true;
+        }
+
         var replayActiveEffectsSplitRatio = Math.Clamp(Configuration.ReplayActiveEffectsSplitRatio, 0.2f, 0.8f);
         if (!float.IsFinite(Configuration.ReplayActiveEffectsSplitRatio) ||
             MathF.Abs(Configuration.ReplayActiveEffectsSplitRatio - replayActiveEffectsSplitRatio) > 0.001f)

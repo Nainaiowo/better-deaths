@@ -10,10 +10,29 @@ using System.Linq;
 
 public sealed partial class Plugin
 {
+    private void RecordDamageMeterDeath(PartyMemberSnapshot member)
+    {
+        damageParsingModule.RecordDeath(new DamageActorIdentity(
+            member.EntityId,
+            member.MemberName,
+            0,
+            string.Empty,
+            true,
+            member.ClassJobId)
+        {
+            IsPartyMember = member.IsPartyMember,
+        });
+    }
+
     private void ParseDamageActionEffectPacket(RawActionEffectPacket packet)
     {
         try
         {
+            var source = CaptureDamageActorIdentity(packet.CasterEntityId, packet.CasterName);
+            var sourceOwner = source.OwnerEntityId == 0
+                ? null
+                : CaptureDamageActorIdentity(source.OwnerEntityId, source.OwnerName);
+            var sourceStatuses = BuildDamageStatusSnapshots(packet.SourceSnapshot);
             var targets = new List<DamageActionTarget>(packet.Targets.Count);
             foreach (var target in packet.Targets)
             {
@@ -37,15 +56,19 @@ public sealed partial class Plugin
                 targets.Add(new DamageActionTarget(
                     target.TargetIndex,
                     CaptureDamageActorIdentity(targetEntityId, string.Empty),
-                    effects));
+                    effects)
+                {
+                    TargetStatuses = BuildDamageStatusSnapshots(target.TargetSnapshot),
+                    HasTargetStatusSnapshot = target.TargetSnapshot is not null,
+                });
             }
 
-            var source = CaptureDamageActorIdentity(packet.CasterEntityId, packet.CasterName);
-            var sourceOwner = source.OwnerEntityId == 0
-                ? null
-                : CaptureDamageActorIdentity(source.OwnerEntityId, source.OwnerName);
             var actionCategoryId = GetActionCategoryId(packet.ActionId);
-            var statusApplications = BuildDamageStatusApplications(packet, source, sourceOwner);
+            var statusApplications = BuildDamageStatusApplications(
+                packet,
+                source,
+                sourceOwner,
+                sourceStatuses);
             var damagePacket = new DamageActionPacket(
                 packet.Sequence,
                 packet.SeenAtUtc,
@@ -64,6 +87,8 @@ public sealed partial class Plugin
                 AnimationTargetEntityId = packet.AnimationTargetEntityId,
                 SourceOwner = sourceOwner,
                 StatusApplications = statusApplications,
+                SourceStatuses = sourceStatuses,
+                HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
             };
             var parsed = damageParsingModule.Process(damagePacket, allowAutomaticEncounterStart: false);
             QueueDamageMeterActionDebug(packet, statusApplications);
@@ -78,7 +103,8 @@ public sealed partial class Plugin
     private IReadOnlyList<DamageStatusApplication> BuildDamageStatusApplications(
         RawActionEffectPacket packet,
         DamageActorIdentity source,
-        DamageActorIdentity? sourceOwner)
+        DamageActorIdentity? sourceOwner,
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
     {
         const byte applyStatusToTarget = 14;
         const byte applyStatusToSource = 15;
@@ -86,10 +112,12 @@ public sealed partial class Plugin
         const byte removeStatusFromSource = 18;
         var applications = new List<DamageStatusApplication>();
         var attributedSource = GetAttributedDamageSource(source, sourceOwner);
+        var actionDamageProfile = GetActionDamageProfile(packet.ActionId);
         string? snapshotKey = null;
         foreach (var target in packet.Targets)
         {
             var packetTarget = CaptureDamageActorIdentity(GetDamageTargetEntityId(target.TargetId), string.Empty);
+            var targetStatuses = BuildDamageStatusSnapshots(target.TargetSnapshot);
             foreach (var effect in target.Effects)
             {
                 if (effect.Type is not (applyStatusToTarget or applyStatusToSource or
@@ -117,11 +145,47 @@ public sealed partial class Plugin
                         ? string.Empty
                         : snapshotKey ??= BuildDamageSnapshotKey(
                             packet.SourceSnapshot ?? CaptureRawCombatSnapshot(packet.CasterEntityId)),
+                    // Variable-strength raid buffs store their applied percentage in Param0.
+                    Parameter = (ushort)effect.Param0,
+                    DamageType = actionDamageProfile.DamageType,
+                    ElementType = actionDamageProfile.ElementType,
+                    SourceStatuses = sourceStatuses,
+                    TargetStatuses = targetStatuses,
+                    HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
+                    HasTargetStatusSnapshot = target.TargetSnapshot is not null,
                 });
             }
         }
 
         return applications;
+    }
+
+    private IReadOnlyList<DamageStatusSnapshot> BuildDamageStatusSnapshots(RawCombatSnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            return [];
+        }
+
+        var identities = new Dictionary<uint, DamageActorIdentity>();
+        var statuses = new List<DamageStatusSnapshot>();
+        foreach (var status in snapshot.Statuses.Where(status => RaidBuffPolicy.IsRelevantStatus(status.StatusId)))
+        {
+            if (!identities.TryGetValue(status.SourceId, out var statusSource))
+            {
+                var rawSource = CaptureDamageActorIdentity(status.SourceId, string.Empty);
+                statusSource = GetAttributedDamageSource(rawSource, CaptureDamageActorOwner(rawSource));
+                identities[status.SourceId] = statusSource;
+            }
+
+            statuses.Add(new DamageStatusSnapshot(
+                status.StatusId,
+                statusSource,
+                status.StackCount,
+                status.RemainingTime));
+        }
+
+        return statuses;
     }
 
     private void ObserveDamageEffectResult(RawEffectResultPacket packet)
@@ -180,11 +244,10 @@ public sealed partial class Plugin
             return;
         }
 
-        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlLoseEffectCategory ||
-            packet.Param1 == 0 || packet.Param1 > ushort.MaxValue)
+        if (packet.Category == ActorControlUpdateEffectCategory)
         {
-            if (packet.Category == ActorControlUpdateEffectCategory &&
-                packet.Param2 is > 0 and <= ushort.MaxValue)
+            if (packet.Param2 is > 0 and <= ushort.MaxValue &&
+                !TryObserveDamageActorControlStatus(packet, packet.Param2, isRemoval: false))
             {
                 damageParsingModule.RefreshStatus(packet.EntityId, packet.Param2, packet.SeenAtUtc);
             }
@@ -192,20 +255,59 @@ public sealed partial class Plugin
             return;
         }
 
+        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlLoseEffectCategory ||
+            packet.Param1 == 0 || packet.Param1 > ushort.MaxValue)
+        {
+            return;
+        }
+
+        TryObserveDamageActorControlStatus(
+            packet,
+            packet.Param1,
+            packet.Category == ActorControlLoseEffectCategory);
+    }
+
+    private bool TryObserveDamageActorControlStatus(
+        RawActorControlPacket packet,
+        uint statusId,
+        bool isRemoval)
+    {
+        var rawStatus = packet.TargetSnapshot?.Statuses
+            .Where(status => status.StatusId == statusId)
+            .OrderByDescending(status => status.RemainingTime)
+            .FirstOrDefault();
+        var rawSourceId = rawStatus?.SourceId ??
+            (packet.Category is ActorControlGainEffectCategory or ActorControlLoseEffectCategory
+                ? packet.Param3
+                : 0);
+        if (!isRemoval && packet.Category == ActorControlUpdateEffectCategory && rawStatus is null)
+        {
+            return false;
+        }
+
         var statusTarget = CaptureDamageActorIdentity(packet.EntityId, string.Empty);
-        var rawStatusSource = CaptureDamageActorIdentity(packet.Param3, string.Empty);
+        var rawStatusSource = CaptureDamageActorIdentity(rawSourceId, string.Empty);
         var statusSource = GetAttributedDamageSource(rawStatusSource, CaptureDamageActorOwner(rawStatusSource));
         var application = CreateDamageStatusApplication(
             statusTarget,
             statusSource,
-            packet.Param1,
+            statusId,
             0,
             string.Empty,
             packet.SeenAtUtc,
-            0.0f,
-            packet.Category == ActorControlLoseEffectCategory);
+            rawStatus?.RemainingTime ?? 0.0f,
+            isRemoval) with
+        {
+            Parameter = rawStatus?.StackCount ?? (ushort)Math.Min(packet.Param2, ushort.MaxValue),
+            SnapshotKey = isRemoval ? string.Empty : BuildDamageSnapshotKey(packet.SourceSnapshot),
+            SourceStatuses = BuildDamageStatusSnapshots(packet.SourceSnapshot),
+            TargetStatuses = BuildDamageStatusSnapshots(packet.TargetSnapshot),
+            HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
+            HasTargetStatusSnapshot = packet.TargetSnapshot is not null,
+        };
         damageParsingModule.ObserveStatus(application);
         QueueDamageMeterStatusDebug("ActorControl", application);
+        return true;
     }
 
     private DamageStatusApplication CreateDamageStatusApplication(
@@ -421,6 +523,7 @@ public sealed partial class Plugin
                 application.StatusId,
                 application.StatusName,
                 application.SnapshotKey,
+                application.Parameter,
                 application.IsRemoval,
             }),
         });
@@ -476,6 +579,7 @@ public sealed partial class Plugin
             application.ActionId,
             application.ActionName,
             application.DurationSeconds,
+            application.Parameter,
             application.IsPeriodicDamage,
             application.IsReactiveDamage,
             application.IsRemoval,
@@ -509,6 +613,24 @@ public sealed partial class Plugin
                 Outcome = damageEvent.Outcome.ToString(),
                 Attribution = damageEvent.AttributionQuality.ToString(),
                 damageEvent.IsPeriodic,
+                damageEvent.HasSourceStatusSnapshot,
+                damageEvent.HasTargetStatusSnapshot,
+                SourceStatuses = damageEvent.SourceStatuses.Select(status => new
+                {
+                    status.StatusId,
+                    SourceEntityId = status.Source.EntityId,
+                    SourceName = status.Source.Name,
+                    status.Parameter,
+                    status.RemainingTime,
+                }),
+                TargetStatuses = damageEvent.TargetStatuses.Select(status => new
+                {
+                    status.StatusId,
+                    SourceEntityId = status.Source.EntityId,
+                    SourceName = status.Source.Name,
+                    status.Parameter,
+                    status.RemainingTime,
+                }),
             }),
         });
     }
@@ -532,6 +654,7 @@ public sealed partial class Plugin
                 ExactDamage = ended?.ExactDamage ?? 0,
                 EstimatedDamage = ended?.EstimatedDamage ?? 0,
                 UnattributedDamage = ended?.UnattributedDamage ?? 0,
+                RaidAdjustedDamage = ended?.RaidAdjustedDamage ?? 0.0,
                 DurationSeconds = ended?.DurationSeconds ?? 0.0,
                 PacketCount = ended?.PacketCount ?? 0,
                 Sources = ended?.Sources.Select(source => new
@@ -548,6 +671,9 @@ public sealed partial class Plugin
                     source.DirectHits,
                     source.CriticalDirectHits,
                     source.PeriodicHits,
+                    source.RaidAdjustedDamage,
+                    source.ExternalBuffDamageReceived,
+                    source.RaidBuffDamageGiven,
                 }),
             });
         }

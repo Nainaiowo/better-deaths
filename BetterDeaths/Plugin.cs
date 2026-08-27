@@ -1,3 +1,4 @@
+using BetterDeaths.DamageParsing;
 using BetterDeaths.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -76,7 +77,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string RecordedPullDetailMigrationTempSuffix = ".migration.tmp";
     private const int RecordedPullHistorySchemaVersion = 3;
     private const int RecordedPullIndexSchemaVersion = 7;
-    private const int CurrentConfigurationVersion = 4;
+    private const int CurrentConfigurationVersion = 5;
     internal const int PullGroupColorPaletteSize = 8;
     private static readonly TimeSpan RecentPullGroupRestoreWindow = TimeSpan.FromHours(3);
     private const int RecordedPullHistoryRollingBackupCount = 5;
@@ -371,6 +372,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, string> actionNameCache = new();
     private readonly Dictionary<uint, uint> actionIconCache = new();
     private readonly Dictionary<uint, uint> actionCategoryCache = new();
+    private readonly Dictionary<uint, (byte DamageType, byte ElementType)> actionDamageProfileCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
     private readonly Dictionary<uint, uint> statusIconCache = new();
     private readonly Dictionary<uint, bool> periodicDamageStatusCache = new();
@@ -773,7 +775,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             UpdateCombatTimerState(now);
-            damageParsingModule.SetCombatActive(combatTimerRunning, now);
+            damageParsingModule.SetCombatActive(IsEffectiveInCombat(), now);
             damageParsingModule.FlushPendingPeriodicTicks(now);
             RefreshPartyState();
             FlushDebugCaptureFile(now);
@@ -935,13 +937,21 @@ public sealed partial class Plugin : IDalamudPlugin
             .Build();
     }
 
-    private RawCombatSnapshot? CaptureRawCombatSnapshot(GameObjectId targetId, bool playerOnly = false)
+    private RawCombatSnapshot? CaptureRawCombatSnapshot(
+        GameObjectId targetId,
+        bool playerOnly = false,
+        bool relevantDamageStatusesOnly = false)
     {
         var entityId = GetEntityId(targetId);
-        return entityId == 0 ? null : CaptureRawCombatSnapshot(entityId, playerOnly);
+        return entityId == 0
+            ? null
+            : CaptureRawCombatSnapshot(entityId, playerOnly, relevantDamageStatusesOnly);
     }
 
-    private RawCombatSnapshot? CaptureRawCombatSnapshot(uint entityId, bool playerOnly = false)
+    private RawCombatSnapshot? CaptureRawCombatSnapshot(
+        uint entityId,
+        bool playerOnly = false,
+        bool relevantDamageStatusesOnly = false)
     {
         if (entityId == 0)
         {
@@ -965,7 +975,8 @@ public sealed partial class Plugin : IDalamudPlugin
             var statuses = new List<RawStatusSnapshot>();
             foreach (var status in battleChara.StatusList)
             {
-                if (status.StatusId == 0)
+                if (status.StatusId == 0 ||
+                    relevantDamageStatusesOnly && !RaidBuffPolicy.IsRelevantStatus(status.StatusId))
                 {
                     continue;
                 }

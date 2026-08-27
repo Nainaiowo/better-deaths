@@ -1781,6 +1781,7 @@ public sealed partial class Plugin
         EnsurePullStarted(deathSeenAtUtc);
         var death = CreateDeathRecord(member, deathSeenAtUtc, deathContext);
         currentDeaths.Add(death);
+        RecordDamageMeterDeath(member);
         if (Configuration.ShowDeathRecapPopup && IsLocalPlayer(member))
         {
             deathRecapPopupWindow.DisplayDeath(death);

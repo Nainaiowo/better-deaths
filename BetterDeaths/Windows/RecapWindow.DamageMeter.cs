@@ -11,7 +11,10 @@ using System.Numerics;
 public sealed partial class RecapWindow
 {
     private const float DamageMeterIconSize = 24.0f;
+    private const string DamageMeterColumnDragPayload = "BETTER_DEATHS_METER_COLUMN";
+    private static readonly DamageMeterColumn[] AvailableDamageMeterColumns = Enum.GetValues<DamageMeterColumn>();
     private readonly HashSet<string> expandedDamageMeterSources = new(StringComparer.Ordinal);
+    private DamageMeterColumn? draggingDamageMeterColumn;
 
     private void DrawDamageMeterPage()
     {
@@ -20,111 +23,302 @@ public sealed partial class RecapWindow
 
     private void DrawDamageMeterContent()
     {
-        var current = plugin.CurrentDamageEncounter;
-        var last = plugin.LastDamageEncounter;
-        var useLast = last is not null && (configuration.DamageMeterShowLastEncounter || current is null);
-        var snapshot = useLast ? last ?? current : current ?? last;
-
-        DrawDamageMeterHeader(current is not null, last is not null, useLast);
-        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        ImGui.TextColored(LeadUpGoldColor, "DPS Meter");
+        ImGui.SameLine();
+        ImGui.TextColored(ModernMutedTextColor, "Widget display and columns");
+        ImGui.Dummy(new Vector2(1.0f, 5.0f));
         ImGui.Separator();
-        ImGui.Dummy(new Vector2(1.0f, 4.0f));
+        ImGui.Dummy(new Vector2(1.0f, 8.0f));
 
-        if (snapshot is null)
-        {
-            ImGui.TextDisabled("No damage recorded yet.");
-            return;
-        }
-
-        var sources = GetVisibleDamageMeterSources(snapshot);
-        var visibleTotal = sources.Aggregate(0UL, (total, source) => total + source.TotalDamage);
-        DrawDamageMeterSummary(snapshot, sources, visibleTotal, useLast);
-        ImGui.Dummy(new Vector2(1.0f, 7.0f));
-
-        if (sources.Count == 0)
-        {
-            ImGui.TextDisabled(configuration.DamageMeterShowAllCombatants
-                ? "No damage sources were recorded."
-                : "No party damage was recorded.");
-            return;
-        }
-
-        DrawDamageMeterTable(snapshot, sources, visibleTotal);
+        DrawDamageMeterWidgetSettings();
+        ImGui.Dummy(new Vector2(1.0f, 10.0f));
+        DrawDamageMeterDataSettings();
+        ImGui.Dummy(new Vector2(1.0f, 10.0f));
+        DrawDamageMeterColumnSettings();
     }
 
-    private void DrawDamageMeterHeader(bool hasCurrent, bool hasLast, bool useLast)
+    private void DrawDamageMeterWidgetSettings()
     {
-        ImGui.TextColored(LeadUpGoldColor, "Damage Meter");
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        ImGui.SameLine();
+        ImGui.TextColored(ModernAccentColor, "Widget");
+        var showWidget = configuration.ShowDamageMeterWidget;
+        if (DrawThemedSwitch("Show DPS meter widget", "DamageMeterWidgetVisible", ref showWidget))
+        {
+            plugin.SetShowDamageMeterWidget(showWidget);
+        }
+    }
 
+    private void DrawDamageMeterDataSettings()
+    {
+        ImGui.TextColored(ModernAccentColor, "Data");
+        ImGui.TextUnformatted("Encounter");
+        ImGui.SameLine();
         var liveWidth = GetThemedActionButtonWidth("Live");
-        if (DrawThemedToggleButton("Live", "DamageMeterLive", !useLast, liveWidth) && hasCurrent)
+        if (DrawThemedToggleButton(
+                "Live",
+                "DamageMeterLive",
+                !configuration.DamageMeterShowLastEncounter,
+                liveWidth))
         {
             configuration.DamageMeterShowLastEncounter = false;
             plugin.SaveConfiguration();
         }
 
-        if (!hasCurrent && ImGui.IsItemHovered())
-        {
-            SetThemedTooltip("No active encounter is available.");
-        }
-
-        ImGui.SameLine(0.0f, spacing);
+        ImGui.SameLine();
         var lastWidth = GetThemedActionButtonWidth("Last pull");
-        if (DrawThemedToggleButton("Last pull", "DamageMeterLast", useLast, lastWidth) && hasLast)
+        if (DrawThemedToggleButton(
+                "Last pull",
+                "DamageMeterLast",
+                configuration.DamageMeterShowLastEncounter,
+                lastWidth))
         {
             configuration.DamageMeterShowLastEncounter = true;
             plugin.SaveConfiguration();
         }
 
-        if (!hasLast && ImGui.IsItemHovered())
-        {
-            SetThemedTooltip("No completed encounter is available.");
-        }
-
-        ImGui.SameLine(0.0f, spacing);
-        var widgetWidth = GetThemedActionButtonWidth("Widget");
-        if (DrawThemedToggleButton(
-                "Widget",
-                "DamageMeterWidget",
-                configuration.ShowDamageMeterWidget,
-                widgetWidth))
-        {
-            plugin.SetShowDamageMeterWidget(!configuration.ShowDamageMeterWidget);
-        }
-
-        if (ImGui.IsItemHovered())
-        {
-            SetThemedTooltip("Show or hide the compact damage meter window.");
-        }
-
+        ImGui.Dummy(new Vector2(1.0f, 3.0f));
+        ImGui.TextUnformatted("Combatants");
+        ImGui.SameLine();
         var allCombatants = configuration.DamageMeterShowAllCombatants;
         var partyWidth = GetThemedActionButtonWidth("Party");
-        var allWidth = GetThemedActionButtonWidth("All");
-        var selectorWidth = partyWidth + spacing + allWidth;
-        var selectorX = ImGui.GetWindowContentRegionMax().X - selectorWidth;
-        if (selectorX > ImGui.GetCursorPosX() + spacing)
-        {
-            ImGui.SameLine(selectorX);
-        }
-        else
-        {
-            ImGui.NewLine();
-        }
-
         if (DrawThemedToggleButton("Party", "DamageMeterParty", !allCombatants, partyWidth))
         {
             configuration.DamageMeterShowAllCombatants = false;
             plugin.SaveConfiguration();
         }
 
-        ImGui.SameLine(0.0f, spacing);
+        ImGui.SameLine();
+        var allWidth = GetThemedActionButtonWidth("All");
         if (DrawThemedToggleButton("All", "DamageMeterAll", allCombatants, allWidth))
         {
             configuration.DamageMeterShowAllCombatants = true;
             plugin.SaveConfiguration();
         }
+    }
+
+    private void DrawDamageMeterColumnSettings()
+    {
+        if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        {
+            draggingDamageMeterColumn = null;
+        }
+
+        configuration.DamageMeterColumns = DamageMeterColumnPolicy.Normalize(configuration.DamageMeterColumns);
+        ImGui.TextColored(ModernAccentColor, "Widget columns");
+        ImGui.Dummy(new Vector2(1.0f, 3.0f));
+
+        var columns = configuration.DamageMeterColumns;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var rowWidth = 0.0f;
+        DamageMeterColumn? removeColumn = null;
+        foreach (var column in columns.ToList())
+        {
+            var tileWidth = GetDamageMeterColumnTileWidth(column);
+            if (rowWidth > 0.0f && rowWidth + spacing + tileWidth <= availableWidth)
+            {
+                ImGui.SameLine(0.0f, spacing);
+                rowWidth += spacing;
+            }
+            else
+            {
+                rowWidth = 0.0f;
+            }
+
+            if (DrawDamageMeterColumnTile(column, columns.Count > 1))
+            {
+                removeColumn = column;
+            }
+
+            rowWidth += tileWidth;
+        }
+
+        if (removeColumn is { } removed && columns.Remove(removed))
+        {
+            draggingDamageMeterColumn = null;
+            plugin.SaveConfiguration();
+        }
+
+        ImGui.Dummy(new Vector2(1.0f, 8.0f));
+        var addLabel = $"{FontAwesomeIcon.Plus.ToIconString()}  Add column";
+        var addWidth = GetThemedActionButtonWidth(addLabel);
+        if (DrawThemedActionButton(addLabel, "DamageMeterAddColumn", addWidth))
+        {
+            ImGui.OpenPopup("##DamageMeterAddColumnPopup");
+        }
+
+        DrawDamageMeterAddColumnPopup();
+        ImGui.SameLine();
+        var resetLabel = $"{FontAwesomeIcon.Undo.ToIconString()}  Reset";
+        var resetWidth = GetThemedActionButtonWidth(resetLabel);
+        if (DrawThemedActionButton(resetLabel, "DamageMeterResetColumns", resetWidth))
+        {
+            configuration.DamageMeterColumns = DamageMeterColumnPolicy.CreateDefault();
+            draggingDamageMeterColumn = null;
+            plugin.SaveConfiguration();
+        }
+    }
+
+    private bool DrawDamageMeterColumnTile(DamageMeterColumn column, bool canRemove)
+    {
+        var label = GetDamageMeterColumnLabel(column);
+        var size = new Vector2(GetDamageMeterColumnTileWidth(column), ImGui.GetFrameHeight() + 6.0f);
+        var start = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##DamageMeterColumn{column}", size);
+        var hovered = ImGui.IsItemHovered();
+        var active = ImGui.IsItemActive();
+        var end = start + size;
+        var closeSize = size.Y;
+        var closeStart = new Vector2(end.X - closeSize, start.Y);
+        var mouse = ImGui.GetIO().MousePos;
+        var closeHovered = hovered && mouse.X >= closeStart.X && mouse.X <= end.X &&
+            mouse.Y >= start.Y && mouse.Y <= end.Y;
+
+        var drawList = ImGui.GetWindowDrawList();
+        var fill = active
+            ? ModernNavButtonActiveColor with { W = 0.70f }
+            : hovered
+                ? ModernNavButtonSelectedColor with { W = 0.55f }
+                : ModernPanelAltColor with { W = ActiveThemeUsesLightPanels() ? 0.72f : 0.55f };
+        var border = draggingDamageMeterColumn == column
+            ? ModernAccentColor
+            : hovered
+                ? ModernAccentColor with { W = 0.72f }
+                : ModernPanelBorderColor with { W = 0.70f };
+        drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 4.0f);
+        drawList.AddRect(start, end, ImGui.GetColorU32(border), 4.0f);
+
+        var grip = FontAwesomeIcon.GripLines.ToIconString();
+        var textSize = ImGui.CalcTextSize(label);
+        var close = FontAwesomeIcon.Times.ToIconString();
+        ImFontPtr iconFont;
+        float iconFontSize;
+        Vector2 gripSize;
+        Vector2 closeTextSize;
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            iconFont = ImGui.GetFont();
+            iconFontSize = ImGui.GetFontSize();
+            gripSize = ImGui.CalcTextSize(grip);
+            closeTextSize = ImGui.CalcTextSize(close);
+        }
+
+        var centerY = start.Y + (size.Y * 0.5f);
+        drawList.AddText(
+            iconFont,
+            iconFontSize,
+            new Vector2(start.X + 9.0f, centerY - (gripSize.Y * 0.5f)),
+            ImGui.GetColorU32(ModernMutedTextColor),
+            grip);
+        drawList.AddText(
+            new Vector2(start.X + 9.0f + gripSize.X + 8.0f, centerY - (textSize.Y * 0.5f)),
+            ImGui.GetColorU32(ModernTextColor),
+            label);
+        drawList.AddText(
+            iconFont,
+            iconFontSize,
+            new Vector2(closeStart.X + ((closeSize - closeTextSize.X) * 0.5f), centerY - (closeTextSize.Y * 0.5f)),
+            ImGui.GetColorU32(canRemove
+                ? ModernMutedTextColor
+                : ModernMutedTextColor with { W = 0.45f }),
+            close);
+
+        if (hovered)
+        {
+            ImGui.SetMouseCursor(closeHovered ? ImGuiMouseCursor.Hand : ImGuiMouseCursor.ResizeAll);
+        }
+
+        if (closeHovered && !canRemove)
+        {
+            SetThemedTooltip("At least one column must remain.");
+        }
+
+        if (ImGui.BeginDragDropSource())
+        {
+            draggingDamageMeterColumn = column;
+            ImGui.SetDragDropPayload(DamageMeterColumnDragPayload, [1]);
+            ImGui.TextUnformatted(label);
+            ImGui.EndDragDropSource();
+        }
+
+        if (ImGui.BeginDragDropTarget())
+        {
+            var payload = ImGui.AcceptDragDropPayload(DamageMeterColumnDragPayload);
+            if (!payload.IsNull && draggingDamageMeterColumn is { } source &&
+                DamageMeterColumnPolicy.Move(configuration.DamageMeterColumns, source, column))
+            {
+                draggingDamageMeterColumn = null;
+                plugin.SaveConfiguration();
+            }
+
+            ImGui.EndDragDropTarget();
+        }
+
+        return clicked && closeHovered && canRemove;
+    }
+
+    private void DrawDamageMeterAddColumnPopup()
+    {
+        if (!ImGui.BeginPopup("##DamageMeterAddColumnPopup"))
+        {
+            return;
+        }
+
+        ImGui.TextColored(LeadUpGoldColor, "Add column");
+        ImGui.Separator();
+        var addedAny = false;
+        foreach (var column in AvailableDamageMeterColumns.Where(column =>
+                     !configuration.DamageMeterColumns.Contains(column)))
+        {
+            if (!ImGui.Selectable($"{GetDamageMeterColumnLabel(column)}##AddDamageMeterColumn{column}"))
+            {
+                continue;
+            }
+
+            configuration.DamageMeterColumns.Add(column);
+            plugin.SaveConfiguration();
+            addedAny = true;
+        }
+
+        if (!addedAny && configuration.DamageMeterColumns.Count == AvailableDamageMeterColumns.Length)
+        {
+            ImGui.TextDisabled("All columns are active.");
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private static float GetDamageMeterColumnTileWidth(DamageMeterColumn column)
+    {
+        float gripWidth;
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            gripWidth = ImGui.CalcTextSize(FontAwesomeIcon.GripLines.ToIconString()).X;
+        }
+
+        return 9.0f + gripWidth + 8.0f + ImGui.CalcTextSize(GetDamageMeterColumnLabel(column)).X +
+            9.0f + ImGui.GetFrameHeight() + 2.0f;
+    }
+
+    private static string GetDamageMeterColumnLabel(DamageMeterColumn column)
+    {
+        return column switch
+        {
+            DamageMeterColumn.Rank => "Rank",
+            DamageMeterColumn.JobIcon => "Job icon",
+            DamageMeterColumn.PlayerName => "Player",
+            DamageMeterColumn.DamagePercent => "Damage %",
+            DamageMeterColumn.DamagePerSecond => "DPS",
+            DamageMeterColumn.RaidDamagePerSecond => "rDPS",
+            DamageMeterColumn.CriticalHitPercent => "Critical hit %",
+            DamageMeterColumn.DirectHitPercent => "Direct hit %",
+            DamageMeterColumn.CriticalDirectHitPercent => "Critical + direct %",
+            DamageMeterColumn.MaxHitAmount => "Max hit",
+            DamageMeterColumn.MaxHitName => "Max hit name",
+            DamageMeterColumn.TotalDamage => "Damage",
+            DamageMeterColumn.Deaths => "Deaths",
+            DamageMeterColumn.HitCount => "Hits",
+            _ => column.ToString(),
+        };
     }
 
     internal void DrawDamageMeterWidgetContent()
@@ -133,7 +327,9 @@ public sealed partial class RecapWindow
         using var widgetStyle = new ModernWidgetScope();
 
         var current = plugin.CurrentDamageEncounter;
-        var snapshot = current ?? plugin.LastDamageEncounter;
+        var last = plugin.LastDamageEncounter;
+        var useLast = configuration.DamageMeterShowLastEncounter && last is not null;
+        var snapshot = useLast ? last : current ?? last;
         if (snapshot is null)
         {
             using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
@@ -154,7 +350,7 @@ public sealed partial class RecapWindow
                 ? visibleTotal / snapshot.DurationSeconds
                 : 0.0;
             var scope = configuration.DamageMeterShowAllCombatants ? "All" : "Party";
-            var state = current is null ? "Last pull" : "Live";
+            var state = ReferenceEquals(snapshot, current) ? "Live" : "Last pull";
             DrawModernWidgetTitle(
                 $"{state} | {scope} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}");
             ImGui.Spacing();
@@ -193,60 +389,287 @@ public sealed partial class RecapWindow
             return;
         }
 
-        const ImGuiTableFlags flags = ImGuiTableFlags.SizingStretchProp |
+        var columns = DamageMeterColumnPolicy.Normalize(configuration.DamageMeterColumns);
+        const ImGuiTableFlags flags = ImGuiTableFlags.SizingFixedFit |
             ImGuiTableFlags.RowBg |
-            ImGuiTableFlags.BordersInnerV;
-        if (!ImGui.BeginTable("##DamageMeterWidgetRows", 5, flags))
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.ScrollX;
+        if (!ImGui.BeginTable("##DamageMeterWidgetRows", columns.Count + 1, flags))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthFixed, 30.0f);
-        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 2.0f);
-        ImGui.TableSetupColumn("Damage", ImGuiTableColumnFlags.WidthStretch, 1.05f);
-        ImGui.TableSetupColumn("DPS", ImGuiTableColumnFlags.WidthStretch, 0.9f);
-        ImGui.TableSetupColumn("Share", ImGuiTableColumnFlags.WidthStretch, 1.15f);
-        DrawCenteredTableHeader("#", "Player", "Damage", "DPS", "Share");
+        ImGui.TableSetupScrollFreeze(1, 1);
+        ImGui.TableSetupColumn("##Expand", ImGuiTableColumnFlags.WidthFixed, 30.0f);
+        foreach (var column in columns)
+        {
+            ImGui.TableSetupColumn(
+                $"{GetDamageMeterColumnHeader(column)}##DamageMeterWidget{column}",
+                ImGuiTableColumnFlags.WidthFixed,
+                GetDamageMeterColumnWidth(column));
+        }
+
+        DrawCenteredTableHeader(["", .. columns.Select(GetDamageMeterColumnHeader)]);
 
         for (var index = 0; index < sources.Count; index++)
         {
-            DrawDamageMeterWidgetRow(snapshot, sources[index], visibleTotal, index + 1);
+            var source = sources[index];
+            var sourceKey = GetDamageMeterSourceKey(source.Source);
+            var expanded = expandedDamageMeterSources.Contains(sourceKey);
+            DrawDamageMeterWidgetSourceRow(
+                snapshot,
+                source,
+                visibleTotal,
+                index + 1,
+                sourceKey,
+                expanded,
+                columns);
+            if (!expanded)
+            {
+                continue;
+            }
+
+            foreach (var action in source.Actions)
+            {
+                DrawDamageMeterWidgetActionRow(snapshot, action, source.TotalDamage, columns);
+            }
         }
 
         ImGui.EndTable();
     }
 
-    private void DrawDamageMeterWidgetRow(
+    private void DrawDamageMeterWidgetSourceRow(
         DamageEncounterSnapshot snapshot,
         DamageSourceSummary source,
         ulong visibleTotal,
-        int rank)
+        int rank,
+        string sourceKey,
+        bool expanded,
+        IReadOnlyList<DamageMeterColumn> columns)
     {
         const float iconSize = 20.0f;
         ImGui.TableNextRow(ImGuiTableRowFlags.None, iconSize + 8.0f);
         ImGui.TableNextColumn();
-        DrawCenteredText(rank.ToString());
-
-        ImGui.TableNextColumn();
-        var iconId = GetClassJobIconId(source.Source.ClassJobId);
-        if (iconId != 0)
+        var expandIcon = expanded ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight;
+        if (DrawTransparentIconButton($"DamageMeterWidgetExpand{sourceKey}", expandIcon))
         {
-            DrawGameIcon(iconId, iconSize, source.Source.Name);
-            ImGui.SameLine();
+            if (!expandedDamageMeterSources.Remove(sourceKey))
+            {
+                expandedDamageMeterSources.Add(sourceKey);
+            }
         }
 
-        var displayName = source.Source.IsPlayer
-            ? FormatKnownPlayerName(source.Source.Name)
-            : source.Source.Name;
-        ImGui.TextUnformatted(displayName);
+        foreach (var column in columns)
+        {
+            ImGui.TableNextColumn();
+            DrawDamageMeterSourceColumn(snapshot, source, visibleTotal, rank, column, iconSize);
+        }
+    }
 
+    private static void DrawDamageMeterWidgetActionRow(
+        DamageEncounterSnapshot snapshot,
+        DamageActionSummary action,
+        ulong sourceTotal,
+        IReadOnlyList<DamageMeterColumn> columns)
+    {
+        const float iconSize = 20.0f;
+        ImGui.TableNextRow(ImGuiTableRowFlags.None, iconSize + 6.0f);
         ImGui.TableNextColumn();
-        DrawCenteredText(FormatAmount(source.TotalDamage));
-        ImGui.TableNextColumn();
-        DrawCenteredText(FormatDamageMeterNumber(
-            snapshot.DurationSeconds > 0.0 ? source.TotalDamage / snapshot.DurationSeconds : 0.0));
-        ImGui.TableNextColumn();
-        DrawDamageMeterShareBar(source.TotalDamage, visibleTotal);
+
+        foreach (var column in columns)
+        {
+            ImGui.TableNextColumn();
+            DrawDamageMeterActionColumn(snapshot, action, sourceTotal, column, iconSize);
+        }
+    }
+
+    private void DrawDamageMeterSourceColumn(
+        DamageEncounterSnapshot snapshot,
+        DamageSourceSummary source,
+        ulong visibleTotal,
+        int rank,
+        DamageMeterColumn column,
+        float iconSize)
+    {
+        var directDamageHits = Math.Max(0, source.Hits - source.PeriodicHits);
+        switch (column)
+        {
+            case DamageMeterColumn.Rank:
+                DrawCenteredText(rank.ToString());
+                break;
+            case DamageMeterColumn.JobIcon:
+                var iconId = GetClassJobIconId(source.Source.ClassJobId);
+                if (iconId != 0)
+                {
+                    CenterNextItem(iconSize);
+                    DrawGameIcon(iconId, iconSize, source.Source.Name);
+                }
+
+                break;
+            case DamageMeterColumn.PlayerName:
+                ImGui.TextUnformatted(source.Source.IsPlayer
+                    ? FormatKnownPlayerName(source.Source.Name)
+                    : source.Source.Name);
+                break;
+            case DamageMeterColumn.DamagePercent:
+                DrawDamageMeterShareBar(source.TotalDamage, visibleTotal);
+                break;
+            case DamageMeterColumn.DamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0 ? source.TotalDamage / snapshot.DurationSeconds : 0.0));
+                break;
+            case DamageMeterColumn.RaidDamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0 ? source.RaidAdjustedDamage / snapshot.DurationSeconds : 0.0));
+                DrawRaidDamageTooltip(source);
+                break;
+            case DamageMeterColumn.CriticalHitPercent:
+                DrawDamageMeterHitPercent(source.CriticalHits, directDamageHits, "critical hits");
+                break;
+            case DamageMeterColumn.DirectHitPercent:
+                DrawDamageMeterHitPercent(source.DirectHits, directDamageHits, "direct hits");
+                break;
+            case DamageMeterColumn.CriticalDirectHitPercent:
+                DrawDamageMeterHitPercent(source.CriticalDirectHits, directDamageHits, "critical direct hits");
+                break;
+            case DamageMeterColumn.MaxHitAmount:
+                DrawCenteredText(source.MaxHitAmount == 0 ? "-" : FormatAmount(source.MaxHitAmount));
+                break;
+            case DamageMeterColumn.MaxHitName:
+                ImGui.TextUnformatted(string.IsNullOrWhiteSpace(source.MaxHitActionName)
+                    ? "-"
+                    : source.MaxHitActionName);
+                break;
+            case DamageMeterColumn.TotalDamage:
+                DrawCenteredText(FormatAmount(source.TotalDamage));
+                break;
+            case DamageMeterColumn.Deaths:
+                DrawCenteredText(source.Deaths == 0 ? "-" : source.Deaths.ToString("N0"));
+                break;
+            case DamageMeterColumn.HitCount:
+                DrawCenteredText(source.Hits == 0 ? "-" : source.Hits.ToString("N0"));
+                break;
+        }
+    }
+
+    private static void DrawDamageMeterActionColumn(
+        DamageEncounterSnapshot snapshot,
+        DamageActionSummary action,
+        ulong sourceTotal,
+        DamageMeterColumn column,
+        float iconSize)
+    {
+        var directDamageHits = Math.Max(0, action.Hits - action.PeriodicHits);
+        var muted = ModernMutedTextColor;
+        switch (column)
+        {
+            case DamageMeterColumn.Rank:
+            case DamageMeterColumn.Deaths:
+                DrawCenteredText("-", muted);
+                break;
+            case DamageMeterColumn.JobIcon:
+                var iconId = action.PeriodicDamage == action.TotalDamage && action.ActionId != 0
+                    ? GetStatusIconId(action.ActionId)
+                    : GetActionIconId(action.ActionId);
+                if (iconId != 0)
+                {
+                    CenterNextItem(iconSize);
+                    DrawGameIcon(iconId, iconSize, action.ActionName);
+                }
+
+                break;
+            case DamageMeterColumn.PlayerName:
+                ImGui.TextColored(muted, action.ActionName);
+                break;
+            case DamageMeterColumn.DamagePercent:
+                DrawCenteredText(
+                    sourceTotal == 0 ? "-" : $"{action.TotalDamage * 100.0 / sourceTotal:F1}%",
+                    muted);
+                break;
+            case DamageMeterColumn.DamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0 ? action.TotalDamage / snapshot.DurationSeconds : 0.0), muted);
+                break;
+            case DamageMeterColumn.RaidDamagePerSecond:
+                DrawCenteredText("-", muted);
+                if (ImGui.IsItemHovered())
+                {
+                    SetThemedTooltip(
+                        "rDPS is shown on player rows because raid-buff contribution comes from damage dealt by the whole party.");
+                }
+
+                break;
+            case DamageMeterColumn.CriticalHitPercent:
+                DrawDamageMeterHitPercent(action.CriticalHits, directDamageHits, "critical hits", muted);
+                break;
+            case DamageMeterColumn.DirectHitPercent:
+                DrawDamageMeterHitPercent(action.DirectHits, directDamageHits, "direct hits", muted);
+                break;
+            case DamageMeterColumn.CriticalDirectHitPercent:
+                DrawDamageMeterHitPercent(action.CriticalDirectHits, directDamageHits, "critical direct hits", muted);
+                break;
+            case DamageMeterColumn.MaxHitAmount:
+                DrawCenteredText(action.MaxHitAmount == 0 ? "-" : FormatAmount(action.MaxHitAmount), muted);
+                break;
+            case DamageMeterColumn.MaxHitName:
+                ImGui.TextColored(muted, action.ActionName);
+                break;
+            case DamageMeterColumn.TotalDamage:
+                DrawCenteredText(FormatAmount(action.TotalDamage), muted);
+                break;
+            case DamageMeterColumn.HitCount:
+                DrawCenteredText(action.Hits == 0 ? "-" : action.Hits.ToString("N0"), muted);
+                break;
+        }
+    }
+
+    private static void DrawDamageMeterHitPercent(
+        int count,
+        int eligibleHits,
+        string label,
+        Vector4? color = null)
+    {
+        DrawCenteredText(
+            eligibleHits == 0 ? "-" : $"{count * 100.0 / eligibleHits:F1}%",
+            color ?? ModernTextColor);
+        if (ImGui.IsItemHovered() && eligibleHits > 0)
+        {
+            SetThemedTooltip($"{count:N0} {label} out of {eligibleHits:N0} eligible hits.");
+        }
+    }
+
+    private static string GetDamageMeterColumnHeader(DamageMeterColumn column)
+    {
+        return column switch
+        {
+            DamageMeterColumn.JobIcon => "Job",
+            DamageMeterColumn.CriticalHitPercent => "Crit %",
+            DamageMeterColumn.DirectHitPercent => "Direct %",
+            DamageMeterColumn.CriticalDirectHitPercent => "Crit + direct %",
+            _ => GetDamageMeterColumnLabel(column),
+        };
+    }
+
+    private static float GetDamageMeterColumnWidth(DamageMeterColumn column)
+    {
+        return column switch
+        {
+            DamageMeterColumn.Rank => 44.0f,
+            DamageMeterColumn.JobIcon => 44.0f,
+            DamageMeterColumn.PlayerName => 145.0f,
+            DamageMeterColumn.DamagePercent => 94.0f,
+            DamageMeterColumn.DamagePerSecond => 84.0f,
+            DamageMeterColumn.RaidDamagePerSecond => 84.0f,
+            DamageMeterColumn.CriticalHitPercent => 86.0f,
+            DamageMeterColumn.DirectHitPercent => 90.0f,
+            DamageMeterColumn.CriticalDirectHitPercent => 116.0f,
+            DamageMeterColumn.MaxHitAmount => 94.0f,
+            DamageMeterColumn.MaxHitName => 145.0f,
+            DamageMeterColumn.TotalDamage => 102.0f,
+            DamageMeterColumn.Deaths => 62.0f,
+            DamageMeterColumn.HitCount => 62.0f,
+            _ => 90.0f,
+        };
     }
 
     private static void DrawDamageMeterShareBar(ulong damage, ulong total)
@@ -310,7 +733,7 @@ public sealed partial class RecapWindow
             ImGuiTableFlags.RowBg |
             ImGuiTableFlags.BordersInnerV |
             ImGuiTableFlags.BordersOuterH;
-        if (!ImGui.BeginTable("##DamageMeterRows", 7, flags))
+        if (!ImGui.BeginTable("##DamageMeterRows", 8, flags))
         {
             return;
         }
@@ -319,10 +742,11 @@ public sealed partial class RecapWindow
         ImGui.TableSetupColumn("Player / ability", ImGuiTableColumnFlags.WidthStretch, 2.7f);
         ImGui.TableSetupColumn("Damage", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("DPS", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+        ImGui.TableSetupColumn("rDPS", ImGuiTableColumnFlags.WidthStretch, 1.0f);
         ImGui.TableSetupColumn("Share", ImGuiTableColumnFlags.WidthStretch, 0.85f);
         ImGui.TableSetupColumn("Crit", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Direct", ImGuiTableColumnFlags.WidthStretch, 0.8f);
-        DrawCenteredTableHeader("#", "Player / ability", "Damage", "DPS", "Share", "Crit", "Direct");
+        DrawCenteredTableHeader("#", "Player / ability", "Damage", "DPS", "rDPS", "Share", "Crit", "Direct");
 
         for (var index = 0; index < sources.Count; index++)
         {
@@ -381,6 +805,7 @@ public sealed partial class RecapWindow
 
         DrawDamageMeterMetricCells(
             source.TotalDamage,
+            source.RaidAdjustedDamage,
             snapshot.DurationSeconds,
             visibleTotal,
             source.Hits,
@@ -414,6 +839,7 @@ public sealed partial class RecapWindow
 
         DrawDamageMeterMetricCells(
             action.TotalDamage,
+            null,
             snapshot.DurationSeconds,
             sourceTotal,
             action.Hits,
@@ -425,6 +851,7 @@ public sealed partial class RecapWindow
 
     private static void DrawDamageMeterMetricCells(
         ulong damage,
+        double? raidAdjustedDamage,
         double durationSeconds,
         ulong shareTotal,
         int hits,
@@ -438,6 +865,19 @@ public sealed partial class RecapWindow
         DrawCenteredText(FormatAmount(damage), color);
         ImGui.TableNextColumn();
         DrawCenteredText(FormatDamageMeterNumber(durationSeconds > 0.0 ? damage / durationSeconds : 0.0), color);
+        ImGui.TableNextColumn();
+        DrawCenteredText(
+            raidAdjustedDamage is null
+                ? "-"
+                : FormatDamageMeterNumber(durationSeconds > 0.0 ? raidAdjustedDamage.Value / durationSeconds : 0.0),
+            color);
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(raidAdjustedDamage is null
+                ? "rDPS is shown on player rows because raid-buff contribution comes from damage dealt by the whole party."
+                : "Raid-contributing DPS moves damage gained from another player's raid buffs back to the player who provided them.");
+        }
+
         ImGui.TableNextColumn();
         DrawCenteredText(shareTotal == 0 ? "-" : $"{damage * 100.0 / shareTotal:F1}%", color);
 
@@ -455,6 +895,19 @@ public sealed partial class RecapWindow
         {
             SetThemedTooltip($"{directHits:N0} direct hits out of {directDamageHits:N0} eligible hits.");
         }
+    }
+
+    private static void DrawRaidDamageTooltip(DamageSourceSummary source)
+    {
+        if (!ImGui.IsItemHovered())
+        {
+            return;
+        }
+
+        SetThemedTooltip(
+            "Raid-contributing DPS moves damage gained from another player's raid buffs back to the player who provided them.\n" +
+            $"Received from others: {FormatDamageMeterNumber(source.ExternalBuffDamageReceived)} damage\n" +
+            $"Given through buffs: {FormatDamageMeterNumber(source.RaidBuffDamageGiven)} damage");
     }
 
     private static string GetDamageMeterSourceKey(DamageActorIdentity source)

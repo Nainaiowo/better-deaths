@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Added a live Damage Meter with player totals, DPS, damage share, and ability breakdowns. Improved periodic-damage attribution and encounter cleanup.",
+  "Changelog": "Expanded the DPS Meter with raid-contributing DPS, customizable widget columns, and detailed combat statistics. Improved damage attribution and encounter timing.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

@@ -85,6 +85,10 @@ internal sealed class DirectDamageParser
                     IsSourceEntry = isSourceEntry,
                     PacketTarget = target.Target,
                     AttributedSource = attributedSource,
+                    SourceStatuses = packet.SourceStatuses,
+                    TargetStatuses = target.TargetStatuses,
+                    HasSourceStatusSnapshot = packet.HasSourceStatusSnapshot,
+                    HasTargetStatusSnapshot = target.HasTargetStatusSnapshot,
                 });
             }
         }

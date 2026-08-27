@@ -391,6 +391,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowDamageMeterWidget { get; set; }
 
+    public List<DamageMeterColumn> DamageMeterColumns { get; set; } = DamageMeterColumnPolicy.CreateDefault();
+
     public ReplayOverlayDockSide ReplayMitigationOverlayDockSide { get; set; } = ReplayOverlayDockSide.Right;
 
     public float ReplayMitigationOverlayOffsetY { get; set; } = 48.0f;

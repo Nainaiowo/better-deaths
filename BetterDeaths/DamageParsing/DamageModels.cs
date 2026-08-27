@@ -39,6 +39,12 @@ internal sealed record DamageActorIdentity(
     public bool IsPartyMember { get; init; }
 }
 
+internal sealed record DamageStatusSnapshot(
+    uint StatusId,
+    DamageActorIdentity Source,
+    ushort Parameter,
+    float RemainingTime);
+
 internal sealed record DamageActionPacket(
     long PacketSequence,
     DateTime SeenAtUtc,
@@ -65,6 +71,10 @@ internal sealed record DamageActionPacket(
     public DamageActorIdentity? SourceOwner { get; init; }
 
     public IReadOnlyList<DamageStatusApplication> StatusApplications { get; init; } = [];
+
+    public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
+
+    public bool HasSourceStatusSnapshot { get; init; }
 }
 
 internal sealed record DamageStatusApplication(
@@ -82,6 +92,20 @@ internal sealed record DamageStatusApplication(
     bool IsRemoval)
 {
     public string SnapshotKey { get; init; } = string.Empty;
+
+    public ushort Parameter { get; init; }
+
+    public byte DamageType { get; init; }
+
+    public byte ElementType { get; init; }
+
+    public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
+
+    public IReadOnlyList<DamageStatusSnapshot> TargetStatuses { get; init; } = [];
+
+    public bool HasSourceStatusSnapshot { get; init; }
+
+    public bool HasTargetStatusSnapshot { get; init; }
 }
 
 internal sealed record PeriodicDamageTick(
@@ -97,7 +121,12 @@ internal sealed record PeriodicDamageTick(
 internal sealed record DamageActionTarget(
     int TargetIndex,
     DamageActorIdentity Target,
-    IReadOnlyList<DamageActionEffect> Effects);
+    IReadOnlyList<DamageActionEffect> Effects)
+{
+    public IReadOnlyList<DamageStatusSnapshot> TargetStatuses { get; init; } = [];
+
+    public bool HasTargetStatusSnapshot { get; init; }
+}
 
 internal sealed record DamageActionEffect(
     int EffectIndex,
@@ -166,6 +195,14 @@ internal sealed record ParsedDamageEvent(
     public uint StatusId { get; init; }
 
     public uint StatusIconId { get; init; }
+
+    public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
+
+    public IReadOnlyList<DamageStatusSnapshot> TargetStatuses { get; init; } = [];
+
+    public bool HasSourceStatusSnapshot { get; init; }
+
+    public bool HasTargetStatusSnapshot { get; init; }
 }
 
 internal sealed record DamageActionSummary(
@@ -194,6 +231,8 @@ internal sealed record DamageActionSummary(
     public ulong UnattributedDamage { get; init; }
 
     public int PeriodicHits { get; init; }
+
+    public ulong MaxHitAmount { get; init; }
 }
 
 internal sealed record DamageSourceSummary(
@@ -217,7 +256,19 @@ internal sealed record DamageSourceSummary(
 
     public ulong UnattributedDamage { get; init; }
 
+    public double RaidAdjustedDamage { get; init; }
+
+    public double ExternalBuffDamageReceived { get; init; }
+
+    public double RaidBuffDamageGiven { get; init; }
+
     public int PeriodicHits { get; init; }
+
+    public ulong MaxHitAmount { get; init; }
+
+    public string MaxHitActionName { get; init; } = string.Empty;
+
+    public int Deaths { get; init; }
 }
 
 internal sealed record DamageTargetSummary(
@@ -247,6 +298,8 @@ internal sealed record DamageEncounterSnapshot(
 
     public ulong UnattributedDamage { get; init; }
 
+    public double RaidAdjustedDamage { get; init; }
+
     public double DurationSeconds
     {
         get
@@ -257,4 +310,6 @@ internal sealed record DamageEncounterSnapshot(
     }
 
     public double DamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : TotalDamage / DurationSeconds;
+
+    public double RaidDamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : RaidAdjustedDamage / DurationSeconds;
 }

@@ -1315,7 +1315,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
-            new("Meter", MainPage.DamageMeter),
+            new("DPS Meter", MainPage.DamageMeter, BadgeText: ThemeNewBadgeText),
             new("Analyzer", MainPage.Analyzer, BadgeText: ThemeNewBadgeText),
             new("Customize", MainPage.Customize, HasUnseenNewThemeBadges()),
             new("Options", MainPage.Options),
@@ -19891,8 +19891,8 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted("v1.0.0.8");
         ImGui.TextDisabled("Testing update.");
-        DrawHighlightedChangelogBullet("Added a live Damage Meter and compact widget with player totals, DPS, damage share, and ability breakdowns.");
-        DrawWrappedBullet("Improved periodic-damage attribution and encounter cleanup.");
+        DrawHighlightedChangelogBullet("Expanded the DPS Meter with raid-contributing DPS, customizable widget columns, and detailed combat statistics.");
+        DrawWrappedBullet("Improved damage attribution and encounter timing.");
 
         ImGui.Separator();
 

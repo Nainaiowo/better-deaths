@@ -139,6 +139,37 @@ public sealed partial class Plugin
         return categoryId;
     }
 
+    private (byte DamageType, byte ElementType) GetActionDamageProfile(uint actionId)
+    {
+        if (actionDamageProfileCache.TryGetValue(actionId, out var cachedProfile))
+        {
+            return cachedProfile;
+        }
+
+        var profile = (DamageType: (byte)0, ElementType: (byte)0);
+        try
+        {
+            var action = DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId);
+            if (action is not null)
+            {
+                var attackType = action.Value.AttackType.RowId;
+                profile.DamageType = attackType is > 0 and <= byte.MaxValue
+                    ? (byte)attackType
+                    : action.Value.ActionCategory.RowId == 3
+                        ? (byte)DamageType.Physical
+                        : (byte)DamageType.Unknown;
+                profile.ElementType = action.Value.Aspect;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not load action damage profile for {ActionId}.", actionId);
+        }
+
+        actionDamageProfileCache[actionId] = profile;
+        return profile;
+    }
+
     private string GetStatusName(uint statusId)
     {
         if (statusNameCache.TryGetValue(statusId, out var cachedName))
