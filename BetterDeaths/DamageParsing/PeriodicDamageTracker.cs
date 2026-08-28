@@ -13,9 +13,16 @@ internal sealed class PeriodicDamageTracker
     private const double NormalStatusExpiryGraceSeconds = 1.0;
     private const double PeriodicStatusRetentionSeconds = 5.0;
     private const int MaximumLearnedTickSamples = 7;
+    private const int MaximumPotencySamples = 1000;
+    private const int MinimumObservedRateSamples = 11;
+    private const double DefaultCriticalRate = 0.15;
+    private const double DefaultDirectHitRate = 0.05;
+    private const double DirectHitMultiplier = 1.25;
     private readonly Dictionary<StatusKey, TrackedStatus> statuses = [];
     private readonly Dictionary<ApplicationKey, TickSamples> learnedApplicationTicks = [];
     private readonly Dictionary<ProfileKey, TickSamples> learnedProfileTicks = [];
+    private readonly Dictionary<string, PotencySamples> sourcePotencySamples = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HitRateSamples> sourceHitRateSamples = new(StringComparer.Ordinal);
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
     private long nextApplicationGeneration;
 
@@ -152,6 +159,78 @@ internal sealed class PeriodicDamageTracker
         };
     }
 
+    public void ObserveDirectDamage(IEnumerable<ParsedDamageEvent> damageEvents)
+    {
+        foreach (var damageEvent in damageEvents.Where(damageEvent =>
+                     !damageEvent.IsPeriodic &&
+                     damageEvent.Outcome == DamageEventOutcome.Damage &&
+                     damageEvent.Amount > 0))
+        {
+            var source = damageEvent.AttributedSource ?? damageEvent.Source;
+            if ((!source.IsPlayer && !source.IsPartyMember) ||
+                source.IsLimitBreak ||
+                damageEvent.Source.IsPet)
+            {
+                continue;
+            }
+
+            var sourceKey = GetActorKey(source);
+            if (!sourceHitRateSamples.TryGetValue(sourceKey, out var rateSamples))
+            {
+                rateSamples = new HitRateSamples();
+                sourceHitRateSamples[sourceKey] = rateSamples;
+            }
+
+            var effects = GetApplicableEffects(
+                damageEvent.SourceStatuses,
+                damageEvent.TargetStatuses,
+                source,
+                damageEvent.DamageType,
+                damageEvent.ElementType);
+            if (!RaidBuffPolicy.IsGuaranteedCritical(damageEvent) &&
+                effects.All(effect => effect.Kind != RaidBuffEffectKind.CriticalChance))
+            {
+                rateSamples.CriticalSwings++;
+                rateSamples.CriticalHits += damageEvent.Critical ? 1 : 0;
+            }
+
+            if (!RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent) &&
+                effects.All(effect => effect.Kind != RaidBuffEffectKind.DirectHitChance))
+            {
+                rateSamples.DirectHitSwings++;
+                rateSamples.DirectHits += damageEvent.DirectHit ? 1 : 0;
+            }
+
+            if (!damageEvent.CanCalibratePotency ||
+                damageEvent.DirectPotency is not > 0.0 ||
+                damageEvent.Blocked ||
+                damageEvent.Parried ||
+                damageEvent.Critical ||
+                damageEvent.DirectHit)
+            {
+                continue;
+            }
+
+            var amount = (double)damageEvent.Amount;
+            amount /= effects
+                .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+                .Aggregate(1.0, (multiplier, effect) => multiplier * (1.0 + effect.Amount));
+            var potencyMultiplier = amount / damageEvent.DirectPotency.Value;
+            if (!double.IsFinite(potencyMultiplier) || potencyMultiplier <= 0.0)
+            {
+                continue;
+            }
+
+            if (!sourcePotencySamples.TryGetValue(sourceKey, out var potencySamples))
+            {
+                potencySamples = new PotencySamples();
+                sourcePotencySamples[sourceKey] = potencySamples;
+            }
+
+            potencySamples.Add(potencyMultiplier);
+        }
+    }
+
     public IReadOnlyList<ParsedDamageEvent> Process(PeriodicDamageTick tick)
     {
         if (tick.Amount == 0)
@@ -179,6 +258,7 @@ internal sealed class PeriodicDamageTracker
                     matchingStatus?.Application,
                     tick.Source,
                     tick.Amount,
+                    tick.Amount,
                     DamageAttributionQuality.Exact,
                     0)];
             }
@@ -194,6 +274,7 @@ internal sealed class PeriodicDamageTracker
                     selected,
                     selected.Source,
                     tick.Amount,
+                    tick.Amount,
                     matchingStatuses.Count == 1
                         ? DamageAttributionQuality.Exact
                         : DamageAttributionQuality.Estimated,
@@ -205,6 +286,7 @@ internal sealed class PeriodicDamageTracker
                 tick,
                 null,
                 unknownGroundSource,
+                tick.Amount,
                 tick.Amount,
                 DamageAttributionQuality.Unattributed,
                 0)];
@@ -218,7 +300,14 @@ internal sealed class PeriodicDamageTracker
         if (candidates.Count == 0)
         {
             var unknownSource = CreateUnknownSource(!tick.Target.IsPlayer);
-            return [CreateEvent(tick, null, unknownSource, tick.Amount, DamageAttributionQuality.Unattributed, 0)];
+            return [CreateEvent(
+                tick,
+                null,
+                unknownSource,
+                tick.Amount,
+                tick.Amount,
+                DamageAttributionQuality.Unattributed,
+                0)];
         }
 
         if (candidates.Count == 1)
@@ -227,11 +316,13 @@ internal sealed class PeriodicDamageTracker
             candidate.LastTickAtUtc = tick.SeenAtUtc;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
             Learn(candidate, tick.Amount);
+            var meterAmount = EstimateMeterTick(candidate) ?? tick.Amount;
             return [CreateEvent(
                 tick,
                 candidate.Application,
                 candidate.Application.Source,
                 tick.Amount,
+                meterAmount,
                 DamageAttributionQuality.Exact,
                 0)];
         }
@@ -248,11 +339,15 @@ internal sealed class PeriodicDamageTracker
 
             candidate.LastTickAtUtc = tick.SeenAtUtc;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
+            var learnedAmount = GetLearnedWeight(candidate);
+            var meterAmount = EstimateMeterTick(candidate) ??
+                (learnedAmount > 0.0 ? learnedAmount : allocations[index]);
             events.Add(CreateEvent(
                 tick,
                 candidate.Application,
                 candidate.Application.Source,
                 allocations[index],
+                meterAmount,
                 DamageAttributionQuality.Estimated,
                 index));
         }
@@ -265,6 +360,8 @@ internal sealed class PeriodicDamageTracker
         statuses.Clear();
         learnedApplicationTicks.Clear();
         learnedProfileTicks.Clear();
+        sourcePotencySamples.Clear();
+        sourceHitRateSamples.Clear();
         nextApplicationGeneration = 0;
     }
 
@@ -440,6 +537,10 @@ internal sealed class PeriodicDamageTracker
                 ElementType = application.ElementType != 0
                     ? application.ElementType
                     : existingApplication.ElementType,
+                PeriodicPotency = application.PeriodicPotency ?? existingApplication.PeriodicPotency,
+                BaseDamageLowByte = application.BaseDamageLowByte ?? existingApplication.BaseDamageLowByte,
+                CriticalRateLowByte = application.CriticalRateLowByte ?? existingApplication.CriticalRateLowByte,
+                EffectParameterByte = application.EffectParameterByte ?? existingApplication.EffectParameterByte,
                 SourceStatuses = existingApplication.HasSourceStatusSnapshot
                     ? existingApplication.SourceStatuses
                     : application.SourceStatuses,
@@ -471,6 +572,7 @@ internal sealed class PeriodicDamageTracker
         DamageStatusApplication? status,
         DamageActorIdentity source,
         uint amount,
+        double meterAmount,
         DamageAttributionQuality quality,
         int allocationIndex)
     {
@@ -502,6 +604,8 @@ internal sealed class PeriodicDamageTracker
             0,
             0)
         {
+            CapturedAtUtc = tick.CapturedAtUtc,
+            MeterAmount = meterAmount,
             AttributedSource = source,
             AttributionQuality = quality,
             IsPeriodic = true,
@@ -528,6 +632,151 @@ internal sealed class PeriodicDamageTracker
         {
             IsPartyMember = outgoing,
         };
+    }
+
+    private double? EstimateMeterTick(TrackedStatus status)
+    {
+        var application = status.Application;
+        if (application.PeriodicPotency is not > 0.0)
+        {
+            return null;
+        }
+
+        var sourceKey = GetActorKey(application.Source);
+        if (!sourcePotencySamples.TryGetValue(sourceKey, out var potencySamples) ||
+            potencySamples.Median is not > 0.0)
+        {
+            return null;
+        }
+
+        var effects = GetApplicableEffects(
+            application.SourceStatuses,
+            application.TargetStatuses,
+            application.Source,
+            application.DamageType,
+            application.ElementType);
+        var baseAmount = application.PeriodicPotency.Value * potencySamples.Median;
+        baseAmount *= effects
+            .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+            .Aggregate(1.0, (multiplier, effect) => multiplier * (1.0 + effect.Amount));
+        baseAmount = ReconstructBaseAmount(baseAmount, application.BaseDamageLowByte);
+
+        var baseRates = GetBaseRates(sourceKey);
+        var criticalBuffRate = effects
+            .Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance)
+            .Sum(effect => effect.Amount);
+        var directHitBuffRate = effects
+            .Where(effect => effect.Kind == RaidBuffEffectKind.DirectHitChance)
+            .Sum(effect => effect.Amount);
+        var expectedCriticalRate = Math.Clamp(baseRates.Critical + criticalBuffRate, 0.0, 1.0);
+        var criticalRate = ResolveCriticalRate(
+            application.CriticalRateLowByte,
+            expectedCriticalRate);
+        var directHitRate = Math.Clamp(baseRates.DirectHit + directHitBuffRate, 0.0, 1.0);
+        var criticalMultiplier = GetCriticalMultiplier(
+            Math.Clamp(criticalRate - criticalBuffRate, 0.05, 0.95));
+        var expectedAmount = baseAmount *
+            (1.0 + (criticalMultiplier - 1.0) * criticalRate) *
+            (1.0 + (DirectHitMultiplier - 1.0) * directHitRate);
+        return double.IsFinite(expectedAmount) && expectedAmount > 0.0
+            ? Math.Round(expectedAmount, MidpointRounding.AwayFromZero)
+            : null;
+    }
+
+    private static double ReconstructBaseAmount(double estimate, byte? lowByte)
+    {
+        if (lowByte is null || estimate < lowByte.Value)
+        {
+            return estimate;
+        }
+
+        var highByte = Math.Clamp(
+            Math.Round((estimate - lowByte.Value) / 256.0, MidpointRounding.AwayFromZero),
+            0.0,
+            byte.MaxValue);
+        var reconstructed = highByte * 256.0 + lowByte.Value;
+        return reconstructed > 4096.0 ? reconstructed + 256.0 : reconstructed;
+    }
+
+    private BaseRates GetBaseRates(string sourceKey)
+    {
+        if (!sourceHitRateSamples.TryGetValue(sourceKey, out var samples))
+        {
+            return BaseRates.Default;
+        }
+
+        return new BaseRates(
+            samples.CriticalSwings >= MinimumObservedRateSamples
+                ? Math.Clamp(samples.CriticalHits / (double)samples.CriticalSwings, 0.05, 0.95)
+                : DefaultCriticalRate,
+            samples.DirectHitSwings >= MinimumObservedRateSamples
+                ? Math.Clamp(samples.DirectHits / (double)samples.DirectHitSwings, 0.05, 0.95)
+                : DefaultDirectHitRate);
+    }
+
+    private static double ResolveCriticalRate(byte? lowByte, double expectedRate)
+    {
+        if (lowByte is null)
+        {
+            return expectedRate;
+        }
+
+        var rate = lowByte.Value / 1000.0;
+        while (expectedRate - rate > 0.125)
+        {
+            rate += 0.255;
+        }
+
+        return rate is >= 0.0 and <= 1.0 ? rate : expectedRate;
+    }
+
+    private static double GetCriticalMultiplier(double baseCriticalRate)
+    {
+        return Math.Max(1.4, 1.35 + baseCriticalRate);
+    }
+
+    private static IReadOnlyList<RaidBuffEffect> GetApplicableEffects(
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
+        IReadOnlyList<DamageStatusSnapshot> targetStatuses,
+        DamageActorIdentity recipient,
+        byte damageType,
+        byte elementType)
+    {
+        var effects = new List<RaidBuffEffect>();
+        var seen = new HashSet<(uint StatusId, RaidBuffEffectKind Kind, string SourceKey)>();
+        AddApplicableEffects(sourceStatuses, false, recipient, damageType, elementType, effects, seen);
+        AddApplicableEffects(targetStatuses, true, recipient, damageType, elementType, effects, seen);
+        return effects;
+    }
+
+    private static void AddApplicableEffects(
+        IReadOnlyList<DamageStatusSnapshot> statuses,
+        bool isTargetStatus,
+        DamageActorIdentity recipient,
+        byte damageType,
+        byte elementType,
+        ICollection<RaidBuffEffect> effects,
+        ISet<(uint StatusId, RaidBuffEffectKind Kind, string SourceKey)> seen)
+    {
+        foreach (var status in statuses.Where(status => status.RemainingTime > 0.0f))
+        {
+            foreach (var effect in RaidBuffPolicy.GetEffects(status, isTargetStatus, recipient))
+            {
+                var sourceKey = GetActorKey(effect.Source);
+                if (RaidBuffPolicy.AppliesToDamage(effect, damageType, elementType) &&
+                    seen.Add((effect.StatusId, effect.Kind, sourceKey)))
+                {
+                    effects.Add(effect);
+                }
+            }
+        }
+    }
+
+    private static string GetActorKey(DamageActorIdentity actor)
+    {
+        return actor.EntityId != 0
+            ? $"entity:{actor.EntityId:X8}"
+            : $"name:{actor.Name}";
     }
 
     private void Prune(DateTime now)
@@ -661,5 +910,37 @@ internal sealed class PeriodicDamageTracker
                 values.Dequeue();
             }
         }
+    }
+
+    private sealed class PotencySamples
+    {
+        private readonly Queue<double> values = new();
+
+        public double Median => PeriodicDamageTracker.Median(values);
+
+        public void Add(double value)
+        {
+            values.Enqueue(value);
+            while (values.Count > MaximumPotencySamples)
+            {
+                values.Dequeue();
+            }
+        }
+    }
+
+    private sealed class HitRateSamples
+    {
+        public int CriticalSwings { get; set; }
+
+        public int CriticalHits { get; set; }
+
+        public int DirectHitSwings { get; set; }
+
+        public int DirectHits { get; set; }
+    }
+
+    private sealed record BaseRates(double Critical, double DirectHit)
+    {
+        public static BaseRates Default { get; } = new(DefaultCriticalRate, DefaultDirectHitRate);
     }
 }

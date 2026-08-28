@@ -18,6 +18,14 @@ internal enum DamageAttributionQuality
     Unattributed,
 }
 
+internal enum DamageResolutionQuality
+{
+    Unresolved,
+    Observed,
+    Resolved,
+    KnownZeroHp,
+}
+
 internal sealed record DamageActorIdentity(
     uint EntityId,
     string Name,
@@ -45,6 +53,17 @@ internal sealed record DamageStatusSnapshot(
     ushort Parameter,
     float RemainingTime);
 
+internal sealed record DamageHpSnapshot(
+    uint CurrentHp,
+    uint ShieldHp,
+    uint MaxHp);
+
+internal sealed record DamageEffectResult(
+    DateTime SeenAtUtc,
+    uint ActionSequence,
+    DamageActorIdentity Target,
+    DamageHpSnapshot Snapshot);
+
 internal sealed record DamageActionPacket(
     long PacketSequence,
     DateTime SeenAtUtc,
@@ -54,7 +73,13 @@ internal sealed record DamageActionPacket(
     string ActionName,
     IReadOnlyList<DamageActionTarget> Targets)
 {
+    public DateTime? CapturedAtUtc { get; init; }
+
     public uint ActionCategoryId { get; init; }
+
+    public double? DirectPotency { get; init; }
+
+    public bool CanCalibratePotency { get; init; }
 
     public bool IsAutoAttack { get; init; }
 
@@ -91,6 +116,14 @@ internal sealed record DamageStatusApplication(
     bool IsReactiveDamage,
     bool IsRemoval)
 {
+    public double? PeriodicPotency { get; init; }
+
+    public byte? BaseDamageLowByte { get; init; }
+
+    public byte? CriticalRateLowByte { get; init; }
+
+    public byte? EffectParameterByte { get; init; }
+
     public string SnapshotKey { get; init; } = string.Empty;
 
     public ushort Parameter { get; init; }
@@ -116,13 +149,20 @@ internal sealed record PeriodicDamageTick(
     string StatusName,
     uint StatusIconId,
     uint Amount,
-    DamageActorIdentity? Source);
+    DamageActorIdentity? Source)
+{
+    public DateTime? CapturedAtUtc { get; init; }
+
+    public DamageHpSnapshot? TargetHp { get; init; }
+}
 
 internal sealed record DamageActionTarget(
     int TargetIndex,
     DamageActorIdentity Target,
     IReadOnlyList<DamageActionEffect> Effects)
 {
+    public DamageHpSnapshot? TargetHp { get; init; }
+
     public IReadOnlyList<DamageStatusSnapshot> TargetStatuses { get; init; } = [];
 
     public bool HasTargetStatusSnapshot { get; init; }
@@ -164,6 +204,30 @@ internal sealed record ParsedDamageEvent(
     byte RawParam3,
     byte RawParam4)
 {
+    public DateTime? CapturedAtUtc { get; init; }
+
+    public double? DirectPotency { get; init; }
+
+    public bool CanCalibratePotency { get; init; }
+
+    public double? MeterAmount { get; init; }
+
+    public double RawMeterAmount => MeterAmount ?? Amount;
+
+    public double? CalculatedAmount { get; init; }
+
+    public double EffectiveMeterAmount => CalculatedAmount ?? RawMeterAmount;
+
+    public DamageResolutionQuality ResolutionQuality { get; init; }
+
+    public double AbsorbedDamage { get; init; }
+
+    public double OverkillDamage { get; init; }
+
+    public DamageHpSnapshot? TargetHpBefore { get; init; }
+
+    public DamageHpSnapshot? TargetHpAfter { get; init; }
+
     public byte ElementType { get; init; }
 
     public uint ActionCategoryId { get; init; }
@@ -220,6 +284,10 @@ internal sealed record DamageActionSummary(
     int BlockedHits,
     int ParriedHits)
 {
+    public double? MeterDamage { get; init; }
+
+    public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
+
     public bool IsAutoAttack { get; init; }
 
     public uint ActionCategoryId { get; init; }
@@ -250,6 +318,10 @@ internal sealed record DamageSourceSummary(
     int ParriedHits,
     IReadOnlyList<DamageActionSummary> Actions)
 {
+    public double? MeterDamage { get; init; }
+
+    public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
+
     public ulong PeriodicDamage { get; init; }
 
     public ulong EstimatedDamage { get; init; }
@@ -258,9 +330,22 @@ internal sealed record DamageSourceSummary(
 
     public double RaidAdjustedDamage { get; init; }
 
+    public double? MeterRaidAdjustedDamage { get; init; }
+
+    public double EffectiveMeterRaidAdjustedDamage => MeterRaidAdjustedDamage ?? RaidAdjustedDamage;
+
     public double ExternalBuffDamageReceived { get; init; }
 
+    public double? MeterExternalBuffDamageReceived { get; init; }
+
+    public double EffectiveMeterExternalBuffDamageReceived =>
+        MeterExternalBuffDamageReceived ?? ExternalBuffDamageReceived;
+
     public double RaidBuffDamageGiven { get; init; }
+
+    public double? MeterRaidBuffDamageGiven { get; init; }
+
+    public double EffectiveMeterRaidBuffDamageGiven => MeterRaidBuffDamageGiven ?? RaidBuffDamageGiven;
 
     public int PeriodicHits { get; init; }
 
@@ -292,6 +377,16 @@ internal sealed record DamageEncounterSnapshot(
     IReadOnlyList<DamageSourceSummary> Sources,
     IReadOnlyList<DamageTargetSummary> Targets)
 {
+    public DateTime? MeterStartedAtUtc { get; init; }
+
+    public DateTime? MeterSnapshotAtUtc { get; init; }
+
+    public DateTime? MeterEndedAtUtc { get; init; }
+
+    public double? MeterDamage { get; init; }
+
+    public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
+
     public ulong ExactDamage { get; init; }
 
     public ulong EstimatedDamage { get; init; }
@@ -300,16 +395,23 @@ internal sealed record DamageEncounterSnapshot(
 
     public double RaidAdjustedDamage { get; init; }
 
+    public double? MeterRaidAdjustedDamage { get; init; }
+
+    public double EffectiveMeterRaidAdjustedDamage => MeterRaidAdjustedDamage ?? RaidAdjustedDamage;
+
     public double DurationSeconds
     {
         get
         {
-            var end = EndedAtUtc ?? SnapshotAtUtc;
-            return Math.Max(0.0, (end - StartedAtUtc).TotalSeconds);
+            var start = MeterStartedAtUtc ?? StartedAtUtc;
+            var end = MeterEndedAtUtc ?? MeterSnapshotAtUtc ?? EndedAtUtc ?? SnapshotAtUtc;
+            return Math.Max(0.0, (end - start).TotalSeconds);
         }
     }
 
-    public double DamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : TotalDamage / DurationSeconds;
+    public double DamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : EffectiveMeterDamage / DurationSeconds;
 
-    public double RaidDamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : RaidAdjustedDamage / DurationSeconds;
+    public double RaidDamagePerSecond => DurationSeconds <= 0.0
+        ? 0.0
+        : EffectiveMeterRaidAdjustedDamage / DurationSeconds;
 }

@@ -374,6 +374,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, uint> actionIconCache = new();
     private readonly Dictionary<uint, uint> actionCategoryCache = new();
     private readonly Dictionary<uint, (byte DamageType, byte ElementType)> actionDamageProfileCache = new();
+    private readonly Dictionary<uint, DamageParsing.ActionPotencyProfile> actionPotencyProfileCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
     private readonly Dictionary<uint, uint> statusIconCache = new();
     private readonly Dictionary<uint, bool> periodicDamageStatusCache = new();

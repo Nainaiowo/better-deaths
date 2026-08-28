@@ -59,12 +59,21 @@ public sealed partial class Plugin
                     CaptureDamageActorIdentity(targetEntityId, string.Empty),
                     effects)
                 {
+                    TargetHp = target.TargetSnapshot is null
+                        ? null
+                        : new DamageHpSnapshot(
+                            target.TargetSnapshot.CurrentHp,
+                            target.TargetSnapshot.ShieldHp,
+                            target.TargetSnapshot.MaxHp),
                     TargetStatuses = BuildDamageStatusSnapshots(target.TargetSnapshot),
                     HasTargetStatusSnapshot = target.TargetSnapshot is not null,
                 });
             }
 
             var actionCategoryId = GetActionCategoryId(packet.ActionId);
+            var potencyProfile = GetActionPotencyProfile(packet.ActionId);
+            var calibratingDamageEffects = targets.Sum(target => target.Effects.Count(effect =>
+                effect.Type is 3 or 5 or 6));
             var statusApplications = BuildDamageStatusApplications(
                 packet,
                 damageSeenAtUtc,
@@ -80,7 +89,11 @@ public sealed partial class Plugin
                 GetActionName(packet.ActionId),
                 targets)
             {
+                CapturedAtUtc = packet.SeenAtUtc,
                 ActionCategoryId = actionCategoryId,
+                DirectPotency = potencyProfile.DirectPotency,
+                CanCalibratePotency = potencyProfile.DirectPotency is > 0.0 &&
+                    calibratingDamageEffects == 1,
                 IsAutoAttack = actionCategoryId == 1,
                 ActionType = packet.ActionType,
                 SourceSequence = packet.SourceSequence,
@@ -116,6 +129,7 @@ public sealed partial class Plugin
         var applications = new List<DamageStatusApplication>();
         var attributedSource = GetAttributedDamageSource(source, sourceOwner);
         var actionDamageProfile = GetActionDamageProfile(packet.ActionId);
+        var potencyProfile = GetActionPotencyProfile(packet.ActionId);
         string? snapshotKey = null;
         foreach (var target in packet.Targets)
         {
@@ -144,6 +158,10 @@ public sealed partial class Plugin
                     0.0f,
                     isRemoval) with
                 {
+                    PeriodicPotency = isRemoval ? null : potencyProfile.PeriodicPotency,
+                    BaseDamageLowByte = isRemoval ? null : (byte)effect.Param0,
+                    CriticalRateLowByte = isRemoval ? null : (byte)effect.Param1,
+                    EffectParameterByte = isRemoval ? null : (byte)effect.Param2,
                     SnapshotKey = isRemoval
                         ? string.Empty
                         : snapshotKey ??= BuildDamageSnapshotKey(
@@ -201,6 +219,14 @@ public sealed partial class Plugin
         }
 
         var target = CaptureDamageActorIdentity(targetEntityId, string.Empty);
+        damageParsingModule.ObserveEffectResult(new DamageEffectResult(
+            damageSeenAtUtc,
+            packet.RelatedActionSequence,
+            target,
+            new DamageHpSnapshot(
+                packet.CurrentHp,
+                CalculateShieldHpFromPercent(packet.MaxHp, packet.ShieldPercent),
+                packet.MaxHp)));
         foreach (var status in packet.Statuses.Where(status => status.EffectId != 0))
         {
             var rawSource = CaptureDamageActorIdentity(status.SourceActorId, string.Empty);
@@ -243,7 +269,16 @@ public sealed partial class Plugin
                 statusId == 0 ? string.Empty : GetStatusName(statusId),
                 statusId == 0 ? 0 : GetStatusIconId(statusId),
                 packet.Param2,
-                source);
+                source)
+            {
+                CapturedAtUtc = packet.SeenAtUtc,
+                TargetHp = packet.TargetSnapshot is null
+                    ? null
+                    : new DamageHpSnapshot(
+                        packet.TargetSnapshot.CurrentHp,
+                        packet.TargetSnapshot.ShieldHp,
+                        packet.TargetSnapshot.MaxHp),
+            };
             QueueDamageMeterPeriodicDebug(packet, tick);
             damageParsingModule.ProcessPeriodicTick(tick, allowAutomaticEncounterStart: false);
             return;
@@ -530,6 +565,9 @@ public sealed partial class Plugin
                 application.StatusName,
                 application.SnapshotKey,
                 application.Parameter,
+                application.PeriodicPotency,
+                application.BaseDamageLowByte,
+                application.CriticalRateLowByte,
                 application.IsRemoval,
             }),
         });
@@ -561,6 +599,7 @@ public sealed partial class Plugin
             tick.StatusId,
             tick.StatusName,
             tick.Amount,
+            tick.CapturedAtUtc,
             SourceEntityId = tick.Source?.EntityId ?? 0,
             SourceName = tick.Source?.Name ?? string.Empty,
         });
@@ -587,6 +626,9 @@ public sealed partial class Plugin
             application.ActionName,
             application.DurationSeconds,
             application.Parameter,
+            application.PeriodicPotency,
+            application.BaseDamageLowByte,
+            application.CriticalRateLowByte,
             application.IsPeriodicDamage,
             application.IsReactiveDamage,
             application.IsRemoval,
@@ -617,6 +659,16 @@ public sealed partial class Plugin
                 damageEvent.ActionName,
                 damageEvent.StatusId,
                 damageEvent.Amount,
+                damageEvent.MeterAmount,
+                damageEvent.CalculatedAmount,
+                Resolution = damageEvent.ResolutionQuality.ToString(),
+                damageEvent.AbsorbedDamage,
+                damageEvent.OverkillDamage,
+                damageEvent.TargetHpBefore,
+                damageEvent.TargetHpAfter,
+                damageEvent.CapturedAtUtc,
+                damageEvent.DirectPotency,
+                damageEvent.CanCalibratePotency,
                 Outcome = damageEvent.Outcome.ToString(),
                 Attribution = damageEvent.AttributionQuality.ToString(),
                 damageEvent.IsPeriodic,
@@ -663,10 +715,12 @@ public sealed partial class Plugin
                 Reason = reason,
                 HasEncounter = ended is not null,
                 TotalDamage = ended?.TotalDamage ?? 0,
+                MeterDamage = ended?.EffectiveMeterDamage ?? 0.0,
                 ExactDamage = ended?.ExactDamage ?? 0,
                 EstimatedDamage = ended?.EstimatedDamage ?? 0,
                 UnattributedDamage = ended?.UnattributedDamage ?? 0,
                 RaidAdjustedDamage = ended?.RaidAdjustedDamage ?? 0.0,
+                MeterRaidAdjustedDamage = ended?.EffectiveMeterRaidAdjustedDamage ?? 0.0,
                 DurationSeconds = ended?.DurationSeconds ?? 0.0,
                 PacketCount = ended?.PacketCount ?? 0,
                 Sources = ended?.Sources.Select(source => new
@@ -674,6 +728,7 @@ public sealed partial class Plugin
                     SourceEntityId = source.Source.EntityId,
                     SourceName = source.Source.Name,
                     source.TotalDamage,
+                    MeterDamage = source.EffectiveMeterDamage,
                     source.Swings,
                     source.Hits,
                     source.Misses,

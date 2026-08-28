@@ -152,6 +152,38 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void UsesCaptureTimestampsForMeterDurationWithoutChangingEventOrder()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            seenAtUtc: SeenAtUtc,
+            actionId: 100) with
+        {
+            CapturedAtUtc = SeenAtUtc.AddMilliseconds(100),
+        });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 200)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(4.8),
+            actionId: 101) with
+        {
+            CapturedAtUtc = SeenAtUtc.AddSeconds(5.013),
+        });
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(
+            module.EndEncounter(SeenAtUtc.AddSeconds(10), "Combat ended"));
+
+        Assert.Equal(SeenAtUtc, snapshot.StartedAtUtc);
+        Assert.Equal(SeenAtUtc.AddSeconds(4.8), snapshot.EndedAtUtc);
+        Assert.Equal(SeenAtUtc.AddMilliseconds(100), snapshot.MeterStartedAtUtc);
+        Assert.Equal(SeenAtUtc.AddSeconds(5.013), snapshot.MeterEndedAtUtc);
+        Assert.Equal(4.913, snapshot.DurationSeconds, 3);
+        Assert.Equal(SeenAtUtc, snapshot.Events[0].SeenAtUtc);
+        Assert.Equal(SeenAtUtc.AddSeconds(4.8), snapshot.Events[1].SeenAtUtc);
+    }
+
+    [Fact]
     public void TracksDeathsAndTheLargestHitForWidgetColumns()
     {
         var module = new DamageParsingModule();
@@ -1027,6 +1059,360 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void SimulatesMeterDotDamageWithoutChangingTheRawPacketTotal()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 900, "Burn") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 20,
+            BaseDamageLowByte = 200,
+            CriticalRateLowByte = 150,
+        });
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(600u, periodicEvent.Amount);
+        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(1600ul, snapshot.TotalDamage);
+        Assert.Equal(1218.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(1600ul, Assert.Single(snapshot.Sources).TotalDamage);
+        Assert.Equal(1218.0, Assert.Single(snapshot.Sources).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void SimulatesEachActiveDotInsteadOfForcingTheirMeterValuesToTheCombinedTick()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 900, "First DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 25,
+            BaseDamageLowByte = 250,
+            CriticalRateLowByte = 150,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 901, "Second DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 20,
+            BaseDamageLowByte = 200,
+            CriticalRateLowByte = 150,
+        });
+
+        var periodicEvents = ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(700, 2, SeenAtUtc.AddSeconds(3)));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(700u, periodicEvents.Aggregate(0u, (total, entry) => total + entry.Amount));
+        Assert.Equal(490.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(1700ul, snapshot.TotalDamage);
+        Assert.Equal(1490.0, snapshot.EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void CapsAResolvedKillingHitWithoutChangingTheRawDamage()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 6262)),
+            905,
+            0,
+            10000);
+
+        module.Process(packet);
+        Assert.Equal(6262.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(0, 0, 10000)));
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        Assert.Equal(6262ul, snapshot.TotalDamage);
+        Assert.Equal(905.0, snapshot.EffectiveMeterDamage);
+        var ended = Assert.IsType<DamageEncounterSnapshot>(module.EndEncounter(SeenAtUtc.AddSeconds(1), "test"));
+        var damageEvent = Assert.Single(ended.Events);
+        Assert.Equal(905.0, damageEvent.CalculatedAmount);
+        Assert.Equal(5357.0, damageEvent.OverkillDamage);
+        Assert.Equal(DamageResolutionQuality.Resolved, damageEvent.ResolutionQuality);
+    }
+
+    [Fact]
+    public void SeparatesShieldAbsorptionFromEffectiveHpDamage()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            1000,
+            500,
+            1000);
+
+        module.Process(packet);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(900, 0, 1000)));
+
+        var ended = Assert.IsType<DamageEncounterSnapshot>(module.EndEncounter(SeenAtUtc.AddSeconds(1), "test"));
+        var damageEvent = Assert.Single(ended.Events);
+        Assert.Equal(100.0, damageEvent.CalculatedAmount);
+        Assert.Equal(500.0, damageEvent.AbsorbedDamage);
+        Assert.Equal(0.0, damageEvent.OverkillDamage);
+    }
+
+    [Fact]
+    public void RecognizesFullShieldAbsorptionDespitePercentRounding()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 50)),
+            1000,
+            100,
+            1000);
+
+        module.Process(packet);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(1000, 100, 1000)));
+
+        var ended = Assert.IsType<DamageEncounterSnapshot>(module.EndEncounter(SeenAtUtc.AddSeconds(1), "test"));
+        var damageEvent = Assert.Single(ended.Events);
+        Assert.Equal(0.0, damageEvent.CalculatedAmount);
+        Assert.Equal(50.0, damageEvent.AbsorbedDamage);
+    }
+
+    [Fact]
+    public void KeepsMissingResultsOnTheExistingRawMeterPath()
+    {
+        var module = new DamageParsingModule();
+        module.Process(WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            1000,
+            0,
+            1000));
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(600.0, snapshot.EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void KeepsRawDamageWhenHpDidNotDropAndAbsorptionDoesNotExplainTheHit()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            1000,
+            0,
+            1000);
+
+        module.Process(packet);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(1000, 0, 1000)));
+
+        Assert.Equal(600.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void ResolvesAnEffectResultThatWasQueuedBeforeItsAction()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 6262)),
+            905,
+            0,
+            10000);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(0, 0, 10000)));
+
+        var damageEvent = Assert.Single(module.Process(packet));
+
+        Assert.Equal(905.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(905.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void KeepsDamageAtZeroWhileATargetRemainsAliveAtZeroHp()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            0,
+            0,
+            1000);
+
+        var damageEvent = Assert.Single(module.Process(packet));
+
+        Assert.Equal(600u, damageEvent.Amount);
+        Assert.Equal(0.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(DamageResolutionQuality.KnownZeroHp, damageEvent.ResolutionQuality);
+        Assert.Equal(0.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void DoesNotTreatUnavailableZeroOverZeroHpAsADeadTarget()
+    {
+        var module = new DamageParsingModule();
+        var damageEvent = Assert.Single(module.Process(WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            0,
+            0,
+            0)));
+
+        Assert.Equal(600.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(DamageResolutionQuality.Observed, damageEvent.ResolutionQuality);
+    }
+
+    [Fact]
+    public void PositiveActionHpStartsANewTargetLifecycleAfterZeroHp()
+    {
+        var module = new DamageParsingModule();
+        module.Process(WithTargetHp(
+            CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)),
+            0,
+            0,
+            1000));
+        var resetPacket = WithTargetHp(
+            CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 50)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddSeconds(1)),
+            100,
+            0,
+            1000) with
+        {
+            ActionSequence = 701,
+        };
+
+        module.Process(resetPacket);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddSeconds(1.1),
+            resetPacket.ActionSequence,
+            Target,
+            new DamageHpSnapshot(50, 0, 1000)));
+
+        Assert.Equal(50.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void ResolvesAoeTargetsIndependentlyWhenTheyShareAnActionSequence()
+    {
+        var secondTarget = Target with { EntityId = 0x2002, Name = "Second target" };
+        var packet = new DamageActionPacket(
+            1,
+            SeenAtUtc,
+            700,
+            Source,
+            100,
+            "AoE",
+            [
+                new DamageActionTarget(0, Target, [new DamageActionEffect(0, 3, 0, 0, 0, 0, 800)])
+                {
+                    TargetHp = new DamageHpSnapshot(1000, 0, 1000),
+                },
+                new DamageActionTarget(1, secondTarget, [new DamageActionEffect(0, 3, 0, 0, 0, 0, 800)])
+                {
+                    TargetHp = new DamageHpSnapshot(1000, 0, 1000),
+                },
+            ]);
+        var module = new DamageParsingModule();
+
+        module.Process(packet);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100),
+            packet.ActionSequence,
+            Target,
+            new DamageHpSnapshot(900, 0, 1000)));
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(110),
+            packet.ActionSequence,
+            secondTarget,
+            new DamageHpSnapshot(500, 0, 1000)));
+
+        Assert.Equal(600.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void ScalesSimulatedDotDamageOnlyWhenHpProvesOverkill()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 900, "Burn") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 20,
+            BaseDamageLowByte = 200,
+            CriticalRateLowByte = 150,
+        });
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddSeconds(2),
+            999,
+            Target,
+            new DamageHpSnapshot(100, 0, 1000)));
+        var tick = CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3)) with
+        {
+            TargetHp = new DamageHpSnapshot(0, 0, 1000),
+        };
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(module, tick));
+
+        Assert.Equal(600u, periodicEvent.Amount);
+        Assert.Equal(218.0 / 6.0, periodicEvent.EffectiveMeterAmount, 6);
+        Assert.Equal(500.0, periodicEvent.OverkillDamage);
+        Assert.Equal(DamageResolutionQuality.Resolved, periodicEvent.ResolutionQuality);
+    }
+
+    [Fact]
+    public void SuppressesPeriodicDamageWhileAKnownTargetRemainsAtZeroHp()
+    {
+        var module = new DamageParsingModule();
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc,
+            999,
+            Target,
+            new DamageHpSnapshot(0, 0, 1000)));
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+
+        Assert.Equal(600u, periodicEvent.Amount);
+        Assert.Equal(0.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(DamageResolutionQuality.KnownZeroHp, periodicEvent.ResolutionQuality);
+    }
+
+    [Fact]
     public void PacketConfirmedGroundDamageRemainsSeparatedAcrossEncounters()
     {
         const uint futureGroundStatusId = 0x1234;
@@ -1295,6 +1681,23 @@ public sealed class DamageParsingTests
             [new DamageActionTarget(0, Target, effects)])
         {
             SourceOwner = sourceOwner,
+        };
+    }
+
+    private static DamageActionPacket WithTargetHp(
+        DamageActionPacket packet,
+        uint currentHp,
+        uint shieldHp,
+        uint maxHp)
+    {
+        return packet with
+        {
+            Targets = packet.Targets
+                .Select(target => target with
+                {
+                    TargetHp = new DamageHpSnapshot(currentHp, shieldHp, maxHp),
+                })
+                .ToList(),
         };
     }
 }

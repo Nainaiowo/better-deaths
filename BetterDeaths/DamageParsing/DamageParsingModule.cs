@@ -10,10 +10,12 @@ internal sealed class DamageParsingModule
     private static readonly TimeSpan PreEncounterRetention = TimeSpan.FromSeconds(2);
     private readonly object syncRoot = new();
     private readonly DirectDamageParser parser = new();
+    private readonly EffectiveDamageResolver effectiveDamageResolver = new();
     private readonly PeriodicDamageTracker periodicDamageTracker = new();
     private readonly RaidBuffTracker raidBuffTracker = new();
     private readonly List<ParsedDamageEvent> events = [];
     private readonly HashSet<string> eventIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> eventIndices = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, DamageActorIdentity> knownActors = [];
     private readonly Dictionary<string, MutableDamageSource> sources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutableDamageTarget> targets = new(StringComparer.Ordinal);
@@ -22,6 +24,8 @@ internal sealed class DamageParsingModule
     private DateTime? startedAtUtc;
     private DateTime? latestEventAtUtc;
     private DateTime? latestAlliedEventAtUtc;
+    private DateTime? meterStartedAtUtc;
+    private DateTime? latestAlliedMeterEventAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
@@ -62,6 +66,8 @@ internal sealed class DamageParsingModule
                 .ToList();
             if (parsed.Count > 0)
             {
+                periodicDamageTracker.ObserveDirectDamage(parsed);
+                parsed = effectiveDamageResolver.ObserveDirect(parsed).ToList();
                 RecordParsedEvents(parsed, 1, allowAutomaticEncounterStart);
             }
 
@@ -82,6 +88,17 @@ internal sealed class DamageParsingModule
             FlushPendingPeriodicTicksCore(application.SeenAtUtc, force: false);
             PrunePreEncounterState(application.SeenAtUtc);
             ObserveStatusCore(application);
+        }
+    }
+
+    public void ObserveEffectResult(DamageEffectResult result)
+    {
+        lock (syncRoot)
+        {
+            result = result with { Target = RememberActor(result.Target) };
+            FlushPendingPeriodicTicksCore(result.SeenAtUtc, force: false);
+            PrunePreEncounterState(result.SeenAtUtc);
+            ApplyEventReplacements(effectiveDamageResolver.ObserveEffectResult(result));
         }
     }
 
@@ -252,12 +269,16 @@ internal sealed class DamageParsingModule
             : [];
         var sourceSnapshots = sources.Values
             .Select(source => source.ToSnapshot())
-            .OrderByDescending(source => source.TotalDamage)
+            .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var raidAdjustments = RaidDamageCalculator.Calculate(events, sourceSnapshots);
+        var meterRaidAdjustments = RaidDamageCalculator.Calculate(
+            events,
+            sourceSnapshots,
+            damageEvent => damageEvent.EffectiveMeterAmount);
         sourceSnapshots = sourceSnapshots
-            .Select(source => ApplyRaidAdjustment(source, raidAdjustments))
+            .Select(source => ApplyRaidAdjustment(source, raidAdjustments, meterRaidAdjustments))
             .ToList();
         foreach (var adjustment in raidAdjustments.Values.Where(adjustment =>
                      sourceSnapshots.All(source =>
@@ -266,11 +287,14 @@ internal sealed class DamageParsingModule
                              RaidDamageCalculator.GetActorKey(adjustment.Source),
                              StringComparison.Ordinal))))
         {
-            sourceSnapshots.Add(CreateRaidOnlySource(adjustment));
+            meterRaidAdjustments.TryGetValue(
+                RaidDamageCalculator.GetActorKey(adjustment.Source),
+                out var meterAdjustment);
+            sourceSnapshots.Add(CreateRaidOnlySource(adjustment, meterAdjustment));
         }
 
         sourceSnapshots = sourceSnapshots
-            .OrderByDescending(source => source.TotalDamage)
+            .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var targetSnapshots = targets.Values
@@ -292,34 +316,50 @@ internal sealed class DamageParsingModule
             targetSnapshots);
         return snapshot with
         {
+            MeterStartedAtUtc = meterStartedAtUtc,
+            MeterSnapshotAtUtc = latestAlliedMeterEventAtUtc,
+            MeterEndedAtUtc = endedAtUtc is null
+                ? null
+                : latestAlliedMeterEventAtUtc,
+            MeterDamage = sourceSnapshots.Sum(source => source.EffectiveMeterDamage),
             EstimatedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.EstimatedDamage),
             UnattributedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.UnattributedDamage),
             ExactDamage = sourceSnapshots.Aggregate(0UL, (total, source) =>
                 total + source.TotalDamage - source.EstimatedDamage - source.UnattributedDamage),
             RaidAdjustedDamage = sourceSnapshots.Sum(source => source.RaidAdjustedDamage),
+            MeterRaidAdjustedDamage = sourceSnapshots.Sum(source => source.EffectiveMeterRaidAdjustedDamage),
         };
     }
 
     private static DamageSourceSummary ApplyRaidAdjustment(
         DamageSourceSummary source,
-        IReadOnlyDictionary<string, RaidDamageAdjustment> adjustments)
+        IReadOnlyDictionary<string, RaidDamageAdjustment> adjustments,
+        IReadOnlyDictionary<string, RaidDamageAdjustment> meterAdjustments)
     {
-        if (!adjustments.TryGetValue(RaidDamageCalculator.GetActorKey(source.Source), out var adjustment))
-        {
-            return source with { RaidAdjustedDamage = source.TotalDamage };
-        }
+        var actorKey = RaidDamageCalculator.GetActorKey(source.Source);
+        adjustments.TryGetValue(actorKey, out var adjustment);
+        meterAdjustments.TryGetValue(actorKey, out var meterAdjustment);
 
         return source with
         {
-            ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
-            RaidBuffDamageGiven = adjustment.RaidBuffDamageGiven,
+            ExternalBuffDamageReceived = adjustment?.ExternalBuffDamageReceived ?? 0.0,
+            RaidBuffDamageGiven = adjustment?.RaidBuffDamageGiven ?? 0.0,
+            MeterExternalBuffDamageReceived = meterAdjustment?.ExternalBuffDamageReceived ?? 0.0,
+            MeterRaidBuffDamageGiven = meterAdjustment?.RaidBuffDamageGiven ?? 0.0,
             RaidAdjustedDamage = Math.Max(
                 0.0,
-                source.TotalDamage - adjustment.ExternalBuffDamageReceived + adjustment.RaidBuffDamageGiven),
+                source.TotalDamage - (adjustment?.ExternalBuffDamageReceived ?? 0.0) +
+                (adjustment?.RaidBuffDamageGiven ?? 0.0)),
+            MeterRaidAdjustedDamage = Math.Max(
+                0.0,
+                source.EffectiveMeterDamage - (meterAdjustment?.ExternalBuffDamageReceived ?? 0.0) +
+                (meterAdjustment?.RaidBuffDamageGiven ?? 0.0)),
         };
     }
 
-    private static DamageSourceSummary CreateRaidOnlySource(RaidDamageAdjustment adjustment)
+    private static DamageSourceSummary CreateRaidOnlySource(
+        RaidDamageAdjustment adjustment,
+        RaidDamageAdjustment? meterAdjustment)
     {
         return new DamageSourceSummary(
             adjustment.Source,
@@ -336,9 +376,13 @@ internal sealed class DamageParsingModule
             0,
             [])
         {
+            MeterDamage = 0.0,
             RaidAdjustedDamage = adjustment.RaidBuffDamageGiven,
+            MeterRaidAdjustedDamage = meterAdjustment?.RaidBuffDamageGiven ?? adjustment.RaidBuffDamageGiven,
             ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
             RaidBuffDamageGiven = adjustment.RaidBuffDamageGiven,
+            MeterExternalBuffDamageReceived = meterAdjustment?.ExternalBuffDamageReceived ?? 0.0,
+            MeterRaidBuffDamageGiven = meterAdjustment?.RaidBuffDamageGiven ?? adjustment.RaidBuffDamageGiven,
         };
     }
 
@@ -346,16 +390,20 @@ internal sealed class DamageParsingModule
     {
         events.Clear();
         eventIds.Clear();
+        eventIndices.Clear();
         knownActors.Clear();
         sources.Clear();
         targets.Clear();
         pendingPeriodicTicks.Clear();
         stagedDamageBatches.Clear();
         periodicDamageTracker.Clear();
+        effectiveDamageResolver.Clear();
         raidBuffTracker.Clear();
         startedAtUtc = null;
         latestEventAtUtc = null;
         latestAlliedEventAtUtc = null;
+        meterStartedAtUtc = null;
+        latestAlliedMeterEventAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
         packetCount = 0;
@@ -417,6 +465,7 @@ internal sealed class DamageParsingModule
             return parsed;
         }
 
+        parsed = effectiveDamageResolver.ResolvePeriodic(entry.Tick, parsed).ToList();
         RecordParsedEvents(parsed, 1, entry.AllowAutomaticEncounterStart);
         PeriodicEventsResolved?.Invoke(parsed);
         return parsed;
@@ -488,6 +537,7 @@ internal sealed class DamageParsingModule
         pendingPeriodicTicks.RemoveAll(entry => entry.Tick.SeenAtUtc < cutoff);
         stagedDamageBatches.Clear();
         periodicDamageTracker.Clear();
+        effectiveDamageResolver.Clear();
         raidBuffTracker.Clear();
         latestPreEncounterActivityAtUtc = null;
     }
@@ -536,6 +586,8 @@ internal sealed class DamageParsingModule
             latestEventAtUtc = latestEventAtUtc is null || damageEvent.SeenAtUtc > latestEventAtUtc
                 ? damageEvent.SeenAtUtc
                 : latestEventAtUtc;
+            var meterEventAtUtc = damageEvent.CapturedAtUtc ?? damageEvent.SeenAtUtc;
+            eventIndices[damageEvent.EventId] = events.Count;
             events.Add(damageEvent);
 
             var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
@@ -543,6 +595,18 @@ internal sealed class DamageParsingModule
                 (latestAlliedEventAtUtc is null || damageEvent.SeenAtUtc > latestAlliedEventAtUtc))
             {
                 latestAlliedEventAtUtc = damageEvent.SeenAtUtc;
+            }
+
+            if (IsAlliedMeterSource(attributedSource) &&
+                (latestAlliedMeterEventAtUtc is null || meterEventAtUtc > latestAlliedMeterEventAtUtc))
+            {
+                latestAlliedMeterEventAtUtc = meterEventAtUtc;
+            }
+
+            if (IsAlliedMeterSource(attributedSource) &&
+                (meterStartedAtUtc is null || meterEventAtUtc < meterStartedAtUtc))
+            {
+                meterStartedAtUtc = meterEventAtUtc;
             }
 
             var sourceKey = GetActorKey(attributedSource);
@@ -563,6 +627,39 @@ internal sealed class DamageParsingModule
 
             target.Add(damageEvent);
             mutationRevision++;
+        }
+    }
+
+    private void ApplyEventReplacements(IReadOnlyList<ParsedDamageEvent> replacements)
+    {
+        foreach (var replacement in replacements)
+        {
+            if (eventIndices.TryGetValue(replacement.EventId, out var index))
+            {
+                var previous = events[index];
+                events[index] = replacement;
+                var attributedSource = previous.AttributedSource ?? previous.Source;
+                if (sources.TryGetValue(GetActorKey(attributedSource), out var source))
+                {
+                    source.ApplyMeterCorrection(previous, replacement);
+                }
+
+                mutationRevision++;
+                continue;
+            }
+
+            foreach (var batch in stagedDamageBatches)
+            {
+                var stagedIndex = batch.Events.FindIndex(entry =>
+                    string.Equals(entry.EventId, replacement.EventId, StringComparison.Ordinal));
+                if (stagedIndex < 0)
+                {
+                    continue;
+                }
+
+                batch.Events[stagedIndex] = replacement;
+                break;
+            }
         }
     }
 
@@ -687,7 +784,7 @@ internal sealed class DamageParsingModule
     private sealed record StagedDamageBatch(
         DateTime SeenAtUtc,
         int PacketCount,
-        IReadOnlyList<ParsedDamageEvent> Events);
+        List<ParsedDamageEvent> Events);
 
     private sealed class MutableDamageSource
     {
@@ -729,11 +826,21 @@ internal sealed class DamageParsingModule
             totals.RecordDeath();
         }
 
+        public void ApplyMeterCorrection(ParsedDamageEvent previous, ParsedDamageEvent replacement)
+        {
+            totals.ApplyMeterCorrection(previous, replacement);
+            var actionKey = (previous.ActionId, previous.ActionName);
+            if (actions.TryGetValue(actionKey, out var action))
+            {
+                action.ApplyMeterCorrection(previous, replacement);
+            }
+        }
+
         public DamageSourceSummary ToSnapshot()
         {
             var actionSnapshots = actions
                 .Select(entry => entry.Value.ToActionSnapshot(entry.Key.ActionId, entry.Key.ActionName))
-                .OrderByDescending(action => action.TotalDamage)
+                .OrderByDescending(action => action.EffectiveMeterDamage)
                 .ThenBy(action => action.ActionName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             return totals.ToSourceSnapshot(source, actionSnapshots);
@@ -787,6 +894,7 @@ internal sealed class DamageParsingModule
     private sealed class MutableDamageTotals
     {
         private ulong totalDamage;
+        private double meterDamage;
         private int swings;
         private int hits;
         private int misses;
@@ -816,6 +924,7 @@ internal sealed class DamageParsingModule
             {
                 case DamageEventOutcome.Damage:
                     totalDamage += damageEvent.Amount;
+                    meterDamage += damageEvent.EffectiveMeterAmount;
                     periodicDamage += damageEvent.IsPeriodic ? damageEvent.Amount : 0;
                     periodicHits += damageEvent.IsPeriodic ? 1 : 0;
                     estimatedDamage += damageEvent.AttributionQuality == DamageAttributionQuality.Estimated
@@ -854,6 +963,13 @@ internal sealed class DamageParsingModule
             deaths++;
         }
 
+        public void ApplyMeterCorrection(ParsedDamageEvent previous, ParsedDamageEvent replacement)
+        {
+            meterDamage = Math.Max(
+                0.0,
+                meterDamage - previous.EffectiveMeterAmount + replacement.EffectiveMeterAmount);
+        }
+
         public DamageActionSummary ToActionSnapshot(uint actionId, string actionName)
         {
             return new DamageActionSummary(
@@ -871,6 +987,7 @@ internal sealed class DamageParsingModule
                 blockedHits,
                 parriedHits)
             {
+                MeterDamage = meterDamage,
                 IsAutoAttack = isAutoAttack,
                 ActionCategoryId = actionCategoryId,
                 PeriodicDamage = periodicDamage,
@@ -900,6 +1017,7 @@ internal sealed class DamageParsingModule
                 parriedHits,
                 actionSnapshots)
             {
+                MeterDamage = meterDamage,
                 PeriodicDamage = periodicDamage,
                 EstimatedDamage = estimatedDamage,
                 UnattributedDamage = unattributedDamage,

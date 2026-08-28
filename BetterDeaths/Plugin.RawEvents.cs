@@ -359,10 +359,11 @@ public sealed partial class Plugin
         var damageStatusCategory = category is ActorControlGainEffectCategory or
             ActorControlLoseEffectCategory or
             ActorControlUpdateEffectCategory;
+        var damageSnapshotCategory = damageStatusCategory || category == ActorControlDotCategory;
         var targetSnapshot = captureForReview && shouldCaptureSnapshots
             ? CaptureRawCombatSnapshot(entityId, playerOnly: true)
             : null;
-        if (targetSnapshot is null && captureForDamageParsing && damageStatusCategory)
+        if (targetSnapshot is null && captureForDamageParsing && damageSnapshotCategory)
         {
             targetSnapshot = CaptureRawCombatSnapshot(entityId);
         }

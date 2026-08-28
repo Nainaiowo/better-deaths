@@ -14,7 +14,7 @@ public sealed partial class RecapWindow
     private static readonly DamageMeterColumn[] AvailableDamageMeterColumns = Enum.GetValues<DamageMeterColumn>();
     private readonly HashSet<string> expandedDamageMeterSources = new(StringComparer.Ordinal);
     private DamageMeterColumn? draggingDamageMeterColumn;
-    private long selectedDamageEncounterNumber = -1;
+    private long selectedDamageEncounterNumber;
 
     private void DrawWidgetsPage()
     {
@@ -362,6 +362,9 @@ public sealed partial class RecapWindow
         var collapsed = configuration.DamageMeterBrowserCollapsed;
         var history = plugin.RecordedDamageEncounters;
         var current = plugin.CurrentDamageEncounter;
+        var automaticEncounterNumber = current is null && selectedDamageEncounterNumber == 0
+            ? history.LastOrDefault()?.EncounterNumber
+            : null;
         if (collapsed)
         {
             if (ImGui.GetContentRegionAvail().X > PullBrowserCollapsedWidth + 100.0f)
@@ -396,7 +399,6 @@ public sealed partial class RecapWindow
             }
 
             ImGui.Separator();
-            DrawDamageMeterBrowserRailItem("EX", -1, selectedDamageEncounterNumber == -1, "Example preview");
             if (current is not null)
             {
                 DrawDamageMeterBrowserRailItem("LIVE", 0, selectedDamageEncounterNumber == 0, "Live encounter");
@@ -407,7 +409,8 @@ public sealed partial class RecapWindow
                 DrawDamageMeterBrowserRailItem(
                     encounter.EncounterNumber.ToString(),
                     encounter.EncounterNumber,
-                    selectedDamageEncounterNumber == encounter.EncounterNumber,
+                    selectedDamageEncounterNumber == encounter.EncounterNumber ||
+                    automaticEncounterNumber == encounter.EncounterNumber,
                     $"Encounter {encounter.EncounterNumber}: {encounter.TerritoryName}");
             }
 
@@ -430,7 +433,7 @@ public sealed partial class RecapWindow
             ImGui.GetIO().KeyCtrl)
         {
             plugin.ClearRecordedDamageEncounters();
-            selectedDamageEncounterNumber = -1;
+            selectedDamageEncounterNumber = 0;
         }
 
         if (history.Count == 0)
@@ -459,11 +462,6 @@ public sealed partial class RecapWindow
         ImGui.Separator();
         if (ImGui.BeginChild("##DamageMeterEncounterRows", Vector2.Zero, false, OptionalScrollbarFlags))
         {
-            DrawDamageMeterBrowserItem(
-                "Example",
-                "Redacted report preview",
-                -1,
-                selectedDamageEncounterNumber == -1);
             if (current is not null)
             {
                 DrawDamageMeterBrowserItem(
@@ -480,7 +478,8 @@ public sealed partial class RecapWindow
                     $"Encounter {encounter.EncounterNumber}",
                     $"{encounter.TerritoryName}\n{detail}",
                     encounter.EncounterNumber,
-                    selectedDamageEncounterNumber == encounter.EncounterNumber);
+                    selectedDamageEncounterNumber == encounter.EncounterNumber ||
+                    automaticEncounterNumber == encounter.EncounterNumber);
             }
 
             DrawReviewPaneBottomPadding();
@@ -529,10 +528,10 @@ public sealed partial class RecapWindow
 
     private void DrawDamageMeterPreview()
     {
-        var (snapshot, label) = GetSelectedDamageMeterPreview();
+        var (snapshot, label, isExample) = GetSelectedDamageMeterPreview();
         ImGui.TextColored(ModernAccentColor, "Preview");
         ImGui.TextColored(ModernMutedTextColor, label);
-        if (selectedDamageEncounterNumber == -1)
+        if (isExample)
         {
             ImGui.SameLine();
             ImGui.TextDisabled("?");
@@ -564,31 +563,48 @@ public sealed partial class RecapWindow
         ImGui.PopStyleColor();
     }
 
-    private (DamageEncounterSnapshot Snapshot, string Label) GetSelectedDamageMeterPreview()
+    private (DamageEncounterSnapshot Snapshot, string Label, bool IsExample) GetSelectedDamageMeterPreview()
     {
-        if (selectedDamageEncounterNumber == -1)
-        {
-            return (DamageMeterPreviewData.Create(), "Dancing Mad | redacted report example");
-        }
-
         var current = plugin.CurrentDamageEncounter;
-        if (selectedDamageEncounterNumber == 0 && current is not null)
-        {
-            return (current, "Live encounter");
-        }
-
         var history = plugin.RecordedDamageEncounters;
-        var recorded = selectedDamageEncounterNumber > 0
-            ? history.FirstOrDefault(encounter => encounter.EncounterNumber == selectedDamageEncounterNumber)
-            : history.LastOrDefault();
-        if (recorded is null)
+        if (selectedDamageEncounterNumber > 0)
         {
-            selectedDamageEncounterNumber = -1;
-            return (DamageMeterPreviewData.Create(), "Dancing Mad | redacted report example");
+            var selected = history.FirstOrDefault(encounter =>
+                encounter.EncounterNumber == selectedDamageEncounterNumber);
+            if (selected is not null)
+            {
+                return (
+                    selected.Snapshot,
+                    $"Encounter {selected.EncounterNumber} | {selected.TerritoryName}",
+                    false);
+            }
+
+            selectedDamageEncounterNumber = 0;
         }
 
-        selectedDamageEncounterNumber = recorded.EncounterNumber;
-        return (recorded.Snapshot, $"Encounter {recorded.EncounterNumber} | {recorded.TerritoryName}");
+        if (current is not null)
+        {
+            return (current, "Live encounter", false);
+        }
+
+        var latest = history.LastOrDefault();
+        if (latest is not null)
+        {
+            return (
+                latest.Snapshot,
+                $"Encounter {latest.EncounterNumber} | {latest.TerritoryName}",
+                false);
+        }
+
+        if (plugin.LastDamageEncounter is { } last)
+        {
+            return (last, "Last encounter", false);
+        }
+
+        return (
+            DamageMeterPreviewData.Create(),
+            "Dancing Mad | redacted report example",
+            true);
     }
 
     internal void DrawDamageMeterWidgetContent()
@@ -623,7 +639,7 @@ public sealed partial class RecapWindow
         string idSuffix)
     {
         var sources = GetVisibleDamageMeterSources(snapshot);
-        var visibleTotal = sources.Aggregate(0UL, (total, source) => total + source.TotalDamage);
+        var visibleTotal = sources.Sum(source => source.EffectiveMeterDamage);
         using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
         {
             var visibleDps = snapshot.DurationSeconds > 0.0
@@ -649,7 +665,7 @@ public sealed partial class RecapWindow
     {
         return snapshot.Sources
             .Where(source => DamageMeterCombatantPolicy.ShouldDisplay(source.Source))
-            .OrderByDescending(source => source.TotalDamage)
+            .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -657,7 +673,7 @@ public sealed partial class RecapWindow
     private void DrawDamageMeterWidgetTable(
         DamageEncounterSnapshot snapshot,
         IReadOnlyList<DamageSourceSummary> sources,
-        ulong visibleTotal,
+        double visibleTotal,
         string idSuffix)
     {
         if (sources.Count == 0)
@@ -709,7 +725,7 @@ public sealed partial class RecapWindow
 
             foreach (var action in source.Actions)
             {
-                DrawDamageMeterWidgetActionRow(snapshot, action, source.TotalDamage, columns);
+                DrawDamageMeterWidgetActionRow(snapshot, action, source.EffectiveMeterDamage, columns);
             }
         }
 
@@ -719,7 +735,7 @@ public sealed partial class RecapWindow
     private void DrawDamageMeterWidgetSourceRow(
         DamageEncounterSnapshot snapshot,
         DamageSourceSummary source,
-        ulong visibleTotal,
+        double visibleTotal,
         int rank,
         string expansionKey,
         bool expanded,
@@ -747,7 +763,7 @@ public sealed partial class RecapWindow
     private static void DrawDamageMeterWidgetActionRow(
         DamageEncounterSnapshot snapshot,
         DamageActionSummary action,
-        ulong sourceTotal,
+        double sourceTotal,
         IReadOnlyList<DamageMeterColumn> columns)
     {
         const float iconSize = 20.0f;
@@ -764,7 +780,7 @@ public sealed partial class RecapWindow
     private void DrawDamageMeterSourceColumn(
         DamageEncounterSnapshot snapshot,
         DamageSourceSummary source,
-        ulong visibleTotal,
+        double visibleTotal,
         int rank,
         DamageMeterColumn column,
         float iconSize)
@@ -794,15 +810,19 @@ public sealed partial class RecapWindow
                         : displayName);
                 break;
             case DamageMeterColumn.DamagePercent:
-                DrawDamageMeterShareBar(source.TotalDamage, visibleTotal);
+                DrawDamageMeterShareBar(source.EffectiveMeterDamage, visibleTotal);
                 break;
             case DamageMeterColumn.DamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
-                    snapshot.DurationSeconds > 0.0 ? source.TotalDamage / snapshot.DurationSeconds : 0.0));
+                    snapshot.DurationSeconds > 0.0
+                        ? source.EffectiveMeterDamage / snapshot.DurationSeconds
+                        : 0.0));
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
-                    snapshot.DurationSeconds > 0.0 ? source.RaidAdjustedDamage / snapshot.DurationSeconds : 0.0));
+                    snapshot.DurationSeconds > 0.0
+                        ? source.EffectiveMeterRaidAdjustedDamage / snapshot.DurationSeconds
+                        : 0.0));
                 DrawRaidDamageTooltip(source);
                 break;
             case DamageMeterColumn.CriticalHitPercent:
@@ -823,7 +843,7 @@ public sealed partial class RecapWindow
                     : source.MaxHitActionName);
                 break;
             case DamageMeterColumn.TotalDamage:
-                DrawCenteredText(FormatAmount(source.TotalDamage));
+                DrawCenteredText(FormatDamageMeterNumber(source.EffectiveMeterDamage));
                 break;
             case DamageMeterColumn.Deaths:
                 DrawCenteredText(source.Deaths == 0 ? "-" : source.Deaths.ToString("N0"));
@@ -837,7 +857,7 @@ public sealed partial class RecapWindow
     private static void DrawDamageMeterActionColumn(
         DamageEncounterSnapshot snapshot,
         DamageActionSummary action,
-        ulong sourceTotal,
+        double sourceTotal,
         DamageMeterColumn column,
         float iconSize)
     {
@@ -865,12 +885,14 @@ public sealed partial class RecapWindow
                 break;
             case DamageMeterColumn.DamagePercent:
                 DrawCenteredText(
-                    sourceTotal == 0 ? "-" : $"{action.TotalDamage * 100.0 / sourceTotal:F1}%",
+                    sourceTotal <= 0.0 ? "-" : $"{action.EffectiveMeterDamage * 100.0 / sourceTotal:F1}%",
                     muted);
                 break;
             case DamageMeterColumn.DamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
-                    snapshot.DurationSeconds > 0.0 ? action.TotalDamage / snapshot.DurationSeconds : 0.0), muted);
+                    snapshot.DurationSeconds > 0.0
+                        ? action.EffectiveMeterDamage / snapshot.DurationSeconds
+                        : 0.0), muted);
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
                 DrawCenteredText("-", muted);
@@ -897,7 +919,7 @@ public sealed partial class RecapWindow
                 ImGui.TextColored(muted, action.ActionName);
                 break;
             case DamageMeterColumn.TotalDamage:
-                DrawCenteredText(FormatAmount(action.TotalDamage), muted);
+                DrawCenteredText(FormatDamageMeterNumber(action.EffectiveMeterDamage), muted);
                 break;
             case DamageMeterColumn.HitCount:
                 DrawCenteredText(action.Hits == 0 ? "-" : action.Hits.ToString("N0"), muted);
@@ -972,10 +994,10 @@ public sealed partial class RecapWindow
         };
     }
 
-    private static void DrawDamageMeterShareBar(ulong damage, ulong total)
+    private static void DrawDamageMeterShareBar(double damage, double total)
     {
-        var fraction = total == 0 ? 0.0f : (float)Math.Clamp(damage / (double)total, 0.0, 1.0);
-        var label = total == 0 ? "-" : $"{damage * 100.0 / total:F1}%";
+        var fraction = total <= 0.0 ? 0.0f : (float)Math.Clamp(damage / total, 0.0, 1.0);
+        var label = total <= 0.0 ? "-" : $"{damage * 100.0 / total:F1}%";
         ImGui.PushStyleColor(ImGuiCol.FrameBg, ModernFrameColor);
         ImGui.PushStyleColor(ImGuiCol.PlotHistogram, ModernAccentColor);
         ImGui.PushStyleColor(ImGuiCol.Text, GetReadableTextColorForBackground(
@@ -993,8 +1015,8 @@ public sealed partial class RecapWindow
 
         SetThemedTooltip(
             "Raid-contributing DPS moves damage gained from another player's raid buffs back to the player who provided them.\n" +
-            $"Received from others: {FormatDamageMeterNumber(source.ExternalBuffDamageReceived)} damage\n" +
-            $"Given through buffs: {FormatDamageMeterNumber(source.RaidBuffDamageGiven)} damage");
+            $"Received from others: {FormatDamageMeterNumber(source.EffectiveMeterExternalBuffDamageReceived)} damage\n" +
+            $"Given through buffs: {FormatDamageMeterNumber(source.EffectiveMeterRaidBuffDamageGiven)} damage");
     }
 
     private static string GetDamageMeterSourceKey(DamageActorIdentity source)

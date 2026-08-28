@@ -18,7 +18,8 @@ internal static class RaidDamageCalculator
 
     public static IReadOnlyDictionary<string, RaidDamageAdjustment> Calculate(
         IReadOnlyList<ParsedDamageEvent> events,
-        IReadOnlyList<DamageSourceSummary> sources)
+        IReadOnlyList<DamageSourceSummary> sources,
+        Func<ParsedDamageEvent, double>? amountSelector = null)
     {
         var adjustments = sources.ToDictionary(
             source => GetActorKey(source.Source),
@@ -32,7 +33,10 @@ internal static class RaidDamageCalculator
                      .ThenBy(entry => entry.TargetIndex)
                      .ThenBy(entry => entry.EffectIndex))
         {
-            if (damageEvent.Outcome != DamageEventOutcome.Damage || damageEvent.Amount == 0)
+            var damageAmount = amountSelector?.Invoke(damageEvent) ?? damageEvent.Amount;
+            if (damageEvent.Outcome != DamageEventOutcome.Damage ||
+                !double.IsFinite(damageAmount) ||
+                damageAmount <= 0.0)
             {
                 continue;
             }
@@ -61,7 +65,7 @@ internal static class RaidDamageCalculator
                     IsExternalPlayerBuff(effect.Source, recipient))
                 .ToList();
             var damageAfterPercentageBuffs = RedistributePercentageDamage(
-                damageEvent.Amount,
+                damageAmount,
                 externalDamageBuffs,
                 recipientAdjustment,
                 adjustments);

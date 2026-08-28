@@ -73,6 +73,10 @@ internal sealed class DirectDamageParser
                     effect.Param3,
                     effect.Param4)
                 {
+                    CapturedAtUtc = packet.CapturedAtUtc,
+                    DirectPotency = packet.DirectPotency,
+                    CanCalibratePotency = packet.CanCalibratePotency,
+                    MeterAmount = isDamage ? DecodeAmount(effect) : 0,
                     ElementType = (byte)(effect.Param1 >> 4),
                     ActionCategoryId = packet.ActionCategoryId,
                     IsAutoAttack = packet.IsAutoAttack,
@@ -85,6 +89,10 @@ internal sealed class DirectDamageParser
                     IsSourceEntry = isSourceEntry,
                     PacketTarget = target.Target,
                     AttributedSource = attributedSource,
+                    TargetHpBefore = isSourceEntry ? null : target.TargetHp,
+                    ResolutionQuality = isSourceEntry || target.TargetHp is null
+                        ? DamageResolutionQuality.Unresolved
+                        : DamageResolutionQuality.Observed,
                     SourceStatuses = packet.SourceStatuses,
                     TargetStatuses = target.TargetStatuses,
                     HasSourceStatusSnapshot = packet.HasSourceStatusSnapshot,

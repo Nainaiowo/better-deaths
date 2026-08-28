@@ -1,4 +1,5 @@
 using BetterDeaths.Windows;
+using BetterDeaths.DamageParsing;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Command;
@@ -167,6 +168,32 @@ public sealed partial class Plugin
         }
 
         actionDamageProfileCache[actionId] = profile;
+        return profile;
+    }
+
+    private ActionPotencyProfile GetActionPotencyProfile(uint actionId)
+    {
+        if (actionPotencyProfileCache.TryGetValue(actionId, out var cachedProfile))
+        {
+            return cachedProfile;
+        }
+
+        var profile = ActionPotencyProfile.Empty;
+        try
+        {
+            var action = DataManager
+                .GetExcelSheet<ActionTransient>(Dalamud.Game.ClientLanguage.English)?
+                .GetRowOrDefault(actionId);
+            profile = ActionPotencyProfileParser.Parse(
+                action?.Description.ExtractText() ?? string.Empty,
+                appliesPeriodicDamage: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not load action potency profile for {ActionId}.", actionId);
+        }
+
+        actionPotencyProfileCache[actionId] = profile;
         return profile;
     }
 

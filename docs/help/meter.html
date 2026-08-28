@@ -79,7 +79,7 @@
         <div class="topic-grid three-up">
           <article>
             <h3>Encounter browser</h3>
-            <p><strong>Live encounter</strong> follows active combat. Completed damage encounters appear beneath it, while <strong>Example</strong> provides a redacted report preview outside combat.</p>
+            <p><strong>Live encounter</strong> follows active combat. Completed damage encounters appear beneath it, and selecting one displays it in the Preview.</p>
           </article>
           <article>
             <h3>Nearby players</h3>
@@ -93,8 +93,8 @@
 
         <h3 class="subheading">How the numbers are handled</h3>
         <div class="setting-table labeled">
-          <div class="setting-row"><strong>Widget</strong><span>Opens a resizable meter that shows the current encounter and falls back to the latest completed encounter while idle.</span></div>
-          <div class="setting-row"><strong>Preview</strong><span>Uses the same renderer as the separate widget. It remains available outside combat and updates immediately as columns or display mode change.</span></div>
+          <div class="setting-row"><strong>Widget</strong><span>Opens a resizable meter that shows live combat and falls back to the latest completed encounter while idle.</span></div>
+          <div class="setting-row"><strong>Preview</strong><span>Shows the selected encounter using the same renderer as the separate widget. Before any encounter data exists, it uses a redacted example so column and display changes can still be previewed.</span></div>
           <div class="setting-row"><strong>Columns</strong><span>Drag active columns to reorder them and select X to remove one. Select + on an available column, click its tile, or drag it into the active row to add it.</span></div>
           <div class="setting-row"><strong>Display</strong><span><strong>Normal</strong> keeps full labels and player names. <strong>Concise</strong> uses initials, shorter headers, and tighter column widths.</span></div>
           <div class="setting-row"><strong>Clear history</strong><span>Ctrl+click the trash icon in the encounter browser. Damage encounter history is stored separately from Review pulls.</span></div>

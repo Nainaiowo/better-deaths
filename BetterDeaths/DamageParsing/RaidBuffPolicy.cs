@@ -249,13 +249,18 @@ internal static class RaidBuffPolicy
 
     public static bool AppliesToDamage(RaidBuffEffect effect, ParsedDamageEvent damageEvent)
     {
+        return AppliesToDamage(effect, damageEvent.DamageType, damageEvent.ElementType);
+    }
+
+    public static bool AppliesToDamage(RaidBuffEffect effect, byte damageType, byte elementType)
+    {
         return effect.DamageScope switch
         {
             RaidBuffDamageScope.All => true,
-            RaidBuffDamageScope.Physical => damageEvent.DamageType is 1 or 2 or 3 or 4 or 7,
-            RaidBuffDamageScope.Magic => damageEvent.DamageType == 5,
-            RaidBuffDamageScope.Astral => damageEvent.ElementType is 1 or 3 or 5,
-            RaidBuffDamageScope.Umbral => damageEvent.ElementType is 2 or 4 or 6,
+            RaidBuffDamageScope.Physical => damageType is 1 or 2 or 3 or 4 or 7,
+            RaidBuffDamageScope.Magic => damageType == 5,
+            RaidBuffDamageScope.Astral => elementType is 1 or 3 or 5,
+            RaidBuffDamageScope.Umbral => elementType is 2 or 4 or 6,
             _ => false,
         };
     }
