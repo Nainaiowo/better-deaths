@@ -20,12 +20,19 @@ internal enum RaidBuffDamageScope
     Umbral,
 }
 
+internal enum RaidBuffTargeting
+{
+    Area,
+    SingleTarget,
+}
+
 internal readonly record struct RaidBuffEffect(
     uint StatusId,
     RaidBuffEffectKind Kind,
     double Amount,
     DamageActorIdentity Source,
-    RaidBuffDamageScope DamageScope = RaidBuffDamageScope.All);
+    RaidBuffDamageScope DamageScope = RaidBuffDamageScope.All,
+    RaidBuffTargeting Targeting = RaidBuffTargeting.Area);
 
 internal static class RaidBuffPolicy
 {
@@ -33,6 +40,9 @@ internal static class RaidBuffPolicy
     private const uint ReassembleStatusId = 0x353;
     private const uint BerserkStatusId = 0x56;
     private const uint InnerReleaseStatusId = 0x499;
+    private const uint OpoOpoFormStatusId = 0x6B;
+    private const uint PerfectBalanceStatusId = 0x6E;
+    private const uint FormlessFistStatusId = 0x9D1;
 
     private static readonly HashSet<uint> RelevantStatusIds =
     [
@@ -68,17 +78,18 @@ internal static class RaidBuffPolicy
         ReassembleStatusId,
         BerserkStatusId,
         InnerReleaseStatusId,
+        OpoOpoFormStatusId,
+        PerfectBalanceStatusId,
+        FormlessFistStatusId,
     ];
 
     private static readonly HashSet<uint> GuaranteedCriticalActionIds =
     [
-        0x35,   // Bootshine
         0x8C6,  // Assassinate
         0x1D3F, // Midare Setsugekka
         0x4051, // Inner Chaos
         0x404F, // Chaotic Cyclone
         0x4066, // Kaeshi: Setsugekka
-        0x64A7, // Shadow of the Destroyer
         0x6499, // Primal Rend
         0x64C0, // Starfall Dance
         0x64B5, // Ogi Namikiri
@@ -87,10 +98,16 @@ internal static class RaidBuffPolicy
         0x8777, // Hammer Brush
         0x8778, // Polishing Hammer
         0x903D, // Primal Ruination
-        0x9051, // Leaping Opo
         0x9066, // Tendo Setsugekka
         0x9068, // Tendo Kaeshi Setsugekka
         0x9076, // Full Metal Field
+    ];
+
+    private static readonly HashSet<uint> OpoOpoGuaranteedCriticalActionIds =
+    [
+        0x35,   // Bootshine
+        0x64A7, // Shadow of the Destroyer
+        0x9051, // Leaping Opo
     ];
 
     private static readonly HashSet<uint> GuaranteedDirectHitActionIds =
@@ -196,10 +213,12 @@ internal static class RaidBuffPolicy
         {
             0x75A or 0xF2F => [Damage(status, GetAstrologianCardAmount(
                 status.Parameter,
-                BalancePreferredClassJobIds.Contains(recipient.ClassJobId)))],
+                BalancePreferredClassJobIds.Contains(recipient.ClassJobId)),
+                targeting: RaidBuffTargeting.SingleTarget)],
             0x75D or 0xF31 => [Damage(status, GetAstrologianCardAmount(
                 status.Parameter,
-                SpearPreferredClassJobIds.Contains(recipient.ClassJobId)))],
+                SpearPreferredClassJobIds.Contains(recipient.ClassJobId)),
+                targeting: RaidBuffTargeting.SingleTarget)],
             0x756 => [Damage(status, 0.06)],
             0x8D => [DirectHit(status, 0.20)],
             0x8A8 => [Critical(status, 0.02)],
@@ -207,10 +226,17 @@ internal static class RaidBuffPolicy
             0x8AA => [DirectHit(status, 0.03)],
             0xB94 => [Damage(status, GetRadiantFinaleAmount(status.Parameter))],
             0x71E => [Damage(status, GetTechnicalFinishAmount(status.Parameter))],
-            0x839 => [Damage(status, GetStandardFinishAmount(status.Parameter))],
-            0x721 => [Critical(status, 0.20), DirectHit(status, 0.20)],
+            0x839 => [Damage(
+                status,
+                GetStandardFinishAmount(status.Parameter),
+                targeting: RaidBuffTargeting.SingleTarget)],
+            0x721 =>
+            [
+                Critical(status, 0.20, RaidBuffTargeting.SingleTarget),
+                DirectHit(status, 0.20, RaidBuffTargeting.SingleTarget),
+            ],
             0x312 => [Critical(status, 0.10)],
-            0x5AE => [Damage(status, 0.05)],
+            0x5AE => [Damage(status, 0.05, targeting: RaidBuffTargeting.SingleTarget)],
             0x4A1 => [Damage(status, 0.05)],
             0xA27 => [Damage(status, 0.03)],
             0x511 => [Damage(status, 0.05)],
@@ -227,11 +253,20 @@ internal static class RaidBuffPolicy
             return true;
         }
 
+        if (OpoOpoGuaranteedCriticalActionIds.Contains(damageEvent.ActionId) &&
+            damageEvent.SourceStatuses.Any(status =>
+                status.RemainingTime > 0.0f &&
+                status.StatusId is OpoOpoFormStatusId or PerfectBalanceStatusId or FormlessFistStatusId))
+        {
+            return true;
+        }
+
         return damageEvent.SourceStatuses.Any(status =>
-            status.StatusId == LifeSurgeStatusId && IsWeaponskill(damageEvent) ||
-            status.StatusId == ReassembleStatusId && IsWeaponskill(damageEvent) ||
-            status.StatusId == BerserkStatusId && IsWeaponskill(damageEvent) ||
-            status.StatusId == InnerReleaseStatusId && InnerReleaseActionIds.Contains(damageEvent.ActionId));
+            status.RemainingTime > 0.0f &&
+            (status.StatusId == LifeSurgeStatusId && IsWeaponskill(damageEvent) ||
+             status.StatusId == ReassembleStatusId && IsWeaponskill(damageEvent) ||
+             status.StatusId == BerserkStatusId && IsWeaponskill(damageEvent) ||
+             status.StatusId == InnerReleaseStatusId && InnerReleaseActionIds.Contains(damageEvent.ActionId)));
     }
 
     public static bool IsGuaranteedDirectHit(ParsedDamageEvent damageEvent)
@@ -242,9 +277,10 @@ internal static class RaidBuffPolicy
         }
 
         return damageEvent.SourceStatuses.Any(status =>
-            status.StatusId == ReassembleStatusId && IsWeaponskill(damageEvent) ||
-            status.StatusId == BerserkStatusId && IsWeaponskill(damageEvent) ||
-            status.StatusId == InnerReleaseStatusId && InnerReleaseActionIds.Contains(damageEvent.ActionId));
+            status.RemainingTime > 0.0f &&
+            (status.StatusId == ReassembleStatusId && IsWeaponskill(damageEvent) ||
+             status.StatusId == BerserkStatusId && IsWeaponskill(damageEvent) ||
+             status.StatusId == InnerReleaseStatusId && InnerReleaseActionIds.Contains(damageEvent.ActionId)));
     }
 
     public static bool AppliesToDamage(RaidBuffEffect effect, ParsedDamageEvent damageEvent)
@@ -311,23 +347,41 @@ internal static class RaidBuffPolicy
     private static RaidBuffEffect Damage(
         DamageStatusSnapshot status,
         double amount,
-        RaidBuffDamageScope damageScope = RaidBuffDamageScope.All)
+        RaidBuffDamageScope damageScope = RaidBuffDamageScope.All,
+        RaidBuffTargeting targeting = RaidBuffTargeting.Area)
     {
         return new RaidBuffEffect(
             status.StatusId,
             RaidBuffEffectKind.DamageMultiplier,
             amount,
             status.Source,
-            damageScope);
+            damageScope,
+            targeting);
     }
 
-    private static RaidBuffEffect Critical(DamageStatusSnapshot status, double amount)
+    private static RaidBuffEffect Critical(
+        DamageStatusSnapshot status,
+        double amount,
+        RaidBuffTargeting targeting = RaidBuffTargeting.Area)
     {
-        return new RaidBuffEffect(status.StatusId, RaidBuffEffectKind.CriticalChance, amount, status.Source);
+        return new RaidBuffEffect(
+            status.StatusId,
+            RaidBuffEffectKind.CriticalChance,
+            amount,
+            status.Source,
+            Targeting: targeting);
     }
 
-    private static RaidBuffEffect DirectHit(DamageStatusSnapshot status, double amount)
+    private static RaidBuffEffect DirectHit(
+        DamageStatusSnapshot status,
+        double amount,
+        RaidBuffTargeting targeting = RaidBuffTargeting.Area)
     {
-        return new RaidBuffEffect(status.StatusId, RaidBuffEffectKind.DirectHitChance, amount, status.Source);
+        return new RaidBuffEffect(
+            status.StatusId,
+            RaidBuffEffectKind.DirectHitChance,
+            amount,
+            status.Source,
+            Targeting: targeting);
     }
 }

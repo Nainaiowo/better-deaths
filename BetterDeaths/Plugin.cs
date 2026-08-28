@@ -995,7 +995,8 @@ public sealed partial class Plugin : IDalamudPlugin
             foreach (var status in battleChara.StatusList)
             {
                 if (status.StatusId == 0 ||
-                    relevantDamageStatusesOnly && !RaidBuffPolicy.IsRelevantStatus(status.StatusId))
+                    relevantDamageStatusesOnly &&
+                    !DamageStatusCapturePolicy.IsRelevant(status.StatusId))
                 {
                     continue;
                 }

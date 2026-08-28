@@ -58,6 +58,10 @@ internal sealed record DamageHpSnapshot(
     uint ShieldHp,
     uint MaxHp);
 
+internal sealed record DamageBaseRateSnapshot(
+    double Critical,
+    double DirectHit);
+
 internal sealed record DamageEffectResult(
     DateTime SeenAtUtc,
     uint ActionSequence,
@@ -94,6 +98,8 @@ internal sealed record DamageActionPacket(
     public uint AnimationTargetEntityId { get; init; }
 
     public DamageActorIdentity? SourceOwner { get; init; }
+
+    public DamageBaseRateSnapshot? SourceBaseRates { get; init; }
 
     public IReadOnlyList<DamageStatusApplication> StatusApplications { get; init; } = [];
 
@@ -133,6 +139,8 @@ internal sealed record DamageStatusApplication(
     public byte DamageType { get; init; }
 
     public byte ElementType { get; init; }
+
+    public DamageBaseRateSnapshot? SourceBaseRates { get; init; }
 
     public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
 
@@ -264,6 +272,8 @@ internal sealed record ParsedDamageEvent(
 
     public byte? CriticalRateLowByte { get; init; }
 
+    public DamageBaseRateSnapshot? SourceBaseRates { get; init; }
+
     public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
 
     public IReadOnlyList<DamageStatusSnapshot> TargetStatuses { get; init; } = [];
@@ -350,6 +360,25 @@ internal sealed record DamageSourceSummary(
     public double? MeterRaidBuffDamageGiven { get; init; }
 
     public double EffectiveMeterRaidBuffDamageGiven => MeterRaidBuffDamageGiven ?? RaidBuffDamageGiven;
+
+    public double SingleTargetBuffDamageReceived { get; init; }
+
+    public double? MeterSingleTargetBuffDamageReceived { get; init; }
+
+    public double EffectiveMeterSingleTargetBuffDamageReceived =>
+        MeterSingleTargetBuffDamageReceived ?? SingleTargetBuffDamageReceived;
+
+    public double NeutralDamage => Math.Max(0.0, TotalDamage - ExternalBuffDamageReceived);
+
+    public double EffectiveMeterNeutralDamage => Math.Max(
+        0.0,
+        EffectiveMeterDamage - EffectiveMeterExternalBuffDamageReceived);
+
+    public double AdjustedDamage => Math.Max(0.0, TotalDamage - SingleTargetBuffDamageReceived);
+
+    public double EffectiveMeterAdjustedDamage => Math.Max(
+        0.0,
+        EffectiveMeterDamage - EffectiveMeterSingleTargetBuffDamageReceived);
 
     public int PeriodicHits { get; init; }
 

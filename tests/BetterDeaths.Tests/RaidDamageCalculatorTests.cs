@@ -230,6 +230,103 @@ public sealed class RaidDamageCalculatorTests
     }
 
     [Fact]
+    public void CapturedBaseRatesReplaceEncounterOutcomeGuessing()
+    {
+        var damageEvent = CreateEvent(165, critical: true) with
+        {
+            SourceBaseRates = new DamageBaseRateSnapshot(0.30, 0.20),
+            SourceStatuses = [Status(0x312, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+        var criticalPortion = 165.0 - 165.0 / 1.65;
+        var expectedCredit = criticalPortion * 0.10 / 0.40;
+
+        Assert.Equal(expectedCredit, Given(result, Buffer), 6);
+        AssertConserved(165.0, result, Dealer, Buffer);
+    }
+
+    [Fact]
+    public void SingleTargetBuffDamageIsTrackedForAdjustedDamage()
+    {
+        var damageEvent = CreateEvent(105) with
+        {
+            SourceStatuses = [Status(0x839, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+
+        Assert.Equal(5.0, Received(result, Dealer), 6);
+        Assert.Equal(5.0, SingleTargetReceived(result, Dealer), 6);
+    }
+
+    [Fact]
+    public void AreaBuffDamageDoesNotReduceAdjustedDamage()
+    {
+        var damageEvent = CreateEvent(105) with
+        {
+            SourceStatuses = [Status(0x4A1, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+
+        Assert.Equal(5.0, Received(result, Dealer), 6);
+        Assert.Equal(0.0, SingleTargetReceived(result, Dealer), 6);
+    }
+
+    [Fact]
+    public void AdjustedDamageKeepsAreaShareWhenAreaAndSingleTargetBuffsOverlap()
+    {
+        var damageEvent = CreateEvent(441) with
+        {
+            SourceStatuses =
+            [
+                Status(0x839, Buffer),
+                Status(0x4A1, SecondBuffer),
+            ],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+
+        Assert.Equal(41.0, Received(result, Dealer), 6);
+        Assert.Equal(20.5, SingleTargetReceived(result, Dealer), 6);
+    }
+
+    [Theory]
+    [InlineData(0x75A)]
+    [InlineData(0x75D)]
+    [InlineData(0xF2F)]
+    [InlineData(0xF31)]
+    [InlineData(0x839)]
+    [InlineData(0x5AE)]
+    public void PageDefinedSingleTargetDamageBuffsReduceAdjustedDamage(uint statusId)
+    {
+        var damageEvent = CreateEvent(106) with
+        {
+            SourceStatuses = [Status(statusId, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+
+        Assert.True(Received(result, Dealer) > 0.0);
+        Assert.Equal(Received(result, Dealer), SingleTargetReceived(result, Dealer), 6);
+    }
+
+    [Fact]
+    public void DevilmentCriticalAndDirectHitCreditReducesAdjustedDamage()
+    {
+        var damageEvent = CreateEvent(200, critical: true, directHit: true) with
+        {
+            SourceStatuses = [Status(0x721, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var result = Calculate(damageEvent);
+
+        Assert.True(Received(result, Dealer) > 0.0);
+        Assert.Equal(Received(result, Dealer), SingleTargetReceived(result, Dealer), 6);
+    }
+
+    [Fact]
     public void DirectHitChanceBuffMovesOnlyItsShareOfDirectHitDamage()
     {
         var damageEvent = CreateEvent(125, directHit: true) with
@@ -248,13 +345,53 @@ public sealed class RaidDamageCalculatorTests
     {
         var damageEvent = CreateEvent(150, critical: true, actionId: 0x35) with
         {
-            SourceStatuses = [Status(0x312, Buffer)],
+            SourceStatuses =
+            [
+                Status(0x6B, Dealer),
+                Status(0x312, Buffer),
+            ],
             HasSourceStatusSnapshot = true,
         };
         var result = Calculate(damageEvent);
 
         Assert.True(Given(result, Buffer) > 0.0);
         AssertConserved(150.0, result, Dealer, Buffer);
+    }
+
+    [Fact]
+    public void PetRaidDamageUsesOwnerRatesAndPetCapturedBuffs()
+    {
+        var pet = new DamageActorIdentity(
+            0x3001,
+            "Dealer pet",
+            Dealer.EntityId,
+            Dealer.Name,
+            false,
+            0)
+        {
+            IsPet = true,
+        };
+        var ownerRateSamples = Enumerable.Range(1, 11)
+            .Select(index => CreateEvent(150, critical: true, actionId: (uint)(500 + index)))
+            .ToArray();
+        var ownerPeriodic = CreateEvent(1_000, actionId: 700) with
+        {
+            IsPeriodic = true,
+            SourceStatuses = [Status(0x312, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var petPeriodic = ownerPeriodic with
+        {
+            Source = pet,
+            AttributedSource = Dealer,
+        };
+
+        var expected = Calculate([.. ownerRateSamples, ownerPeriodic]);
+        var actual = Calculate([.. ownerRateSamples, petPeriodic]);
+
+        Assert.Equal(Given(expected, Buffer), Given(actual, Buffer), 6);
+        Assert.True(Given(actual, Buffer) > 0.0);
+        AssertConserved(2_650.0, actual, Dealer, Buffer);
     }
 
     [Fact]
@@ -877,6 +1014,13 @@ public sealed class RaidDamageCalculatorTests
         DamageActorIdentity actor)
     {
         return result[RaidDamageCalculator.GetActorKey(actor)].RaidBuffDamageGiven;
+    }
+
+    private static double SingleTargetReceived(
+        IReadOnlyDictionary<string, RaidDamageAdjustment> result,
+        DamageActorIdentity actor)
+    {
+        return result[RaidDamageCalculator.GetActorKey(actor)].SingleTargetBuffDamageReceived;
     }
 
     private static void AssertConserved(

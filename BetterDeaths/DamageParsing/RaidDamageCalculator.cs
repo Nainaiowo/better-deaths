@@ -7,7 +7,8 @@ using System.Linq;
 internal sealed record RaidDamageAdjustment(
     DamageActorIdentity Source,
     double ExternalBuffDamageReceived,
-    double RaidBuffDamageGiven);
+    double RaidBuffDamageGiven,
+    double SingleTargetBuffDamageReceived);
 
 internal static class RaidDamageCalculator
 {
@@ -59,7 +60,7 @@ internal static class RaidDamageCalculator
             var effects = GetEffects(damageEvent);
             var rates = GetEstimatedRates(
                 rateSamples,
-                GetRateActorKey(damageEvent, recipient));
+                GetRateActorKey(recipient));
             var externalDamageBuffs = effects
                 .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier &&
                     IsExternalPlayerBuff(effect.Source, recipient))
@@ -85,7 +86,8 @@ internal static class RaidDamageCalculator
             entry => new RaidDamageAdjustment(
                 entry.Value.Source,
                 entry.Value.ExternalBuffDamageReceived,
-                entry.Value.RaidBuffDamageGiven),
+                entry.Value.RaidBuffDamageGiven,
+                entry.Value.SingleTargetBuffDamageReceived),
             StringComparer.Ordinal);
     }
 
@@ -119,7 +121,7 @@ internal static class RaidDamageCalculator
         foreach (var buff in buffs)
         {
             var credit = buffDamage * Math.Log(1.0 + buff.Amount) / logTotal;
-            TransferCredit(buff.Source, credit, recipient, adjustments);
+            TransferCredit(buff, credit, recipient, adjustments);
         }
 
         return damageWithoutBuffs;
@@ -193,7 +195,7 @@ internal static class RaidDamageCalculator
 
         var directHitRate = guaranteedDirectHit
             ? 1.0
-            : Math.Clamp(rates.DirectHit + allDirectHitBuffs.Sum(effect => effect.Amount), 0.05, 1.0);
+            : Math.Clamp(rates.DirectHit + allDirectHitBuffs.Sum(effect => effect.Amount), 0.0, 1.0);
         var (criticalPortion, directHitPortion) = damageEvent.IsPeriodic
             ? GetPeriodicCriticalAndDirectHitPortions(
                 damage,
@@ -209,7 +211,7 @@ internal static class RaidDamageCalculator
         foreach (var buff in externalCriticalBuffs)
         {
             TransferCredit(
-                buff.Source,
+                buff,
                 criticalPortion * buff.Amount / criticalRate,
                 recipientAdjustment,
                 adjustments);
@@ -218,7 +220,7 @@ internal static class RaidDamageCalculator
         foreach (var buff in externalDirectHitBuffs)
         {
             TransferCredit(
-                buff.Source,
+                buff,
                 directHitPortion * buff.Amount / directHitRate,
                 recipientAdjustment,
                 adjustments);
@@ -316,7 +318,7 @@ internal static class RaidDamageCalculator
         foreach (var buff in externalBuffs)
         {
             TransferCredit(
-                buff.Source,
+                buff,
                 categoryCredit * buff.Amount / totalChance,
                 recipient,
                 adjustments);
@@ -384,17 +386,11 @@ internal static class RaidDamageCalculator
             return expectedRate;
         }
 
-        var rate = lowByte.Value / 1000.0;
-        while (expectedRate - rate > 0.125)
-        {
-            rate += 0.255;
-        }
-
-        return rate is >= 0.0 and <= 1.0 ? rate : expectedRate;
+        return DamageBaseRatePolicy.ResolveCriticalLowByte(lowByte.Value, expectedRate);
     }
 
     private static void TransferCredit(
-        DamageActorIdentity provider,
+        RaidBuffEffect buff,
         double amount,
         MutableAdjustment recipient,
         IDictionary<string, MutableAdjustment> adjustments)
@@ -404,14 +400,19 @@ internal static class RaidDamageCalculator
             return;
         }
 
-        var providerKey = GetActorKey(provider);
+        var providerKey = GetActorKey(buff.Source);
         if (!adjustments.TryGetValue(providerKey, out var providerAdjustment))
         {
-            providerAdjustment = new MutableAdjustment(provider);
+            providerAdjustment = new MutableAdjustment(buff.Source);
             adjustments[providerKey] = providerAdjustment;
         }
 
         recipient.ExternalBuffDamageReceived += amount;
+        if (buff.Targeting == RaidBuffTargeting.SingleTarget)
+        {
+            recipient.SingleTargetBuffDamageReceived += amount;
+        }
+
         providerAdjustment.RaidBuffDamageGiven += amount;
     }
 
@@ -470,24 +471,30 @@ internal static class RaidDamageCalculator
         var samples = new Dictionary<string, RateSamples>(StringComparer.Ordinal);
         foreach (var damageEvent in events)
         {
-            if (damageEvent.IsPeriodic ||
-                damageEvent.Outcome != DamageEventOutcome.Damage ||
-                damageEvent.Amount == 0)
-            {
-                continue;
-            }
-
             var source = damageEvent.AttributedSource ?? damageEvent.Source;
             if (!IsPlayerCombatant(source) || source.IsLimitBreak)
             {
                 continue;
             }
 
-            var key = GetRateActorKey(damageEvent, source);
+            var key = GetRateActorKey(source);
             if (!samples.TryGetValue(key, out var sample))
             {
                 sample = new RateSamples();
                 samples[key] = sample;
+            }
+
+            if (damageEvent.SourceBaseRates is not null)
+            {
+                sample.KnownCriticalRate = damageEvent.SourceBaseRates.Critical;
+                sample.KnownDirectHitRate = damageEvent.SourceBaseRates.DirectHit;
+            }
+
+            if (damageEvent.IsPeriodic ||
+                damageEvent.Outcome != DamageEventOutcome.Damage ||
+                damageEvent.Amount == 0)
+            {
+                continue;
             }
 
             var effects = GetEffects(damageEvent);
@@ -506,6 +513,36 @@ internal static class RaidDamageCalculator
             }
         }
 
+        foreach (var damageEvent in events.Where(damageEvent =>
+                     damageEvent.IsPeriodic &&
+                     damageEvent.CriticalRateLowByte is not null))
+        {
+            var source = damageEvent.AttributedSource ?? damageEvent.Source;
+            if (!IsPlayerCombatant(source) || source.IsLimitBreak)
+            {
+                continue;
+            }
+
+            var key = GetRateActorKey(source);
+            var sample = samples[key];
+            if (sample.KnownCriticalRate is not null)
+            {
+                continue;
+            }
+
+            var criticalBuffRate = GetEffects(damageEvent)
+                .Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance)
+                .Sum(effect => effect.Amount);
+            var observedRate = sample.CriticalSwings >= MinimumObservedRateSamples
+                ? Math.Clamp(sample.CriticalHits / (double)sample.CriticalSwings, 0.05, 0.95)
+                : DefaultCriticalRate;
+            var expectedBuffedRate = Math.Clamp(observedRate + criticalBuffRate, 0.05, 1.0);
+            var buffedRate = DamageBaseRatePolicy.ResolveCriticalLowByte(
+                damageEvent.CriticalRateLowByte!.Value,
+                expectedBuffedRate);
+            sample.PacketCriticalRates.Add(Math.Clamp(buffedRate - criticalBuffRate, 0.05, 0.95));
+        }
+
         return samples;
     }
 
@@ -519,12 +556,23 @@ internal static class RaidDamageCalculator
         }
 
         return new BaseRates(
-            sample.CriticalSwings >= MinimumObservedRateSamples
+            sample.KnownCriticalRate ?? (sample.PacketCriticalRates.Count > 0
+                ? Median(sample.PacketCriticalRates)
+                : sample.CriticalSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(sample.CriticalHits / (double)sample.CriticalSwings, 0.05, 0.95)
-                : DefaultCriticalRate,
-            sample.DirectHitSwings >= MinimumObservedRateSamples
+                : DefaultCriticalRate),
+            sample.KnownDirectHitRate ?? (sample.DirectHitSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(sample.DirectHits / (double)sample.DirectHitSwings, 0.05, 0.95)
-                : DefaultDirectHitRate);
+                : DefaultDirectHitRate));
+    }
+
+    private static double Median(IReadOnlyList<double> values)
+    {
+        var ordered = values.OrderBy(value => value).ToArray();
+        var middle = ordered.Length / 2;
+        return ordered.Length % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) / 2.0
+            : ordered[middle];
     }
 
     private sealed class MutableAdjustment(DamageActorIdentity source)
@@ -534,10 +582,18 @@ internal static class RaidDamageCalculator
         public double ExternalBuffDamageReceived { get; set; }
 
         public double RaidBuffDamageGiven { get; set; }
+
+        public double SingleTargetBuffDamageReceived { get; set; }
     }
 
     private sealed class RateSamples
     {
+        public double? KnownCriticalRate { get; set; }
+
+        public double? KnownDirectHitRate { get; set; }
+
+        public List<double> PacketCriticalRates { get; } = [];
+
         public int CriticalSwings { get; set; }
 
         public int CriticalHits { get; set; }
@@ -552,12 +608,8 @@ internal static class RaidDamageCalculator
         public static BaseRates Default { get; } = new(DefaultCriticalRate, DefaultDirectHitRate);
     }
 
-    private static string GetRateActorKey(
-        ParsedDamageEvent damageEvent,
-        DamageActorIdentity attributedSource)
+    private static string GetRateActorKey(DamageActorIdentity attributedSource)
     {
-        return damageEvent.Source.IsPet && damageEvent.Source.EntityId != 0
-            ? GetActorKey(damageEvent.Source)
-            : GetActorKey(attributedSource);
+        return GetActorKey(attributedSource);
     }
 }

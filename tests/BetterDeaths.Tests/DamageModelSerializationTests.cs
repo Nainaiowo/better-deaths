@@ -100,6 +100,7 @@ public sealed class DamageModelSerializationTests
             TargetHpBefore = before,
             TargetHpAfter = after,
             ResolutionQuality = DamageResolutionQuality.Resolved,
+            SourceBaseRates = new DamageBaseRateSnapshot(0.208, 0.235),
         };
         var snapshot = new DamageEncounterSnapshot(
             seenAtUtc,
@@ -122,5 +123,25 @@ public sealed class DamageModelSerializationTests
         Assert.Equal(before, restoredEvent.TargetHpBefore);
         Assert.Equal(after, restoredEvent.TargetHpAfter);
         Assert.Equal(DamageResolutionQuality.Resolved, restoredEvent.ResolutionQuality);
+        Assert.Equal(new DamageBaseRateSnapshot(0.208, 0.235), restoredEvent.SourceBaseRates);
+    }
+
+    [Fact]
+    public void NeutralAndAdjustedDamageUseTheirSeparateBuffRemovalRules()
+    {
+        var actor = new DamageActorIdentity(1, "Source", 0, string.Empty, true, 21);
+        var source = new DamageSourceSummary(actor, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [])
+        {
+            MeterDamage = 950,
+            ExternalBuffDamageReceived = 100,
+            MeterExternalBuffDamageReceived = 90,
+            SingleTargetBuffDamageReceived = 40,
+            MeterSingleTargetBuffDamageReceived = 35,
+        };
+
+        Assert.Equal(900.0, source.NeutralDamage);
+        Assert.Equal(860.0, source.EffectiveMeterNeutralDamage);
+        Assert.Equal(960.0, source.AdjustedDamage);
+        Assert.Equal(915.0, source.EffectiveMeterAdjustedDamage);
     }
 }

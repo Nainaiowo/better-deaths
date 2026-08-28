@@ -89,6 +89,7 @@ internal sealed class DirectDamageParser
                     IsSourceEntry = isSourceEntry,
                     PacketTarget = target.Target,
                     AttributedSource = attributedSource,
+                    SourceBaseRates = packet.SourceBaseRates,
                     TargetHpBefore = isSourceEntry ? null : target.TargetHp,
                     ResolutionQuality = isSourceEntry || target.TargetHp is null
                         ? DamageResolutionQuality.Unresolved

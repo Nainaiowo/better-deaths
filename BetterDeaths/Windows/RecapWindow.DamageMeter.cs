@@ -345,6 +345,8 @@ public sealed partial class RecapWindow
             DamageMeterColumn.DamagePercent => "Damage %",
             DamageMeterColumn.DamagePerSecond => "DPS",
             DamageMeterColumn.RaidDamagePerSecond => "rDPS",
+            DamageMeterColumn.NeutralDamagePerSecond => "nDPS",
+            DamageMeterColumn.AdjustedDamagePerSecond => "aDPS",
             DamageMeterColumn.CriticalHitPercent => "Critical hit %",
             DamageMeterColumn.DirectHitPercent => "Direct hit %",
             DamageMeterColumn.CriticalDirectHitPercent => "Critical + direct %",
@@ -825,6 +827,20 @@ public sealed partial class RecapWindow
                         : 0.0));
                 DrawRaidDamageTooltip(source);
                 break;
+            case DamageMeterColumn.NeutralDamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0
+                        ? source.EffectiveMeterNeutralDamage / snapshot.DurationSeconds
+                        : 0.0));
+                DrawNeutralDamageTooltip(source);
+                break;
+            case DamageMeterColumn.AdjustedDamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0
+                        ? source.EffectiveMeterAdjustedDamage / snapshot.DurationSeconds
+                        : 0.0));
+                DrawAdjustedDamageTooltip(source);
+                break;
             case DamageMeterColumn.CriticalHitPercent:
                 DrawDamageMeterHitPercent(source.CriticalHits, directDamageHits, "critical hits");
                 break;
@@ -895,11 +911,13 @@ public sealed partial class RecapWindow
                         : 0.0), muted);
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
+            case DamageMeterColumn.NeutralDamagePerSecond:
+            case DamageMeterColumn.AdjustedDamagePerSecond:
                 DrawCenteredText("-", muted);
                 if (ImGui.IsItemHovered())
                 {
                     SetThemedTooltip(
-                        "rDPS is shown on player rows because raid-buff contribution comes from damage dealt by other recorded players.");
+                        "Adjusted DPS metrics are shown on player rows because their buff adjustments apply to the player's total damage.");
                 }
 
                 break;
@@ -982,6 +1000,8 @@ public sealed partial class RecapWindow
             DamageMeterColumn.DamagePercent => concise ? 82.0f : 94.0f,
             DamageMeterColumn.DamagePerSecond => concise ? 70.0f : 84.0f,
             DamageMeterColumn.RaidDamagePerSecond => concise ? 70.0f : 84.0f,
+            DamageMeterColumn.NeutralDamagePerSecond => concise ? 70.0f : 84.0f,
+            DamageMeterColumn.AdjustedDamagePerSecond => concise ? 70.0f : 84.0f,
             DamageMeterColumn.CriticalHitPercent => concise ? 66.0f : 86.0f,
             DamageMeterColumn.DirectHitPercent => concise ? 62.0f : 90.0f,
             DamageMeterColumn.CriticalDirectHitPercent => concise ? 66.0f : 116.0f,
@@ -1017,6 +1037,30 @@ public sealed partial class RecapWindow
             "Raid-contributing DPS moves damage gained from another player's raid buffs back to the player who provided them.\n" +
             $"Received from others: {FormatDamageMeterNumber(source.EffectiveMeterExternalBuffDamageReceived)} damage\n" +
             $"Given through buffs: {FormatDamageMeterNumber(source.EffectiveMeterRaidBuffDamageGiven)} damage");
+    }
+
+    private static void DrawNeutralDamageTooltip(DamageSourceSummary source)
+    {
+        if (!ImGui.IsItemHovered())
+        {
+            return;
+        }
+
+        SetThemedTooltip(
+            "Neutral DPS removes damage gained from every external damage, critical-hit, and direct-hit buff.\n" +
+            $"Removed from external buffs: {FormatDamageMeterNumber(source.EffectiveMeterExternalBuffDamageReceived)} damage");
+    }
+
+    private static void DrawAdjustedDamageTooltip(DamageSourceSummary source)
+    {
+        if (!ImGui.IsItemHovered())
+        {
+            return;
+        }
+
+        SetThemedTooltip(
+            "Adjusted DPS removes only damage gained from single-target padding buffs.\n" +
+            $"Removed from single-target buffs: {FormatDamageMeterNumber(source.EffectiveMeterSingleTargetBuffDamageReceived)} damage");
     }
 
     private static string GetDamageMeterSourceKey(DamageActorIdentity source)

@@ -17,14 +17,18 @@
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageModels.cs" Link="DamageParsing/DamageModels.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageBaseRatePolicy.cs" Link="DamageParsing/DamageBaseRatePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ActionPotencyProfileParser.cs" Link="DamageParsing/ActionPotencyProfileParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterPreviewData.cs" Link="DamageParsing/DamageMeterPreviewData.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterCombatantPolicy.cs" Link="DamageParsing/DamageMeterCombatantPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParsingModule.cs" Link="DamageParsing/DamageParsingModule.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusCapturePolicy.cs" Link="DamageParsing/DamageStatusCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/EffectiveDamageResolver.cs" Link="DamageParsing/EffectiveDamageResolver.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/GroundDamageStatusPolicy.cs" Link="DamageParsing/GroundDamageStatusPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/JobDamageCalibrationPolicy.cs" Link="DamageParsing/JobDamageCalibrationPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageTracker.cs" Link="DamageParsing/PeriodicDamageTracker.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageRefreshPolicy.cs" Link="DamageParsing/PeriodicDamageRefreshPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PersonalDamageModifierPolicy.cs" Link="DamageParsing/PersonalDamageModifierPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffPolicy.cs" Link="DamageParsing/RaidBuffPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffTracker.cs" Link="DamageParsing/RaidBuffTracker.cs" />

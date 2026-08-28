@@ -344,8 +344,10 @@ internal sealed class DamageParsingModule
         {
             ExternalBuffDamageReceived = adjustment?.ExternalBuffDamageReceived ?? 0.0,
             RaidBuffDamageGiven = adjustment?.RaidBuffDamageGiven ?? 0.0,
+            SingleTargetBuffDamageReceived = adjustment?.SingleTargetBuffDamageReceived ?? 0.0,
             MeterExternalBuffDamageReceived = meterAdjustment?.ExternalBuffDamageReceived ?? 0.0,
             MeterRaidBuffDamageGiven = meterAdjustment?.RaidBuffDamageGiven ?? 0.0,
+            MeterSingleTargetBuffDamageReceived = meterAdjustment?.SingleTargetBuffDamageReceived ?? 0.0,
             RaidAdjustedDamage = Math.Max(
                 0.0,
                 source.TotalDamage - (adjustment?.ExternalBuffDamageReceived ?? 0.0) +
@@ -381,8 +383,11 @@ internal sealed class DamageParsingModule
             MeterRaidAdjustedDamage = meterAdjustment?.RaidBuffDamageGiven ?? adjustment.RaidBuffDamageGiven,
             ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
             RaidBuffDamageGiven = adjustment.RaidBuffDamageGiven,
+            SingleTargetBuffDamageReceived = adjustment.SingleTargetBuffDamageReceived,
             MeterExternalBuffDamageReceived = meterAdjustment?.ExternalBuffDamageReceived ?? 0.0,
             MeterRaidBuffDamageGiven = meterAdjustment?.RaidBuffDamageGiven ?? adjustment.RaidBuffDamageGiven,
+            MeterSingleTargetBuffDamageReceived = meterAdjustment?.SingleTargetBuffDamageReceived ??
+                adjustment.SingleTargetBuffDamageReceived,
         };
     }
 

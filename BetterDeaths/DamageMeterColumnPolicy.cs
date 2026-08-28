@@ -19,6 +19,8 @@ public enum DamageMeterColumn
     TotalDamage,
     Deaths,
     HitCount,
+    NeutralDamagePerSecond,
+    AdjustedDamagePerSecond,
 }
 
 internal static class DamageMeterColumnPolicy

@@ -99,7 +99,7 @@ public sealed class PersonalDamageModifierPolicyTests
     }
 
     [Fact]
-    public void PersonalSnapshotModifiersStackAdditively()
+    public void PersonalSnapshotModifiersStackMultiplicatively()
     {
         var module = new DamageParsingModule();
         module.Process(DirectPacket(1_000, []));
@@ -111,7 +111,7 @@ public sealed class PersonalDamageModifierPolicyTests
 
         var damageEvent = Assert.Single(ProcessPeriodicTick(module));
 
-        Assert.Equal(294.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(303.0, damageEvent.EffectiveMeterAmount);
     }
 
     [Fact]

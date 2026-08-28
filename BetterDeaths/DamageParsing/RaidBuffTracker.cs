@@ -11,8 +11,7 @@ internal sealed class RaidBuffTracker
 
     public void Observe(DamageStatusApplication application)
     {
-        if (!RaidBuffPolicy.IsRelevantStatus(application.StatusId) &&
-            !PersonalDamageModifierPolicy.IsRelevantStatus(application.StatusId))
+        if (!DamageStatusCapturePolicy.IsRelevant(application.StatusId))
         {
             return;
         }
@@ -222,8 +221,13 @@ internal sealed class RaidBuffTracker
 
     private static double GetDefaultDurationSeconds(uint statusId)
     {
-        return PersonalDamageModifierPolicy.IsRelevantStatus(statusId)
-            ? PersonalDamageModifierPolicy.GetDefaultDurationSeconds(statusId)
+        if (PersonalDamageModifierPolicy.IsRelevantStatus(statusId))
+        {
+            return PersonalDamageModifierPolicy.GetDefaultDurationSeconds(statusId);
+        }
+
+        return JobDamageCalibrationPolicy.IsRelevantStatus(statusId)
+            ? JobDamageCalibrationPolicy.GetDefaultDurationSeconds(statusId)
             : RaidBuffPolicy.GetDefaultDurationSeconds(statusId);
     }
 

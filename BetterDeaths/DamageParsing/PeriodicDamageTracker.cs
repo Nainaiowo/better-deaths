@@ -139,6 +139,7 @@ internal sealed class PeriodicDamageTracker
             return damageEvent with
             {
                 AttributedSource = unknownSource,
+                SourceBaseRates = null,
                 AttributionQuality = DamageAttributionQuality.Unattributed,
             };
         }
@@ -151,6 +152,7 @@ internal sealed class PeriodicDamageTracker
             ActionCategoryId = 0,
             IsAutoAttack = false,
             AttributedSource = selected.Source,
+            SourceBaseRates = selected.SourceBaseRates,
             AttributionQuality = candidates.Count == 1
                 ? DamageAttributionQuality.Exact
                 : DamageAttributionQuality.Estimated,
@@ -181,6 +183,12 @@ internal sealed class PeriodicDamageTracker
                 sourceHitRateSamples[sourceKey] = rateSamples;
             }
 
+            if (damageEvent.SourceBaseRates is not null)
+            {
+                rateSamples.KnownCriticalRate = damageEvent.SourceBaseRates.Critical;
+                rateSamples.KnownDirectHitRate = damageEvent.SourceBaseRates.DirectHit;
+            }
+
             var effects = GetApplicableEffects(
                 damageEvent.SourceStatuses,
                 damageEvent.TargetStatuses,
@@ -202,8 +210,8 @@ internal sealed class PeriodicDamageTracker
                 rateSamples.DirectHits += damageEvent.DirectHit ? 1 : 0;
             }
 
-            if (!damageEvent.CanCalibratePotency ||
-                damageEvent.DirectPotency is not > 0.0 ||
+            var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
+            if (calibrationPotency is not > 0.0 ||
                 damageEvent.Blocked ||
                 damageEvent.Parried ||
                 damageEvent.Critical ||
@@ -214,7 +222,7 @@ internal sealed class PeriodicDamageTracker
 
             var amount = (double)damageEvent.Amount;
             amount /= GetDamageMultiplier(effects);
-            var potencyMultiplier = amount / damageEvent.DirectPotency.Value;
+            var potencyMultiplier = amount / calibrationPotency.Value;
             if (!double.IsFinite(potencyMultiplier) || potencyMultiplier <= 0.0)
             {
                 continue;
@@ -507,7 +515,8 @@ internal sealed class PeriodicDamageTracker
         DateTime nominalExpiresAtUtc,
         DateTime retainUntilUtc)
     {
-        var isDuplicateObservation = existing.RemovedAtUtc is null &&
+        var isExplicitResnapshot = PeriodicDamageRefreshPolicy.IsExplicitResnapshot(application.ActionId);
+        var isDuplicateObservation = !isExplicitResnapshot && existing.RemovedAtUtc is null &&
             Math.Abs((application.SeenAtUtc - existing.Application.SeenAtUtc).TotalSeconds) <=
                 DuplicateApplicationWindowSeconds;
         if (isDuplicateObservation)
@@ -543,6 +552,7 @@ internal sealed class PeriodicDamageTracker
                 BaseDamageLowByte = application.BaseDamageLowByte ?? existingApplication.BaseDamageLowByte,
                 CriticalRateLowByte = application.CriticalRateLowByte ?? existingApplication.CriticalRateLowByte,
                 EffectParameterByte = application.EffectParameterByte ?? existingApplication.EffectParameterByte,
+                SourceBaseRates = application.SourceBaseRates ?? existingApplication.SourceBaseRates,
                 SourceStatuses = existingApplication.HasSourceStatusSnapshot
                     ? existingApplication.SourceStatuses
                     : application.SourceStatuses,
@@ -557,6 +567,21 @@ internal sealed class PeriodicDamageTracker
         }
         else
         {
+            var existingApplication = existing.Application;
+            if (application.IsPeriodicDamage)
+            {
+                application = application with
+                {
+                    ActionId = application.ActionId != 0
+                        ? application.ActionId
+                        : existingApplication.ActionId,
+                    ActionName = !string.IsNullOrWhiteSpace(application.ActionName)
+                        ? application.ActionName
+                        : existingApplication.ActionName,
+                    PeriodicPotency = application.PeriodicPotency ?? existingApplication.PeriodicPotency,
+                };
+            }
+
             learnedApplicationTicks.Remove(GetApplicationKey(existing));
             existing.ApplicationGeneration = ++nextApplicationGeneration;
             existing.LastTickAtUtc = null;
@@ -617,6 +642,7 @@ internal sealed class PeriodicDamageTracker
             StatusId = statusId,
             StatusIconId = statusIconId,
             CriticalRateLowByte = status?.CriticalRateLowByte,
+            SourceBaseRates = status?.SourceBaseRates,
             SourceStatuses = status?.SourceStatuses ?? [],
             TargetStatuses = status?.TargetStatuses ?? [],
             HasSourceStatusSnapshot = status?.HasSourceStatusSnapshot ?? false,
@@ -664,7 +690,11 @@ internal sealed class PeriodicDamageTracker
         baseAmount *= GetDamageMultiplier(effects);
         baseAmount = ReconstructBaseAmount(baseAmount, application.BaseDamageLowByte);
 
-        var baseRates = GetBaseRates(sourceKey);
+        var baseRates = application.SourceBaseRates is null
+            ? GetBaseRates(sourceKey)
+            : new BaseRates(
+                application.SourceBaseRates.Critical,
+                application.SourceBaseRates.DirectHit);
         var criticalBuffRate = effects
             .Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance)
             .Sum(effect => effect.Amount);
@@ -709,12 +739,12 @@ internal sealed class PeriodicDamageTracker
         }
 
         return new BaseRates(
-            samples.CriticalSwings >= MinimumObservedRateSamples
+            samples.KnownCriticalRate ?? (samples.CriticalSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(samples.CriticalHits / (double)samples.CriticalSwings, 0.05, 0.95)
-                : DefaultCriticalRate,
-            samples.DirectHitSwings >= MinimumObservedRateSamples
+                : DefaultCriticalRate),
+            samples.KnownDirectHitRate ?? (samples.DirectHitSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(samples.DirectHits / (double)samples.DirectHitSwings, 0.05, 0.95)
-                : DefaultDirectHitRate);
+                : DefaultDirectHitRate));
     }
 
     private static double ResolveCriticalRate(byte? lowByte, double expectedRate)
@@ -724,13 +754,7 @@ internal sealed class PeriodicDamageTracker
             return expectedRate;
         }
 
-        var rate = lowByte.Value / 1000.0;
-        while (expectedRate - rate > 0.125)
-        {
-            rate += 0.255;
-        }
-
-        return rate is >= 0.0 and <= 1.0 ? rate : expectedRate;
+        return DamageBaseRatePolicy.ResolveCriticalLowByte(lowByte.Value, expectedRate);
     }
 
     private static double GetCriticalMultiplier(double baseCriticalRate)
@@ -812,11 +836,10 @@ internal sealed class PeriodicDamageTracker
 
     private static double GetDamageMultiplier(IReadOnlyList<RaidBuffEffect> effects)
     {
-        return Math.Max(
-            0.01,
-            1.0 + effects
-                .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
-                .Sum(effect => effect.Amount));
+        var multiplier = effects
+            .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+            .Aggregate(1.0, (total, effect) => total * (1.0 + effect.Amount));
+        return Math.Max(0.01, multiplier);
     }
 
     private static string GetActorKey(DamageActorIdentity actor)
@@ -977,6 +1000,10 @@ internal sealed class PeriodicDamageTracker
 
     private sealed class HitRateSamples
     {
+        public double? KnownCriticalRate { get; set; }
+
+        public double? KnownDirectHitRate { get; set; }
+
         public int CriticalSwings { get; set; }
 
         public int CriticalHits { get; set; }

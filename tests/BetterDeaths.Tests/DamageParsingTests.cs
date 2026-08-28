@@ -1090,6 +1090,88 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void OverheatedMachinistPotencyDoesNotInflateTheDotBaseline()
+    {
+        var machinist = Source with { ClassJobId = 31 };
+        var module = new DamageParsingModule();
+        module.ObserveStatus(new DamageStatusApplication(
+            machinist,
+            machinist,
+            JobDamageCalibrationPolicy.MachinistOverheatedStatusId,
+            "Overheated",
+            0,
+            0,
+            string.Empty,
+            SeenAtUtc,
+            5.0f,
+            false,
+            false,
+            false));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 2200)],
+            actionId: 0x1CF2,
+            actionName: "Heat Blast",
+            source: machinist) with
+        {
+            DirectPotency = 200,
+            CanCalibratePotency = true,
+            SourceStatuses = [],
+            HasSourceStatusSnapshot = false,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(machinist, 0x74A, "Bioblaster") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 50,
+            CriticalRateLowByte = 150,
+        });
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+
+        Assert.Equal(544.0, periodicEvent.EffectiveMeterAmount);
+    }
+
+    [Fact]
+    public void BlackMageElementalStateDoesNotTeachTheSharedDotBaseline()
+    {
+        var blackMage = Source with { ClassJobId = 25 };
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 5400)],
+            actionId: 0x8D,
+            actionName: "Fire",
+            source: blackMage) with
+        {
+            DirectPotency = 300,
+            CanCalibratePotency = true,
+        });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 8900)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(1),
+            actionId: 0x407B,
+            actionName: "Xenoglossy",
+            source: blackMage) with
+        {
+            DirectPotency = 890,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(blackMage, 0xF1F, "High Thunder") with
+        {
+            SeenAtUtc = SeenAtUtc.AddSeconds(1.1),
+            PeriodicPotency = 60,
+            CriticalRateLowByte = 150,
+        });
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(900, 3, SeenAtUtc.AddSeconds(4))));
+
+        Assert.Equal(653.0, periodicEvent.EffectiveMeterAmount);
+    }
+
+    [Fact]
     public void SimulatesEachActiveDotInsteadOfForcingTheirMeterValuesToTheCombinedTick()
     {
         var module = new DamageParsingModule();
@@ -1123,6 +1205,90 @@ public sealed class DamageParsingTests
         Assert.Equal(490.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
         Assert.Equal(1700ul, snapshot.TotalDamage);
         Assert.Equal(1490.0, snapshot.EffectiveMeterDamage);
+    }
+
+    [Fact]
+    public void IronJawsRefreshKeepsDotPotencyAndReplacesItsBuffSnapshot()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x4B0, "Caustic Bite") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            ActionId = 0x1D3B,
+            ActionName = "Caustic Bite",
+            PeriodicPotency = 20,
+            CriticalRateLowByte = 150,
+            SourceStatuses =
+            [
+                new DamageStatusSnapshot(0x7D, Source, 0, 10.0f),
+            ],
+            HasSourceStatusSnapshot = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x4B0, "Caustic Bite") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(300),
+            ActionId = 0x0DE8,
+            ActionName = "Iron Jaws",
+            PeriodicPotency = null,
+            SourceStatuses = [],
+            HasSourceStatusSnapshot = true,
+        });
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+
+        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Empty(periodicEvent.SourceStatuses);
+        Assert.True(periodicEvent.HasSourceStatusSnapshot);
+    }
+
+    [Fact]
+    public void StatusControlRefreshKeepsKnownPeriodicPotencyAndUsesItsNewSnapshot()
+    {
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x4B0, "Caustic Bite") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            ActionId = 0x1D3B,
+            ActionName = "Caustic Bite",
+            PeriodicPotency = 20,
+            CriticalRateLowByte = 150,
+            SourceStatuses =
+            [
+                new DamageStatusSnapshot(0x7D, Source, 0, 10.0f),
+            ],
+            HasSourceStatusSnapshot = true,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x4B0, "Caustic Bite") with
+        {
+            SeenAtUtc = SeenAtUtc.AddSeconds(10),
+            ActionId = 0,
+            ActionName = string.Empty,
+            PeriodicPotency = null,
+            SourceStatuses = [],
+            HasSourceStatusSnapshot = true,
+        });
+
+        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+            module,
+            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(12))));
+
+        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Empty(periodicEvent.SourceStatuses);
+        Assert.True(periodicEvent.HasSourceStatusSnapshot);
     }
 
     [Fact]

@@ -4,6 +4,8 @@ using BetterDeaths.DamageParsing;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +35,8 @@ public sealed partial class Plugin
             var sourceOwner = source.OwnerEntityId == 0
                 ? null
                 : CaptureDamageActorIdentity(source.OwnerEntityId, source.OwnerName);
+            var attributedSource = GetAttributedDamageSource(source, sourceOwner);
+            var sourceBaseRates = CaptureDamageBaseRates(attributedSource);
             var sourceStatuses = BuildDamageStatusSnapshots(packet.SourceSnapshot);
             var targets = new List<DamageActionTarget>(packet.Targets.Count);
             foreach (var target in packet.Targets)
@@ -102,6 +106,7 @@ public sealed partial class Plugin
                 AnimationVariation = packet.AnimationVariation,
                 AnimationTargetEntityId = packet.AnimationTargetEntityId,
                 SourceOwner = sourceOwner,
+                SourceBaseRates = sourceBaseRates,
                 StatusApplications = statusApplications,
                 SourceStatuses = sourceStatuses,
                 HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
@@ -173,6 +178,7 @@ public sealed partial class Plugin
                     ActionCategoryId = actionCategoryId,
                     DamageType = actionDamageProfile.DamageType,
                     ElementType = actionDamageProfile.ElementType,
+                    SourceBaseRates = CaptureDamageBaseRates(attributedSource),
                     SourceStatuses = sourceStatuses,
                     TargetStatuses = targetStatuses,
                     HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
@@ -194,8 +200,7 @@ public sealed partial class Plugin
         var identities = new Dictionary<uint, DamageActorIdentity>();
         var statuses = new List<DamageStatusSnapshot>();
         foreach (var status in snapshot.Statuses.Where(status =>
-                     RaidBuffPolicy.IsRelevantStatus(status.StatusId) ||
-                     PersonalDamageModifierPolicy.IsRelevantStatus(status.StatusId)))
+                     DamageStatusCapturePolicy.IsRelevant(status.StatusId)))
         {
             if (!identities.TryGetValue(status.SourceId, out var statusSource))
             {
@@ -377,7 +382,40 @@ public sealed partial class Plugin
             durationSeconds,
             IsPeriodicDamageStatus(statusId) || GroundDamageStatusPolicy.IsKnown(statusId),
             IsReactiveDamageStatus(statusId),
-            isRemoval);
+            isRemoval)
+        {
+            SourceBaseRates = CaptureDamageBaseRates(source),
+        };
+    }
+
+    private unsafe DamageBaseRateSnapshot? CaptureDamageBaseRates(DamageActorIdentity source)
+    {
+        var localPlayer = ObjectTable.LocalPlayer;
+        if (localPlayer is null ||
+            source.EntityId == 0 ||
+            NormalizeActorEntityId(localPlayer.EntityId) != source.EntityId)
+        {
+            return null;
+        }
+
+        var uiState = UIState.Instance();
+        if (uiState == null || uiState->PlayerState.CurrentLevel <= 0)
+        {
+            return null;
+        }
+
+        var level = (uint)uiState->PlayerState.CurrentLevel;
+        var paramGrow = DataManager.GetExcelSheet<ParamGrow>()?.GetRowOrDefault(level);
+        if (paramGrow is null)
+        {
+            return null;
+        }
+
+        return DamageBaseRatePolicy.FromAttributes(
+            uiState->PlayerState.Attributes[27],
+            uiState->PlayerState.Attributes[22],
+            paramGrow.Value.BaseSpeed,
+            paramGrow.Value.LevelModifier);
     }
 
     private DamageActorIdentity? CaptureDamageActorOwner(DamageActorIdentity actor)
@@ -634,6 +672,7 @@ public sealed partial class Plugin
             application.PeriodicPotency,
             application.BaseDamageLowByte,
             application.CriticalRateLowByte,
+            application.SourceBaseRates,
             application.IsPeriodicDamage,
             application.IsReactiveDamage,
             application.IsRemoval,
@@ -674,6 +713,7 @@ public sealed partial class Plugin
                 damageEvent.CapturedAtUtc,
                 damageEvent.DirectPotency,
                 damageEvent.CanCalibratePotency,
+                damageEvent.SourceBaseRates,
                 Outcome = damageEvent.Outcome.ToString(),
                 Attribution = damageEvent.AttributionQuality.ToString(),
                 damageEvent.IsPeriodic,
@@ -746,6 +786,7 @@ public sealed partial class Plugin
                     source.RaidAdjustedDamage,
                     source.ExternalBuffDamageReceived,
                     source.RaidBuffDamageGiven,
+                    source.SingleTargetBuffDamageReceived,
                 }),
             });
         }
