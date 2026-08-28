@@ -128,6 +128,8 @@ internal sealed record DamageStatusApplication(
 
     public ushort Parameter { get; init; }
 
+    public uint ActionCategoryId { get; init; }
+
     public byte DamageType { get; init; }
 
     public byte ElementType { get; init; }
@@ -259,6 +261,8 @@ internal sealed record ParsedDamageEvent(
     public uint StatusId { get; init; }
 
     public uint StatusIconId { get; init; }
+
+    public byte? CriticalRateLowByte { get; init; }
 
     public IReadOnlyList<DamageStatusSnapshot> SourceStatuses { get; init; } = [];
 

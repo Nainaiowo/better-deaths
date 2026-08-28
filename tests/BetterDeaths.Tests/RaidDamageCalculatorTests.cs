@@ -336,7 +336,34 @@ public sealed class RaidDamageCalculatorTests
     }
 
     [Fact]
-    public void LaterRateSamplesDoNotRetroactivelyChangeEarlierBuffCredit()
+    public void PeriodicCriticalLowByteUsesFullEncounterRateToResolveWraparound()
+    {
+        var periodic = CreateEvent(1_000) with
+        {
+            IsPeriodic = true,
+            CriticalRateLowByte = 145,
+            SourceStatuses = [Status(0x312, Buffer)],
+            HasSourceStatusSnapshot = true,
+        };
+        var unbuffedSamples = Enumerable.Range(1, 20)
+            .Select(index => CreateEvent(
+                index <= 6 ? 150u : 100u,
+                critical: index <= 6,
+                actionId: (uint)(300 + index)) with
+            {
+                SeenAtUtc = SeenAtUtc.AddSeconds(index),
+            })
+            .ToArray();
+
+        var resolved = Calculate([periodic, .. unbuffedSamples]);
+        var expected = Calculate([periodic with { CriticalRateLowByte = null }, .. unbuffedSamples]);
+
+        Assert.Equal(Given(expected, Buffer), Given(resolved, Buffer), 6);
+        AssertConserved(3_300.0, resolved, Dealer, Buffer, SecondBuffer);
+    }
+
+    [Fact]
+    public void FullEncounterRateSamplesStabilizeOpenerBuffCredit()
     {
         var earlyBuffedHit = CreateEvent(150, critical: true) with
         {
@@ -344,7 +371,10 @@ public sealed class RaidDamageCalculatorTests
             HasSourceStatusSnapshot = true,
         };
         var laterUnbuffedHits = Enumerable.Range(1, 20)
-            .Select(index => CreateEvent(100, actionId: (uint)(200 + index)) with
+            .Select(index => CreateEvent(
+                index <= 6 ? 150u : 100u,
+                critical: index <= 6,
+                actionId: (uint)(200 + index)) with
             {
                 SeenAtUtc = SeenAtUtc.AddSeconds(index),
             })
@@ -353,8 +383,8 @@ public sealed class RaidDamageCalculatorTests
         var earlyOnly = Calculate(earlyBuffedHit);
         var completed = Calculate([earlyBuffedHit, .. laterUnbuffedHits]);
 
-        Assert.Equal(Given(earlyOnly, Buffer), Given(completed, Buffer), 6);
-        AssertConserved(2_150.0, completed, Dealer, Buffer, SecondBuffer);
+        Assert.True(Given(completed, Buffer) < Given(earlyOnly, Buffer));
+        AssertConserved(2_450.0, completed, Dealer, Buffer, SecondBuffer);
     }
 
     [Fact]

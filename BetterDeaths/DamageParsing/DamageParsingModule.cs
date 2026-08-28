@@ -23,9 +23,8 @@ internal sealed class DamageParsingModule
     private readonly List<StagedDamageBatch> stagedDamageBatches = [];
     private DateTime? startedAtUtc;
     private DateTime? latestEventAtUtc;
-    private DateTime? latestAlliedEventAtUtc;
     private DateTime? meterStartedAtUtc;
-    private DateTime? latestAlliedMeterEventAtUtc;
+    private DateTime? latestMeterEventAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
@@ -219,8 +218,9 @@ internal sealed class DamageParsingModule
                 return null;
             }
 
-            var snapshotAtUtc = latestAlliedEventAtUtc ?? latestEventAtUtc.Value;
-            var timeBucket = snapshotAtUtc.Ticks / TimeSpan.TicksPerSecond;
+            var snapshotAtUtc = latestEventAtUtc.Value;
+            var meterSnapshotAtUtc = latestMeterEventAtUtc ?? snapshotAtUtc;
+            var timeBucket = meterSnapshotAtUtc.Ticks / TimeSpan.TicksPerSecond;
             if (cachedCurrentEncounter is not null &&
                 cachedCurrentEncounterRevision == mutationRevision &&
                 cachedCurrentEncounterTimeBucket == timeBucket)
@@ -246,7 +246,7 @@ internal sealed class DamageParsingModule
                 return null;
             }
 
-            var effectiveEnd = latestAlliedEventAtUtc ?? latestEventAtUtc.Value;
+            var effectiveEnd = latestEventAtUtc.Value;
             lastEncounter = BuildSnapshot(effectiveEnd, effectiveEnd, reason, includeEvents: true);
             ClearCurrentEncounter();
             return lastEncounter;
@@ -317,10 +317,10 @@ internal sealed class DamageParsingModule
         return snapshot with
         {
             MeterStartedAtUtc = meterStartedAtUtc,
-            MeterSnapshotAtUtc = latestAlliedMeterEventAtUtc,
+            MeterSnapshotAtUtc = latestMeterEventAtUtc,
             MeterEndedAtUtc = endedAtUtc is null
                 ? null
-                : latestAlliedMeterEventAtUtc,
+                : latestMeterEventAtUtc,
             MeterDamage = sourceSnapshots.Sum(source => source.EffectiveMeterDamage),
             EstimatedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.EstimatedDamage),
             UnattributedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.UnattributedDamage),
@@ -401,9 +401,8 @@ internal sealed class DamageParsingModule
         raidBuffTracker.Clear();
         startedAtUtc = null;
         latestEventAtUtc = null;
-        latestAlliedEventAtUtc = null;
         meterStartedAtUtc = null;
-        latestAlliedMeterEventAtUtc = null;
+        latestMeterEventAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
         packetCount = 0;
@@ -587,22 +586,13 @@ internal sealed class DamageParsingModule
                 ? damageEvent.SeenAtUtc
                 : latestEventAtUtc;
             var meterEventAtUtc = damageEvent.CapturedAtUtc ?? damageEvent.SeenAtUtc;
+            latestMeterEventAtUtc = latestMeterEventAtUtc is null || meterEventAtUtc > latestMeterEventAtUtc
+                ? meterEventAtUtc
+                : latestMeterEventAtUtc;
             eventIndices[damageEvent.EventId] = events.Count;
             events.Add(damageEvent);
 
             var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
-            if (IsAlliedMeterSource(attributedSource) &&
-                (latestAlliedEventAtUtc is null || damageEvent.SeenAtUtc > latestAlliedEventAtUtc))
-            {
-                latestAlliedEventAtUtc = damageEvent.SeenAtUtc;
-            }
-
-            if (IsAlliedMeterSource(attributedSource) &&
-                (latestAlliedMeterEventAtUtc is null || meterEventAtUtc > latestAlliedMeterEventAtUtc))
-            {
-                latestAlliedMeterEventAtUtc = meterEventAtUtc;
-            }
-
             if (IsAlliedMeterSource(attributedSource) &&
                 (meterStartedAtUtc is null || meterEventAtUtc < meterStartedAtUtc))
             {

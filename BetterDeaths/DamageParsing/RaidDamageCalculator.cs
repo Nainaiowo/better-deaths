@@ -25,13 +25,15 @@ internal static class RaidDamageCalculator
             source => GetActorKey(source.Source),
             source => new MutableAdjustment(source.Source),
             StringComparer.Ordinal);
-        var rateSamples = new Dictionary<string, RateSamples>(StringComparer.Ordinal);
+        var orderedEvents = events
+            .OrderBy(entry => entry.SeenAtUtc)
+            .ThenBy(entry => entry.PacketSequence)
+            .ThenBy(entry => entry.TargetIndex)
+            .ThenBy(entry => entry.EffectIndex)
+            .ToList();
+        var rateSamples = BuildRateSamples(orderedEvents);
 
-        foreach (var damageEvent in events
-                     .OrderBy(entry => entry.SeenAtUtc)
-                     .ThenBy(entry => entry.PacketSequence)
-                     .ThenBy(entry => entry.TargetIndex)
-                     .ThenBy(entry => entry.EffectIndex))
+        foreach (var damageEvent in orderedEvents)
         {
             var damageAmount = amountSelector?.Invoke(damageEvent) ?? damageEvent.Amount;
             if (damageEvent.Outcome != DamageEventOutcome.Damage ||
@@ -55,11 +57,9 @@ internal static class RaidDamageCalculator
             }
 
             var effects = GetEffects(damageEvent);
-            var rates = ObserveAndEstimateBaseRates(
-                damageEvent,
-                recipient,
-                effects,
-                rateSamples);
+            var rates = GetEstimatedRates(
+                rateSamples,
+                GetRateActorKey(damageEvent, recipient));
             var externalDamageBuffs = effects
                 .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier &&
                     IsExternalPlayerBuff(effect.Source, recipient))
@@ -153,7 +153,17 @@ internal static class RaidDamageCalculator
             return;
         }
 
-        var criticalMultiplier = 1.35 + rates.Critical;
+        var totalCriticalBuffRate = allCriticalBuffs.Sum(effect => effect.Amount);
+        var estimatedCriticalRate = guaranteedCritical
+            ? 1.0
+            : Math.Clamp(rates.Critical + totalCriticalBuffRate, 0.05, 1.0);
+        var criticalRate = damageEvent.IsPeriodic
+            ? ResolvePeriodicCriticalRate(damageEvent.CriticalRateLowByte, estimatedCriticalRate)
+            : estimatedCriticalRate;
+        var baseCriticalRate = guaranteedCritical
+            ? rates.Critical
+            : Math.Clamp(criticalRate - totalCriticalBuffRate, 0.05, 0.95);
+        var criticalMultiplier = 1.35 + baseCriticalRate;
         damage = RedistributeGuaranteedHitBuffDamage(
             damage,
             guaranteedCritical,
@@ -181,9 +191,6 @@ internal static class RaidDamageCalculator
             return;
         }
 
-        var criticalRate = guaranteedCritical
-            ? 1.0
-            : Math.Clamp(rates.Critical + allCriticalBuffs.Sum(effect => effect.Amount), 0.05, 1.0);
         var directHitRate = guaranteedDirectHit
             ? 1.0
             : Math.Clamp(rates.DirectHit + allDirectHitBuffs.Sum(effect => effect.Amount), 0.05, 1.0);
@@ -370,6 +377,22 @@ internal static class RaidDamageCalculator
         return (criticalPortion, directHitPortion);
     }
 
+    private static double ResolvePeriodicCriticalRate(byte? lowByte, double expectedRate)
+    {
+        if (lowByte is null)
+        {
+            return expectedRate;
+        }
+
+        var rate = lowByte.Value / 1000.0;
+        while (expectedRate - rate > 0.125)
+        {
+            rate += 0.255;
+        }
+
+        return rate is >= 0.0 and <= 1.0 ? rate : expectedRate;
+    }
+
     private static void TransferCredit(
         DamageActorIdentity provider,
         double amount,
@@ -441,39 +464,49 @@ internal static class RaidDamageCalculator
         return actor.IsPlayer || actor.IsPartyMember;
     }
 
-    private static BaseRates ObserveAndEstimateBaseRates(
-        ParsedDamageEvent damageEvent,
-        DamageActorIdentity source,
-        IReadOnlyList<RaidBuffEffect> effects,
-        IDictionary<string, RateSamples> samples)
+    private static Dictionary<string, RateSamples> BuildRateSamples(
+        IReadOnlyList<ParsedDamageEvent> events)
     {
-        if (damageEvent.IsPeriodic)
+        var samples = new Dictionary<string, RateSamples>(StringComparer.Ordinal);
+        foreach (var damageEvent in events)
         {
-            return GetEstimatedRates(samples, GetRateActorKey(damageEvent, source));
+            if (damageEvent.IsPeriodic ||
+                damageEvent.Outcome != DamageEventOutcome.Damage ||
+                damageEvent.Amount == 0)
+            {
+                continue;
+            }
+
+            var source = damageEvent.AttributedSource ?? damageEvent.Source;
+            if (!IsPlayerCombatant(source) || source.IsLimitBreak)
+            {
+                continue;
+            }
+
+            var key = GetRateActorKey(damageEvent, source);
+            if (!samples.TryGetValue(key, out var sample))
+            {
+                sample = new RateSamples();
+                samples[key] = sample;
+            }
+
+            var effects = GetEffects(damageEvent);
+            if (!RaidBuffPolicy.IsGuaranteedCritical(damageEvent) &&
+                effects.All(effect => effect.Kind != RaidBuffEffectKind.CriticalChance))
+            {
+                sample.CriticalSwings++;
+                sample.CriticalHits += damageEvent.Critical ? 1 : 0;
+            }
+
+            if (!RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent) &&
+                effects.All(effect => effect.Kind != RaidBuffEffectKind.DirectHitChance))
+            {
+                sample.DirectHitSwings++;
+                sample.DirectHits += damageEvent.DirectHit ? 1 : 0;
+            }
         }
 
-        var key = GetRateActorKey(damageEvent, source);
-        if (!samples.TryGetValue(key, out var sample))
-        {
-            sample = new RateSamples();
-            samples[key] = sample;
-        }
-
-        if (!RaidBuffPolicy.IsGuaranteedCritical(damageEvent) &&
-            effects.All(effect => effect.Kind != RaidBuffEffectKind.CriticalChance))
-        {
-            sample.CriticalSwings++;
-            sample.CriticalHits += damageEvent.Critical ? 1 : 0;
-        }
-
-        if (!RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent) &&
-            effects.All(effect => effect.Kind != RaidBuffEffectKind.DirectHitChance))
-        {
-            sample.DirectHitSwings++;
-            sample.DirectHits += damageEvent.DirectHit ? 1 : 0;
-        }
-
-        return GetEstimatedRates(samples, key);
+        return samples;
     }
 
     private static BaseRates GetEstimatedRates(

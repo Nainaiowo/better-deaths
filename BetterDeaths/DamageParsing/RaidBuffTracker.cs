@@ -11,7 +11,8 @@ internal sealed class RaidBuffTracker
 
     public void Observe(DamageStatusApplication application)
     {
-        if (!RaidBuffPolicy.IsRelevantStatus(application.StatusId))
+        if (!RaidBuffPolicy.IsRelevantStatus(application.StatusId) &&
+            !PersonalDamageModifierPolicy.IsRelevantStatus(application.StatusId))
         {
             return;
         }
@@ -73,7 +74,7 @@ internal sealed class RaidBuffTracker
                      status.Application.StatusId == statusId))
         {
             status.ExpiresAtUtc = seenAtUtc.AddSeconds(
-                RaidBuffPolicy.GetDefaultDurationSeconds(statusId));
+                GetDefaultDurationSeconds(statusId));
             status.RemovedAtUtc = null;
         }
     }
@@ -188,7 +189,7 @@ internal sealed class RaidBuffTracker
     {
         var duration = application.DurationSeconds > 0.0f
             ? application.DurationSeconds
-            : RaidBuffPolicy.GetDefaultDurationSeconds(application.StatusId);
+            : GetDefaultDurationSeconds(application.StatusId);
         return new TrackedStatus(application, application.SeenAtUtc.AddSeconds(duration));
     }
 
@@ -203,7 +204,7 @@ internal sealed class RaidBuffTracker
         status.ExpiresAtUtc = application.SeenAtUtc.AddSeconds(
             application.DurationSeconds > 0.0f
                 ? application.DurationSeconds
-                : RaidBuffPolicy.GetDefaultDurationSeconds(application.StatusId));
+                : GetDefaultDurationSeconds(application.StatusId));
         status.RemovedAtUtc = null;
     }
 
@@ -217,6 +218,13 @@ internal sealed class RaidBuffTracker
         {
             statuses.Remove(key);
         }
+    }
+
+    private static double GetDefaultDurationSeconds(uint statusId)
+    {
+        return PersonalDamageModifierPolicy.IsRelevantStatus(statusId)
+            ? PersonalDamageModifierPolicy.GetDefaultDurationSeconds(statusId)
+            : RaidBuffPolicy.GetDefaultDurationSeconds(statusId);
     }
 
     private readonly record struct StatusKey(uint TargetEntityId, uint StatusId, uint SourceEntityId);

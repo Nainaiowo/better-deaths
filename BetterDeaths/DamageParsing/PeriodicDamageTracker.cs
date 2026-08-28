@@ -185,6 +185,7 @@ internal sealed class PeriodicDamageTracker
                 damageEvent.SourceStatuses,
                 damageEvent.TargetStatuses,
                 source,
+                damageEvent.ActionCategoryId,
                 damageEvent.DamageType,
                 damageEvent.ElementType);
             if (!RaidBuffPolicy.IsGuaranteedCritical(damageEvent) &&
@@ -212,9 +213,7 @@ internal sealed class PeriodicDamageTracker
             }
 
             var amount = (double)damageEvent.Amount;
-            amount /= effects
-                .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
-                .Aggregate(1.0, (multiplier, effect) => multiplier * (1.0 + effect.Amount));
+            amount /= GetDamageMultiplier(effects);
             var potencyMultiplier = amount / damageEvent.DirectPotency.Value;
             if (!double.IsFinite(potencyMultiplier) || potencyMultiplier <= 0.0)
             {
@@ -531,6 +530,9 @@ internal sealed class PeriodicDamageTracker
                 Parameter = application.Parameter != 0
                     ? application.Parameter
                     : existingApplication.Parameter,
+                ActionCategoryId = application.ActionCategoryId != 0
+                    ? application.ActionCategoryId
+                    : existingApplication.ActionCategoryId,
                 DamageType = application.DamageType != 0
                     ? application.DamageType
                     : existingApplication.DamageType,
@@ -611,8 +613,10 @@ internal sealed class PeriodicDamageTracker
             IsPeriodic = true,
             DamageType = status?.DamageType ?? 0,
             ElementType = status?.ElementType ?? 0,
+            ActionCategoryId = status?.ActionCategoryId ?? 0,
             StatusId = statusId,
             StatusIconId = statusIconId,
+            CriticalRateLowByte = status?.CriticalRateLowByte,
             SourceStatuses = status?.SourceStatuses ?? [],
             TargetStatuses = status?.TargetStatuses ?? [],
             HasSourceStatusSnapshot = status?.HasSourceStatusSnapshot ?? false,
@@ -653,12 +657,11 @@ internal sealed class PeriodicDamageTracker
             application.SourceStatuses,
             application.TargetStatuses,
             application.Source,
+            application.ActionCategoryId,
             application.DamageType,
             application.ElementType);
         var baseAmount = application.PeriodicPotency.Value * potencySamples.Median;
-        baseAmount *= effects
-            .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
-            .Aggregate(1.0, (multiplier, effect) => multiplier * (1.0 + effect.Amount));
+        baseAmount *= GetDamageMultiplier(effects);
         baseAmount = ReconstructBaseAmount(baseAmount, application.BaseDamageLowByte);
 
         var baseRates = GetBaseRates(sourceKey);
@@ -739,13 +742,30 @@ internal sealed class PeriodicDamageTracker
         IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
         IReadOnlyList<DamageStatusSnapshot> targetStatuses,
         DamageActorIdentity recipient,
+        uint actionCategoryId,
         byte damageType,
         byte elementType)
     {
         var effects = new List<RaidBuffEffect>();
         var seen = new HashSet<(uint StatusId, RaidBuffEffectKind Kind, string SourceKey)>();
-        AddApplicableEffects(sourceStatuses, false, recipient, damageType, elementType, effects, seen);
-        AddApplicableEffects(targetStatuses, true, recipient, damageType, elementType, effects, seen);
+        AddApplicableEffects(
+            sourceStatuses,
+            false,
+            recipient,
+            actionCategoryId,
+            damageType,
+            elementType,
+            effects,
+            seen);
+        AddApplicableEffects(
+            targetStatuses,
+            true,
+            recipient,
+            actionCategoryId,
+            damageType,
+            elementType,
+            effects,
+            seen);
         return effects;
     }
 
@@ -753,6 +773,7 @@ internal sealed class PeriodicDamageTracker
         IReadOnlyList<DamageStatusSnapshot> statuses,
         bool isTargetStatus,
         DamageActorIdentity recipient,
+        uint actionCategoryId,
         byte damageType,
         byte elementType,
         ICollection<RaidBuffEffect> effects,
@@ -769,7 +790,33 @@ internal sealed class PeriodicDamageTracker
                     effects.Add(effect);
                 }
             }
+
+            if (isTargetStatus)
+            {
+                continue;
+            }
+
+            foreach (var effect in PersonalDamageModifierPolicy.GetEffects(
+                         status,
+                         actionCategoryId,
+                         damageType))
+            {
+                var sourceKey = GetActorKey(effect.Source);
+                if (seen.Add((effect.StatusId, effect.Kind, sourceKey)))
+                {
+                    effects.Add(effect);
+                }
+            }
         }
+    }
+
+    private static double GetDamageMultiplier(IReadOnlyList<RaidBuffEffect> effects)
+    {
+        return Math.Max(
+            0.01,
+            1.0 + effects
+                .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+                .Sum(effect => effect.Amount));
     }
 
     private static string GetActorKey(DamageActorIdentity actor)

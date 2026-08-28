@@ -79,7 +79,8 @@ public sealed partial class Plugin
                 damageSeenAtUtc,
                 source,
                 sourceOwner,
-                sourceStatuses);
+                sourceStatuses,
+                actionCategoryId);
             var damagePacket = new DamageActionPacket(
                 packet.Sequence,
                 damageSeenAtUtc,
@@ -120,7 +121,8 @@ public sealed partial class Plugin
         DateTime damageSeenAtUtc,
         DamageActorIdentity source,
         DamageActorIdentity? sourceOwner,
-        IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
+        uint actionCategoryId)
     {
         const byte applyStatusToTarget = 14;
         const byte applyStatusToSource = 15;
@@ -168,6 +170,7 @@ public sealed partial class Plugin
                             packet.SourceSnapshot ?? CaptureRawCombatSnapshot(packet.CasterEntityId)),
                     // Variable-strength raid buffs store their applied percentage in Param0.
                     Parameter = (ushort)effect.Param0,
+                    ActionCategoryId = actionCategoryId,
                     DamageType = actionDamageProfile.DamageType,
                     ElementType = actionDamageProfile.ElementType,
                     SourceStatuses = sourceStatuses,
@@ -190,7 +193,9 @@ public sealed partial class Plugin
 
         var identities = new Dictionary<uint, DamageActorIdentity>();
         var statuses = new List<DamageStatusSnapshot>();
-        foreach (var status in snapshot.Statuses.Where(status => RaidBuffPolicy.IsRelevantStatus(status.StatusId)))
+        foreach (var status in snapshot.Statuses.Where(status =>
+                     RaidBuffPolicy.IsRelevantStatus(status.StatusId) ||
+                     PersonalDamageModifierPolicy.IsRelevantStatus(status.StatusId)))
         {
             if (!identities.TryGetValue(status.SourceId, out var statusSource))
             {

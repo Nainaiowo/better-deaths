@@ -366,7 +366,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void ExplicitCombatLifecycleStopsLiveDpsAtTheLatestAlliedEvent()
+    public void ExplicitCombatLifecycleStopsLiveDpsAtTheLatestDamageEvent()
     {
         var module = new DamageParsingModule();
         module.Process(
@@ -415,7 +415,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void EncounterDurationEndsAtLatestAlliedOutgoingEvent()
+    public void EncounterDurationEndsAtLatestCombatDamageEvent()
     {
         var module = new DamageParsingModule();
         module.Process(CreatePacket(
@@ -437,8 +437,8 @@ public sealed class DamageParsingTests
         var ended = Assert.IsType<DamageEncounterSnapshot>(
             module.EndEncounter(SeenAtUtc.AddSeconds(10), "Combat ended"));
 
-        Assert.Equal(SeenAtUtc.AddSeconds(5), ended.EndedAtUtc);
-        Assert.Equal(5.0, ended.DurationSeconds);
+        Assert.Equal(SeenAtUtc.AddSeconds(7), ended.EndedAtUtc);
+        Assert.Equal(7.0, ended.DurationSeconds);
         Assert.Equal(1750ul, ended.TotalDamage);
     }
 
