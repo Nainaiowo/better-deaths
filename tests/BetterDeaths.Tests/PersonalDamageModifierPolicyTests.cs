@@ -28,6 +28,12 @@ public sealed class PersonalDamageModifierPolicyTests
         false,
         0);
 
+    private static readonly DamageActorIdentity ReferenceDealer = Dealer with
+    {
+        EntityId = 0x1002,
+        Name = "Reference dealer",
+    };
+
     public static TheoryData<uint, double> UniversalModifiers => new()
     {
         { 0x31, 0.15 },
@@ -90,11 +96,16 @@ public sealed class PersonalDamageModifierPolicyTests
         var module = new DamageParsingModule();
         var lanceCharge = Status(0x748);
         module.Process(DirectPacket(1_100, [lanceCharge]));
+        module.Process(DirectPacket(1_000, [], ReferenceDealer, 2));
         module.ObserveStatus(PeriodicApplication([lanceCharge]));
+        module.ObserveStatus(PeriodicApplication([], ReferenceDealer, 0x501));
 
-        var damageEvent = Assert.Single(ProcessPeriodicTick(module));
+        var damageEvents = ProcessPeriodicTick(module);
+        var damageEvent = damageEvents.Single(entry =>
+            entry.AttributedSource?.EntityId == Dealer.EntityId);
 
-        Assert.Equal(239.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(314.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(600.0, damageEvents.Sum(entry => entry.EffectiveMeterAmount));
         Assert.Equal(3u, damageEvent.ActionCategoryId);
     }
 
@@ -103,15 +114,20 @@ public sealed class PersonalDamageModifierPolicyTests
     {
         var module = new DamageParsingModule();
         module.Process(DirectPacket(1_000, []));
+        module.Process(DirectPacket(1_000, [], ReferenceDealer, 2));
         module.ObserveStatus(PeriodicApplication([
             Status(0x748),
             Status(0x77A),
             Status(0xF04),
         ]));
+        module.ObserveStatus(PeriodicApplication([], ReferenceDealer, 0x501));
 
-        var damageEvent = Assert.Single(ProcessPeriodicTick(module));
+        var damageEvents = ProcessPeriodicTick(module);
+        var damageEvent = damageEvents.Single(entry =>
+            entry.AttributedSource?.EntityId == Dealer.EntityId);
 
-        Assert.Equal(303.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(349.0, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(600.0, damageEvents.Sum(entry => entry.EffectiveMeterAmount));
     }
 
     [Fact]
@@ -123,20 +139,25 @@ public sealed class PersonalDamageModifierPolicyTests
             recipient: Dealer));
     }
 
-    private static DamageStatusSnapshot Status(uint statusId)
+    private static DamageStatusSnapshot Status(
+        uint statusId,
+        DamageActorIdentity? source = null)
     {
-        return new DamageStatusSnapshot(statusId, Dealer, 0, 20.0f);
+        return new DamageStatusSnapshot(statusId, source ?? Dealer, 0, 20.0f);
     }
 
     private static DamageActionPacket DirectPacket(
         uint amount,
-        IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
+        DamageActorIdentity? source = null,
+        long packetSequence = 1)
     {
+        source ??= Dealer;
         return new DamageActionPacket(
-            1,
+            packetSequence,
             SeenAtUtc,
-            1,
-            Dealer,
+            (uint)packetSequence,
+            source,
             100,
             "Direct action",
             [new DamageActionTarget(
@@ -153,12 +174,15 @@ public sealed class PersonalDamageModifierPolicyTests
     }
 
     private static DamageStatusApplication PeriodicApplication(
-        IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
+        DamageActorIdentity? source = null,
+        uint statusId = 0x500)
     {
+        source ??= Dealer;
         return new DamageStatusApplication(
             Target,
-            Dealer,
-            0x500,
+            source,
+            statusId,
             "Periodic effect",
             0,
             200,

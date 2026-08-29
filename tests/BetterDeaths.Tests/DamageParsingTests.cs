@@ -1059,20 +1059,22 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void SimulatesMeterDotDamageWithoutChangingTheRawPacketTotal()
+    public void CircleOfScornKeepsTheObservedMeterTotalWhenItsEstimateDiffers()
     {
+        var paladin = Source with { ClassJobId = 19 };
         var module = new DamageParsingModule();
         module.Process(CreatePacket(
-            new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)) with
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+            source: paladin) with
         {
             DirectPotency = 100,
             CanCalibratePotency = true,
         });
-        module.ObserveStatus(CreatePeriodicStatus(Source, 900, "Burn") with
+        module.ObserveStatus(CreatePeriodicStatus(paladin, 0x00F8, "Circle of Scorn") with
         {
             SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
-            PeriodicPotency = 20,
-            BaseDamageLowByte = 200,
+            PeriodicPotency = 30,
+            BaseDamageLowByte = 44,
             CriticalRateLowByte = 150,
         });
 
@@ -1082,17 +1084,18 @@ public sealed class DamageParsingTests
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(600u, periodicEvent.Amount);
-        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(600.0, periodicEvent.EffectiveMeterAmount);
         Assert.Equal(1600ul, snapshot.TotalDamage);
-        Assert.Equal(1218.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(1600.0, snapshot.EffectiveMeterDamage);
         Assert.Equal(1600ul, Assert.Single(snapshot.Sources).TotalDamage);
-        Assert.Equal(1218.0, Assert.Single(snapshot.Sources).EffectiveMeterDamage);
+        Assert.Equal(1600.0, Assert.Single(snapshot.Sources).EffectiveMeterDamage);
     }
 
     [Fact]
     public void OverheatedMachinistPotencyDoesNotInflateTheDotBaseline()
     {
         var machinist = Source with { ClassJobId = 31 };
+        var referenceSource = Source with { EntityId = 0x1002, Name = "Reference source" };
         var module = new DamageParsingModule();
         module.ObserveStatus(new DamageStatusApplication(
             machinist,
@@ -1118,24 +1121,43 @@ public sealed class DamageParsingTests
             SourceStatuses = [],
             HasSourceStatusSnapshot = false,
         });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+            packetSequence: 2,
+            actionId: 101,
+            actionName: "Reference action",
+            source: referenceSource) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
         module.ObserveStatus(CreatePeriodicStatus(machinist, 0x74A, "Bioblaster") with
         {
             SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
             PeriodicPotency = 50,
             CriticalRateLowByte = 150,
         });
+        module.ObserveStatus(CreatePeriodicStatus(referenceSource, 900, "Reference DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 50,
+            CriticalRateLowByte = 150,
+        });
 
-        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+        var periodicEvents = ProcessPeriodicTick(
             module,
-            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+            CreatePeriodicTick(1200, 3, SeenAtUtc.AddSeconds(3)));
+        var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x74A);
 
-        Assert.Equal(544.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(600.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
     }
 
     [Fact]
     public void BlackMageElementalStateDoesNotTeachTheSharedDotBaseline()
     {
         var blackMage = Source with { ClassJobId = 25 };
+        var referenceSource = Source with { EntityId = 0x1002, Name = "Reference source" };
         var module = new DamageParsingModule();
         module.Process(CreatePacket(
             [new DamageActionEffect(0, 3, 0, 0, 0, 0, 5400)],
@@ -1157,22 +1179,41 @@ public sealed class DamageParsingTests
             DirectPotency = 890,
             CanCalibratePotency = true,
         });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(1),
+            actionId: 101,
+            actionName: "Reference action",
+            source: referenceSource) with
+        {
+            DirectPotency = 100,
+            CanCalibratePotency = true,
+        });
         module.ObserveStatus(CreatePeriodicStatus(blackMage, 0xF1F, "High Thunder") with
         {
             SeenAtUtc = SeenAtUtc.AddSeconds(1.1),
             PeriodicPotency = 60,
             CriticalRateLowByte = 150,
         });
+        module.ObserveStatus(CreatePeriodicStatus(referenceSource, 900, "Reference DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddSeconds(1.1),
+            PeriodicPotency = 60,
+            CriticalRateLowByte = 150,
+        });
 
-        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+        var periodicEvents = ProcessPeriodicTick(
             module,
-            CreatePeriodicTick(900, 3, SeenAtUtc.AddSeconds(4))));
+            CreatePeriodicTick(1800, 4, SeenAtUtc.AddSeconds(4)));
+        var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0xF1F);
 
-        Assert.Equal(653.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(900.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(1800.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
     }
 
     [Fact]
-    public void SimulatesEachActiveDotInsteadOfForcingTheirMeterValuesToTheCombinedTick()
+    public void BardDotSharesConserveTheObservedCombinedTick()
     {
         var module = new DamageParsingModule();
         module.Process(CreatePacket(
@@ -1181,18 +1222,18 @@ public sealed class DamageParsingTests
             DirectPotency = 100,
             CanCalibratePotency = true,
         });
-        module.ObserveStatus(CreatePeriodicStatus(Source, 900, "First DoT") with
-        {
-            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
-            PeriodicPotency = 25,
-            BaseDamageLowByte = 250,
-            CriticalRateLowByte = 150,
-        });
-        module.ObserveStatus(CreatePeriodicStatus(Source, 901, "Second DoT") with
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x04B0, "Caustic Bite") with
         {
             SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
             PeriodicPotency = 20,
             BaseDamageLowByte = 200,
+            CriticalRateLowByte = 150,
+        });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 0x04B1, "Stormbite") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
+            PeriodicPotency = 25,
+            BaseDamageLowByte = 250,
             CriticalRateLowByte = 150,
         });
 
@@ -1202,9 +1243,11 @@ public sealed class DamageParsingTests
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(700u, periodicEvents.Aggregate(0u, (total, entry) => total + entry.Amount));
-        Assert.Equal(490.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(700.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(311u, periodicEvents.Single(entry => entry.StatusId == 0x04B0).Amount);
+        Assert.Equal(389u, periodicEvents.Single(entry => entry.StatusId == 0x04B1).Amount);
         Assert.Equal(1700ul, snapshot.TotalDamage);
-        Assert.Equal(1490.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(1700.0, snapshot.EffectiveMeterDamage);
     }
 
     [Fact]
@@ -1239,12 +1282,21 @@ public sealed class DamageParsingTests
             SourceStatuses = [],
             HasSourceStatusSnapshot = true,
         });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 901, "Reference DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(300),
+            PeriodicPotency = 40,
+            BaseDamageLowByte = 144,
+            CriticalRateLowByte = 150,
+        });
 
-        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+        var periodicEvents = ProcessPeriodicTick(
             module,
-            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(3))));
+            CreatePeriodicTick(1200, 2, SeenAtUtc.AddSeconds(3)));
+        var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x4B0);
 
-        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(401.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
         Assert.Empty(periodicEvent.SourceStatuses);
         Assert.True(periodicEvent.HasSourceStatusSnapshot);
     }
@@ -1281,12 +1333,21 @@ public sealed class DamageParsingTests
             SourceStatuses = [],
             HasSourceStatusSnapshot = true,
         });
+        module.ObserveStatus(CreatePeriodicStatus(Source, 901, "Reference DoT") with
+        {
+            SeenAtUtc = SeenAtUtc.AddMilliseconds(300),
+            PeriodicPotency = 40,
+            BaseDamageLowByte = 144,
+            CriticalRateLowByte = 150,
+        });
 
-        var periodicEvent = Assert.Single(ProcessPeriodicTick(
+        var periodicEvents = ProcessPeriodicTick(
             module,
-            CreatePeriodicTick(600, 2, SeenAtUtc.AddSeconds(12))));
+            CreatePeriodicTick(1200, 2, SeenAtUtc.AddSeconds(12)));
+        var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x4B0);
 
-        Assert.Equal(218.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(401.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
         Assert.Empty(periodicEvent.SourceStatuses);
         Assert.True(periodicEvent.HasSourceStatusSnapshot);
     }
@@ -1525,7 +1586,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void ScalesSimulatedDotDamageOnlyWhenHpProvesOverkill()
+    public void ScalesObservedDotDamageOnlyWhenHpProvesOverkill()
     {
         var module = new DamageParsingModule();
         module.Process(CreatePacket(
@@ -1554,7 +1615,7 @@ public sealed class DamageParsingTests
         var periodicEvent = Assert.Single(ProcessPeriodicTick(module, tick));
 
         Assert.Equal(600u, periodicEvent.Amount);
-        Assert.Equal(218.0 / 6.0, periodicEvent.EffectiveMeterAmount, 6);
+        Assert.Equal(100.0, periodicEvent.EffectiveMeterAmount, 6);
         Assert.Equal(500.0, periodicEvent.OverkillDamage);
         Assert.Equal(DamageResolutionQuality.Resolved, periodicEvent.ResolutionQuality);
     }

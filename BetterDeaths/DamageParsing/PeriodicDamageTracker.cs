@@ -323,13 +323,12 @@ internal sealed class PeriodicDamageTracker
             candidate.LastTickAtUtc = tick.SeenAtUtc;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
             Learn(candidate, tick.Amount);
-            var meterAmount = EstimateMeterTick(candidate) ?? tick.Amount;
             return [CreateEvent(
                 tick,
                 candidate.Application,
                 candidate.Application.Source,
                 tick.Amount,
-                meterAmount,
+                tick.Amount,
                 DamageAttributionQuality.Exact,
                 0)];
         }
@@ -346,15 +345,12 @@ internal sealed class PeriodicDamageTracker
 
             candidate.LastTickAtUtc = tick.SeenAtUtc;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
-            var learnedAmount = GetLearnedWeight(candidate);
-            var meterAmount = EstimateMeterTick(candidate) ??
-                (learnedAmount > 0.0 ? learnedAmount : allocations[index]);
             events.Add(CreateEvent(
                 tick,
                 candidate.Application,
                 candidate.Application.Source,
                 allocations[index],
-                meterAmount,
+                allocations[index],
                 DamageAttributionQuality.Estimated,
                 index));
         }
@@ -413,7 +409,7 @@ internal sealed class PeriodicDamageTracker
     private uint[] Allocate(uint amount, IReadOnlyList<TrackedStatus> candidates)
     {
         var weights = candidates
-            .Select(GetLearnedWeight)
+            .Select(GetAllocationWeight)
             .ToArray();
         if (weights.All(weight => weight <= 0.0))
         {
@@ -456,6 +452,14 @@ internal sealed class PeriodicDamageTracker
         }
 
         return allocations;
+    }
+
+    private double GetAllocationWeight(TrackedStatus status)
+    {
+        var learnedWeight = GetLearnedWeight(status);
+        return learnedWeight > 0.0
+            ? learnedWeight
+            : EstimateTickWeight(status) ?? 0.0;
     }
 
     private void Learn(TrackedStatus status, uint amount)
@@ -664,7 +668,7 @@ internal sealed class PeriodicDamageTracker
         };
     }
 
-    private double? EstimateMeterTick(TrackedStatus status)
+    private double? EstimateTickWeight(TrackedStatus status)
     {
         var application = status.Application;
         if (application.PeriodicPotency is not > 0.0)
