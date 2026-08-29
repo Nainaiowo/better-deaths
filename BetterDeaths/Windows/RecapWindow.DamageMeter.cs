@@ -339,7 +339,6 @@ public sealed partial class RecapWindow
     {
         return column switch
         {
-            DamageMeterColumn.Rank => "Rank",
             DamageMeterColumn.JobIcon => "Job icon",
             DamageMeterColumn.PlayerName => "Player",
             DamageMeterColumn.DamagePercent => "Damage %",
@@ -706,9 +705,8 @@ public sealed partial class RecapWindow
 
         DrawCenteredTableHeader(["", .. columns.Select(GetDamageMeterColumnHeader)]);
 
-        for (var index = 0; index < sources.Count; index++)
+        foreach (var source in sources)
         {
-            var source = sources[index];
             var sourceKey = GetDamageMeterSourceKey(source.Source);
             var expansionKey = $"{idSuffix}:{sourceKey}";
             var expanded = expandedDamageMeterSources.Contains(expansionKey);
@@ -716,7 +714,6 @@ public sealed partial class RecapWindow
                 snapshot,
                 source,
                 visibleTotal,
-                index + 1,
                 expansionKey,
                 expanded,
                 columns);
@@ -738,7 +735,6 @@ public sealed partial class RecapWindow
         DamageEncounterSnapshot snapshot,
         DamageSourceSummary source,
         double visibleTotal,
-        int rank,
         string expansionKey,
         bool expanded,
         IReadOnlyList<DamageMeterColumn> columns)
@@ -758,7 +754,7 @@ public sealed partial class RecapWindow
         foreach (var column in columns)
         {
             ImGui.TableNextColumn();
-            DrawDamageMeterSourceColumn(snapshot, source, visibleTotal, rank, column, iconSize);
+            DrawDamageMeterSourceColumn(snapshot, source, visibleTotal, column, iconSize);
         }
     }
 
@@ -783,16 +779,12 @@ public sealed partial class RecapWindow
         DamageEncounterSnapshot snapshot,
         DamageSourceSummary source,
         double visibleTotal,
-        int rank,
         DamageMeterColumn column,
         float iconSize)
     {
         var directDamageHits = Math.Max(0, source.Hits - source.PeriodicHits);
         switch (column)
         {
-            case DamageMeterColumn.Rank:
-                DrawCenteredText(rank.ToString());
-                break;
             case DamageMeterColumn.JobIcon:
                 var iconId = GetClassJobIconId(source.Source.ClassJobId);
                 if (iconId != 0)
@@ -881,7 +873,6 @@ public sealed partial class RecapWindow
         var muted = ModernMutedTextColor;
         switch (column)
         {
-            case DamageMeterColumn.Rank:
             case DamageMeterColumn.Deaths:
                 DrawCenteredText("-", muted);
                 break;
@@ -994,7 +985,6 @@ public sealed partial class RecapWindow
         var concise = configuration.DamageMeterWidgetDisplayMode == WidgetDisplayMode.Concise;
         return column switch
         {
-            DamageMeterColumn.Rank => concise ? 34.0f : 44.0f,
             DamageMeterColumn.JobIcon => concise ? 38.0f : 44.0f,
             DamageMeterColumn.PlayerName => concise ? 92.0f : 145.0f,
             DamageMeterColumn.DamagePercent => concise ? 82.0f : 94.0f,

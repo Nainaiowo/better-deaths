@@ -31,6 +31,28 @@ public sealed class DamageMeterColumnPolicyTests
     }
 
     [Fact]
+    public void NormalizeRemovesTheLegacyRankColumnWithoutRenumberingSavedColumns()
+    {
+        var normalized = DamageMeterColumnPolicy.Normalize(
+        [
+            (DamageMeterColumn)0,
+            DamageMeterColumn.JobIcon,
+            DamageMeterColumn.PlayerName,
+            DamageMeterColumn.DamagePerSecond,
+        ]);
+
+        Assert.Equal(
+        [
+            DamageMeterColumn.JobIcon,
+            DamageMeterColumn.PlayerName,
+            DamageMeterColumn.DamagePerSecond,
+        ], normalized);
+        Assert.Equal(1, (int)DamageMeterColumn.JobIcon);
+        Assert.Equal(2, (int)DamageMeterColumn.PlayerName);
+        Assert.Equal(4, (int)DamageMeterColumn.DamagePerSecond);
+    }
+
+    [Fact]
     public void MoveReordersAnExistingColumn()
     {
         var columns = new List<DamageMeterColumn>
@@ -59,14 +81,14 @@ public sealed class DamageMeterColumnPolicyTests
     {
         List<DamageMeterColumn> columns =
         [
-            DamageMeterColumn.Rank,
+            DamageMeterColumn.JobIcon,
             DamageMeterColumn.PlayerName,
             DamageMeterColumn.TotalDamage,
         ];
 
         var changed = DamageMeterColumnPolicy.Move(
             columns,
-            DamageMeterColumn.Rank,
+            DamageMeterColumn.JobIcon,
             DamageMeterColumn.TotalDamage);
 
         Assert.True(changed);
@@ -74,7 +96,7 @@ public sealed class DamageMeterColumnPolicyTests
         [
             DamageMeterColumn.PlayerName,
             DamageMeterColumn.TotalDamage,
-            DamageMeterColumn.Rank,
+            DamageMeterColumn.JobIcon,
         ], columns);
     }
 

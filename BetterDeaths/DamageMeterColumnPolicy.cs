@@ -5,29 +5,27 @@ using System.Collections.Generic;
 
 public enum DamageMeterColumn
 {
-    Rank,
-    JobIcon,
-    PlayerName,
-    DamagePercent,
-    DamagePerSecond,
-    RaidDamagePerSecond,
-    CriticalHitPercent,
-    DirectHitPercent,
-    CriticalDirectHitPercent,
-    MaxHitAmount,
-    MaxHitName,
-    TotalDamage,
-    Deaths,
-    HitCount,
-    NeutralDamagePerSecond,
-    AdjustedDamagePerSecond,
+    JobIcon = 1,
+    PlayerName = 2,
+    DamagePercent = 3,
+    DamagePerSecond = 4,
+    RaidDamagePerSecond = 5,
+    CriticalHitPercent = 6,
+    DirectHitPercent = 7,
+    CriticalDirectHitPercent = 8,
+    MaxHitAmount = 9,
+    MaxHitName = 10,
+    TotalDamage = 11,
+    Deaths = 12,
+    HitCount = 13,
+    NeutralDamagePerSecond = 14,
+    AdjustedDamagePerSecond = 15,
 }
 
 internal static class DamageMeterColumnPolicy
 {
     private static readonly DamageMeterColumn[] DefaultColumns =
     [
-        DamageMeterColumn.Rank,
         DamageMeterColumn.JobIcon,
         DamageMeterColumn.PlayerName,
         DamageMeterColumn.TotalDamage,
