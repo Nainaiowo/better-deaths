@@ -197,6 +197,34 @@ public sealed partial class Plugin
         return profile;
     }
 
+    private bool IsOffensiveDamageMeterCast(uint actionId)
+    {
+        if (offensiveDamageMeterCastCache.TryGetValue(actionId, out var cached))
+        {
+            return cached;
+        }
+
+        var isOffensive = false;
+        try
+        {
+            var action = DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId);
+            if (action is not null && action.Value.CanTargetHostile)
+            {
+                var potency = GetActionPotencyProfile(actionId);
+                isOffensive = potency.DirectPotency is > 0.0 ||
+                    potency.PeriodicPotency is > 0.0 ||
+                    action.Value.AttackType.RowId != 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not classify damage-meter cast {ActionId}.", actionId);
+        }
+
+        offensiveDamageMeterCastCache[actionId] = isOffensive;
+        return isOffensive;
+    }
+
     private string GetStatusName(uint statusId)
     {
         if (statusNameCache.TryGetValue(statusId, out var cachedName))

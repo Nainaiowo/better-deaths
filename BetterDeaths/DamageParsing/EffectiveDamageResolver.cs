@@ -133,7 +133,7 @@ internal sealed class EffectiveDamageResolver
             effective = 0;
             quality = DamageResolutionQuality.KnownZeroHp;
         }
-        else if (before is not null && after is not null && after.CurrentHp < before.CurrentHp)
+        else if (before is not null && after is { CurrentHp: 0 } && before.CurrentHp > 0)
         {
             effective = Math.Min(tick.Amount, before.CurrentHp - after.CurrentHp);
             quality = DamageResolutionQuality.Resolved;

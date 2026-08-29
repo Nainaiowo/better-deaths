@@ -219,6 +219,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int CombatLogEventRetentionSeconds = LeadUpTimingPolicy.LiveRetentionSeconds;
     private const int RawActionEffectRetentionSeconds = 5;
     private const int RawCombatLogRetentionSeconds = 10;
+    private static readonly TimeSpan DamageMeterCastPollInterval = TimeSpan.FromMilliseconds(100);
     private const int MaxRawActionEffectPackets = 256;
     private const int MaxRawCombatLogMessages = 256;
     private const int MaxRawEffectResultPackets = 256;
@@ -375,6 +376,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, uint> actionCategoryCache = new();
     private readonly Dictionary<uint, (byte DamageType, byte ElementType)> actionDamageProfileCache = new();
     private readonly Dictionary<uint, DamageParsing.ActionPotencyProfile> actionPotencyProfileCache = new();
+    private readonly Dictionary<uint, bool> offensiveDamageMeterCastCache = new();
     private readonly Dictionary<uint, string> statusNameCache = new();
     private readonly Dictionary<uint, uint> statusIconCache = new();
     private readonly Dictionary<uint, bool> periodicDamageStatusCache = new();
@@ -412,6 +414,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private long nextResolvedCombatEventOrdinal = 1;
     private DateTime? pendingDeathRecapLinksExpiresAtUtc;
     private DateTime nextQueuedChatMessageAtUtc = DateTime.MinValue;
+    private DateTime lastDamageMeterCastPollAtUtc = DateTime.MinValue;
     private DateTime nextPluginUpdateCheckAtUtc = DateTime.MinValue;
     private DateTime nextLiveCapturePruneAtUtc = DateTime.MinValue;
     private DateTime? lastPluginUpdateCheckAtUtc;
@@ -793,6 +796,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 ResolveRawCombatQueues(now);
             }
 
+            ObserveDamageMeterOffensiveCasts(now);
             UpdateCombatTimerState(now);
             damageParsingModule.SetCombatActive(IsEffectiveInCombat(), now);
             damageParsingModule.FlushPendingPeriodicTicks(now);

@@ -8,6 +8,7 @@ internal sealed class DamageParsingModule
 {
     private static readonly TimeSpan DeferredPeriodicTickDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan PreEncounterRetention = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan OffensiveCastRetention = TimeSpan.FromSeconds(5);
     private readonly object syncRoot = new();
     private readonly DirectDamageParser parser = new();
     private readonly EffectiveDamageResolver effectiveDamageResolver = new();
@@ -24,7 +25,8 @@ internal sealed class DamageParsingModule
     private DateTime? startedAtUtc;
     private DateTime? latestEventAtUtc;
     private DateTime? meterStartedAtUtc;
-    private DateTime? latestMeterEventAtUtc;
+    private DateTime? latestMeterDamageAtUtc;
+    private DateTime? pendingOffensiveCastStartedAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
@@ -165,6 +167,24 @@ internal sealed class DamageParsingModule
         }
     }
 
+    public void ObserveOffensiveCast(DateTime? castStartedAtUtc, DateTime observedAtUtc)
+    {
+        lock (syncRoot)
+        {
+            PrunePendingOffensiveCast(observedAtUtc);
+            if (meterStartedAtUtc is not null ||
+                castStartedAtUtc is null ||
+                castStartedAtUtc.Value > observedAtUtc ||
+                observedAtUtc - castStartedAtUtc.Value > OffensiveCastRetention)
+            {
+                pendingOffensiveCastStartedAtUtc = null;
+                return;
+            }
+
+            pendingOffensiveCastStartedAtUtc = castStartedAtUtc.Value;
+        }
+    }
+
     public void SetCombatActive(bool active, DateTime seenAtUtc)
     {
         lock (syncRoot)
@@ -219,7 +239,7 @@ internal sealed class DamageParsingModule
             }
 
             var snapshotAtUtc = latestEventAtUtc.Value;
-            var meterSnapshotAtUtc = latestMeterEventAtUtc ?? snapshotAtUtc;
+            var meterSnapshotAtUtc = latestMeterDamageAtUtc ?? snapshotAtUtc;
             var timeBucket = meterSnapshotAtUtc.Ticks / TimeSpan.TicksPerSecond;
             if (cachedCurrentEncounter is not null &&
                 cachedCurrentEncounterRevision == mutationRevision &&
@@ -317,10 +337,10 @@ internal sealed class DamageParsingModule
         return snapshot with
         {
             MeterStartedAtUtc = meterStartedAtUtc,
-            MeterSnapshotAtUtc = latestMeterEventAtUtc,
+            MeterSnapshotAtUtc = latestMeterDamageAtUtc,
             MeterEndedAtUtc = endedAtUtc is null
                 ? null
-                : latestMeterEventAtUtc,
+                : latestMeterDamageAtUtc,
             MeterDamage = sourceSnapshots.Sum(source => source.EffectiveMeterDamage),
             EstimatedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.EstimatedDamage),
             UnattributedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.UnattributedDamage),
@@ -407,7 +427,8 @@ internal sealed class DamageParsingModule
         startedAtUtc = null;
         latestEventAtUtc = null;
         meterStartedAtUtc = null;
-        latestMeterEventAtUtc = null;
+        latestMeterDamageAtUtc = null;
+        pendingOffensiveCastStartedAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
         packetCount = 0;
@@ -525,6 +546,7 @@ internal sealed class DamageParsingModule
 
     private void PrunePreEncounterState(DateTime nowUtc)
     {
+        PrunePendingOffensiveCast(nowUtc);
         if (!usesExplicitCombatLifecycle || startedAtUtc is not null || combatActive)
         {
             return;
@@ -544,6 +566,15 @@ internal sealed class DamageParsingModule
         effectiveDamageResolver.Clear();
         raidBuffTracker.Clear();
         latestPreEncounterActivityAtUtc = null;
+    }
+
+    private void PrunePendingOffensiveCast(DateTime nowUtc)
+    {
+        if (pendingOffensiveCastStartedAtUtc is { } castStartedAtUtc &&
+            nowUtc - castStartedAtUtc > OffensiveCastRetention)
+        {
+            pendingOffensiveCastStartedAtUtc = null;
+        }
     }
 
     private void MarkPreEncounterActivity(DateTime seenAtUtc)
@@ -590,18 +621,22 @@ internal sealed class DamageParsingModule
             latestEventAtUtc = latestEventAtUtc is null || damageEvent.SeenAtUtc > latestEventAtUtc
                 ? damageEvent.SeenAtUtc
                 : latestEventAtUtc;
-            var meterEventAtUtc = damageEvent.CapturedAtUtc ?? damageEvent.SeenAtUtc;
-            latestMeterEventAtUtc = latestMeterEventAtUtc is null || meterEventAtUtc > latestMeterEventAtUtc
-                ? meterEventAtUtc
-                : latestMeterEventAtUtc;
             eventIndices[damageEvent.EventId] = events.Count;
             events.Add(damageEvent);
 
             var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
-            if (IsAlliedMeterSource(attributedSource) &&
-                (meterStartedAtUtc is null || meterEventAtUtc < meterStartedAtUtc))
+            if (IsMeterDamage(damageEvent, attributedSource))
             {
-                meterStartedAtUtc = meterEventAtUtc;
+                var meterEventAtUtc = damageEvent.SeenAtUtc;
+                latestMeterDamageAtUtc = latestMeterDamageAtUtc is null ||
+                    meterEventAtUtc > latestMeterDamageAtUtc
+                        ? meterEventAtUtc
+                        : latestMeterDamageAtUtc;
+                if (meterStartedAtUtc is null)
+                {
+                    meterStartedAtUtc = ResolveMeterStart(damageEvent, meterEventAtUtc);
+                    pendingOffensiveCastStartedAtUtc = null;
+                }
             }
 
             var sourceKey = GetActorKey(attributedSource);
@@ -770,6 +805,35 @@ internal sealed class DamageParsingModule
     private static bool IsAlliedMeterSource(DamageActorIdentity source)
     {
         return source.IsPartyMember || source.IsPlayer || source.IsLimitBreak;
+    }
+
+    private static bool IsMeterDamage(ParsedDamageEvent damageEvent, DamageActorIdentity attributedSource)
+    {
+        return damageEvent.Outcome == DamageEventOutcome.Damage &&
+            damageEvent.Amount > 0 &&
+            IsAlliedMeterSource(attributedSource);
+    }
+
+    private DateTime ResolveMeterStart(ParsedDamageEvent damageEvent, DateTime meterEventAtUtc)
+    {
+        if (pendingOffensiveCastStartedAtUtc is not { } castStartedAtUtc)
+        {
+            return meterEventAtUtc;
+        }
+
+        if (damageEvent.CapturedAtUtc is { } capturedAtUtc)
+        {
+            var castLead = capturedAtUtc - castStartedAtUtc;
+            if (castLead >= TimeSpan.Zero && castLead <= OffensiveCastRetention)
+            {
+                return meterEventAtUtc - castLead;
+            }
+        }
+
+        return castStartedAtUtc <= meterEventAtUtc &&
+            meterEventAtUtc - castStartedAtUtc <= OffensiveCastRetention
+                ? castStartedAtUtc
+                : meterEventAtUtc;
     }
 
     private sealed record PendingPeriodicTick(

@@ -12,6 +12,46 @@ using System.Linq;
 
 public sealed partial class Plugin
 {
+    private void ObserveDamageMeterOffensiveCasts(DateTime observedAtUtc)
+    {
+        if (!ShouldAcceptDamageParserCapture(observedAtUtc) ||
+            observedAtUtc - lastDamageMeterCastPollAtUtc < DamageMeterCastPollInterval)
+        {
+            return;
+        }
+
+        lastDamageMeterCastPollAtUtc = observedAtUtc;
+        try
+        {
+            DateTime? earliestCastStartedAtUtc = null;
+            foreach (var gameObject in ObjectTable)
+            {
+                if (gameObject is not IPlayerCharacter player ||
+                    !player.IsCasting ||
+                    player.CastActionId == 0 ||
+                    !IsOffensiveDamageMeterCast(player.CastActionId))
+                {
+                    continue;
+                }
+
+                var elapsedCastSeconds = float.IsFinite(player.CurrentCastTime)
+                    ? MathF.Max(0.0f, player.CurrentCastTime)
+                    : 0.0f;
+                var castStartedAtUtc = observedAtUtc.AddSeconds(-elapsedCastSeconds);
+                earliestCastStartedAtUtc = earliestCastStartedAtUtc is null ||
+                    castStartedAtUtc < earliestCastStartedAtUtc.Value
+                        ? castStartedAtUtc
+                        : earliestCastStartedAtUtc;
+            }
+
+            damageParsingModule.ObserveOffensiveCast(earliestCastStartedAtUtc, observedAtUtc);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not observe damage-meter cast starts.");
+        }
+    }
+
     private void RecordDamageMeterDeath(PartyMemberSnapshot member)
     {
         damageParsingModule.RecordDeath(new DamageActorIdentity(
