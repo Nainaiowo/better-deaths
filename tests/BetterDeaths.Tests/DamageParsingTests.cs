@@ -536,6 +536,57 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void ExcludesFriendlyTargetDamageFromMeterTotals()
+    {
+        var module = new DamageParsingModule();
+        var friendlyTarget = Target with
+        {
+            Name = "Friendly target",
+            IsPlayer = true,
+            IsPartyMember = true,
+        };
+        var packet = CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)) with
+        {
+            Targets =
+            [
+                new DamageActionTarget(
+                    0,
+                    friendlyTarget,
+                    [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)]),
+            ],
+        };
+
+        var damageEvent = Assert.Single(module.Process(packet));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources);
+
+        Assert.Equal(DamageMeterEligibility.FriendlyTarget, damageEvent.MeterEligibility);
+        Assert.Equal(500ul, source.TotalDamage);
+        Assert.Equal(0.0, source.EffectiveMeterDamage);
+        Assert.Equal(0.0, Assert.Single(snapshot.Targets).EffectiveMeterDamage);
+        Assert.Equal(0.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(500.0, Assert.Single(snapshot.Diagnostics.Eligibility).RawDamage);
+    }
+
+    [Fact]
+    public void ClassifiesNonAlliedSourcesWithoutStartingTheMeterClock()
+    {
+        var module = new DamageParsingModule();
+        module.SetCombatActive(true, SeenAtUtc);
+        var enemy = new DamageActorIdentity(0x4001, "Enemy", 0, string.Empty, false, 0);
+
+        var damageEvent = Assert.Single(module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+            source: enemy)));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+
+        Assert.Equal(DamageMeterEligibility.NonAlliedSource, damageEvent.MeterEligibility);
+        Assert.Equal(500ul, Assert.Single(snapshot.Sources).TotalDamage);
+        Assert.Equal(500.0, Assert.Single(snapshot.Sources).EffectiveMeterDamage);
+        Assert.Null(snapshot.MeterStartedAtUtc);
+    }
+
+    [Fact]
     public void PlayerDeathDoesNotStopPetOrOtherPlayerDamageFromExtendingTheMeter()
     {
         var module = new DamageParsingModule();
@@ -663,6 +714,7 @@ public sealed class DamageParsingTests
 
         Assert.Equal(resolved, source.Source);
         Assert.Equal(300ul, source.TotalDamage);
+        Assert.Equal(300.0, source.EffectiveMeterDamage);
     }
 
     [Fact]
@@ -1380,6 +1432,23 @@ public sealed class DamageParsingTests
         Assert.Equal(389u, periodicEvents.Single(entry => entry.StatusId == 0x04B1).Amount);
         Assert.Equal(1700ul, snapshot.TotalDamage);
         Assert.Equal(1700.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(700.0, snapshot.Diagnostics.PeriodicRawMeterDamage);
+        Assert.Equal(700.0, snapshot.Diagnostics.PeriodicEffectiveMeterDamage);
+        var tickDiagnostic = Assert.Single(snapshot.Diagnostics.PeriodicTicks);
+        Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, tickDiagnostic.Basis);
+        Assert.Equal(2, tickDiagnostic.CandidateCount);
+        Assert.Equal(700.0, tickDiagnostic.CombinedDamage);
+        Assert.Equal(700.0, tickDiagnostic.AllocatedDamage);
+        Assert.All(snapshot.Diagnostics.PeriodicAllocations, diagnostic =>
+        {
+            Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, diagnostic.Basis);
+            Assert.Equal(2, diagnostic.CandidateCount);
+            Assert.True(diagnostic.AverageWeight > 0.0);
+        });
+        var targetDiagnostic = Assert.Single(snapshot.Diagnostics.Targets);
+        Assert.Equal(1700.0, targetDiagnostic.RawDamage);
+        Assert.Equal(1000.0, targetDiagnostic.DirectRawDamage);
+        Assert.Equal(700.0, targetDiagnostic.PeriodicRawDamage);
     }
 
     [Fact]
@@ -1627,11 +1696,15 @@ public sealed class DamageParsingTests
             1000);
 
         var damageEvent = Assert.Single(module.Process(packet));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(600u, damageEvent.Amount);
         Assert.Equal(0.0, damageEvent.EffectiveMeterAmount);
         Assert.Equal(DamageResolutionQuality.KnownZeroHp, damageEvent.ResolutionQuality);
-        Assert.Equal(0.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
+        Assert.Equal(0.0, snapshot.EffectiveMeterDamage);
+        var targetDiagnostic = Assert.Single(snapshot.Diagnostics.Targets);
+        Assert.Equal(600.0, targetDiagnostic.KnownZeroRawDamage);
+        Assert.Equal(0.0, targetDiagnostic.EffectiveDamage);
     }
 
     [Fact]

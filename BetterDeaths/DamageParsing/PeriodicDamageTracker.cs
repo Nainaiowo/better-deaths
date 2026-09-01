@@ -165,6 +165,7 @@ internal sealed class PeriodicDamageTracker
     {
         foreach (var damageEvent in damageEvents.Where(damageEvent =>
                      !damageEvent.IsPeriodic &&
+                     damageEvent.MeterEligibility == DamageMeterEligibility.Eligible &&
                      damageEvent.Outcome == DamageEventOutcome.Damage &&
                      damageEvent.Amount > 0))
         {
@@ -267,7 +268,10 @@ internal sealed class PeriodicDamageTracker
                     tick.Amount,
                     tick.Amount,
                     DamageAttributionQuality.Exact,
-                    0)];
+                    0,
+                    PeriodicAllocationBasis.ExactSource,
+                    Math.Max(1, matchingStatuses.Count),
+                    tick.Amount)];
             }
 
             if (matchingStatuses.Count > 0)
@@ -285,7 +289,12 @@ internal sealed class PeriodicDamageTracker
                     matchingStatuses.Count == 1
                         ? DamageAttributionQuality.Exact
                         : DamageAttributionQuality.Estimated,
-                    0)];
+                    0,
+                    matchingStatuses.Count == 1
+                        ? PeriodicAllocationBasis.SingleCandidate
+                        : PeriodicAllocationBasis.EqualFallback,
+                    matchingStatuses.Count,
+                    tick.Amount)];
             }
 
             var unknownGroundSource = CreateUnknownSource(!tick.Target.IsPlayer);
@@ -296,7 +305,10 @@ internal sealed class PeriodicDamageTracker
                 tick.Amount,
                 tick.Amount,
                 DamageAttributionQuality.Unattributed,
-                0)];
+                0,
+                PeriodicAllocationBasis.Unattributed,
+                0,
+                0.0)];
         }
 
         var candidates = statuses.Values
@@ -314,7 +326,10 @@ internal sealed class PeriodicDamageTracker
                 tick.Amount,
                 tick.Amount,
                 DamageAttributionQuality.Unattributed,
-                0)];
+                0,
+                PeriodicAllocationBasis.Unattributed,
+                0,
+                0.0)];
         }
 
         if (candidates.Count == 1)
@@ -330,7 +345,10 @@ internal sealed class PeriodicDamageTracker
                 tick.Amount,
                 tick.Amount,
                 DamageAttributionQuality.Exact,
-                0)];
+                0,
+                PeriodicAllocationBasis.SingleCandidate,
+                1,
+                tick.Amount)];
         }
 
         var allocations = Allocate(tick.Amount, candidates);
@@ -338,7 +356,7 @@ internal sealed class PeriodicDamageTracker
         for (var index = 0; index < candidates.Count; index++)
         {
             var candidate = candidates[index];
-            if (allocations[index] == 0)
+            if (allocations[index].Amount == 0)
             {
                 continue;
             }
@@ -349,10 +367,13 @@ internal sealed class PeriodicDamageTracker
                 tick,
                 candidate.Application,
                 candidate.Application.Source,
-                allocations[index],
-                allocations[index],
+                allocations[index].Amount,
+                allocations[index].Amount,
                 DamageAttributionQuality.Estimated,
-                index));
+                index,
+                allocations[index].Basis,
+                candidates.Count,
+                allocations[index].Weight));
         }
 
         return events;
@@ -406,34 +427,41 @@ internal sealed class PeriodicDamageTracker
             (tick.SeenAtUtc - status.LastTickAtUtc.Value).TotalSeconds >= MinimumTickSpacingSeconds;
     }
 
-    private uint[] Allocate(uint amount, IReadOnlyList<TrackedStatus> candidates)
+    private PeriodicAllocation[] Allocate(uint amount, IReadOnlyList<TrackedStatus> candidates)
     {
         var weights = candidates
             .Select(GetAllocationWeight)
             .ToArray();
-        if (weights.All(weight => weight <= 0.0))
+        if (weights.All(weight => weight.Value <= 0.0))
         {
-            Array.Fill(weights, 1.0);
+            for (var index = 0; index < weights.Length; index++)
+            {
+                weights[index] = new AllocationWeight(1.0, PeriodicAllocationBasis.EqualFallback);
+            }
         }
         else
         {
-            var knownMedian = Median(weights.Where(weight => weight > 0.0));
+            var knownMedian = Median(weights
+                .Where(weight => weight.Value > 0.0)
+                .Select(weight => weight.Value));
             for (var index = 0; index < weights.Length; index++)
             {
-                if (weights[index] <= 0.0)
+                if (weights[index].Value <= 0.0)
                 {
-                    weights[index] = knownMedian;
+                    weights[index] = new AllocationWeight(
+                        knownMedian,
+                        PeriodicAllocationBasis.MedianFallback);
                 }
             }
         }
 
-        var totalWeight = weights.Sum();
+        var totalWeight = weights.Sum(weight => weight.Value);
         var allocations = new uint[candidates.Count];
         var fractions = new (int Index, double Fraction)[candidates.Count];
         ulong allocated = 0;
         for (var index = 0; index < candidates.Count; index++)
         {
-            var exact = amount * weights[index] / totalWeight;
+            var exact = amount * weights[index].Value / totalWeight;
             allocations[index] = (uint)Math.Floor(exact);
             allocated += allocations[index];
             fractions[index] = (index, exact - allocations[index]);
@@ -451,15 +479,34 @@ internal sealed class PeriodicDamageTracker
             remainder--;
         }
 
-        return allocations;
+        return allocations
+            .Select((allocation, index) => new PeriodicAllocation(
+                allocation,
+                weights[index].Value,
+                weights[index].Basis))
+            .ToArray();
     }
 
-    private double GetAllocationWeight(TrackedStatus status)
+    private AllocationWeight GetAllocationWeight(TrackedStatus status)
     {
-        var learnedWeight = GetLearnedWeight(status);
-        return learnedWeight > 0.0
-            ? learnedWeight
-            : EstimateTickWeight(status) ?? 0.0;
+        if (learnedApplicationTicks.TryGetValue(GetApplicationKey(status), out var applicationSamples))
+        {
+            return new AllocationWeight(
+                applicationSamples.Median,
+                PeriodicAllocationBasis.LearnedApplication);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status.Application.SnapshotKey) &&
+            learnedProfileTicks.TryGetValue(GetProfileKey(status.Application), out var profileSamples))
+        {
+            return new AllocationWeight(
+                profileSamples.Median,
+                PeriodicAllocationBasis.LearnedSnapshot);
+        }
+
+        return new AllocationWeight(
+            EstimateTickWeight(status) ?? 0.0,
+            PeriodicAllocationBasis.PotencyEstimate);
     }
 
     private void Learn(TrackedStatus status, uint amount)
@@ -469,19 +516,6 @@ internal sealed class PeriodicDamageTracker
         {
             AddLearnedSample(learnedProfileTicks, GetProfileKey(status.Application), amount);
         }
-    }
-
-    private double GetLearnedWeight(TrackedStatus status)
-    {
-        if (learnedApplicationTicks.TryGetValue(GetApplicationKey(status), out var applicationSamples))
-        {
-            return applicationSamples.Median;
-        }
-
-        return !string.IsNullOrWhiteSpace(status.Application.SnapshotKey) &&
-            learnedProfileTicks.TryGetValue(GetProfileKey(status.Application), out var profileSamples)
-                ? profileSamples.Median
-                : 0.0;
     }
 
     private static void AddLearnedSample<TKey>(
@@ -605,7 +639,10 @@ internal sealed class PeriodicDamageTracker
         uint amount,
         double meterAmount,
         DamageAttributionQuality quality,
-        int allocationIndex)
+        int allocationIndex,
+        PeriodicAllocationBasis allocationBasis,
+        int candidateCount,
+        double allocationWeight)
     {
         var statusId = status?.StatusId ?? tick.StatusId;
         var statusName = status?.StatusName ??
@@ -651,6 +688,10 @@ internal sealed class PeriodicDamageTracker
             TargetStatuses = status?.TargetStatuses ?? [],
             HasSourceStatusSnapshot = status?.HasSourceStatusSnapshot ?? false,
             HasTargetStatusSnapshot = status?.HasTargetStatusSnapshot ?? false,
+            PeriodicAllocationBasis = allocationBasis,
+            PeriodicCandidateCount = candidateCount,
+            PeriodicAllocationWeight = allocationWeight,
+            PeriodicCombinedAmount = tick.Amount,
         };
     }
 
@@ -900,6 +941,15 @@ internal sealed class PeriodicDamageTracker
         uint SourceEntityId,
         uint StatusId,
         string SnapshotKey);
+
+    private readonly record struct AllocationWeight(
+        double Value,
+        PeriodicAllocationBasis Basis);
+
+    private readonly record struct PeriodicAllocation(
+        uint Amount,
+        double Weight,
+        PeriodicAllocationBasis Basis);
 
     private static ProfileKey GetProfileKey(DamageStatusApplication application)
     {

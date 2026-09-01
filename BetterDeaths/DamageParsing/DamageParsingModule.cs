@@ -64,6 +64,7 @@ internal sealed class DamageParsingModule
             var parsed = parser.Parse(packet)
                 .Select(periodicDamageTracker.ResolveReactiveDamage)
                 .Select(raidBuffTracker.ApplyFallback)
+                .Select(ApplyMeterEligibility)
                 .ToList();
             if (parsed.Count > 0)
             {
@@ -292,11 +293,16 @@ internal sealed class DamageParsingModule
             .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var raidAdjustments = RaidDamageCalculator.Calculate(events, sourceSnapshots);
+        var raidAdjustments = RaidDamageCalculator.Calculate(
+            events,
+            sourceSnapshots,
+            damageEvent => damageEvent.MeterEligibility != DamageMeterEligibility.FriendlyTarget
+                ? damageEvent.Amount
+                : 0.0);
         var meterRaidAdjustments = RaidDamageCalculator.Calculate(
             events,
             sourceSnapshots,
-            damageEvent => damageEvent.EffectiveMeterAmount);
+            damageEvent => damageEvent.MeterAggregateAmount);
         sourceSnapshots = sourceSnapshots
             .Select(source => ApplyRaidAdjustment(source, raidAdjustments, meterRaidAdjustments))
             .ToList();
@@ -348,6 +354,136 @@ internal sealed class DamageParsingModule
                 total + source.TotalDamage - source.EstimatedDamage - source.UnattributedDamage),
             RaidAdjustedDamage = sourceSnapshots.Sum(source => source.RaidAdjustedDamage),
             MeterRaidAdjustedDamage = sourceSnapshots.Sum(source => source.EffectiveMeterRaidAdjustedDamage),
+            Diagnostics = BuildDiagnostics(events),
+        };
+    }
+
+    private static DamageEncounterDiagnostics BuildDiagnostics(
+        IReadOnlyList<ParsedDamageEvent> damageEvents)
+    {
+        var damagingEvents = damageEvents
+            .Where(damageEvent =>
+                damageEvent.Outcome == DamageEventOutcome.Damage &&
+                damageEvent.Amount > 0)
+            .ToList();
+        var eligibleEvents = damagingEvents
+            .Where(damageEvent => damageEvent.MeterEligibility == DamageMeterEligibility.Eligible)
+            .ToList();
+        var resolution = eligibleEvents
+            .GroupBy(damageEvent => damageEvent.ResolutionQuality)
+            .OrderBy(group => group.Key)
+            .Select(group => new DamageResolutionDiagnostic(
+                group.Key,
+                group.Count(),
+                group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                group.Sum(damageEvent => damageEvent.EffectiveMeterAmount)))
+            .ToList();
+        var eligibility = damagingEvents
+            .GroupBy(damageEvent => damageEvent.MeterEligibility)
+            .OrderBy(group => group.Key)
+            .Select(group => new DamageEligibilityDiagnostic(
+                group.Key,
+                group.Count(),
+                group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                group.Sum(damageEvent => damageEvent.EffectiveMeterAmount)))
+            .ToList();
+        var periodicEvents = eligibleEvents
+            .Where(damageEvent => damageEvent.IsPeriodic)
+            .ToList();
+        var periodicAllocations = periodicEvents
+            .GroupBy(damageEvent => new
+            {
+                SourceKey = GetActorKey(damageEvent.AttributedSource ?? damageEvent.Source),
+                TargetKey = GetActorKey(damageEvent.Target),
+                damageEvent.StatusId,
+                damageEvent.ActionName,
+                damageEvent.PeriodicAllocationBasis,
+                damageEvent.PeriodicCandidateCount,
+            })
+            .Select(group => new PeriodicAllocationDiagnostic(
+                group.First().AttributedSource ?? group.First().Source,
+                group.First().Target,
+                group.Key.StatusId,
+                group.Key.ActionName,
+                group.Key.PeriodicAllocationBasis,
+                group.Key.PeriodicCandidateCount,
+                group.Count(),
+                group.Average(damageEvent => damageEvent.PeriodicAllocationWeight),
+                group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                group.Sum(damageEvent => damageEvent.EffectiveMeterAmount)))
+            .OrderByDescending(diagnostic => diagnostic.AllocatedDamage)
+            .ThenBy(diagnostic => diagnostic.Source.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(diagnostic => diagnostic.StatusName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var periodicTicks = periodicEvents
+            .GroupBy(damageEvent => new
+            {
+                damageEvent.PacketSequence,
+                damageEvent.SeenAtUtc,
+                TargetKey = GetActorKey(damageEvent.Target),
+            })
+            .Select(group => new
+            {
+                Basis = group.Select(damageEvent => damageEvent.PeriodicAllocationBasis).Distinct().Count() == 1
+                    ? group.First().PeriodicAllocationBasis
+                    : PeriodicAllocationBasis.None,
+                CandidateCount = group.Max(damageEvent => damageEvent.PeriodicCandidateCount),
+                CombinedDamage = group.Max(damageEvent => (double)damageEvent.PeriodicCombinedAmount),
+                AllocatedDamage = group.Sum(damageEvent => damageEvent.RawMeterAmount),
+            })
+            .GroupBy(tick => new { tick.Basis, tick.CandidateCount })
+            .Select(group => new PeriodicTickDiagnostic(
+                group.Key.Basis,
+                group.Key.CandidateCount,
+                group.Count(),
+                group.Sum(tick => tick.CombinedDamage),
+                group.Sum(tick => tick.AllocatedDamage)))
+            .OrderBy(diagnostic => diagnostic.Basis)
+            .ThenBy(diagnostic => diagnostic.CandidateCount)
+            .ToList();
+        var directEvents = eligibleEvents
+            .Where(damageEvent => !damageEvent.IsPeriodic)
+            .ToList();
+        var targetDiagnostics = eligibleEvents
+            .GroupBy(damageEvent => GetActorKey(damageEvent.Target))
+            .Select(group =>
+            {
+                var direct = group.Where(damageEvent => !damageEvent.IsPeriodic).ToList();
+                var periodic = group.Where(damageEvent => damageEvent.IsPeriodic).ToList();
+                return new DamageTargetDiagnostic(
+                    group.First().Target,
+                    group.Count(),
+                    group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                    group.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+                    direct.Sum(damageEvent => damageEvent.RawMeterAmount),
+                    direct.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+                    periodic.Sum(damageEvent => damageEvent.RawMeterAmount),
+                    periodic.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+                    group.Where(damageEvent =>
+                            damageEvent.ResolutionQuality == DamageResolutionQuality.Unresolved)
+                        .Sum(damageEvent => damageEvent.RawMeterAmount),
+                    group.Where(damageEvent =>
+                            damageEvent.ResolutionQuality == DamageResolutionQuality.KnownZeroHp)
+                        .Sum(damageEvent => damageEvent.RawMeterAmount));
+            })
+            .OrderByDescending(diagnostic => diagnostic.EffectiveDamage)
+            .ThenBy(diagnostic => diagnostic.Target.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new DamageEncounterDiagnostics(
+            damageEvents.Count,
+            eligibleEvents.Sum(damageEvent => damageEvent.RawMeterAmount),
+            eligibleEvents.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+            directEvents.Sum(damageEvent => damageEvent.RawMeterAmount),
+            directEvents.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+            periodicEvents.Sum(damageEvent => damageEvent.RawMeterAmount),
+            periodicEvents.Sum(damageEvent => damageEvent.EffectiveMeterAmount),
+            resolution,
+            eligibility,
+            periodicAllocations,
+            periodicTicks)
+        {
+            Targets = targetDiagnostics,
         };
     }
 
@@ -490,7 +626,9 @@ internal sealed class DamageParsingModule
             return parsed;
         }
 
-        parsed = effectiveDamageResolver.ResolvePeriodic(entry.Tick, parsed).ToList();
+        parsed = effectiveDamageResolver.ResolvePeriodic(entry.Tick, parsed)
+            .Select(ApplyMeterEligibility)
+            .ToList();
         RecordParsedEvents(parsed, 1, entry.AllowAutomaticEncounterStart);
         PeriodicEventsResolved?.Invoke(parsed);
         return parsed;
@@ -646,7 +784,8 @@ internal sealed class DamageParsingModule
                 sources[sourceKey] = source;
             }
 
-            source.Add(damageEvent);
+            var isMeterEligible = damageEvent.MeterEligibility != DamageMeterEligibility.FriendlyTarget;
+            source.Add(damageEvent, isMeterEligible);
 
             var targetKey = GetActorKey(damageEvent.Target);
             if (!targets.TryGetValue(targetKey, out var target))
@@ -655,18 +794,20 @@ internal sealed class DamageParsingModule
                 targets[targetKey] = target;
             }
 
-            target.Add(damageEvent);
+            target.Add(damageEvent, isMeterEligible);
             mutationRevision++;
         }
     }
 
     private void ApplyEventReplacements(IReadOnlyList<ParsedDamageEvent> replacements)
     {
-        foreach (var replacement in replacements)
+        foreach (var replacementCandidate in replacements)
         {
+            var replacement = replacementCandidate;
             if (eventIndices.TryGetValue(replacement.EventId, out var index))
             {
                 var previous = events[index];
+                replacement = replacement with { MeterEligibility = previous.MeterEligibility };
                 events[index] = replacement;
                 var attributedSource = previous.AttributedSource ?? previous.Source;
                 if (sources.TryGetValue(GetActorKey(attributedSource), out var source))
@@ -811,7 +952,19 @@ internal sealed class DamageParsingModule
     {
         return damageEvent.Outcome == DamageEventOutcome.Damage &&
             damageEvent.Amount > 0 &&
+            damageEvent.MeterEligibility == DamageMeterEligibility.Eligible &&
             IsAlliedMeterSource(attributedSource);
+    }
+
+    private static ParsedDamageEvent ApplyMeterEligibility(ParsedDamageEvent damageEvent)
+    {
+        var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
+        var eligibility = !IsAlliedMeterSource(attributedSource)
+            ? DamageMeterEligibility.NonAlliedSource
+            : damageEvent.Target.IsPlayer || damageEvent.Target.IsPartyMember
+                ? DamageMeterEligibility.FriendlyTarget
+                : DamageMeterEligibility.Eligible;
+        return damageEvent with { MeterEligibility = eligibility };
     }
 
     private DateTime ResolveMeterStart(ParsedDamageEvent damageEvent, DateTime meterEventAtUtc)
@@ -856,7 +1009,7 @@ internal sealed class DamageParsingModule
             this.source = source;
         }
 
-        public void Add(ParsedDamageEvent damageEvent)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
         {
             var candidateSource = damageEvent.AttributedSource ?? damageEvent.Source;
             if (GetIdentityQuality(candidateSource) > GetIdentityQuality(source))
@@ -864,7 +1017,7 @@ internal sealed class DamageParsingModule
                 source = candidateSource;
             }
 
-            totals.Add(damageEvent);
+            totals.Add(damageEvent, isMeterEligible);
             var actionKey = (damageEvent.ActionId, damageEvent.ActionName);
             if (!actions.TryGetValue(actionKey, out var action))
             {
@@ -872,7 +1025,7 @@ internal sealed class DamageParsingModule
                 actions[actionKey] = action;
             }
 
-            action.Add(damageEvent);
+            action.Add(damageEvent, isMeterEligible);
         }
 
         public void RecordDeath(DamageActorIdentity actor)
@@ -934,14 +1087,14 @@ internal sealed class DamageParsingModule
             this.target = target;
         }
 
-        public void Add(ParsedDamageEvent damageEvent)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
         {
             if (GetIdentityQuality(damageEvent.Target) > GetIdentityQuality(target))
             {
                 target = damageEvent.Target;
             }
 
-            totals.Add(damageEvent);
+            totals.Add(damageEvent, isMeterEligible);
         }
 
         public DamageTargetSummary ToSnapshot()
@@ -974,7 +1127,7 @@ internal sealed class DamageParsingModule
         private bool isAutoAttack;
         private uint actionCategoryId;
 
-        public void Add(ParsedDamageEvent damageEvent)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
         {
             swings++;
             isAutoAttack |= damageEvent.IsAutoAttack;
@@ -983,7 +1136,7 @@ internal sealed class DamageParsingModule
             {
                 case DamageEventOutcome.Damage:
                     totalDamage += damageEvent.Amount;
-                    meterDamage += damageEvent.EffectiveMeterAmount;
+                    meterDamage += isMeterEligible ? damageEvent.EffectiveMeterAmount : 0.0;
                     periodicDamage += damageEvent.IsPeriodic ? damageEvent.Amount : 0;
                     periodicHits += damageEvent.IsPeriodic ? 1 : 0;
                     estimatedDamage += damageEvent.AttributionQuality == DamageAttributionQuality.Estimated
@@ -1024,6 +1177,11 @@ internal sealed class DamageParsingModule
 
         public void ApplyMeterCorrection(ParsedDamageEvent previous, ParsedDamageEvent replacement)
         {
+            if (previous.MeterEligibility == DamageMeterEligibility.FriendlyTarget)
+            {
+                return;
+            }
+
             meterDamage = Math.Max(
                 0.0,
                 meterDamage - previous.EffectiveMeterAmount + replacement.EffectiveMeterAmount);
@@ -1096,7 +1254,10 @@ internal sealed class DamageParsingModule
                 hits,
                 misses,
                 resists,
-                invulnerableHits);
+                invulnerableHits)
+            {
+                MeterDamage = meterDamage,
+            };
         }
     }
 }

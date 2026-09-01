@@ -100,11 +100,11 @@ public sealed partial class Plugin
             return;
         }
 
-        // The widget only needs aggregates. Raw events and target details remain in debug capture.
+        // Keep compact source, target, and attribution aggregates for later comparison without
+        // retaining the full event stream for every encounter.
         var storedSnapshot = encounter with
         {
             Events = [],
-            Targets = [],
         };
 
         IReadOnlyList<RecordedDamageEncounter> snapshot;

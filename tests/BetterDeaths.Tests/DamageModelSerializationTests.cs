@@ -52,6 +52,23 @@ public sealed class DamageModelSerializationTests
             MeterDamage = 950,
             RaidAdjustedDamage = 900,
             MeterRaidAdjustedDamage = 875,
+            Diagnostics = new DamageEncounterDiagnostics(
+                1,
+                1000,
+                950,
+                700,
+                650,
+                300,
+                300,
+                [new DamageResolutionDiagnostic(DamageResolutionQuality.Resolved, 1, 1000, 950)],
+                [new DamageEligibilityDiagnostic(DamageMeterEligibility.Eligible, 1, 1000, 950)],
+                [],
+                [new PeriodicTickDiagnostic(
+                    PeriodicAllocationBasis.SingleCandidate,
+                    1,
+                    1,
+                    300,
+                    300)]),
         };
 
         var restored = Assert.IsType<DamageEncounterSnapshot>(
@@ -60,6 +77,10 @@ public sealed class DamageModelSerializationTests
         Assert.Equal(950.0, restored.EffectiveMeterDamage);
         Assert.Equal(875.0, restored.EffectiveMeterRaidAdjustedDamage);
         Assert.Equal(5.1, restored.DurationSeconds, 3);
+        Assert.Equal(300.0, restored.Diagnostics.PeriodicRawMeterDamage);
+        Assert.Equal(
+            PeriodicAllocationBasis.SingleCandidate,
+            Assert.Single(restored.Diagnostics.PeriodicTicks).Basis);
     }
 
     [Fact]

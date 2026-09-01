@@ -26,6 +26,26 @@ internal enum DamageResolutionQuality
     KnownZeroHp,
 }
 
+internal enum DamageMeterEligibility
+{
+    Eligible,
+    NonAlliedSource,
+    FriendlyTarget,
+}
+
+internal enum PeriodicAllocationBasis
+{
+    None,
+    ExactSource,
+    SingleCandidate,
+    LearnedApplication,
+    LearnedSnapshot,
+    PotencyEstimate,
+    MedianFallback,
+    EqualFallback,
+    Unattributed,
+}
+
 internal sealed record DamageActorIdentity(
     uint EntityId,
     string Name,
@@ -281,6 +301,20 @@ internal sealed record ParsedDamageEvent(
     public bool HasSourceStatusSnapshot { get; init; }
 
     public bool HasTargetStatusSnapshot { get; init; }
+
+    public DamageMeterEligibility MeterEligibility { get; init; }
+
+    public double MeterAggregateAmount => MeterEligibility == DamageMeterEligibility.FriendlyTarget
+        ? 0.0
+        : EffectiveMeterAmount;
+
+    public PeriodicAllocationBasis PeriodicAllocationBasis { get; init; }
+
+    public int PeriodicCandidateCount { get; init; }
+
+    public double PeriodicAllocationWeight { get; init; }
+
+    public uint PeriodicCombinedAmount { get; init; }
 }
 
 internal sealed record DamageActionSummary(
@@ -396,7 +430,84 @@ internal sealed record DamageTargetSummary(
     int Hits,
     int Misses,
     int Resists,
-    int InvulnerableHits);
+    int InvulnerableHits)
+{
+    public double? MeterDamage { get; init; }
+
+    public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
+}
+
+internal sealed record DamageResolutionDiagnostic(
+    DamageResolutionQuality Quality,
+    int EventCount,
+    double RawDamage,
+    double EffectiveDamage);
+
+internal sealed record DamageEligibilityDiagnostic(
+    DamageMeterEligibility Eligibility,
+    int EventCount,
+    double RawDamage,
+    double EffectiveDamage);
+
+internal sealed record PeriodicAllocationDiagnostic(
+    DamageActorIdentity Source,
+    DamageActorIdentity Target,
+    uint StatusId,
+    string StatusName,
+    PeriodicAllocationBasis Basis,
+    int CandidateCount,
+    int TickCount,
+    double AverageWeight,
+    double AllocatedDamage,
+    double EffectiveDamage);
+
+internal sealed record PeriodicTickDiagnostic(
+    PeriodicAllocationBasis Basis,
+    int CandidateCount,
+    int TickCount,
+    double CombinedDamage,
+    double AllocatedDamage);
+
+internal sealed record DamageTargetDiagnostic(
+    DamageActorIdentity Target,
+    int EventCount,
+    double RawDamage,
+    double EffectiveDamage,
+    double DirectRawDamage,
+    double DirectEffectiveDamage,
+    double PeriodicRawDamage,
+    double PeriodicEffectiveDamage,
+    double UnresolvedRawDamage,
+    double KnownZeroRawDamage);
+
+internal sealed record DamageEncounterDiagnostics(
+    int EventCount,
+    double RawMeterDamage,
+    double EffectiveMeterDamage,
+    double DirectRawMeterDamage,
+    double DirectEffectiveMeterDamage,
+    double PeriodicRawMeterDamage,
+    double PeriodicEffectiveMeterDamage,
+    IReadOnlyList<DamageResolutionDiagnostic> Resolution,
+    IReadOnlyList<DamageEligibilityDiagnostic> Eligibility,
+    IReadOnlyList<PeriodicAllocationDiagnostic> PeriodicAllocations,
+    IReadOnlyList<PeriodicTickDiagnostic> PeriodicTicks)
+{
+    public IReadOnlyList<DamageTargetDiagnostic> Targets { get; init; } = [];
+
+    public static DamageEncounterDiagnostics Empty { get; } = new(
+        0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        [],
+        [],
+        [],
+        []);
+}
 
 internal sealed record DamageEncounterSnapshot(
     DateTime StartedAtUtc,
@@ -429,6 +540,8 @@ internal sealed record DamageEncounterSnapshot(
     public double RaidAdjustedDamage { get; init; }
 
     public double? MeterRaidAdjustedDamage { get; init; }
+
+    public DamageEncounterDiagnostics Diagnostics { get; init; } = DamageEncounterDiagnostics.Empty;
 
     public double EffectiveMeterRaidAdjustedDamage => MeterRaidAdjustedDamage ?? RaidAdjustedDamage;
 
