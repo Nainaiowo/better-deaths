@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Better Deaths - FFXIV Dalamud Death Recap Plugin</title>
-  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, configurable lead-up analysis up to one minute, and Death Replay in beta.">
+  <title>Better Deaths - FFXIV Raid Death Review Plugin</title>
+  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for fatal event review, mitigation context, What-if checks, saved pull history, Death Replay, and supported Dancing Mad mechanic analysis.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
-  <meta property="og:description" content="Review raid deaths with fatal events, HP plus shields, mitigation context, what-if checks, a configurable combat lead-up up to one minute, and Death Replay in beta.">
+  <meta property="og:title" content="Better Deaths - FFXIV Raid Death Review Plugin">
+  <meta property="og:description" content="Review fatal events and mitigation context, replay captured pulls, and analyze supported Dancing Mad mechanics.">
   <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
-  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Better Deaths - FFXIV Dalamud Death Recap Plugin">
-  <meta name="twitter:description" content="A Dalamud plugin for clearer FFXIV raid death review, with Death Replay in beta.">
-  <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/death-timeline.png">
+  <meta name="twitter:title" content="Better Deaths - FFXIV Raid Death Review Plugin">
+  <meta name="twitter:description" content="Death review, mitigation context, pull replay, and supported mechanic analysis in one Dalamud plugin.">
+  <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -24,7 +24,7 @@
     "name": "Better Deaths",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows",
-    "description": "Better Deaths is a FFXIV Dalamud plugin for raid death recap, fatal event review, mitigation what-if checks, pull history, HP plus shields, configurable lead-up analysis up to one minute, and Death Replay in beta.",
+    "description": "Better Deaths is a FFXIV Dalamud plugin for fatal event review, mitigation context, What-if checks, saved pull history, Death Replay, and supported Dancing Mad mechanic analysis.",
     "softwareRequirements": "Dalamud",
     "url": "https://nainaiowo.github.io/better-deaths/",
     "codeRepository": "https://github.com/Nainaiowo/better-deaths",
@@ -92,7 +92,7 @@
       inset: 0;
       background:
         linear-gradient(90deg, rgba(16, 16, 20, 0.96) 0%, rgba(16, 16, 20, 0.78) 46%, rgba(16, 16, 20, 0.46) 100%),
-        url("assets/death-timeline.png") center right / cover no-repeat;
+        url("assets/help-review-lead-up.png") center right / cover no-repeat;
       z-index: -2;
     }
 
@@ -137,14 +137,14 @@
     }
 
     h1 {
-      font-size: clamp(3rem, 10vw, 6.5rem);
+      font-size: 5.75rem;
       line-height: 0.95;
       margin: 0 0 24px;
       letter-spacing: 0;
     }
 
     .lead {
-      font-size: clamp(1.08rem, 2.2vw, 1.45rem);
+      font-size: 1.3rem;
       color: var(--muted);
       max-width: 680px;
       margin: 0 0 30px;
@@ -196,7 +196,7 @@
     }
 
     h2 {
-      font-size: clamp(1.75rem, 4vw, 2.75rem);
+      font-size: 2.5rem;
       line-height: 1.08;
       margin: 0 0 16px;
       letter-spacing: 0;
@@ -235,9 +235,23 @@
       margin-bottom: 0;
     }
 
+    .feature h3 a {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .feature h3 a:hover {
+      color: var(--gold);
+    }
+
     .screens {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 28px;
+    }
+
+    .screenshot.wide {
+      grid-column: 1 / -1;
     }
 
     .screenshot {
@@ -328,15 +342,35 @@
       .hero::before {
         background:
           linear-gradient(180deg, rgba(16, 16, 20, 0.95) 0%, rgba(16, 16, 20, 0.76) 58%, rgba(16, 16, 20, 0.58) 100%),
-          url("assets/death-timeline.png") center / cover no-repeat;
+          url("assets/help-review-lead-up.png") center / cover no-repeat;
       }
 
       .hero-content {
         padding: 56px 0 96px;
       }
 
+      h1 {
+        font-size: 3.2rem;
+      }
+
+      h2 {
+        font-size: 2rem;
+      }
+
+      .lead {
+        font-size: 1.05rem;
+      }
+
       .feature-grid {
         grid-template-columns: 1fr;
+      }
+
+      .screens {
+        grid-template-columns: 1fr;
+      }
+
+      .screenshot.wide {
+        grid-column: auto;
       }
 
       .install-box {
@@ -354,7 +388,7 @@
           <p class="eyebrow">FFXIV Dalamud plugin</p>
         </div>
         <h1>Better Deaths</h1>
-        <p class="lead">A raid-focused death recap tool for reviewing fatal events, HP plus shields, mitigation coverage, enemy HP at death, What-if mitigation, a configurable lead-up of up to one minute before each KO, and Death Replay in beta.</p>
+        <p class="lead">Review fatal events and mitigation context, trace the lead-up to each KO, replay captured pulls, and analyze supported Dancing Mad mechanics without leaving the game.</p>
         <div class="actions">
           <a class="button primary" href="#install">Install with Dalamud</a>
           <a class="button" href="help/">Help Center</a>
@@ -364,7 +398,7 @@
           <span class="tag"><strong>Duty-only</strong> recap capture</span>
           <span class="tag"><strong>Saved</strong> pull history</span>
           <span class="tag"><strong>Replay</strong> in beta</span>
-          <span class="tag"><strong>Testing</strong> and stable builds</span>
+          <span class="tag"><strong>WTF.DIG</strong> mechanic analysis</span>
         </div>
       </div>
     </div>
@@ -372,43 +406,39 @@
 
   <main>
     <section class="wrap" id="features">
-      <h2>Death review built for raid progression</h2>
-      <p class="muted">Better Deaths keeps deaths grouped by pull and puts the useful review data in one place, so a wipe can be checked without digging through scattered combat text.</p>
+      <h2>One place for the pull you just played</h2>
+      <p class="muted">Better Deaths connects death review, mitigation context, replay, and supported mechanic analysis so the useful parts of a pull stay together.</p>
       <div class="feature-grid">
         <article class="feature">
-          <h3>Fatal Event Review</h3>
-          <p>See the hit or event that caused the death with source, amount, damage type, overkill, and HP plus shields before impact.</p>
+          <h3><a href="help/review.html">Death Review</a></h3>
+          <p>See the fatal event, HP plus shields, mitigation context, expired effects, enemy HP, and up to one minute of lead-up data for each KO.</p>
         </article>
         <article class="feature">
-          <h3>Mitigation Context</h3>
-          <p>Review player mitigations, shields, debuffs, target mitigation, expired context, and calculated mitigation totals.</p>
+          <h3><a href="help/analyzer.html">WTF.DIG Analyzer</a></h3>
+          <p>Analyze supported Dancing Mad mechanics from an eligible Better Deaths pull or an FFLogs report link, with mechanic-specific diagrams and assignments.</p>
         </article>
         <article class="feature">
-          <h3>Configurable Lead-Up</h3>
-          <p>Choose 10 seconds, 30 seconds, or one minute of HP samples, healing, damage, sources, status timers, and captured events leading into the death.</p>
+          <h3><a href="help/replay.html">Death Replay (Beta)</a></h3>
+          <p>Play through captured positions, movement, markers, active effects, and supported mechanic shapes around a selected death.</p>
         </article>
         <article class="feature">
-          <h3>What-if Mitigation</h3>
-          <p>Pick available mitigation and see how selected tools would have changed the damage outcome.</p>
+          <h3><a href="help/review.html#what-if">What-if Mitigation</a></h3>
+          <p>Select available mitigation and compare the projected damage against the recorded fatal hit before changing the next pull's plan.</p>
         </article>
         <article class="feature">
-          <h3>Death Replay (IN BETA)</h3>
-          <p>Review captured positions, markers, mechanics, and movement around the selected death while replay work continues.</p>
+          <h3><a href="help/widget.html">Death Widget</a></h3>
+          <p>Keep a compact current-pull death list open during progression, then open the latest recap directly when a closer review is needed.</p>
         </article>
         <article class="feature">
-          <h3>Death Widget</h3>
-          <p>Keep a compact current-pull view open during progression with normal and concise display modes.</p>
-        </article>
-        <article class="feature">
-          <h3>Themes And Sharing</h3>
-          <p>Use theme options, name redaction, local pull history, and optional chat recap links for other Better Deaths users.</p>
+          <h3><a href="help/settings.html">Themes and Sharing</a></h3>
+          <p>Match the plugin to your UI, redact names for screenshots, and share concise death information through optional in-game chat posts.</p>
         </article>
       </div>
     </section>
 
     <section class="wrap" id="privacy">
-      <h2>Local data, no uploads</h2>
-      <p class="muted">Better Deaths does not upload your data. It has no upload functions, telemetry, analytics, webhook, feedback endpoint, or hidden network reporting built into the plugin.</p>
+      <h2>Captured data stays local</h2>
+      <p class="muted">Better Deaths does not upload captured pulls. It has no telemetry, analytics, feedback endpoint, or hidden network reporting. When you choose FFLogs Link in WTF.DIG, only the report reference needed for that lookup is sent to the analyzer service.</p>
       <div class="feature-grid">
         <article class="feature">
           <h3>Saved Locally</h3>
@@ -416,7 +446,7 @@
         </article>
         <article class="feature">
           <h3>What Gets Saved</h3>
-          <p>Saved pull files can include player names, jobs, duty names, death timing, HP, shields, damage events, actions, statuses, and mitigation context.</p>
+          <p>Saved review pulls can include names, jobs, duty details, death timing, HP, shields, events, actions, statuses, and mitigation context.</p>
         </article>
         <article class="feature">
           <h3>Name Redaction</h3>
@@ -426,31 +456,32 @@
     </section>
 
     <section class="wrap" id="screenshots">
-      <h2>What it looks like</h2>
+      <h2>See the pull from every angle</h2>
+      <p class="muted">These are the same redacted views used throughout the Help Center.</p>
       <div class="screens">
-        <figure class="screenshot">
-          <img src="assets/death-timeline.png" alt="Better Deaths death timeline showing ordered party deaths and fatal events">
-          <figcaption>Death timeline with ordered player deaths, jobs, fatal events, and selected death summary.</figcaption>
+        <figure class="screenshot wide">
+          <img src="assets/help-review-lead-up.png" alt="Better Deaths review page with a recorded pull, death timeline, and expanded lead-up events">
+          <figcaption><a href="help/review.html">Review</a> keeps saved pulls, the death timeline, and the selected death's lead-up together.</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/what-if-mitigation.png" alt="Better Deaths What-if mitigation review with available party mitigations">
-          <figcaption>What-if mitigation review with available party tools and projected outcome.</figcaption>
+          <img src="assets/help-selected-death.png" alt="Better Deaths selected death summary showing fatal event and mitigation context">
+          <figcaption>The selected death explains the fatal event, effective HP, overkill, active effects, and nearby mitigation context.</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/mitigation-context.png" alt="Better Deaths mitigation context showing active mitigation and calculated mitigation totals">
-          <figcaption>Mitigation context with active effects, shields, debuffs, and calculated mitigation totals.</figcaption>
+          <img src="assets/help-what-if.png" alt="Better Deaths What-if mitigation analysis with available party tools and projected results">
+          <figcaption><a href="help/review.html#what-if">What-if</a> tests available mitigation against the recorded hit.</figcaption>
+        </figure>
+        <figure class="screenshot wide">
+          <img src="assets/help-replay.png" alt="Better Deaths Replay showing an arena, players, mechanics, timeline, and active effects">
+          <figcaption><a href="help/replay.html">Replay</a> puts captured movement, arena context, active effects, and supported mechanic drawings on one timeline.</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/lead-up-history.png" alt="Better Deaths configurable lead-up table with HP history and combat events">
-          <figcaption>Configurable lead-up history with HP samples, sources, events, and mitigation/debuff icons.</figcaption>
+          <img src="assets/help-analyzer-p3-limit-cut.png" alt="Better Deaths WTF.DIG Limit Cut analysis showing player rotations and target positions">
+          <figcaption><a href="help/analyzer.html">WTF.DIG</a> turns supported mechanic data into focused diagrams such as Limit Cut.</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/death-replay-beta.png" alt="Better Deaths Death Replay beta showing captured positions and Black Hole mechanics">
-          <figcaption>Death Replay, IN BETA, with captured positions, role-colored players, markers, mechanics, zoom, and playback controls.</figcaption>
-        </figure>
-        <figure class="screenshot">
-          <img src="assets/customize-themes-widget.png" alt="Better Deaths customization tab with theme options and widget preview">
-          <figcaption>Theme controls and widget preview showing how the death widget can be customized.</figcaption>
+          <img src="assets/help-analyzer-p3-black-hole.png" alt="Better Deaths WTF.DIG Black Hole analysis showing tethers, assignments, and mechanic states">
+          <figcaption>Mechanic views combine assignments, positions, tethers, and outcomes without crowding the main review.</figcaption>
         </figure>
       </div>
     </section>
