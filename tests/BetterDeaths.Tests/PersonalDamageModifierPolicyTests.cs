@@ -120,6 +120,60 @@ public sealed class PersonalDamageModifierPolicyTests
         Assert.Null(restored.SimulatedPeriodicAmount);
     }
 
+    [Theory]
+    [InlineData(1000u, (byte)0)]
+    [InlineData(1500u, (byte)0x20)]
+    [InlineData(1250u, (byte)0x40)]
+    [InlineData(1875u, (byte)0x60)]
+    public void CriticalAndDirectHitsCanCalibrateWithoutChangingCapturedDamage(uint amount, byte flags)
+    {
+        var module = new DamageParsingModule();
+        var packet = DirectPacket(amount, []) with
+        {
+            SourceBaseRates = new DamageBaseRateSnapshot(0.15, 0.05),
+            Targets = [new DamageActionTarget(0, Target, [new DamageActionEffect(0, 3, flags, 0, 0, 0, amount)])],
+        };
+        var direct = Assert.Single(module.Process(packet));
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(amount, direct.Amount);
+        Assert.Equal(217.6875, tick.SimulatedPeriodicAmount!.Value, 6);
+        Assert.Equal(10, tick.PeriodicEstimateInputs!.DamagePerPotency);
+        Assert.Equal(200, tick.PeriodicEstimateInputs.BaseDamage);
+    }
+
+    [Fact]
+    public void CalibrationRemovesPersonalDamageAndKnownHitBonusesTogether()
+    {
+        var module = new DamageParsingModule();
+        var packet = DirectPacket(1980, [Status(0x748)]) with
+        {
+            SourceBaseRates = new DamageBaseRateSnapshot(0.25, 0.05),
+            Targets = [new DamageActionTarget(0, Target, [new DamageActionEffect(0, 3, 0x60, 0, 0, 0, 1980)])],
+        };
+        var direct = Assert.Single(module.Process(packet));
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(1980u, direct.Amount);
+        Assert.Equal(9.0, tick.PeriodicEstimateInputs!.DamagePerPotency, 6);
+        Assert.Equal(180.0, tick.PeriodicEstimateInputs.BaseDamage);
+    }
+
+    [Fact]
+    public void GuaranteedHitsWithChanceBuffsDoNotContaminateCalibration()
+    {
+        var module = new DamageParsingModule();
+        var packet = DirectPacket(3000, [Status(0x312)]) with
+        {
+            ActionId = 0x4051, // Inner Chaos under Battle Litany.
+            Targets = [new DamageActionTarget(0, Target, [new DamageActionEffect(0, 3, 0x60, 0, 0, 0, 3000)])],
+        };
+        module.Process(packet);
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Null(tick.SimulatedPeriodicAmount);
+    }
+
     [Fact]
     public void IndependentEstimateIsSeparateFromObservedAllocationAndFrozenAtApplication()
     {
@@ -135,6 +189,8 @@ public sealed class PersonalDamageModifierPolicyTests
         var restored = System.Text.Json.JsonSerializer.Deserialize<ParsedDamageEvent>(
             System.Text.Json.JsonSerializer.Serialize(tick))!;
         Assert.Equal(tick.SimulatedPeriodicAmount, restored.SimulatedPeriodicAmount);
+        Assert.Equal(tick.PeriodicEstimateInputs, restored.PeriodicEstimateInputs);
+        Assert.Equal(tick.SimulatedPeriodicAmount, restored.PeriodicEstimateInputs!.ExpectedAmount);
         Assert.Equal(tick.EffectiveMeterAmount, restored.EffectiveMeterAmount);
     }
 

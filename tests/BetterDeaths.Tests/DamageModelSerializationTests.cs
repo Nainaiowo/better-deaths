@@ -27,6 +27,8 @@ public sealed class DamageModelSerializationTests
             JsonSerializer.Deserialize<DamageEncounterSnapshot>(json));
 
         Assert.Equal(1000.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(1000.0, snapshot.ObservedMeterDamage);
+        Assert.Equal(200.0, snapshot.DamagePerSecond);
         Assert.Equal(900.0, snapshot.EffectiveMeterRaidAdjustedDamage);
         Assert.Equal(5.0, snapshot.DurationSeconds);
     }
@@ -164,6 +166,25 @@ public sealed class DamageModelSerializationTests
         Assert.Equal(860.0, source.EffectiveMeterNeutralDamage);
         Assert.Equal(960.0, source.AdjustedDamage);
         Assert.Equal(915.0, source.EffectiveMeterAdjustedDamage);
+    }
+
+    [Fact]
+    public void StandardMeterUsesRawDamageAndKeepsHpAdjustmentsSeparate()
+    {
+        var start = new DateTime(2026, 9, 4, 0, 0, 0, DateTimeKind.Utc);
+        var snapshot = new DamageEncounterSnapshot(start, start.AddSeconds(10), start.AddSeconds(10),
+            "test", 1500, 2, 0, [], [], [])
+        {
+            RawMeterDamage = 1000,
+            MeterDamage = 750,
+            RaidAdjustedDamage = 1000,
+            MeterRaidAdjustedDamage = 750,
+        };
+        var restored = JsonSerializer.Deserialize<DamageEncounterSnapshot>(JsonSerializer.Serialize(snapshot))!;
+        Assert.Equal(1000, restored.ObservedMeterDamage);
+        Assert.Equal(750, restored.EffectiveMeterDamage);
+        Assert.Equal(100, restored.DamagePerSecond);
+        Assert.Equal(100, restored.RaidDamagePerSecond);
     }
 
     [Fact]

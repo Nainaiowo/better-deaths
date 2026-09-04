@@ -642,7 +642,7 @@ public sealed partial class RecapWindow
         string idSuffix)
     {
         var sources = GetVisibleDamageMeterSources(snapshot);
-        var visibleTotal = sources.Sum(source => source.EffectiveMeterDamage);
+        var visibleTotal = sources.Sum(source => source.ObservedMeterDamage);
         using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
         {
             var visibleDps = snapshot.DurationSeconds > 0 ? visibleTotal / snapshot.DurationSeconds : 0;
@@ -666,7 +666,7 @@ public sealed partial class RecapWindow
     {
         return snapshot.Sources
             .Where(source => DamageMeterCombatantPolicy.ShouldDisplay(source.Source))
-            .OrderByDescending(source => source.EffectiveMeterDamage)
+            .OrderByDescending(source => source.ObservedMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -722,9 +722,9 @@ public sealed partial class RecapWindow
                 continue;
             }
 
-            foreach (var action in source.Actions)
+            foreach (var action in source.Actions.OrderByDescending(action => action.ObservedMeterDamage))
             {
-                DrawDamageMeterWidgetActionRow(snapshot, source, action, source.EffectiveMeterDamage, columns);
+                DrawDamageMeterWidgetActionRow(snapshot, source, action, source.ObservedMeterDamage, columns);
             }
         }
 
@@ -805,38 +805,38 @@ public sealed partial class RecapWindow
                         : displayName);
                 break;
             case DamageMeterColumn.DamagePercent:
-                DrawDamageMeterShareBar(source.EffectiveMeterDamage, visibleTotal);
+                DrawDamageMeterShareBar(source.ObservedMeterDamage, visibleTotal);
                 break;
             case DamageMeterColumn.DamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(snapshot.DurationSeconds > 0
-                    ? source.EffectiveMeterDamage / snapshot.DurationSeconds : 0));
+                    ? source.ObservedMeterDamage / snapshot.DurationSeconds : 0));
                 DrawEncounterDamagePerSecondTooltip(snapshot.DurationSeconds);
                 break;
             case DamageMeterColumn.EncounterDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? source.EffectiveMeterDamage / snapshot.DurationSeconds
+                        ? source.ObservedMeterDamage / snapshot.DurationSeconds
                         : 0.0));
                 DrawEncounterDamagePerSecondTooltip(snapshot.DurationSeconds);
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? source.EffectiveMeterRaidAdjustedDamage / snapshot.DurationSeconds
+                        ? source.RaidAdjustedDamage / snapshot.DurationSeconds
                         : 0.0));
                 DrawRaidDamageTooltip(source);
                 break;
             case DamageMeterColumn.NeutralDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? source.EffectiveMeterNeutralDamage / snapshot.DurationSeconds
+                        ? source.NeutralDamage / snapshot.DurationSeconds
                         : 0.0));
                 DrawNeutralDamageTooltip(source);
                 break;
             case DamageMeterColumn.AdjustedDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? source.EffectiveMeterAdjustedDamage / snapshot.DurationSeconds
+                        ? source.AdjustedDamage / snapshot.DurationSeconds
                         : 0.0));
                 DrawAdjustedDamageTooltip(source);
                 break;
@@ -858,7 +858,7 @@ public sealed partial class RecapWindow
                     : source.MaxHitActionName);
                 break;
             case DamageMeterColumn.TotalDamage:
-                DrawCenteredText(FormatDamageMeterNumber(source.EffectiveMeterDamage));
+                DrawCenteredText(FormatDamageMeterNumber(source.ObservedMeterDamage));
                 break;
             case DamageMeterColumn.Deaths:
                 DrawCenteredText(source.Deaths == 0 ? "-" : source.Deaths.ToString("N0"));
@@ -900,19 +900,19 @@ public sealed partial class RecapWindow
                 break;
             case DamageMeterColumn.DamagePercent:
                 DrawCenteredText(
-                    sourceTotal <= 0.0 ? "-" : $"{action.EffectiveMeterDamage * 100.0 / sourceTotal:F1}%",
+                    sourceTotal <= 0.0 ? "-" : $"{action.ObservedMeterDamage * 100.0 / sourceTotal:F1}%",
                     muted);
                 break;
             case DamageMeterColumn.DamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? action.EffectiveMeterDamage / snapshot.DurationSeconds
+                        ? action.ObservedMeterDamage / snapshot.DurationSeconds
                         : 0.0), muted);
                 break;
             case DamageMeterColumn.EncounterDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
-                        ? action.EffectiveMeterDamage / snapshot.DurationSeconds
+                        ? action.ObservedMeterDamage / snapshot.DurationSeconds
                         : 0.0), muted);
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
@@ -942,7 +942,7 @@ public sealed partial class RecapWindow
                 ImGui.TextColored(muted, action.ActionName);
                 break;
             case DamageMeterColumn.TotalDamage:
-                DrawCenteredText(FormatDamageMeterNumber(action.EffectiveMeterDamage), muted);
+                DrawCenteredText(FormatDamageMeterNumber(action.ObservedMeterDamage), muted);
                 break;
             case DamageMeterColumn.HitCount:
                 DrawCenteredText(action.Hits == 0 ? "-" : action.Hits.ToString("N0"), muted);
@@ -1036,7 +1036,7 @@ public sealed partial class RecapWindow
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip(
-                $"Damage divided by the full {FormatDamageMeterDuration(encounterDurationSeconds)} encounter duration.");
+                $"Captured damage before HP-based reductions, divided by the {encounterDurationSeconds:F3}s encounter duration.");
         }
     }
 
@@ -1049,8 +1049,8 @@ public sealed partial class RecapWindow
 
         SetThemedTooltip(
             "Raid-contributing DPS moves damage gained from another player's raid buffs back to the player who provided them.\n" +
-            $"Received from others: {FormatDamageMeterNumber(source.EffectiveMeterExternalBuffDamageReceived)} damage\n" +
-            $"Given through buffs: {FormatDamageMeterNumber(source.EffectiveMeterRaidBuffDamageGiven)} damage");
+            $"Received from others: {FormatDamageMeterNumber(source.ExternalBuffDamageReceived)} damage\n" +
+            $"Given through buffs: {FormatDamageMeterNumber(source.RaidBuffDamageGiven)} damage");
     }
 
     private static void DrawNeutralDamageTooltip(DamageSourceSummary source)
@@ -1062,7 +1062,7 @@ public sealed partial class RecapWindow
 
         SetThemedTooltip(
             "Neutral DPS removes damage gained from every external damage, critical-hit, and direct-hit buff.\n" +
-            $"Removed from external buffs: {FormatDamageMeterNumber(source.EffectiveMeterExternalBuffDamageReceived)} damage");
+            $"Removed from external buffs: {FormatDamageMeterNumber(source.ExternalBuffDamageReceived)} damage");
     }
 
     private static void DrawAdjustedDamageTooltip(DamageSourceSummary source)
@@ -1074,7 +1074,7 @@ public sealed partial class RecapWindow
 
         SetThemedTooltip(
             "Adjusted DPS removes only damage gained from single-target padding buffs.\n" +
-            $"Removed from single-target buffs: {FormatDamageMeterNumber(source.EffectiveMeterSingleTargetBuffDamageReceived)} damage");
+            $"Removed from single-target buffs: {FormatDamageMeterNumber(source.SingleTargetBuffDamageReceived)} damage");
     }
 
     private static string GetDamageMeterSourceKey(DamageActorIdentity source)

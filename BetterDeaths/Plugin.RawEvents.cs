@@ -45,6 +45,8 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
+    private long nextDamageCaptureOrder = 1;
+
     private sealed record RawActionEffectPacket(
         long Sequence,
         DateTime SeenAtUtc,
@@ -74,6 +76,8 @@ public sealed partial class Plugin
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
+
+        public long DamageCaptureOrder { get; init; }
 
         public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
@@ -159,6 +163,8 @@ public sealed partial class Plugin
 
         public bool CaptureForDamageParsing { get; init; }
 
+        public long DamageCaptureOrder { get; init; }
+
         public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
 
@@ -190,6 +196,8 @@ public sealed partial class Plugin
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
+
+        public long DamageCaptureOrder { get; init; }
 
         public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
@@ -785,6 +793,7 @@ public sealed partial class Plugin
     {
         lock (rawCombatQueueLock)
         {
+            packet = packet with { DamageCaptureOrder = nextDamageCaptureOrder++ };
             rawActionEffectPackets.Enqueue(packet);
             while (rawActionEffectPackets.Count > MaxRawActionEffectPackets)
             {
@@ -809,6 +818,7 @@ public sealed partial class Plugin
     {
         lock (rawCombatQueueLock)
         {
+            packet = packet with { DamageCaptureOrder = nextDamageCaptureOrder++ };
             rawEffectResultPackets.Enqueue(packet);
             while (rawEffectResultPackets.Count > MaxRawEffectResultPackets)
             {
@@ -821,6 +831,7 @@ public sealed partial class Plugin
     {
         lock (rawCombatQueueLock)
         {
+            packet = packet with { DamageCaptureOrder = nextDamageCaptureOrder++ };
             rawActorControlPackets.Enqueue(packet);
             while (rawActorControlPackets.Count > MaxRawActorControlPackets)
             {
@@ -850,19 +861,25 @@ public sealed partial class Plugin
             ResolveRawMapEffectPacket(packet);
         }
 
-        var actionPackets = DrainRawActionEffectPackets(now);
-        var effectResultPackets = DrainRawEffectResultPackets(now);
-        var actorControlPackets = DrainRawActorControlPackets(now);
+        List<RawActionEffectPacket> actionPackets;
+        List<RawEffectResultPacket> effectResultPackets;
+        List<RawActorControlPacket> actorControlPackets;
+        // Take one receive snapshot so no later status can overtake an undrained action.
+        lock (rawCombatQueueLock)
+        {
+            actionPackets = DrainRawActionEffectPackets(now);
+            effectResultPackets = DrainRawEffectResultPackets(now);
+            actorControlPackets = DrainRawActorControlPackets(now);
+        }
         // Only the damage parser changes ordering; review keeps its existing resolution passes.
-        var damagePackets = new List<(DateTime SeenAtUtc, int Kind, long Sequence, object Packet)>();
+        var damagePackets = new List<(long CaptureOrder, object Packet)>();
         damagePackets.AddRange(actionPackets.Where(packet => packet.CaptureForDamageParsing)
-            .Select(packet => (packet.SeenAtUtc, 0, packet.Sequence, (object)packet)));
+            .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         damagePackets.AddRange(effectResultPackets.Where(packet => packet.CaptureForDamageParsing)
-            .Select(packet => (packet.SeenAtUtc, 1, packet.Sequence, (object)packet)));
+            .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         damagePackets.AddRange(actorControlPackets.Where(packet => packet.CaptureForDamageParsing)
-            .Select(packet => (packet.SeenAtUtc, 2, packet.Sequence, (object)packet)));
-        foreach (var entry in damagePackets.OrderBy(entry => entry.SeenAtUtc)
-                     .ThenBy(entry => entry.Kind).ThenBy(entry => entry.Sequence))
+            .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
+        foreach (var entry in damagePackets.OrderBy(entry => entry.CaptureOrder))
         {
             switch (entry.Packet)
             {

@@ -627,6 +627,7 @@ public sealed partial class Plugin
         QueueDebugCaptureRecord("DamageMeterAction", new
         {
             packet.Sequence,
+            packet.DamageCaptureOrder,
             packet.SeenAtUtc,
             ServerSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc,
             packet.ActionSequence,
@@ -666,6 +667,7 @@ public sealed partial class Plugin
         QueueDebugCaptureRecord("DamageMeterPeriodic", new
         {
             packet.Sequence,
+            packet.DamageCaptureOrder,
             packet.SeenAtUtc,
             ServerSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc,
             packet.Category,
@@ -744,6 +746,9 @@ public sealed partial class Plugin
                 damageEvent.StatusId,
                 damageEvent.Amount,
                 damageEvent.MeterAmount,
+                damageEvent.SimulatedPeriodicAmount,
+                damageEvent.PeriodicEstimateInputs,
+                damageEvent.PeriodicEstimateUnavailableReason,
                 damageEvent.CalculatedAmount,
                 Resolution = damageEvent.ResolutionQuality.ToString(),
                 damageEvent.AbsorbedDamage,
@@ -803,6 +808,7 @@ public sealed partial class Plugin
                 Reason = reason,
                 HasEncounter = ended is not null,
                 TotalDamage = ended?.TotalDamage ?? 0,
+                RawMeterDamage = ended?.ObservedMeterDamage ?? 0.0,
                 MeterDamage = ended?.EffectiveMeterDamage ?? 0.0,
                 ExactDamage = ended?.ExactDamage ?? 0,
                 EstimatedDamage = ended?.EstimatedDamage ?? 0,
@@ -816,6 +822,7 @@ public sealed partial class Plugin
                     SourceEntityId = source.Source.EntityId,
                     SourceName = source.Source.Name,
                     source.TotalDamage,
+                    RawMeterDamage = source.ObservedMeterDamage,
                     MeterDamage = source.EffectiveMeterDamage,
                     source.Swings,
                     source.Hits,

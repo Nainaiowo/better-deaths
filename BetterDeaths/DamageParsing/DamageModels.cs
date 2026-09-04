@@ -82,6 +82,20 @@ internal sealed record DamageBaseRateSnapshot(
     double Critical,
     double DirectHit);
 
+internal sealed record PeriodicDamageEstimateInputs(
+    double DamagePerPotency,
+    double Potency,
+    double DamageMultiplier,
+    byte? DamageLowByte,
+    double BaseDamage,
+    double CriticalRate,
+    double DirectHitRate,
+    double CriticalMultiplier)
+{
+    public double ExpectedAmount => BaseDamage * (1 + (CriticalMultiplier - 1) * CriticalRate) *
+        (1 + 0.25 * DirectHitRate);
+}
+
 internal sealed record DamageEffectResult(
     DateTime SeenAtUtc,
     uint ActionSequence,
@@ -245,6 +259,8 @@ internal sealed record ParsedDamageEvent(
     // Independent expected tick, never substituted for the observed allocation.
     public double? SimulatedPeriodicAmount { get; init; }
 
+    public PeriodicDamageEstimateInputs? PeriodicEstimateInputs { get; init; }
+
     public string? PeriodicEstimateUnavailableReason { get; init; }
 
     public double RawMeterAmount => MeterAmount ?? Amount;
@@ -337,6 +353,10 @@ internal sealed record DamageActionSummary(
     int BlockedHits,
     int ParriedHits)
 {
+    public double? RawMeterDamage { get; init; }
+
+    public double ObservedMeterDamage => RawMeterDamage ?? TotalDamage;
+
     public double? MeterDamage { get; init; }
 
     public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
@@ -373,6 +393,10 @@ internal sealed record DamageSourceSummary(
     int ParriedHits,
     IReadOnlyList<DamageActionSummary> Actions)
 {
+    public double? RawMeterDamage { get; init; }
+
+    public double ObservedMeterDamage => RawMeterDamage ?? TotalDamage;
+
     public double? MeterDamage { get; init; }
 
     public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
@@ -415,13 +439,13 @@ internal sealed record DamageSourceSummary(
     public double EffectiveMeterSingleTargetBuffDamageReceived =>
         MeterSingleTargetBuffDamageReceived ?? SingleTargetBuffDamageReceived;
 
-    public double NeutralDamage => Math.Max(0.0, TotalDamage - ExternalBuffDamageReceived);
+    public double NeutralDamage => Math.Max(0.0, ObservedMeterDamage - ExternalBuffDamageReceived);
 
     public double EffectiveMeterNeutralDamage => Math.Max(
         0.0,
         EffectiveMeterDamage - EffectiveMeterExternalBuffDamageReceived);
 
-    public double AdjustedDamage => Math.Max(0.0, TotalDamage - SingleTargetBuffDamageReceived);
+    public double AdjustedDamage => Math.Max(0.0, ObservedMeterDamage - SingleTargetBuffDamageReceived);
 
     public double EffectiveMeterAdjustedDamage => Math.Max(
         0.0,
@@ -472,7 +496,16 @@ internal sealed record PeriodicAllocationDiagnostic(
     int TickCount,
     double AverageWeight,
     double AllocatedDamage,
-    double EffectiveDamage);
+    double EffectiveDamage)
+{
+    public IReadOnlyList<PeriodicEstimateDiagnostic> IndependentEstimates { get; init; } = [];
+}
+
+internal sealed record PeriodicEstimateDiagnostic(
+    string? UnavailableReason,
+    int TickCount,
+    double AllocatedDamage,
+    double? EstimatedDamage);
 
 internal sealed record PeriodicTickDiagnostic(
     PeriodicAllocationBasis Basis,
@@ -534,6 +567,10 @@ internal sealed record DamageEncounterSnapshot(
     IReadOnlyList<DamageSourceSummary> Sources,
     IReadOnlyList<DamageTargetSummary> Targets)
 {
+    public double? RawMeterDamage { get; init; }
+
+    public double ObservedMeterDamage => RawMeterDamage ?? TotalDamage;
+
     public DateTime? MeterStartedAtUtc { get; init; }
 
     public DateTime? MeterSnapshotAtUtc { get; init; }
@@ -568,9 +605,9 @@ internal sealed record DamageEncounterSnapshot(
         }
     }
 
-    public double DamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : EffectiveMeterDamage / DurationSeconds;
+    public double DamagePerSecond => DurationSeconds <= 0.0 ? 0.0 : ObservedMeterDamage / DurationSeconds;
 
     public double RaidDamagePerSecond => DurationSeconds <= 0.0
         ? 0.0
-        : EffectiveMeterRaidAdjustedDamage / DurationSeconds;
+        : RaidAdjustedDamage / DurationSeconds;
 }

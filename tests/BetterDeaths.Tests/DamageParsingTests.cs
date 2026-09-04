@@ -717,6 +717,9 @@ public sealed class DamageParsingTests
         Assert.Equal(DamageMeterEligibility.FriendlyTarget, damageEvent.MeterEligibility);
         Assert.Equal(500ul, source.TotalDamage);
         Assert.Equal(0.0, source.EffectiveMeterDamage);
+        Assert.Equal(0.0, source.ObservedMeterDamage);
+        Assert.Equal(0.0, Assert.Single(source.Actions).ObservedMeterDamage);
+        Assert.Equal(0.0, snapshot.ObservedMeterDamage);
         Assert.Equal(0.0, Assert.Single(snapshot.Targets).EffectiveMeterDamage);
         Assert.Equal(0.0, snapshot.EffectiveMeterDamage);
         Assert.Equal(500.0, Assert.Single(snapshot.Diagnostics.Eligibility).RawDamage);
@@ -1728,8 +1731,15 @@ public sealed class DamageParsingTests
 
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
         Assert.Equal(6262ul, snapshot.TotalDamage);
+        Assert.Equal(6262.0, snapshot.ObservedMeterDamage);
         Assert.Equal(905.0, snapshot.EffectiveMeterDamage);
+        var source = Assert.Single(snapshot.Sources);
+        Assert.Equal(6262.0, source.ObservedMeterDamage);
+        Assert.Equal(6262.0, Assert.Single(source.Actions).ObservedMeterDamage);
+        Assert.Equal(6262.0, source.RaidAdjustedDamage);
+        Assert.Equal(905.0, source.EffectiveMeterRaidAdjustedDamage);
         var ended = Assert.IsType<DamageEncounterSnapshot>(module.EndEncounter(SeenAtUtc.AddSeconds(1), "test"));
+        Assert.Equal(6262.0, ended.ObservedMeterDamage);
         var damageEvent = Assert.Single(ended.Events);
         Assert.Equal(905.0, damageEvent.CalculatedAmount);
         Assert.Equal(5357.0, damageEvent.OverkillDamage);
@@ -1869,6 +1879,9 @@ public sealed class DamageParsingTests
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(600u, damageEvent.Amount);
+        Assert.Equal(600.0, snapshot.ObservedMeterDamage);
+        Assert.Equal(600.0, Assert.Single(snapshot.Sources).ObservedMeterDamage);
+        Assert.Equal(600.0, Assert.Single(Assert.Single(snapshot.Sources).Actions).ObservedMeterDamage);
         Assert.Equal(0.0, damageEvent.EffectiveMeterAmount);
         Assert.Equal(DamageResolutionQuality.KnownZeroHp, damageEvent.ResolutionQuality);
         Assert.Equal(0.0, snapshot.EffectiveMeterDamage);

@@ -77,7 +77,7 @@ internal sealed class PeriodicDamageTracker
             nominalExpiresAtUtc,
             retainUntilUtc,
             ++nextApplicationGeneration);
-        tracked.IndependentEstimate = EstimateTickWeight(tracked);
+        CaptureIndependentEstimate(tracked);
         statuses[key] = tracked;
     }
 
@@ -220,16 +220,30 @@ internal sealed class PeriodicDamageTracker
                 HasAttributeChange(damageEvent.SourceStatuses) ||
                 calibrationPotency is not > 0.0 ||
                 damageEvent.Blocked ||
-                damageEvent.Parried ||
-                damageEvent.Critical ||
-                damageEvent.DirectHit)
+                damageEvent.Parried)
+            {
+                continue;
+            }
+
+            // Guaranteed hits under chance buffs have additional damage conversions.
+            if ((RaidBuffPolicy.IsGuaranteedCritical(damageEvent) || RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent)) &&
+                effects.Any(effect => effect.Kind is RaidBuffEffectKind.CriticalChance or RaidBuffEffectKind.DirectHitChance))
             {
                 continue;
             }
 
             var amount = (double)damageEvent.Amount;
-            amount /= GetDamageMultiplier(effects);
-            var potencyMultiplier = amount / calibrationPotency.Value;
+            if (damageEvent.DirectHit)
+            {
+                amount /= DirectHitMultiplier;
+            }
+            if (damageEvent.Critical)
+            {
+                amount /= GetCriticalMultiplier(GetBaseRates(sourceKey).Critical);
+            }
+            // Preserve division order: tick reconstruction truncates this estimate.
+            amount /= calibrationPotency.Value;
+            var potencyMultiplier = amount / GetDamageMultiplier(effects);
             if (!double.IsFinite(potencyMultiplier) || potencyMultiplier <= 0.0)
             {
                 continue;
@@ -601,7 +615,7 @@ internal sealed class PeriodicDamageTracker
                 BaseDamageLowByte = application.BaseDamageLowByte ?? existingApplication.BaseDamageLowByte,
                 CriticalRateLowByte = application.CriticalRateLowByte ?? existingApplication.CriticalRateLowByte,
                 EffectParameterByte = application.EffectParameterByte ?? existingApplication.EffectParameterByte,
-                SourceBaseRates = application.SourceBaseRates ?? existingApplication.SourceBaseRates,
+                SourceBaseRates = existingApplication.SourceBaseRates ?? application.SourceBaseRates,
                 SourceStatuses = existingApplication.HasSourceStatusSnapshot
                     ? existingApplication.SourceStatuses
                     : application.SourceStatuses,
@@ -622,7 +636,7 @@ internal sealed class PeriodicDamageTracker
                 {
                     RemovedAtUtc = existing.Application.SeenAtUtc,
                 };
-                earlier.IndependentEstimate = EstimateTickWeight(earlier);
+                CaptureIndependentEstimate(earlier);
                 statusHistory.Add(earlier);
                 return;
             }
@@ -633,6 +647,8 @@ internal sealed class PeriodicDamageTracker
                     ? removed : application.SeenAtUtc,
                 LastTickAtUtc = existing.LastTickAtUtc,
                 IndependentEstimate = existing.IndependentEstimate,
+                EstimateInputs = existing.EstimateInputs,
+                Calibration = existing.Calibration,
             });
             var existingApplication = existing.Application;
             if (application.IsPeriodicDamage)
@@ -655,10 +671,7 @@ internal sealed class PeriodicDamageTracker
         }
 
         existing.Application = application;
-        if (!isDuplicateObservation || existing.IndependentEstimate is null)
-        {
-            existing.IndependentEstimate = EstimateTickWeight(existing);
-        }
+        CaptureIndependentEstimate(existing, recaptureCalibration: !isDuplicateObservation);
         existing.NominalExpiresAtUtc = nominalExpiresAtUtc;
         existing.RetainUntilUtc = retainUntilUtc;
         existing.RemovedAtUtc = null;
@@ -709,6 +722,7 @@ internal sealed class PeriodicDamageTracker
             CapturedAtUtc = tick.CapturedAtUtc,
             MeterAmount = meterAmount,
             SimulatedPeriodicAmount = tick.StatusId == 0 ? tracked?.IndependentEstimate : null,
+            PeriodicEstimateInputs = tick.StatusId == 0 ? tracked?.EstimateInputs : null,
             PeriodicEstimateUnavailableReason = tick.StatusId != 0 ? "Observed source-specific tick" :
                 status is null ? "Missing application" :
                 HasAttributeChange(status.SourceStatuses) ? "Attribute-changing status" :
@@ -751,15 +765,40 @@ internal sealed class PeriodicDamageTracker
 
     private double? EstimateTickWeight(TrackedStatus status)
     {
+        return GetEstimateInputs(status)?.ExpectedAmount;
+    }
+
+    private void CaptureIndependentEstimate(TrackedStatus status, bool recaptureCalibration = true)
+    {
+        if (recaptureCalibration)
+        {
+            status.Calibration = GetCalibration(status.Application.Source);
+        }
+
+        // Enrich packet metadata without substituting samples from after application.
+        status.EstimateInputs = GetEstimateInputs(status, status.Calibration);
+        status.IndependentEstimate = status.EstimateInputs?.ExpectedAmount;
+    }
+
+    private CalibrationSnapshot GetCalibration(DamageActorIdentity source)
+    {
+        var sourceKey = GetActorKey(source);
+        sourcePotencySamples.TryGetValue(sourceKey, out var potencySamples);
+        return new CalibrationSnapshot(potencySamples?.Median, GetBaseRates(sourceKey));
+    }
+
+    private PeriodicDamageEstimateInputs? GetEstimateInputs(TrackedStatus status) =>
+        GetEstimateInputs(status, GetCalibration(status.Application.Source));
+
+    private static PeriodicDamageEstimateInputs? GetEstimateInputs(TrackedStatus status, CalibrationSnapshot calibration)
+    {
         var application = status.Application;
         if (application.PeriodicPotency is not > 0.0 || HasAttributeChange(application.SourceStatuses))
         {
             return null;
         }
 
-        var sourceKey = GetActorKey(application.Source);
-        if (!sourcePotencySamples.TryGetValue(sourceKey, out var potencySamples) ||
-            potencySamples.Median is not > 0.0)
+        if (calibration.DamagePerPotency is not > 0.0)
         {
             return null;
         }
@@ -771,12 +810,12 @@ internal sealed class PeriodicDamageTracker
             application.ActionCategoryId,
             application.DamageType,
             application.ElementType);
-        var baseAmount = application.PeriodicPotency.Value * potencySamples.Median;
-        baseAmount *= GetDamageMultiplier(effects);
+        var damageMultiplier = GetDamageMultiplier(effects);
+        var baseAmount = application.PeriodicPotency.Value * calibration.DamagePerPotency.Value * damageMultiplier;
         baseAmount = ReconstructBaseAmount(baseAmount, application.BaseDamageLowByte);
 
         var baseRates = application.SourceBaseRates is null
-            ? GetBaseRates(sourceKey)
+            ? calibration.BaseRates
             : new BaseRates(
                 application.SourceBaseRates.Critical,
                 application.SourceBaseRates.DirectHit);
@@ -793,26 +832,22 @@ internal sealed class PeriodicDamageTracker
         var directHitRate = Math.Clamp(baseRates.DirectHit + directHitBuffRate, 0.0, 1.0);
         var criticalMultiplier = GetCriticalMultiplier(
             Math.Clamp(criticalRate - criticalBuffRate, 0.05, 0.95));
-        var expectedAmount = baseAmount *
-            (1.0 + (criticalMultiplier - 1.0) * criticalRate) *
-            (1.0 + (DirectHitMultiplier - 1.0) * directHitRate);
-        return double.IsFinite(expectedAmount) && expectedAmount > 0.0
-            ? expectedAmount
+        var inputs = new PeriodicDamageEstimateInputs(calibration.DamagePerPotency.Value, application.PeriodicPotency.Value,
+            damageMultiplier, application.BaseDamageLowByte, baseAmount, criticalRate, directHitRate, criticalMultiplier);
+        return double.IsFinite(inputs.ExpectedAmount) && inputs.ExpectedAmount >= 0.0
+            ? inputs
             : null;
     }
 
-    private static double ReconstructBaseAmount(double estimate, byte? lowByte)
+    internal static double ReconstructBaseAmount(double estimate, byte? lowByte)
     {
-        if (lowByte is null || estimate < lowByte.Value)
+        var reconstructed = Math.Truncate(estimate);
+        if (lowByte is not null && reconstructed >= lowByte.Value)
         {
-            return estimate;
+            var buckets = Math.Clamp(Math.Round((reconstructed - lowByte.Value) / 256.0,
+                MidpointRounding.ToEven), 0.0, byte.MaxValue);
+            reconstructed = buckets * 256.0 + lowByte.Value;
         }
-
-        var highByte = Math.Clamp(
-            Math.Round((estimate - lowByte.Value) / 256.0, MidpointRounding.AwayFromZero),
-            0.0,
-            byte.MaxValue);
-        var reconstructed = highByte * 256.0 + lowByte.Value;
         return reconstructed > 4096.0 ? reconstructed + 256.0 : reconstructed;
     }
 
@@ -1068,7 +1103,13 @@ internal sealed class PeriodicDamageTracker
         public long ApplicationGeneration { get; set; } = applicationGeneration;
 
         public double? IndependentEstimate { get; set; }
+
+        public PeriodicDamageEstimateInputs? EstimateInputs { get; set; }
+
+        public CalibrationSnapshot Calibration { get; set; } = new(null, BaseRates.Default);
     }
+
+    private sealed record CalibrationSnapshot(double? DamagePerPotency, BaseRates BaseRates);
 
     private sealed class TickSamples
     {

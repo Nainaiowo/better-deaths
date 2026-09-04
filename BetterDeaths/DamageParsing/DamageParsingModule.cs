@@ -63,7 +63,18 @@ internal sealed class DamageParsingModule
             usesExplicitCombatLifecycle |= !allowAutomaticEncounterStart;
             FlushPendingPeriodicTicksCore(packet.SeenAtUtc, force: false);
             PrunePreEncounterState(packet.SeenAtUtc);
-            var parsed = parser.Parse(packet)
+            var decoded = parser.Parse(packet);
+            var unseen = FilterNewDirectEvents(decoded);
+            if (decoded.Count > 0 && unseen.Count == 0)
+            {
+                if (startedAtUtc is not null || combatActive)
+                {
+                    packetCount++;
+                }
+                return [];
+            }
+
+            var parsed = unseen
                 .Select(periodicDamageTracker.ResolveReactiveDamage)
                 .Select(raidBuffTracker.ApplyFallback)
                 .Select(ApplyMeterEligibility)
@@ -302,7 +313,7 @@ internal sealed class DamageParsingModule
             events,
             sourceSnapshots,
             damageEvent => damageEvent.MeterEligibility != DamageMeterEligibility.FriendlyTarget
-                ? damageEvent.Amount
+                ? damageEvent.RawMeterAmount
                 : 0.0);
         var meterRaidAdjustments = RaidDamageCalculator.Calculate(
             events,
@@ -353,6 +364,7 @@ internal sealed class DamageParsingModule
                 ? null
                 : latestMeterDamageAtUtc,
             MeterDamage = sourceSnapshots.Sum(source => source.EffectiveMeterDamage),
+            RawMeterDamage = sourceSnapshots.Sum(source => source.ObservedMeterDamage),
             EstimatedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.EstimatedDamage),
             UnattributedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.UnattributedDamage),
             ExactDamage = sourceSnapshots.Aggregate(0UL, (total, source) =>
@@ -415,7 +427,19 @@ internal sealed class DamageParsingModule
                 group.Count(),
                 group.Average(damageEvent => damageEvent.PeriodicAllocationWeight),
                 group.Sum(damageEvent => damageEvent.RawMeterAmount),
-                group.Sum(damageEvent => damageEvent.EffectiveMeterAmount)))
+                group.Sum(damageEvent => damageEvent.EffectiveMeterAmount))
+            {
+                IndependentEstimates = group
+                    .GroupBy(damageEvent => damageEvent.SimulatedPeriodicAmount is not null
+                        ? null : damageEvent.PeriodicEstimateUnavailableReason ?? "Unavailable in captured data")
+                    .Select(estimates => new PeriodicEstimateDiagnostic(
+                        estimates.Key,
+                        estimates.Count(),
+                        estimates.Sum(damageEvent => damageEvent.RawMeterAmount),
+                        estimates.Key is null ? estimates.Sum(damageEvent => damageEvent.SimulatedPeriodicAmount) : null))
+                    .OrderBy(diagnostic => diagnostic.UnavailableReason, StringComparer.Ordinal)
+                    .ToList(),
+            })
             .OrderByDescending(diagnostic => diagnostic.AllocatedDamage)
             .ThenBy(diagnostic => diagnostic.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(diagnostic => diagnostic.StatusName, StringComparer.OrdinalIgnoreCase)
@@ -511,7 +535,7 @@ internal sealed class DamageParsingModule
             MeterSingleTargetBuffDamageReceived = meterAdjustment?.SingleTargetBuffDamageReceived ?? 0.0,
             RaidAdjustedDamage = Math.Max(
                 0.0,
-                source.TotalDamage - (adjustment?.ExternalBuffDamageReceived ?? 0.0) +
+                source.ObservedMeterDamage - (adjustment?.ExternalBuffDamageReceived ?? 0.0) +
                 (adjustment?.RaidBuffDamageGiven ?? 0.0)),
             MeterRaidAdjustedDamage = Math.Max(
                 0.0,
@@ -540,6 +564,7 @@ internal sealed class DamageParsingModule
             [])
         {
             MeterDamage = 0.0,
+            RawMeterDamage = 0.0,
             RaidAdjustedDamage = adjustment.RaidBuffDamageGiven,
             MeterRaidAdjustedDamage = meterAdjustment?.RaidBuffDamageGiven ?? adjustment.RaidBuffDamageGiven,
             ExternalBuffDamageReceived = adjustment.ExternalBuffDamageReceived,
@@ -749,6 +774,25 @@ internal sealed class DamageParsingModule
             damageEvent.Target.IsPartyMember;
     }
 
+    private IReadOnlyList<ParsedDamageEvent> FilterNewDirectEvents(IReadOnlyList<ParsedDamageEvent> decoded)
+    {
+        var accepted = new List<ParsedDamageEvent>(decoded.Count);
+        var packetEventIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var damageEvent in decoded)
+        {
+            if (eventIds.Contains(damageEvent.EventId) ||
+                stagedDamageBatches.Any(batch => batch.Events.Any(entry => entry.EventId == damageEvent.EventId)) ||
+                !packetEventIds.Add(damageEvent.EventId))
+            {
+                duplicateEventCount++;
+                mutationRevision++;
+                continue;
+            }
+            accepted.Add(damageEvent);
+        }
+        return accepted;
+    }
+
     private void AddEvents(IEnumerable<ParsedDamageEvent> parsed)
     {
         foreach (var damageEvent in parsed)
@@ -781,6 +825,10 @@ internal sealed class DamageParsingModule
                 {
                     meterStartedAtUtc = ResolveMeterStart(damageEvent, meterEventAtUtc);
                     pendingOffensiveCastStartedAtUtc = null;
+                }
+                else if (meterEventAtUtc < meterStartedAtUtc)
+                {
+                    meterStartedAtUtc = meterEventAtUtc;
                 }
             }
 
@@ -1146,6 +1194,7 @@ internal sealed class DamageParsingModule
     private sealed class MutableDamageTotals
     {
         private ulong totalDamage;
+        private double rawMeterDamage;
         private double meterDamage;
         private int swings;
         private int hits;
@@ -1182,6 +1231,7 @@ internal sealed class DamageParsingModule
             {
                 case DamageEventOutcome.Damage:
                     totalDamage += damageEvent.Amount;
+                    rawMeterDamage += isMeterEligible ? damageEvent.RawMeterAmount : 0.0;
                     meterDamage += isMeterEligible ? damageEvent.EffectiveMeterAmount : 0.0;
                     periodicDamage += damageEvent.IsPeriodic ? damageEvent.Amount : 0;
                     periodicHits += damageEvent.IsPeriodic ? 1 : 0;
@@ -1250,6 +1300,7 @@ internal sealed class DamageParsingModule
                 blockedHits,
                 parriedHits)
             {
+                RawMeterDamage = rawMeterDamage,
                 MeterDamage = meterDamage,
                 IsAutoAttack = isAutoAttack,
                 ActionCategoryId = actionCategoryId,
@@ -1283,6 +1334,7 @@ internal sealed class DamageParsingModule
                 parriedHits,
                 actionSnapshots)
             {
+                RawMeterDamage = rawMeterDamage,
                 MeterDamage = meterDamage,
                 PeriodicDamage = periodicDamage,
                 EstimatedDamage = estimatedDamage,
