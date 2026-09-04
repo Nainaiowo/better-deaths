@@ -198,6 +198,26 @@ public sealed partial class Plugin
         }
     }
 
+    public void SetDebugDamageMeterTraceEnabled(bool enabled)
+    {
+        Configuration.DebugDamageMeterTraceEnabled = enabled;
+        SaveConfiguration();
+    }
+
+    public void SetDebugDamageMeterTraceCategory(DamageMeterDebugTraceCategory category, bool enabled)
+    {
+        Configuration.DebugDamageMeterTraceCategories = enabled
+            ? Configuration.DebugDamageMeterTraceCategories | category
+            : Configuration.DebugDamageMeterTraceCategories & ~category;
+        SaveConfiguration();
+    }
+
+    public void SetDebugDamageMeterEncounterExportEnabled(bool enabled)
+    {
+        Configuration.DebugDamageMeterEncounterExportEnabled = enabled;
+        SaveConfiguration();
+    }
+
     public void SetDebugFreezeOnDeathEnabled(bool enabled)
     {
         debugFreezeOnDeathEnabled = enabled;

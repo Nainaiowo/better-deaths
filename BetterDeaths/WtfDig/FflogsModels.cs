@@ -63,6 +63,7 @@ internal sealed class FflogsActor
     public string Name { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public string SubType { get; init; } = string.Empty;
+    public int? PetOwner { get; init; }
 }
 
 internal sealed class FflogsResources
@@ -87,6 +88,15 @@ internal sealed class FflogsEvent
     public long? UnmitigatedAmount { get; init; }
     public long? Absorbed { get; init; }
     public long? Mitigated { get; init; }
+    public long? Overkill { get; init; }
+    public long? PacketID { get; init; }
+    public int? Fight { get; init; }
+    public int? HitType { get; init; }
+    public bool? DirectHit { get; init; }
+    public bool? Tick { get; init; }
+    public bool? Simulated { get; init; }
+    public double? FinalizedAmount { get; init; }
+    public double? Multiplier { get; init; }
     public uint? KillingAbilityGameID { get; init; }
     public int? Stack { get; init; }
     public uint? MarkerID { get; init; }

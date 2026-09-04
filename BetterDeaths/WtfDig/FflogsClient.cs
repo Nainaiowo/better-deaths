@@ -117,6 +117,7 @@ internal sealed partial class FflogsClient : IWtfDigEventSource, IDisposable
     {
         var events = new List<FflogsEvent>();
         var startTime = query.StartTime;
+        var complete = false;
         for (var page = 0; page < 200; page++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -150,14 +151,19 @@ internal sealed partial class FflogsClient : IWtfDigEventSource, IDisposable
                 query.CacheTtl,
                 cancellationToken).ConfigureAwait(false);
             var eventPage = data.ReportData?.Report?.Events;
-            if (eventPage is null)
+            if (eventPage?.Data is null)
             {
-                break;
+                throw new InvalidOperationException("The report returned no event page; comparison data is incomplete.");
             }
 
-            events.AddRange(eventPage.Data ?? []);
+            events.AddRange(eventPage.Data);
             if (eventPage.NextPageTimestamp is not { } next || eventPage.Data is not { Count: > 0 })
             {
+                if (eventPage.NextPageTimestamp is not null)
+                {
+                    throw new InvalidOperationException("The report returned an empty unfinished event page.");
+                }
+                complete = true;
                 break;
             }
 
@@ -169,7 +175,7 @@ internal sealed partial class FflogsClient : IWtfDigEventSource, IDisposable
             startTime = next;
         }
 
-        return events;
+        return complete ? events : throw new InvalidOperationException("The report event limit was reached; comparison data is incomplete.");
     }
 
     internal static int EventsCacheTtl(FflogsReportSummary report, FflogsFight fight, DateTime? nowUtc = null)

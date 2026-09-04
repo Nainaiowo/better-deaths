@@ -20,6 +20,7 @@ public enum DamageMeterColumn
     HitCount = 13,
     NeutralDamagePerSecond = 14,
     AdjustedDamagePerSecond = 15,
+    EncounterDamagePerSecond = 16,
 }
 
 internal static class DamageMeterColumnPolicy
@@ -50,9 +51,12 @@ internal static class DamageMeterColumnPolicy
         var seen = new HashSet<DamageMeterColumn>();
         foreach (var column in columns)
         {
-            if (Enum.IsDefined(column) && seen.Add(column))
+            var canonical = column == DamageMeterColumn.EncounterDamagePerSecond
+                ? DamageMeterColumn.DamagePerSecond
+                : column;
+            if (Enum.IsDefined(canonical) && seen.Add(canonical))
             {
-                normalized.Add(column);
+                normalized.Add(canonical);
             }
         }
 

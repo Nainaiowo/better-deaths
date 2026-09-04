@@ -19,6 +19,7 @@ internal sealed class PeriodicDamageTracker
     private const double DefaultDirectHitRate = 0.05;
     private const double DirectHitMultiplier = 1.25;
     private readonly Dictionary<StatusKey, TrackedStatus> statuses = [];
+    private readonly List<TrackedStatus> statusHistory = [];
     private readonly Dictionary<ApplicationKey, TickSamples> learnedApplicationTicks = [];
     private readonly Dictionary<ProfileKey, TickSamples> learnedProfileTicks = [];
     private readonly Dictionary<string, PotencySamples> sourcePotencySamples = new(StringComparer.Ordinal);
@@ -71,22 +72,26 @@ internal sealed class PeriodicDamageTracker
             return;
         }
 
-        statuses[key] = new TrackedStatus(
+        var tracked = new TrackedStatus(
             application,
             nominalExpiresAtUtc,
             retainUntilUtc,
             ++nextApplicationGeneration);
+        tracked.IndependentEstimate = EstimateTickWeight(tracked);
+        statuses[key] = tracked;
     }
 
     public void Retire(uint targetEntityId, uint statusId, uint sourceEntityId, DateTime removedAtUtc)
     {
-        foreach (var status in statuses
-                     .Where(entry => entry.Key.TargetEntityId == targetEntityId &&
-                         entry.Key.StatusId == statusId &&
-                         (sourceEntityId == 0 || entry.Key.SourceEntityId == sourceEntityId))
-                     .Select(entry => entry.Value))
+        foreach (var status in statuses.Values.Concat(statusHistory)
+                     .Where(status => status.Application.Target.EntityId == targetEntityId &&
+                         status.Application.StatusId == statusId && status.Application.SeenAtUtc <= removedAtUtc &&
+                         (sourceEntityId == 0 || status.Application.Source.EntityId == sourceEntityId)))
         {
-            status.RemovedAtUtc = removedAtUtc;
+            if (status.RemovedAtUtc is null || status.RemovedAtUtc > removedAtUtc)
+            {
+                status.RemovedAtUtc = removedAtUtc;
+            }
         }
     }
 
@@ -171,8 +176,7 @@ internal sealed class PeriodicDamageTracker
         {
             var source = damageEvent.AttributedSource ?? damageEvent.Source;
             if ((!source.IsPlayer && !source.IsPartyMember) ||
-                source.IsLimitBreak ||
-                damageEvent.Source.IsPet)
+                source.IsLimitBreak)
             {
                 continue;
             }
@@ -212,7 +216,9 @@ internal sealed class PeriodicDamageTracker
             }
 
             var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
-            if (calibrationPotency is not > 0.0 ||
+            if (damageEvent.Source.IsPet ||
+                HasAttributeChange(damageEvent.SourceStatuses) ||
+                calibrationPotency is not > 0.0 ||
                 damageEvent.Blocked ||
                 damageEvent.Parried ||
                 damageEvent.Critical ||
@@ -263,7 +269,7 @@ internal sealed class PeriodicDamageTracker
                 ConsumeLateTickIfNeeded(matchingStatus, tick.SeenAtUtc);
                 return [CreateEvent(
                     tick,
-                    matchingStatus?.Application,
+                    matchingStatus,
                     tick.Source,
                     tick.Amount,
                     tick.Amount,
@@ -282,7 +288,7 @@ internal sealed class PeriodicDamageTracker
                 var selected = selectedStatus.Application;
                 return [CreateEvent(
                     tick,
-                    selected,
+                    selectedStatus,
                     selected.Source,
                     tick.Amount,
                     tick.Amount,
@@ -311,8 +317,12 @@ internal sealed class PeriodicDamageTracker
                 0.0)];
         }
 
-        var candidates = statuses.Values
+        var candidates = statuses.Values.Concat(statusHistory)
             .Where(status => IsEligibleForTick(status, tick))
+            .GroupBy(status => (status.Application.Source.EntityId, status.Application.StatusId))
+            .Select(group => group.Where(status => status.Application.SeenAtUtc <= tick.SeenAtUtc)
+                .OrderByDescending(status => status.Application.SeenAtUtc).FirstOrDefault() ??
+                group.OrderBy(status => status.Application.SeenAtUtc).First())
             .OrderBy(status => status.Application.Source.EntityId)
             .ThenBy(status => status.Application.StatusId)
             .ToList();
@@ -340,7 +350,7 @@ internal sealed class PeriodicDamageTracker
             Learn(candidate, tick.Amount);
             return [CreateEvent(
                 tick,
-                candidate.Application,
+                candidate,
                 candidate.Application.Source,
                 tick.Amount,
                 tick.Amount,
@@ -365,7 +375,7 @@ internal sealed class PeriodicDamageTracker
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
             events.Add(CreateEvent(
                 tick,
-                candidate.Application,
+                candidate,
                 candidate.Application.Source,
                 allocations[index].Amount,
                 allocations[index].Amount,
@@ -382,6 +392,7 @@ internal sealed class PeriodicDamageTracker
     public void Clear()
     {
         statuses.Clear();
+        statusHistory.Clear();
         learnedApplicationTicks.Clear();
         learnedProfileTicks.Clear();
         sourcePotencySamples.Clear();
@@ -505,7 +516,7 @@ internal sealed class PeriodicDamageTracker
         }
 
         return new AllocationWeight(
-            EstimateTickWeight(status) ?? 0.0,
+            Math.Round(EstimateTickWeight(status) ?? 0.0, MidpointRounding.AwayFromZero),
             PeriodicAllocationBasis.PotencyEstimate);
     }
 
@@ -605,6 +616,24 @@ internal sealed class PeriodicDamageTracker
         }
         else
         {
+            if (application.SeenAtUtc < existing.Application.SeenAtUtc)
+            {
+                var earlier = new TrackedStatus(application, nominalExpiresAtUtc, retainUntilUtc, ++nextApplicationGeneration)
+                {
+                    RemovedAtUtc = existing.Application.SeenAtUtc,
+                };
+                earlier.IndependentEstimate = EstimateTickWeight(earlier);
+                statusHistory.Add(earlier);
+                return;
+            }
+            statusHistory.Add(new TrackedStatus(existing.Application, existing.NominalExpiresAtUtc,
+                existing.RetainUntilUtc, existing.ApplicationGeneration)
+            {
+                RemovedAtUtc = existing.RemovedAtUtc is { } removed && removed < application.SeenAtUtc
+                    ? removed : application.SeenAtUtc,
+                LastTickAtUtc = existing.LastTickAtUtc,
+                IndependentEstimate = existing.IndependentEstimate,
+            });
             var existingApplication = existing.Application;
             if (application.IsPeriodicDamage)
             {
@@ -626,15 +655,19 @@ internal sealed class PeriodicDamageTracker
         }
 
         existing.Application = application;
+        if (!isDuplicateObservation || existing.IndependentEstimate is null)
+        {
+            existing.IndependentEstimate = EstimateTickWeight(existing);
+        }
         existing.NominalExpiresAtUtc = nominalExpiresAtUtc;
         existing.RetainUntilUtc = retainUntilUtc;
         existing.RemovedAtUtc = null;
         existing.LateTickConsumed = false;
     }
 
-    private static ParsedDamageEvent CreateEvent(
+    private ParsedDamageEvent CreateEvent(
         PeriodicDamageTick tick,
-        DamageStatusApplication? status,
+        TrackedStatus? tracked,
         DamageActorIdentity source,
         uint amount,
         double meterAmount,
@@ -644,6 +677,7 @@ internal sealed class PeriodicDamageTracker
         int candidateCount,
         double allocationWeight)
     {
+        var status = tracked?.Application;
         var statusId = status?.StatusId ?? tick.StatusId;
         var statusName = status?.StatusName ??
             (!string.IsNullOrWhiteSpace(tick.StatusName) ? tick.StatusName : "Unattributed DoT");
@@ -674,6 +708,12 @@ internal sealed class PeriodicDamageTracker
         {
             CapturedAtUtc = tick.CapturedAtUtc,
             MeterAmount = meterAmount,
+            SimulatedPeriodicAmount = tick.StatusId == 0 ? tracked?.IndependentEstimate : null,
+            PeriodicEstimateUnavailableReason = tick.StatusId != 0 ? "Observed source-specific tick" :
+                status is null ? "Missing application" :
+                HasAttributeChange(status.SourceStatuses) ? "Attribute-changing status" :
+                status.PeriodicPotency is not > 0 ? "Missing potency" :
+                tracked?.IndependentEstimate is null ? "Missing application-time calibration" : null,
             AttributedSource = source,
             AttributionQuality = quality,
             IsPeriodic = true,
@@ -712,7 +752,7 @@ internal sealed class PeriodicDamageTracker
     private double? EstimateTickWeight(TrackedStatus status)
     {
         var application = status.Application;
-        if (application.PeriodicPotency is not > 0.0)
+        if (application.PeriodicPotency is not > 0.0 || HasAttributeChange(application.SourceStatuses))
         {
             return null;
         }
@@ -757,7 +797,7 @@ internal sealed class PeriodicDamageTracker
             (1.0 + (criticalMultiplier - 1.0) * criticalRate) *
             (1.0 + (DirectHitMultiplier - 1.0) * directHitRate);
         return double.IsFinite(expectedAmount) && expectedAmount > 0.0
-            ? Math.Round(expectedAmount, MidpointRounding.AwayFromZero)
+            ? expectedAmount
             : null;
     }
 
@@ -787,10 +827,12 @@ internal sealed class PeriodicDamageTracker
             samples.KnownCriticalRate ?? (samples.CriticalSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(samples.CriticalHits / (double)samples.CriticalSwings, 0.05, 0.95)
                 : DefaultCriticalRate),
-            samples.KnownDirectHitRate ?? (samples.DirectHitSwings >= MinimumObservedRateSamples
-                ? Math.Clamp(samples.DirectHits / (double)samples.DirectHitSwings, 0.05, 0.95)
-                : DefaultDirectHitRate));
+            samples.KnownDirectHitRate ?? DamageBaseRatePolicy.EstimateObserved(
+                samples.DirectHits, samples.DirectHitSwings, critical: false));
     }
+
+    private static bool HasAttributeChange(IReadOnlyList<DamageStatusSnapshot> statuses) =>
+        statuses.Any(status => status.RemainingTime > 0 && PersonalDamageModifierPolicy.ChangesAttributes(status.StatusId));
 
     private static double ResolveCriticalRate(byte? lowByte, double expectedRate)
     {
@@ -896,12 +938,18 @@ internal sealed class PeriodicDamageTracker
 
     private void Prune(DateTime now)
     {
+        foreach (var retired in statusHistory.Where(status => status.RemovedAtUtc is { } removed &&
+                     removed.AddSeconds(PeriodicStatusRetentionSeconds) < now).ToList())
+        {
+            learnedApplicationTicks.Remove(GetApplicationKey(retired));
+            statusHistory.Remove(retired);
+        }
         foreach (var key in statuses
                      .Where(entry => entry.Value.RetainUntilUtc < now ||
                          entry.Value.LateTickConsumed &&
                          entry.Value.NominalExpiresAtUtc.AddSeconds(NormalStatusExpiryGraceSeconds) < now ||
                          entry.Value.RemovedAtUtc is { } removedAtUtc &&
-                         removedAtUtc.AddSeconds(DeferredStatusArrivalToleranceSeconds) < now)
+                         removedAtUtc.AddSeconds(PeriodicStatusRetentionSeconds) < now)
                      .Select(entry => entry.Key)
                      .ToList())
         {
@@ -1018,6 +1066,8 @@ internal sealed class PeriodicDamageTracker
         public bool LateTickConsumed { get; set; }
 
         public long ApplicationGeneration { get; set; } = applicationGeneration;
+
+        public double? IndependentEstimate { get; set; }
     }
 
     private sealed class TickSamples

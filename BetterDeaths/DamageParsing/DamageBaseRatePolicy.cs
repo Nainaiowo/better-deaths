@@ -6,6 +6,14 @@ internal static class DamageBaseRatePolicy
 {
     private const double MinimumCriticalRate = 0.05;
 
+    public static double EstimateObserved(int hits, int samples, bool critical)
+    {
+        var minimum = critical ? MinimumCriticalRate : 0.0;
+        return samples >= 11
+            ? Math.Clamp(hits / (double)samples, minimum, 1.0)
+            : critical ? 0.15 : 0.05;
+    }
+
     public static DamageBaseRateSnapshot? FromAttributes(
         int criticalHit,
         int directHit,

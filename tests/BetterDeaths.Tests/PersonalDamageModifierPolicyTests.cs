@@ -36,9 +36,6 @@ public sealed class PersonalDamageModifierPolicyTests
 
     public static TheoryData<uint, double> UniversalModifiers => new()
     {
-        { 0x31, 0.15 },
-        { 0x2B, -0.25 },
-        { 0x2C, -0.50 },
         { 0x7D, 0.15 },
         { 0x748, 0.10 },
         { 0x77A, 0.10 },
@@ -88,6 +85,68 @@ public sealed class PersonalDamageModifierPolicyTests
             Status(0x846),
             actionCategoryId: 2,
             damageType: 5));
+    }
+
+    [Theory]
+    [InlineData(0x31u)]
+    [InlineData(0x2Bu)]
+    [InlineData(0x2Cu)]
+    public void AttributeModifiersAreCapturedButNotTreatedAsFlatDamage(uint id)
+    {
+        Assert.True(PersonalDamageModifierPolicy.IsRelevantStatus(id));
+        Assert.True(PersonalDamageModifierPolicy.ChangesAttributes(id));
+        Assert.Empty(PersonalDamageModifierPolicy.GetEffects(Status(id), 3, 3));
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1_150, [Status(id)]));
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Null(tick.SimulatedPeriodicAmount);
+        Assert.Equal("Missing application-time calibration", tick.PeriodicEstimateUnavailableReason);
+        Assert.Equal(600u, tick.Amount);
+    }
+
+    [Fact]
+    public void LateCalibrationDoesNotHideMissingApplicationTimeEstimate()
+    {
+        var module = new DamageParsingModule();
+        module.ObserveStatus(PeriodicApplication([]));
+        module.Process(DirectPacket(1_000, []) with { SeenAtUtc = SeenAtUtc.AddSeconds(1) });
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Null(tick.SimulatedPeriodicAmount);
+        Assert.Equal("Missing application-time calibration", tick.PeriodicEstimateUnavailableReason);
+        var restored = System.Text.Json.JsonSerializer.Deserialize<ParsedDamageEvent>(
+            System.Text.Json.JsonSerializer.Serialize(tick))!;
+        Assert.Equal(tick.PeriodicEstimateUnavailableReason, restored.PeriodicEstimateUnavailableReason);
+        Assert.Null(restored.SimulatedPeriodicAmount);
+    }
+
+    [Fact]
+    public void IndependentEstimateIsSeparateFromObservedAllocationAndFrozenAtApplication()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1_000, []));
+        module.ObserveStatus(PeriodicApplication([]));
+        module.Process(DirectPacket(9_000, [], packetSequence: 3) with { SeenAtUtc = SeenAtUtc.AddSeconds(1) });
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        // 20 potency * 10 damage/potency, 15% crit with 1.5 multiplier, 5% DH.
+        Assert.Equal(217.6875, tick.SimulatedPeriodicAmount!.Value, 6);
+        Assert.Equal(600u, tick.Amount);
+        Assert.Equal(600, tick.EffectiveMeterAmount);
+        var restored = System.Text.Json.JsonSerializer.Deserialize<ParsedDamageEvent>(
+            System.Text.Json.JsonSerializer.Serialize(tick))!;
+        Assert.Equal(tick.SimulatedPeriodicAmount, restored.SimulatedPeriodicAmount);
+        Assert.Equal(tick.EffectiveMeterAmount, restored.EffectiveMeterAmount);
+    }
+
+    [Fact]
+    public void AttributeChangedApplicationDoesNotReuseUnbuffedIndependentEstimate()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1_000, []));
+        module.ObserveStatus(PeriodicApplication([Status(0x31)]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Null(tick.SimulatedPeriodicAmount);
+        Assert.Equal("Attribute-changing status", tick.PeriodicEstimateUnavailableReason);
     }
 
     [Fact]
@@ -144,6 +203,64 @@ public sealed class PersonalDamageModifierPolicyTests
         DamageActorIdentity? source = null)
     {
         return new DamageStatusSnapshot(statusId, source ?? Dealer, 0, 20.0f);
+    }
+
+    [Fact]
+    public void PetHitsSampleOwnerRatesWithoutCalibratingOwnerPotency()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1_000, []));
+        var pet = Dealer with
+        {
+            EntityId = 0x40000002, IsPlayer = false, IsPartyMember = false, IsPet = true,
+            OwnerEntityId = Dealer.EntityId,
+        };
+        for (var index = 0; index < 11; index++)
+        {
+            module.Process(DirectPacket(9_000, [], pet, index + 2) with { SourceOwner = Dealer });
+        }
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(215, tick.SimulatedPeriodicAmount!.Value, 6);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DelayedTickUsesTheApplicationBeforeARefresh(bool tickArrivesFirst)
+    {
+        var tracker = new PeriodicDamageTracker();
+        var original = PeriodicApplication([]);
+        var refreshed = original with { SeenAtUtc = SeenAtUtc.AddSeconds(3), SourceStatuses = [Status(0x748)] };
+        tracker.Observe(original);
+        var tick = new PeriodicDamageTick(1, SeenAtUtc.AddSeconds(2.98), Target, 0, "", 0, 600, null);
+        IReadOnlyList<ParsedDamageEvent> events;
+        if (tickArrivesFirst)
+        {
+            events = tracker.Process(tick);
+            tracker.Observe(refreshed);
+        }
+        else
+        {
+            tracker.Observe(refreshed);
+            events = tracker.Process(tick);
+        }
+        Assert.Empty(Assert.Single(events).SourceStatuses);
+        Assert.Equal(600u, Assert.Single(events).Amount);
+        var later = Assert.Single(tracker.Process(tick with { PacketSequence = 2, SeenAtUtc = SeenAtUtc.AddSeconds(6) }));
+        Assert.Equal(0x748u, Assert.Single(later.SourceStatuses).StatusId);
+    }
+
+    [Fact]
+    public void LateRemovalDoesNotRemoveTheNewApplication()
+    {
+        var tracker = new PeriodicDamageTracker();
+        var application = PeriodicApplication([]);
+        tracker.Observe(application);
+        tracker.Observe(application with { SeenAtUtc = SeenAtUtc.AddSeconds(4), SourceStatuses = [Status(0x748)] });
+        tracker.Retire(Target.EntityId, application.StatusId, Dealer.EntityId, SeenAtUtc.AddSeconds(3));
+        var tick = Assert.Single(tracker.Process(new PeriodicDamageTick(1, SeenAtUtc.AddSeconds(5), Target, 0, "", 0, 600, null)));
+        Assert.Equal(0x748u, Assert.Single(tick.SourceStatuses).StatusId);
     }
 
     private static DamageActionPacket DirectPacket(

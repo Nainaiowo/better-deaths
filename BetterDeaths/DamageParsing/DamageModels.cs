@@ -242,6 +242,11 @@ internal sealed record ParsedDamageEvent(
 
     public double? MeterAmount { get; init; }
 
+    // Independent expected tick, never substituted for the observed allocation.
+    public double? SimulatedPeriodicAmount { get; init; }
+
+    public string? PeriodicEstimateUnavailableReason { get; init; }
+
     public double RawMeterAmount => MeterAmount ?? Amount;
 
     public double? CalculatedAmount { get; init; }
@@ -336,6 +341,8 @@ internal sealed record DamageActionSummary(
 
     public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
 
+    public double? ActiveDurationSeconds { get; init; }
+
     public bool IsAutoAttack { get; init; }
 
     public uint ActionCategoryId { get; init; }
@@ -369,6 +376,12 @@ internal sealed record DamageSourceSummary(
     public double? MeterDamage { get; init; }
 
     public double EffectiveMeterDamage => MeterDamage ?? TotalDamage;
+
+    public DateTime? ActiveStartedAtUtc { get; init; }
+
+    public DateTime? ActiveEndedAtUtc { get; init; }
+
+    public double? ActiveDurationSeconds { get; init; }
 
     public ulong PeriodicDamage { get; init; }
 

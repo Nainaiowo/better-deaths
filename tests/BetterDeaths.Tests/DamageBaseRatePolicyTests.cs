@@ -2,6 +2,16 @@ namespace BetterDeaths.DamageParsing;
 
 public sealed class DamageBaseRatePolicyTests
 {
+    [Theory]
+    [InlineData(0, 11, false, 0.0)]
+    [InlineData(0, 100, false, 0.0)]
+    [InlineData(0, 11, true, 0.05)]
+    [InlineData(0, 10, false, 0.05)]
+    [InlineData(100, 100, false, 1.0)]
+    public void ObservedRatesDoNotInventDirectHits(int hits, int count, bool critical, double expected)
+    {
+        Assert.Equal(expected, DamageBaseRatePolicy.EstimateObserved(hits, count, critical), 8);
+    }
     [Fact]
     public void LevelOneHundredAttributesProduceTieredBaseRates()
     {

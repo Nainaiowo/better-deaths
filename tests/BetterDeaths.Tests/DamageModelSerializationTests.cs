@@ -165,4 +165,24 @@ public sealed class DamageModelSerializationTests
         Assert.Equal(960.0, source.AdjustedDamage);
         Assert.Equal(915.0, source.EffectiveMeterAdjustedDamage);
     }
+
+    [Fact]
+    public void PersonalDurationSurvivesSourceSerialization()
+    {
+        var seenAtUtc = new DateTime(2026, 8, 27, 12, 0, 0, DateTimeKind.Utc);
+        var actor = new DamageActorIdentity(1, "Source", 0, string.Empty, true, 21);
+        var source = new DamageSourceSummary(actor, 1000, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, [])
+        {
+            ActiveStartedAtUtc = seenAtUtc,
+            ActiveEndedAtUtc = seenAtUtc.AddSeconds(4.5),
+            ActiveDurationSeconds = 4.5,
+        };
+
+        var restored = Assert.IsType<DamageSourceSummary>(
+            JsonSerializer.Deserialize<DamageSourceSummary>(JsonSerializer.Serialize(source)));
+
+        Assert.Equal(seenAtUtc, restored.ActiveStartedAtUtc);
+        Assert.Equal(seenAtUtc.AddSeconds(4.5), restored.ActiveEndedAtUtc);
+        Assert.Equal(4.5, restored.ActiveDurationSeconds.GetValueOrDefault(), 6);
+    }
 }

@@ -756,6 +756,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     public void Dispose()
     {
         wtfDigAnalyzer.Dispose();
+        damageParity.Dispose();
     }
 
     public override void PreDraw()
@@ -18474,6 +18475,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         ImGui.TextDisabled(plugin.DebugCaptureFilePath);
+
+        DrawDamageMeterDiagnostics();
 
         DrawDebugFilters();
 

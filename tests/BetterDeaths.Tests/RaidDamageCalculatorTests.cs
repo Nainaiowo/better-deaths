@@ -930,6 +930,42 @@ public sealed class RaidDamageCalculatorTests
         Assert.Equal(5.0, buffer.RaidAdjustedDamage, 6);
     }
 
+    [Fact]
+    public void ZeroObservedDirectHitRateDoesNotDiluteExternalBuffCredit()
+    {
+        var events = Enumerable.Range(0, 11).Select(index => CreateEvent(1_000) with
+        {
+            EventId = $"sample:{index}",
+        }).Append(CreateEvent(12_500, directHit: true) with
+        {
+            SourceStatuses = [Status(0x8D, Buffer)],
+        }).ToArray();
+        var result = Calculate(events);
+        Assert.Equal(2_500, Given(result, Buffer), 6);
+        Assert.Equal(2_500, Received(result, Dealer), 6);
+        AssertConserved(23_500, result, Dealer, Buffer, SecondBuffer);
+    }
+
+    [Fact]
+    public void BuffHistorySurvivesRefreshAndRemovalForEarlierEvents()
+    {
+        var tracker = new RaidBuffTracker();
+        var application = PeriodicApplication() with
+        {
+            Target = Dealer, Source = Buffer, StatusId = 0xB94, Parameter = 1,
+            IsPeriodicDamage = false, DurationSeconds = 20,
+        };
+        tracker.Observe(application);
+        tracker.Observe(application with { SeenAtUtc = SeenAtUtc.AddSeconds(3), Parameter = 3 });
+        tracker.Observe(application with { SeenAtUtc = SeenAtUtc.AddSeconds(4), IsRemoval = true });
+        var before = tracker.ApplyFallback(CreateEvent(1_000) with { SeenAtUtc = SeenAtUtc.AddSeconds(2) });
+        var after = tracker.ApplyFallback(CreateEvent(1_000) with { SeenAtUtc = SeenAtUtc.AddSeconds(3.5) });
+        var removed = tracker.ApplyFallback(CreateEvent(1_000) with { SeenAtUtc = SeenAtUtc.AddSeconds(4.5) });
+        Assert.Equal(1, Assert.Single(before.SourceStatuses).Parameter);
+        Assert.Equal(3, Assert.Single(after.SourceStatuses).Parameter);
+        Assert.Empty(removed.SourceStatuses);
+    }
+
     private static IReadOnlyDictionary<string, RaidDamageAdjustment> Calculate(params ParsedDamageEvent[] events)
     {
         var sources = new[] { Dealer, Buffer, SecondBuffer }

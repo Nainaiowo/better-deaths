@@ -851,14 +851,35 @@ public sealed partial class Plugin
         }
 
         var actionPackets = DrainRawActionEffectPackets(now);
+        var effectResultPackets = DrainRawEffectResultPackets(now);
+        var actorControlPackets = DrainRawActorControlPackets(now);
+        // Only the damage parser changes ordering; review keeps its existing resolution passes.
+        var damagePackets = new List<(DateTime SeenAtUtc, int Kind, long Sequence, object Packet)>();
+        damagePackets.AddRange(actionPackets.Where(packet => packet.CaptureForDamageParsing)
+            .Select(packet => (packet.SeenAtUtc, 0, packet.Sequence, (object)packet)));
+        damagePackets.AddRange(effectResultPackets.Where(packet => packet.CaptureForDamageParsing)
+            .Select(packet => (packet.SeenAtUtc, 1, packet.Sequence, (object)packet)));
+        damagePackets.AddRange(actorControlPackets.Where(packet => packet.CaptureForDamageParsing)
+            .Select(packet => (packet.SeenAtUtc, 2, packet.Sequence, (object)packet)));
+        foreach (var entry in damagePackets.OrderBy(entry => entry.SeenAtUtc)
+                     .ThenBy(entry => entry.Kind).ThenBy(entry => entry.Sequence))
+        {
+            switch (entry.Packet)
+            {
+                case RawActionEffectPacket action:
+                    ParseDamageActionEffectPacket(action);
+                    break;
+                case RawEffectResultPacket result:
+                    ObserveDamageEffectResult(result);
+                    break;
+                case RawActorControlPacket control:
+                    ParseDamageActorControl(control);
+                    break;
+            }
+        }
         actionPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in actionPackets)
         {
-            if (packet.CaptureForDamageParsing)
-            {
-                ParseDamageActionEffectPacket(packet);
-            }
-
             if (packet.CaptureForReview)
             {
                 AddActionEffectReplayPoseSamples(packet);
@@ -873,30 +894,18 @@ public sealed partial class Plugin
             ResolveRawCombatLogMessage(message);
         }
 
-        var effectResultPackets = DrainRawEffectResultPackets(now);
         effectResultPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in effectResultPackets)
         {
-            if (packet.CaptureForDamageParsing)
-            {
-                ObserveDamageEffectResult(packet);
-            }
-
             if (packet.CaptureForReview)
             {
                 ResolveRawEffectResultPacket(packet);
             }
         }
 
-        var actorControlPackets = DrainRawActorControlPackets(now);
         actorControlPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in actorControlPackets)
         {
-            if (packet.CaptureForDamageParsing)
-            {
-                ParseDamageActorControl(packet);
-            }
-
             if (packet.CaptureForReview)
             {
                 ResolveRawActorControlPacket(packet);

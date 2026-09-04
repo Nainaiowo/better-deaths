@@ -61,6 +61,16 @@ internal static class DamageMeterPreviewData
                 (4242, "Dragonsong Dive", 3_085_932UL, 2, 1_542_966UL),
                 (7861, "Doom of Living", 3_061_874UL, 2, 1_530_937UL)),
         };
+        sources = sources
+            .Select((source, index) => source.Source.IsPlayer
+                ? source with
+                {
+                    ActiveStartedAtUtc = startedAtUtc.AddSeconds(0.5 + (index * 0.1)),
+                    ActiveEndedAtUtc = endedAtUtc.AddSeconds(-3.5 - (index * 0.75)),
+                    ActiveDurationSeconds = DurationSeconds - 4.0 - (index * 0.85),
+                }
+                : source)
+            .ToList();
         var total = sources.Aggregate(0UL, (sum, source) => sum + source.TotalDamage);
         return new DamageEncounterSnapshot(
             startedAtUtc,

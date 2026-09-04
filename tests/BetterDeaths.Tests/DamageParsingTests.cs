@@ -184,6 +184,160 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void TracksPersonalDamageDurationSeparatelyFromEncounterDuration()
+    {
+        var other = Source with { EntityId = 0x1002, Name = "Other source" };
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 1,
+            seenAtUtc: SeenAtUtc,
+            source: other) with { ActionSequence = 701 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 200)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(2)) with { ActionSequence = 702 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 300)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(8)) with { ActionSequence = 703 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 4,
+            seenAtUtc: SeenAtUtc.AddSeconds(10),
+            source: other) with { ActionSequence = 704 });
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources, entry => entry.Source.EntityId == Source.EntityId);
+
+        Assert.Equal(10.0, snapshot.DurationSeconds, 6);
+        Assert.Equal(6.0, source.ActiveDurationSeconds.GetValueOrDefault(), 6);
+        Assert.Equal(SeenAtUtc.AddSeconds(2), source.ActiveStartedAtUtc);
+        Assert.Equal(SeenAtUtc.AddSeconds(8), source.ActiveEndedAtUtc);
+    }
+
+    [Fact]
+    public void OutgoingHealingExtendsPersonalActiveDurationWithoutAddingDamage()
+    {
+        var other = Source with { EntityId = 0x1002, Name = "Other source" };
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 1,
+            seenAtUtc: SeenAtUtc,
+            source: other) with { ActionSequence = 701 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 200)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(2)) with { ActionSequence = 702 });
+        Assert.Empty(module.Process(CreatePacket(
+            [new DamageActionEffect(0, 4, 0, 0, 0, 0, 500)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(8)) with { ActionSequence = 703 }));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 4,
+            seenAtUtc: SeenAtUtc.AddSeconds(10),
+            source: other) with { ActionSequence = 704 });
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources, entry => entry.Source.EntityId == Source.EntityId);
+
+        Assert.Equal(200ul, source.TotalDamage);
+        Assert.Equal(6.0, source.ActiveDurationSeconds.GetValueOrDefault(), 6);
+    }
+
+    [Fact]
+    public void OutgoingHealingBeforeFirstDamageStartsPersonalActivityDuringExplicitCombat()
+    {
+        var module = new DamageParsingModule();
+        module.SetCombatActive(true, SeenAtUtc);
+        Assert.Empty(module.Process(CreatePacket(
+            [new DamageActionEffect(0, 4, 0, 0, 0, 0, 500)],
+            packetSequence: 1,
+            seenAtUtc: SeenAtUtc) with { ActionSequence = 701 }, allowAutomaticEncounterStart: false));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 200)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(2)) with { ActionSequence = 702 }, allowAutomaticEncounterStart: false);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources);
+
+        Assert.Equal(200ul, source.TotalDamage);
+        Assert.Equal(2.0, source.ActiveDurationSeconds.GetValueOrDefault(), 6);
+        Assert.Equal(SeenAtUtc, source.ActiveStartedAtUtc);
+    }
+
+    [Fact]
+    public void AttributesPetActivityToTheOwnerDuration()
+    {
+        var other = Source with { EntityId = 0x1002, Name = "Other source" };
+        var pet = new DamageActorIdentity(0x3001, "Pet", Source.EntityId, Source.Name, false, 0)
+        {
+            IsPet = true,
+        };
+        var module = new DamageParsingModule();
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 1,
+            seenAtUtc: SeenAtUtc,
+            source: other) with { ActionSequence = 701 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 200)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(2)) with { ActionSequence = 702 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 300)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(8),
+            source: pet,
+            sourceOwner: Source) with { ActionSequence = 703 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 4,
+            seenAtUtc: SeenAtUtc.AddSeconds(10),
+            source: other) with { ActionSequence = 704 });
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources, entry => entry.Source.EntityId == Source.EntityId);
+
+        Assert.Equal(500ul, source.TotalDamage);
+        Assert.Equal(6.0, source.ActiveDurationSeconds.GetValueOrDefault(), 6);
+    }
+
+    [Fact]
+    public void PersonalDurationSumsSeparateCombatSegments()
+    {
+        var module = new DamageParsingModule();
+        module.SetCombatActive(true, SeenAtUtc);
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 1,
+            seenAtUtc: SeenAtUtc) with { ActionSequence = 701 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 2,
+            seenAtUtc: SeenAtUtc.AddSeconds(2)) with { ActionSequence = 702 });
+        module.SetCombatActive(false, SeenAtUtc.AddSeconds(3));
+        module.SetCombatActive(true, SeenAtUtc.AddSeconds(9));
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 3,
+            seenAtUtc: SeenAtUtc.AddSeconds(10)) with { ActionSequence = 703 });
+        module.Process(CreatePacket(
+            [new DamageActionEffect(0, 3, 0, 0, 0, 0, 100)],
+            packetSequence: 4,
+            seenAtUtc: SeenAtUtc.AddSeconds(13)) with { ActionSequence = 704 });
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        var source = Assert.Single(snapshot.Sources);
+
+        Assert.Equal(13.0, snapshot.DurationSeconds, 6);
+        Assert.Equal(5.0, source.ActiveDurationSeconds.GetValueOrDefault(), 6);
+    }
+
+    [Fact]
     public void StartsMeterAtARecentOffensiveCastUsingTheCombatEventClock()
     {
         var module = new DamageParsingModule();
@@ -1665,6 +1819,22 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void PartialHpDropWithoutAbsorptionOrDeathDoesNotInventDamageLoss()
+    {
+        var module = new DamageParsingModule();
+        var packet = WithTargetHp(CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 600)), 1000, 0, 1000);
+        module.Process(packet);
+        module.ObserveEffectResult(new DamageEffectResult(
+            SeenAtUtc.AddMilliseconds(100), packet.ActionSequence, Target,
+            new DamageHpSnapshot(900, 0, 1000)));
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.EndEncounter(SeenAtUtc.AddSeconds(1), "Test"));
+        var damageEvent = Assert.Single(snapshot.Events);
+        Assert.Equal(600u, damageEvent.Amount);
+        Assert.Equal(600, damageEvent.EffectiveMeterAmount);
+        Assert.Equal(DamageResolutionQuality.Observed, damageEvent.ResolutionQuality);
+    }
+
+    [Fact]
     public void ResolvesAnEffectResultThatWasQueuedBeforeItsAction()
     {
         var module = new DamageParsingModule();
@@ -1766,11 +1936,11 @@ public sealed class DamageParsingTests
             [
                 new DamageActionTarget(0, Target, [new DamageActionEffect(0, 3, 0, 0, 0, 0, 800)])
                 {
-                    TargetHp = new DamageHpSnapshot(1000, 0, 1000),
+                    TargetHp = new DamageHpSnapshot(100, 0, 1000),
                 },
                 new DamageActionTarget(1, secondTarget, [new DamageActionEffect(0, 3, 0, 0, 0, 0, 800)])
                 {
-                    TargetHp = new DamageHpSnapshot(1000, 0, 1000),
+                    TargetHp = new DamageHpSnapshot(500, 0, 1000),
                 },
             ]);
         var module = new DamageParsingModule();
@@ -1780,12 +1950,12 @@ public sealed class DamageParsingTests
             SeenAtUtc.AddMilliseconds(100),
             packet.ActionSequence,
             Target,
-            new DamageHpSnapshot(900, 0, 1000)));
+            new DamageHpSnapshot(0, 0, 1000)));
         module.ObserveEffectResult(new DamageEffectResult(
             SeenAtUtc.AddMilliseconds(110),
             packet.ActionSequence,
             secondTarget,
-            new DamageHpSnapshot(500, 0, 1000)));
+            new DamageHpSnapshot(0, 0, 1000)));
 
         Assert.Equal(600.0, Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter()).EffectiveMeterDamage);
     }

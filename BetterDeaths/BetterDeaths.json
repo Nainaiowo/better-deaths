@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved DPS Meter target filtering and added encounter diagnostics for accuracy testing.",
+  "Changelog": "Improved DPS Meter encounter timing, buff snapshots, pet sampling, and damage resolution. Added opt-in encounter exports and report comparisons, with separate periodic estimates and clearer incomplete-data warnings.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

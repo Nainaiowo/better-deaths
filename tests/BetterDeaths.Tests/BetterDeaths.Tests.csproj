@@ -21,6 +21,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/ActionPotencyProfileParser.cs" Link="DamageParsing/ActionPotencyProfileParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterPreviewData.cs" Link="DamageParsing/DamageMeterPreviewData.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterCombatantPolicy.cs" Link="DamageParsing/DamageMeterCombatantPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageParityComparer.cs" Link="DamageParsing/DamageParityComparer.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParsingModule.cs" Link="DamageParsing/DamageParsingModule.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusCapturePolicy.cs" Link="DamageParsing/DamageStatusCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />

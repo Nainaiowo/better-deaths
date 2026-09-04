@@ -35,6 +35,9 @@ internal static class PersonalDamageModifierPolicy
         return RelevantStatusIds.Contains(statusId);
     }
 
+    public static bool ChangesAttributes(uint statusId) =>
+        statusId is MedicatedStatusId or WeaknessStatusId or BrinkOfDeathStatusId;
+
     public static double GetDefaultDurationSeconds(uint statusId)
     {
         return statusId switch
@@ -54,9 +57,6 @@ internal static class PersonalDamageModifierPolicy
     {
         var amount = status.StatusId switch
         {
-            MedicatedStatusId => 0.15,
-            WeaknessStatusId => -0.25,
-            BrinkOfDeathStatusId => -0.50,
             0x7D => 0.15,
             0x748 => 0.10,
             0x77A or 0xAA0 => 0.10,

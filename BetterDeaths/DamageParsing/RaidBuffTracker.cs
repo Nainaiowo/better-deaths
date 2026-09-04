@@ -7,7 +7,9 @@ using System.Linq;
 internal sealed class RaidBuffTracker
 {
     private const double ExpiryGraceSeconds = 1.0;
+    private const double HistoryRetentionSeconds = 5.0;
     private readonly Dictionary<StatusKey, TrackedStatus> statuses = [];
+    private readonly List<TrackedStatus> history = [];
 
     public void Observe(DamageStatusApplication application)
     {
@@ -19,13 +21,17 @@ internal sealed class RaidBuffTracker
         Prune(application.SeenAtUtc);
         if (application.IsRemoval)
         {
-            foreach (var status in statuses.Values.Where(status =>
+            foreach (var status in statuses.Values.Concat(history).Where(status =>
                          status.Application.Target.EntityId == application.Target.EntityId &&
                          status.Application.StatusId == application.StatusId &&
+                         status.Application.SeenAtUtc <= application.SeenAtUtc &&
                          (application.Source.EntityId == 0 ||
                              status.Application.Source.EntityId == application.Source.EntityId)))
             {
-                status.RemovedAtUtc = application.SeenAtUtc;
+                if (status.RemovedAtUtc is null || status.RemovedAtUtc > application.SeenAtUtc)
+                {
+                    status.RemovedAtUtc = application.SeenAtUtc;
+                }
             }
 
             return;
@@ -109,11 +115,11 @@ internal sealed class RaidBuffTracker
         for (var index = 0; index < snapshots.Count; index++)
         {
             var snapshot = snapshots[index];
-            var tracked = statuses.Values
+            var tracked = statuses.Values.Concat(history)
                 .Where(status => status.Application.Target.EntityId == targetEntityId &&
                     status.Application.StatusId == snapshot.StatusId &&
                     status.Application.SeenAtUtc <= seenAtUtc &&
-                    status.RemovedAtUtc is null &&
+                    (status.RemovedAtUtc is null || seenAtUtc < status.RemovedAtUtc) &&
                     seenAtUtc <= status.ExpiresAtUtc.AddSeconds(ExpiryGraceSeconds) &&
                     (snapshot.Source.EntityId == 0 ||
                         status.Application.Source.EntityId == snapshot.Source.EntityId))
@@ -162,6 +168,7 @@ internal sealed class RaidBuffTracker
     public void Clear()
     {
         statuses.Clear();
+        history.Clear();
     }
 
     private IReadOnlyList<DamageStatusSnapshot> GetActive(uint targetEntityId, DateTime seenAtUtc)
@@ -171,11 +178,13 @@ internal sealed class RaidBuffTracker
             return [];
         }
 
-        return statuses.Values
+        return statuses.Values.Concat(history)
             .Where(status => status.Application.Target.EntityId == targetEntityId &&
                 status.Application.SeenAtUtc <= seenAtUtc &&
-                status.RemovedAtUtc is null &&
+                (status.RemovedAtUtc is null || seenAtUtc < status.RemovedAtUtc) &&
                 seenAtUtc <= status.ExpiresAtUtc.AddSeconds(ExpiryGraceSeconds))
+            .GroupBy(status => (status.Application.StatusId, status.Application.Source.EntityId))
+            .Select(group => group.OrderByDescending(status => status.Application.SeenAtUtc).First())
             .Select(status => new DamageStatusSnapshot(
                 status.Application.StatusId,
                 status.Application.Source,
@@ -192,8 +201,22 @@ internal sealed class RaidBuffTracker
         return new TrackedStatus(application, application.SeenAtUtc.AddSeconds(duration));
     }
 
-    private static void Update(TrackedStatus status, DamageStatusApplication application)
+    private void Update(TrackedStatus status, DamageStatusApplication application)
     {
+        if (application.SeenAtUtc < status.Application.SeenAtUtc)
+        {
+            var earlier = Create(application);
+            earlier.RemovedAtUtc = status.Application.SeenAtUtc;
+            history.Add(earlier);
+            return;
+        }
+        if (application.SeenAtUtc > status.Application.SeenAtUtc)
+        {
+            history.Add(new TrackedStatus(status.Application, status.ExpiresAtUtc)
+            {
+                RemovedAtUtc = status.RemovedAtUtc ?? application.SeenAtUtc,
+            });
+        }
         if (application.Parameter == 0 && status.Application.Parameter != 0)
         {
             application = application with { Parameter = status.Application.Parameter };
@@ -209,9 +232,11 @@ internal sealed class RaidBuffTracker
 
     private void Prune(DateTime seenAtUtc)
     {
+        history.RemoveAll(status => (status.RemovedAtUtc ?? status.ExpiresAtUtc)
+            .AddSeconds(HistoryRetentionSeconds) < seenAtUtc);
         foreach (var key in statuses
-                     .Where(entry => entry.Value.RemovedAtUtc is { } removedAtUtc && removedAtUtc < seenAtUtc ||
-                         entry.Value.ExpiresAtUtc.AddSeconds(ExpiryGraceSeconds) < seenAtUtc)
+                     .Where(entry => (entry.Value.RemovedAtUtc ?? entry.Value.ExpiresAtUtc)
+                         .AddSeconds(HistoryRetentionSeconds) < seenAtUtc)
                      .Select(entry => entry.Key)
                      .ToList())
         {

@@ -619,7 +619,7 @@ public sealed partial class Plugin
         RawActionEffectPacket packet,
         IReadOnlyList<DamageStatusApplication> applications)
     {
-        if (!ShouldSaveDamageMeterDebug())
+        if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.ActionPackets))
         {
             return;
         }
@@ -658,7 +658,7 @@ public sealed partial class Plugin
 
     private void QueueDamageMeterPeriodicDebug(RawActorControlPacket packet, PeriodicDamageTick tick)
     {
-        if (!ShouldSaveDamageMeterDebug())
+        if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.PeriodicTicks))
         {
             return;
         }
@@ -690,7 +690,7 @@ public sealed partial class Plugin
 
     private void QueueDamageMeterStatusDebug(string stage, DamageStatusApplication application)
     {
-        if (!ShouldSaveDamageMeterDebug())
+        if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.StatusChanges))
         {
             return;
         }
@@ -722,7 +722,7 @@ public sealed partial class Plugin
 
     private void QueueDamageMeterParsedDebug(string stage, IReadOnlyList<ParsedDamageEvent> parsed)
     {
-        if (!ShouldSaveDamageMeterDebug() || parsed.Count == 0)
+        if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.ParsedEvents) || parsed.Count == 0)
         {
             return;
         }
@@ -779,9 +779,12 @@ public sealed partial class Plugin
         });
     }
 
-    private bool ShouldSaveDamageMeterDebug()
+    private bool ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory category)
     {
-        return Configuration.DebugLogEnabled && Configuration.DebugSaveToFileEnabled;
+        return Configuration.DebugLogEnabled &&
+            Configuration.DebugSaveToFileEnabled &&
+            Configuration.DebugDamageMeterTraceEnabled &&
+            Configuration.DebugDamageMeterTraceCategories.HasFlag(category);
     }
 
     private DamageEncounterSnapshot? EndDamageEncounter(DateTime endedAtUtc, string reason)
@@ -792,7 +795,7 @@ public sealed partial class Plugin
             RecordCompletedDamageEncounter(ended);
         }
 
-        if (ShouldSaveDamageMeterDebug())
+        if (ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary))
         {
             QueueDebugCaptureRecord("DamageMeterEncounterEnd", new
             {
@@ -823,6 +826,9 @@ public sealed partial class Plugin
                     source.DirectHits,
                     source.CriticalDirectHits,
                     source.PeriodicHits,
+                    source.ActiveStartedAtUtc,
+                    source.ActiveEndedAtUtc,
+                    source.ActiveDurationSeconds,
                     source.RaidAdjustedDamage,
                     source.ExternalBuffDamageReceived,
                     source.RaidBuffDamageGiven,

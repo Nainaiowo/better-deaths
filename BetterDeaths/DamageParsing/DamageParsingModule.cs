@@ -19,6 +19,7 @@ internal sealed class DamageParsingModule
     private readonly Dictionary<string, int> eventIndices = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, DamageActorIdentity> knownActors = [];
     private readonly Dictionary<string, MutableDamageSource> sources = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MutableActivityDuration> sourceActivities = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutableDamageTarget> targets = new(StringComparer.Ordinal);
     private readonly List<PendingPeriodicTick> pendingPeriodicTicks = [];
     private readonly List<StagedDamageBatch> stagedDamageBatches = [];
@@ -30,6 +31,7 @@ internal sealed class DamageParsingModule
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
+    private int activitySegmentId;
     private int packetCount;
     private int duplicateEventCount;
     private DamageEncounterSnapshot? lastEncounter;
@@ -77,6 +79,8 @@ internal sealed class DamageParsingModule
             {
                 ObserveStatusCore(application);
             }
+
+            ObserveOutgoingActivity(packet);
 
             return parsed;
         }
@@ -197,6 +201,7 @@ internal sealed class DamageParsingModule
                 if (!combatActive)
                 {
                     cachedCurrentEncounterTimeBucket = -1;
+                    activitySegmentId++;
                 }
 
                 combatActive = true;
@@ -288,8 +293,8 @@ internal sealed class DamageParsingModule
                 .ThenBy(entry => entry.EffectIndex)
                 .ToList()
             : [];
-        var sourceSnapshots = sources.Values
-            .Select(source => source.ToSnapshot())
+        var sourceSnapshots = sources
+            .Select(entry => entry.Value.ToSnapshot(sourceActivities.GetValueOrDefault(entry.Key)))
             .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -554,6 +559,7 @@ internal sealed class DamageParsingModule
         eventIndices.Clear();
         knownActors.Clear();
         sources.Clear();
+        sourceActivities.Clear();
         targets.Clear();
         pendingPeriodicTicks.Clear();
         stagedDamageBatches.Clear();
@@ -567,6 +573,7 @@ internal sealed class DamageParsingModule
         pendingOffensiveCastStartedAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
+        activitySegmentId = 0;
         packetCount = 0;
         duplicateEventCount = 0;
         cachedCurrentEncounter = null;
@@ -785,7 +792,7 @@ internal sealed class DamageParsingModule
             }
 
             var isMeterEligible = damageEvent.MeterEligibility != DamageMeterEligibility.FriendlyTarget;
-            source.Add(damageEvent, isMeterEligible);
+            source.Add(damageEvent, isMeterEligible, activitySegmentId);
 
             var targetKey = GetActorKey(damageEvent.Target);
             if (!targets.TryGetValue(targetKey, out var target))
@@ -794,9 +801,42 @@ internal sealed class DamageParsingModule
                 targets[targetKey] = target;
             }
 
-            target.Add(damageEvent, isMeterEligible);
+            target.Add(damageEvent, isMeterEligible, activitySegmentId);
             mutationRevision++;
         }
+    }
+
+    private void ObserveOutgoingActivity(DamageActionPacket packet)
+    {
+        if ((!combatActive && startedAtUtc is null) ||
+            !packet.Targets.Any(target => target.Effects.Any(effect => effect.Type is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 74)))
+        {
+            return;
+        }
+
+        var attributedSource = packet.ActionCategoryId == 9
+            ? new DamageActorIdentity(0, "Limit Break", 0, string.Empty, false, 0)
+            {
+                IsLimitBreak = true,
+                IsPartyMember = true,
+            }
+            : packet.Source.IsPet && packet.SourceOwner is not null
+                ? packet.SourceOwner
+                : packet.Source;
+        if (!IsAlliedMeterSource(attributedSource))
+        {
+            return;
+        }
+
+        var sourceKey = GetActorKey(attributedSource);
+        if (!sourceActivities.TryGetValue(sourceKey, out var activity))
+        {
+            activity = new MutableActivityDuration();
+            sourceActivities[sourceKey] = activity;
+        }
+
+        activity.Observe(packet.SeenAtUtc, activitySegmentId);
+        mutationRevision++;
     }
 
     private void ApplyEventReplacements(IReadOnlyList<ParsedDamageEvent> replacements)
@@ -1009,7 +1049,7 @@ internal sealed class DamageParsingModule
             this.source = source;
         }
 
-        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible, int activitySegmentId)
         {
             var candidateSource = damageEvent.AttributedSource ?? damageEvent.Source;
             if (GetIdentityQuality(candidateSource) > GetIdentityQuality(source))
@@ -1017,7 +1057,7 @@ internal sealed class DamageParsingModule
                 source = candidateSource;
             }
 
-            totals.Add(damageEvent, isMeterEligible);
+            totals.Add(damageEvent, isMeterEligible, activitySegmentId);
             var actionKey = (damageEvent.ActionId, damageEvent.ActionName);
             if (!actions.TryGetValue(actionKey, out var action))
             {
@@ -1025,7 +1065,7 @@ internal sealed class DamageParsingModule
                 actions[actionKey] = action;
             }
 
-            action.Add(damageEvent, isMeterEligible);
+            action.Add(damageEvent, isMeterEligible, activitySegmentId);
         }
 
         public void RecordDeath(DamageActorIdentity actor)
@@ -1048,14 +1088,14 @@ internal sealed class DamageParsingModule
             }
         }
 
-        public DamageSourceSummary ToSnapshot()
+        public DamageSourceSummary ToSnapshot(MutableActivityDuration? additionalActivity)
         {
             var actionSnapshots = actions
                 .Select(entry => entry.Value.ToActionSnapshot(entry.Key.ActionId, entry.Key.ActionName))
                 .OrderByDescending(action => action.EffectiveMeterDamage)
                 .ThenBy(action => action.ActionName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            return totals.ToSourceSnapshot(source, actionSnapshots);
+            return totals.ToSourceSnapshot(source, actionSnapshots, additionalActivity);
         }
     }
 
@@ -1087,14 +1127,14 @@ internal sealed class DamageParsingModule
             this.target = target;
         }
 
-        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible, int activitySegmentId)
         {
             if (GetIdentityQuality(damageEvent.Target) > GetIdentityQuality(target))
             {
                 target = damageEvent.Target;
             }
 
-            totals.Add(damageEvent, isMeterEligible);
+            totals.Add(damageEvent, isMeterEligible, activitySegmentId);
         }
 
         public DamageTargetSummary ToSnapshot()
@@ -1126,10 +1166,16 @@ internal sealed class DamageParsingModule
         private int deaths;
         private bool isAutoAttack;
         private uint actionCategoryId;
+        private readonly MutableActivityDuration activity = new();
 
-        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible)
+        public void Add(ParsedDamageEvent damageEvent, bool isMeterEligible, int activitySegmentId)
         {
             swings++;
+            if (isMeterEligible)
+            {
+                activity.Observe(damageEvent.SeenAtUtc, activitySegmentId);
+            }
+
             isAutoAttack |= damageEvent.IsAutoAttack;
             actionCategoryId = actionCategoryId == 0 ? damageEvent.ActionCategoryId : actionCategoryId;
             switch (damageEvent.Outcome)
@@ -1212,13 +1258,16 @@ internal sealed class DamageParsingModule
                 UnattributedDamage = unattributedDamage,
                 PeriodicHits = periodicHits,
                 MaxHitAmount = maxHitAmount,
+                ActiveDurationSeconds = activity.GetSummary().DurationSeconds,
             };
         }
 
         public DamageSourceSummary ToSourceSnapshot(
             DamageActorIdentity source,
-            IReadOnlyList<DamageActionSummary> actionSnapshots)
+            IReadOnlyList<DamageActionSummary> actionSnapshots,
+            MutableActivityDuration? additionalActivity)
         {
+            var active = activity.GetSummary(additionalActivity);
             return new DamageSourceSummary(
                 source,
                 totalDamage,
@@ -1242,6 +1291,9 @@ internal sealed class DamageParsingModule
                 MaxHitAmount = maxHitAmount,
                 MaxHitActionName = maxHitActionName,
                 Deaths = deaths,
+                ActiveStartedAtUtc = active.StartedAtUtc,
+                ActiveEndedAtUtc = active.EndedAtUtc,
+                ActiveDurationSeconds = active.DurationSeconds,
             };
         }
 
@@ -1260,4 +1312,61 @@ internal sealed class DamageParsingModule
             };
         }
     }
+
+    private sealed class MutableActivityDuration
+    {
+        private readonly Dictionary<int, ActivitySegment> segments = [];
+
+        public void Observe(DateTime seenAtUtc, int segmentId)
+        {
+            if (!segments.TryGetValue(segmentId, out var segment))
+            {
+                segments[segmentId] = new ActivitySegment(seenAtUtc, seenAtUtc);
+                return;
+            }
+
+            segments[segmentId] = new ActivitySegment(
+                seenAtUtc < segment.StartedAtUtc ? seenAtUtc : segment.StartedAtUtc,
+                seenAtUtc > segment.EndedAtUtc ? seenAtUtc : segment.EndedAtUtc);
+        }
+
+        public ActivityDurationSummary GetSummary(MutableActivityDuration? additional = null)
+        {
+            var combined = new Dictionary<int, ActivitySegment>(segments);
+            if (additional is not null)
+            {
+                foreach (var (segmentId, segment) in additional.segments)
+                {
+                    if (!combined.TryGetValue(segmentId, out var existing))
+                    {
+                        combined[segmentId] = segment;
+                        continue;
+                    }
+
+                    combined[segmentId] = new ActivitySegment(
+                        segment.StartedAtUtc < existing.StartedAtUtc ? segment.StartedAtUtc : existing.StartedAtUtc,
+                        segment.EndedAtUtc > existing.EndedAtUtc ? segment.EndedAtUtc : existing.EndedAtUtc);
+                }
+            }
+
+            if (combined.Count == 0)
+            {
+                return default;
+            }
+
+            return new ActivityDurationSummary(
+                combined.Values.Min(segment => segment.StartedAtUtc),
+                combined.Values.Max(segment => segment.EndedAtUtc),
+                combined.Values.Sum(segment => Math.Max(
+                    0.0,
+                    (segment.EndedAtUtc - segment.StartedAtUtc).TotalSeconds)));
+        }
+
+        private readonly record struct ActivitySegment(DateTime StartedAtUtc, DateTime EndedAtUtc);
+    }
+
+    private readonly record struct ActivityDurationSummary(
+        DateTime? StartedAtUtc,
+        DateTime? EndedAtUtc,
+        double DurationSeconds);
 }

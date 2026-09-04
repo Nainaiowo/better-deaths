@@ -81,6 +81,18 @@ public enum ClockDisplayMode
     TwelveHour,
 }
 
+[Flags]
+public enum DamageMeterDebugTraceCategory
+{
+    None = 0,
+    ActionPackets = 1 << 0,
+    StatusChanges = 1 << 1,
+    PeriodicTicks = 1 << 2,
+    ParsedEvents = 1 << 3,
+    EncounterSummary = 1 << 4,
+    All = ActionPackets | StatusChanges | PeriodicTicks | ParsedEvents | EncounterSummary,
+}
+
 [Serializable]
 public sealed class ThemeColorValue
 {
@@ -428,6 +440,13 @@ public sealed class Configuration : IPluginConfiguration
     public bool DebugLogEnabled { get; set; }
 
     public bool DebugSaveToFileEnabled { get; set; } = true;
+
+    public bool DebugDamageMeterTraceEnabled { get; set; }
+
+    public DamageMeterDebugTraceCategory DebugDamageMeterTraceCategories { get; set; } =
+        DamageMeterDebugTraceCategory.All;
+
+    public bool DebugDamageMeterEncounterExportEnabled { get; set; }
 
     public string LastAnnouncedUpdateNoticeKey { get; set; } = string.Empty;
 

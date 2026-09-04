@@ -106,6 +106,98 @@ public sealed class WtfDigFflogsTests
     }
 
     [Fact]
+    public async Task FightEvents_ParsesFinalAndSimulatedPeriodicFields()
+    {
+        var handler = new RecordingHandler(
+            """
+            {
+              "data": {
+                "reportData": {
+                  "report": {
+                    "events": {
+                      "data": [{
+                        "timestamp": 1234,
+                        "type": "damage",
+                        "packetID": 99,
+                        "sourceID": 1,
+                        "targetID": 2,
+                        "abilityGameID": 100001,
+                        "amount": 12345,
+                        "overkill": 321,
+                        "tick": true,
+                        "simulated": true,
+                        "finalizedAmount": 12344.75,
+                        "multiplier": 1.05
+                      }]
+                    }
+                  }
+                }
+              }
+            }
+            """);
+        using var httpClient = new HttpClient(handler);
+        using var client = new FflogsClient(httpClient, new Uri("https://example.test/api/fflogs"));
+
+        var events = await client.FetchAllEventsAsync(
+            new FflogsEventQuery(
+                "aBcDeFgHiJkLmNoP",
+                7,
+                1000,
+                2000,
+                FflogsEventDataType.DamageTaken,
+                FflogsHostilityType.Enemies),
+            CancellationToken.None);
+
+        var damage = Assert.Single(events);
+        Assert.Equal(99, damage.PacketID);
+        Assert.Equal(321, damage.Overkill);
+        Assert.True(damage.Tick);
+        Assert.True(damage.Simulated);
+        Assert.Equal(12344.75, damage.FinalizedAmount);
+        Assert.Equal(1.05, damage.Multiplier);
+        Assert.Contains("\"dataType\":\"DamageTaken\"", handler.Body);
+        Assert.Contains("\"hostilityType\":\"Enemies\"", handler.Body);
+    }
+
+    [Fact]
+    public async Task FightEvents_RejectsMissingPageInsteadOfReturningZeroDamage()
+    {
+        using var http = new HttpClient(new RecordingHandler("""
+            {"data":{"reportData":{"report":{}}}}
+            """));
+        using var client = new FflogsClient(http, new Uri("https://example.test/api/fflogs"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.FetchAllEventsAsync(
+            new FflogsEventQuery("aBcDeFgHiJkLmNoP", 7, 1000, 2000,
+                FflogsEventDataType.DamageTaken, FflogsHostilityType.Enemies), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("{\"nextPageTimestamp\":1500}")]
+    [InlineData("{\"data\":[],\"nextPageTimestamp\":1500}")]
+    [InlineData("{\"data\":[{\"type\":\"damage\",\"amount\":1}],\"nextPageTimestamp\":1000}")]
+    public async Task FightEvents_RejectsIncompleteOrRepeatedPage(string eventPage)
+    {
+        using var http = new HttpClient(new RecordingHandler(
+            "{\"data\":{\"reportData\":{\"report\":{\"events\":" + eventPage + "}}}}"));
+        using var client = new FflogsClient(http, new Uri("https://example.test/api/fflogs"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.FetchAllEventsAsync(
+            new FflogsEventQuery("aBcDeFgHiJkLmNoP", 7, 1000, 2000,
+                FflogsEventDataType.DamageTaken, FflogsHostilityType.Enemies), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FightEvents_AcceptsCompletedEmptyPage()
+    {
+        using var http = new HttpClient(new RecordingHandler("""
+            {"data":{"reportData":{"report":{"events":{"data":[]}}}}}
+            """));
+        using var client = new FflogsClient(http, new Uri("https://example.test/api/fflogs"));
+        Assert.Empty(await client.FetchAllEventsAsync(
+            new FflogsEventQuery("aBcDeFgHiJkLmNoP", 7, 1000, 2000,
+                FflogsEventDataType.DamageTaken, FflogsHostilityType.Enemies), CancellationToken.None));
+    }
+
+    [Fact]
     public void EligibleFights_OnlyReturnsDancingMadPullsThatReachedTheMechanic()
     {
         var report = new FflogsReportSummary

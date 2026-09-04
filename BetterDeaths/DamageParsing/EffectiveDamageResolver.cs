@@ -210,7 +210,9 @@ internal sealed class EffectiveDamageResolver
         var likelyFullyAbsorbed = hpLoss == 0 &&
             before.ShieldHp > 0 &&
             rawTotal <= before.ShieldHp + shieldRoundingTolerance;
-        if (hpLoss == 0 && !likelyFullyAbsorbed)
+        var unexplainedShortfall = after.CurrentHp > 0 &&
+            (double)hpLoss + shieldLoss < rawTotal && !likelyFullyAbsorbed;
+        if ((hpLoss == 0 && !likelyFullyAbsorbed) || unexplainedShortfall)
         {
             return pending.Events
                 .Select(entry => entry with

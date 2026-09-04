@@ -561,9 +561,8 @@ internal static class RaidDamageCalculator
                 : sample.CriticalSwings >= MinimumObservedRateSamples
                 ? Math.Clamp(sample.CriticalHits / (double)sample.CriticalSwings, 0.05, 0.95)
                 : DefaultCriticalRate),
-            sample.KnownDirectHitRate ?? (sample.DirectHitSwings >= MinimumObservedRateSamples
-                ? Math.Clamp(sample.DirectHits / (double)sample.DirectHitSwings, 0.05, 0.95)
-                : DefaultDirectHitRate));
+            sample.KnownDirectHitRate ?? DamageBaseRatePolicy.EstimateObserved(
+                sample.DirectHits, sample.DirectHitSwings, critical: false));
     }
 
     private static double Median(IReadOnlyList<double> values)

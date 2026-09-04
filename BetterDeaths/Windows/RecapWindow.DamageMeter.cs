@@ -11,7 +11,8 @@ using System.Numerics;
 public sealed partial class RecapWindow
 {
     private const string DamageMeterColumnDragPayload = "BETTER_DEATHS_METER_COLUMN";
-    private static readonly DamageMeterColumn[] AvailableDamageMeterColumns = Enum.GetValues<DamageMeterColumn>();
+    private static readonly DamageMeterColumn[] AvailableDamageMeterColumns = Enum.GetValues<DamageMeterColumn>()
+        .Where(column => column != DamageMeterColumn.EncounterDamagePerSecond).ToArray();
     private readonly HashSet<string> expandedDamageMeterSources = new(StringComparer.Ordinal);
     private DamageMeterColumn? draggingDamageMeterColumn;
     private long selectedDamageEncounterNumber;
@@ -343,6 +344,7 @@ public sealed partial class RecapWindow
             DamageMeterColumn.PlayerName => "Player",
             DamageMeterColumn.DamagePercent => "Damage %",
             DamageMeterColumn.DamagePerSecond => "DPS",
+            DamageMeterColumn.EncounterDamagePerSecond => "EncDPS",
             DamageMeterColumn.RaidDamagePerSecond => "rDPS",
             DamageMeterColumn.NeutralDamagePerSecond => "nDPS",
             DamageMeterColumn.AdjustedDamagePerSecond => "aDPS",
@@ -643,9 +645,7 @@ public sealed partial class RecapWindow
         var visibleTotal = sources.Sum(source => source.EffectiveMeterDamage);
         using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
         {
-            var visibleDps = snapshot.DurationSeconds > 0.0
-                ? visibleTotal / snapshot.DurationSeconds
-                : 0.0;
+            var visibleDps = snapshot.DurationSeconds > 0 ? visibleTotal / snapshot.DurationSeconds : 0;
             var title = configuration.DamageMeterWidgetDisplayMode == WidgetDisplayMode.Concise
                 ? $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | {FormatDamageMeterNumber(visibleDps)} DPS"
                 : $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}";
@@ -724,7 +724,7 @@ public sealed partial class RecapWindow
 
             foreach (var action in source.Actions)
             {
-                DrawDamageMeterWidgetActionRow(snapshot, action, source.EffectiveMeterDamage, columns);
+                DrawDamageMeterWidgetActionRow(snapshot, source, action, source.EffectiveMeterDamage, columns);
             }
         }
 
@@ -760,6 +760,7 @@ public sealed partial class RecapWindow
 
     private static void DrawDamageMeterWidgetActionRow(
         DamageEncounterSnapshot snapshot,
+        DamageSourceSummary source,
         DamageActionSummary action,
         double sourceTotal,
         IReadOnlyList<DamageMeterColumn> columns)
@@ -771,7 +772,7 @@ public sealed partial class RecapWindow
         foreach (var column in columns)
         {
             ImGui.TableNextColumn();
-            DrawDamageMeterActionColumn(snapshot, action, sourceTotal, column, iconSize);
+            DrawDamageMeterActionColumn(snapshot, source, action, sourceTotal, column, iconSize);
         }
     }
 
@@ -807,10 +808,16 @@ public sealed partial class RecapWindow
                 DrawDamageMeterShareBar(source.EffectiveMeterDamage, visibleTotal);
                 break;
             case DamageMeterColumn.DamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(snapshot.DurationSeconds > 0
+                    ? source.EffectiveMeterDamage / snapshot.DurationSeconds : 0));
+                DrawEncounterDamagePerSecondTooltip(snapshot.DurationSeconds);
+                break;
+            case DamageMeterColumn.EncounterDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
                         ? source.EffectiveMeterDamage / snapshot.DurationSeconds
                         : 0.0));
+                DrawEncounterDamagePerSecondTooltip(snapshot.DurationSeconds);
                 break;
             case DamageMeterColumn.RaidDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
@@ -864,6 +871,7 @@ public sealed partial class RecapWindow
 
     private static void DrawDamageMeterActionColumn(
         DamageEncounterSnapshot snapshot,
+        DamageSourceSummary source,
         DamageActionSummary action,
         double sourceTotal,
         DamageMeterColumn column,
@@ -896,6 +904,12 @@ public sealed partial class RecapWindow
                     muted);
                 break;
             case DamageMeterColumn.DamagePerSecond:
+                DrawCenteredText(FormatDamageMeterNumber(
+                    snapshot.DurationSeconds > 0.0
+                        ? action.EffectiveMeterDamage / snapshot.DurationSeconds
+                        : 0.0), muted);
+                break;
+            case DamageMeterColumn.EncounterDamagePerSecond:
                 DrawCenteredText(FormatDamageMeterNumber(
                     snapshot.DurationSeconds > 0.0
                         ? action.EffectiveMeterDamage / snapshot.DurationSeconds
@@ -989,6 +1003,7 @@ public sealed partial class RecapWindow
             DamageMeterColumn.PlayerName => concise ? 92.0f : 145.0f,
             DamageMeterColumn.DamagePercent => concise ? 82.0f : 94.0f,
             DamageMeterColumn.DamagePerSecond => concise ? 70.0f : 84.0f,
+            DamageMeterColumn.EncounterDamagePerSecond => concise ? 70.0f : 84.0f,
             DamageMeterColumn.RaidDamagePerSecond => concise ? 70.0f : 84.0f,
             DamageMeterColumn.NeutralDamagePerSecond => concise ? 70.0f : 84.0f,
             DamageMeterColumn.AdjustedDamagePerSecond => concise ? 70.0f : 84.0f,
@@ -1014,6 +1029,15 @@ public sealed partial class RecapWindow
             fraction >= 0.45f ? ModernAccentColor : ModernFrameColor));
         ImGui.ProgressBar(fraction, new Vector2(-1.0f, ImGui.GetFrameHeight()), label);
         ImGui.PopStyleColor(3);
+    }
+
+    private static void DrawEncounterDamagePerSecondTooltip(double encounterDurationSeconds)
+    {
+        if (ImGui.IsItemHovered())
+        {
+            SetThemedTooltip(
+                $"Damage divided by the full {FormatDamageMeterDuration(encounterDurationSeconds)} encounter duration.");
+        }
     }
 
     private static void DrawRaidDamageTooltip(DamageSourceSummary source)

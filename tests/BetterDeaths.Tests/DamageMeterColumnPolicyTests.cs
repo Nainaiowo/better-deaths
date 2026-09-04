@@ -50,6 +50,17 @@ public sealed class DamageMeterColumnPolicyTests
         Assert.Equal(1, (int)DamageMeterColumn.JobIcon);
         Assert.Equal(2, (int)DamageMeterColumn.PlayerName);
         Assert.Equal(4, (int)DamageMeterColumn.DamagePerSecond);
+        Assert.Equal(16, (int)DamageMeterColumn.EncounterDamagePerSecond);
+    }
+
+    [Fact]
+    public void NormalizeMigratesDuplicateEncounterDpsWithoutChangingOtherColumns()
+    {
+        Assert.Equal(
+            [DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond, DamageMeterColumn.TotalDamage],
+            DamageMeterColumnPolicy.Normalize(
+                [DamageMeterColumn.PlayerName, DamageMeterColumn.EncounterDamagePerSecond,
+                 DamageMeterColumn.TotalDamage, DamageMeterColumn.DamagePerSecond]));
     }
 
     [Fact]
