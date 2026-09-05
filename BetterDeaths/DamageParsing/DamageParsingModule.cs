@@ -444,7 +444,12 @@ internal sealed class DamageParsingModule
                         estimates.Key,
                         estimates.Count(),
                         estimates.Sum(damageEvent => damageEvent.RawMeterAmount),
-                        estimates.Key is null ? estimates.Sum(damageEvent => damageEvent.SimulatedPeriodicAmount) : null))
+                        estimates.Key is null ? estimates.Sum(damageEvent => damageEvent.SimulatedPeriodicAmount) : null)
+                    {
+                        CompatibilityTickCount = estimates.Count(damageEvent => damageEvent.PeriodicCompatibilityEstimate is not null),
+                        CompatibilityDamage = estimates.Any(damageEvent => damageEvent.PeriodicCompatibilityEstimate is not null)
+                            ? estimates.Sum(damageEvent => damageEvent.PeriodicCompatibilityEstimate?.EstimatedDamage ?? 0) : null,
+                    })
                     .OrderBy(diagnostic => diagnostic.UnavailableReason, StringComparer.Ordinal)
                     .ToList(),
             })

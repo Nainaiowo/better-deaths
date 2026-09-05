@@ -750,6 +750,7 @@ public sealed partial class Plugin
                 damageEvent.MeterAmount,
                 damageEvent.SimulatedPeriodicAmount,
                 damageEvent.PeriodicEstimateInputs,
+                damageEvent.PeriodicCompatibilityEstimate,
                 damageEvent.PeriodicEstimateUnavailableReason,
                 damageEvent.CalculatedAmount,
                 Resolution = damageEvent.ResolutionQuality.ToString(),

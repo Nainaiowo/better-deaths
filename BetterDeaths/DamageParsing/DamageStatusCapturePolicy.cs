@@ -6,6 +6,7 @@ internal static class DamageStatusCapturePolicy
     {
         return RaidBuffPolicy.IsRelevantStatus(statusId) ||
             PersonalDamageModifierPolicy.IsRelevantStatus(statusId) ||
+            PeriodicDirectHitCompatibility.IsRelevantStatus(statusId) ||
             JobDamageCalibrationPolicy.IsRelevantStatus(statusId);
     }
 }

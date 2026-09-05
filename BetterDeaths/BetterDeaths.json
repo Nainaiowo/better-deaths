@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved DPS Meter potency detection across jobs and levels, corrected periodic effect activation and refresh snapshots, and retained calibration between encounters in the same duty. Added target-specific area-hit calibration and richer opt-in periodic diagnostics. Independent periodic estimates remain diagnostic-only.",
+  "Changelog": "Fixed pending DoT refresh snapshots being lost when the previous effect expires before confirmation. Added opt-in direct-hit estimation diagnostics with per-application sampling and encounter coverage summaries. New estimates remain diagnostic-only; displayed damage and rDPS do not use them.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

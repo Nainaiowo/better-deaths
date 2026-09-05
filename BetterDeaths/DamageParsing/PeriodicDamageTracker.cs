@@ -25,6 +25,7 @@ internal sealed class PeriodicDamageTracker
     private readonly Dictionary<string, PotencySamples> sourcePotencySamples = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HitRateSamples> sourceHitRateSamples = new(StringComparer.Ordinal);
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
+    private readonly PeriodicDirectHitCompatibility directHitCompatibility = new();
     private long nextApplicationGeneration;
 
     public void Observe(DamageStatusApplication application)
@@ -38,6 +39,7 @@ internal sealed class PeriodicDamageTracker
         if (application.Source.EntityId != 0 && (application.Source.IsPlayer || application.Source.IsPartyMember))
         {
             GetSourceSamples(application.Source, application.SourceBaseRates);
+            directHitCompatibility.ObserveContext(application.Source, application.SourceBaseRates);
         }
 
         var nominalExpiresAtUtc = application.DurationSeconds > 0.0f
@@ -92,8 +94,11 @@ internal sealed class PeriodicDamageTracker
 
     public void Retire(uint targetEntityId, uint statusId, uint sourceEntityId, DateTime removedAtUtc)
     {
+        // Target DoTs can expire between a replacement cast and its status result.
+        // Preserve the pending snapshot, without changing ground-effect attribution.
         foreach (var status in statuses.Values.Concat(statusHistory)
-                     .Where(status => status.Application.Target.EntityId == targetEntityId &&
+                     .Where(status => (!status.AwaitingStatusConfirmation || IsGroundDamageStatus(status.Application.StatusId)) &&
+                         status.Application.Target.EntityId == targetEntityId &&
                          status.Application.StatusId == statusId && status.Application.SeenAtUtc <= removedAtUtc &&
                          (sourceEntityId == 0 || status.Application.Source.EntityId == sourceEntityId)))
         {
@@ -177,12 +182,15 @@ internal sealed class PeriodicDamageTracker
 
     public void ObserveDirectDamage(IEnumerable<ParsedDamageEvent> damageEvents)
     {
-        foreach (var damageEvent in damageEvents.Where(damageEvent =>
-                     !damageEvent.IsPeriodic &&
-                     damageEvent.MeterEligibility == DamageMeterEligibility.Eligible &&
-                     damageEvent.Outcome == DamageEventOutcome.Damage &&
-                     damageEvent.Amount > 0))
+        foreach (var damageEvent in damageEvents)
         {
+            directHitCompatibility.Observe(damageEvent);
+            if (damageEvent.IsPeriodic || damageEvent.MeterEligibility != DamageMeterEligibility.Eligible ||
+                damageEvent.Outcome != DamageEventOutcome.Damage || damageEvent.Amount == 0)
+            {
+                continue;
+            }
+
             var source = damageEvent.AttributedSource ?? damageEvent.Source;
             if ((!source.IsPlayer && !source.IsPartyMember) ||
                 source.IsLimitBreak)
@@ -419,6 +427,7 @@ internal sealed class PeriodicDamageTracker
     {
         sourcePotencySamples.Clear();
         sourceHitRateSamples.Clear();
+        directHitCompatibility.Clear();
     }
 
     private HitRateSamples GetSourceSamples(DamageActorIdentity source, DamageBaseRateSnapshot? knownRates)
@@ -632,6 +641,7 @@ internal sealed class PeriodicDamageTracker
         var confirmsPendingAction = existing.AwaitingStatusConfirmation && isStatusAcknowledgement &&
             application.SeenAtUtc >= existing.Application.SeenAtUtc &&
             application.SeenAtUtc <= existing.NominalExpiresAtUtc;
+        var compatibilityConfirmationAtUtc = confirmsPendingAction ? application.SeenAtUtc : (DateTime?)null;
         var repeatsConfirmation = isStatusAcknowledgement && existing.ActivatedAtUtc is { } activatedAtUtc &&
             Math.Abs((application.SeenAtUtc - activatedAtUtc).TotalSeconds) <= DuplicateApplicationWindowSeconds;
         var isDuplicateObservation = !isExplicitResnapshot && existing.RemovedAtUtc is null &&
@@ -721,6 +731,7 @@ internal sealed class PeriodicDamageTracker
                 IndependentEstimate = existing.IndependentEstimate,
                 EstimateInputs = existing.EstimateInputs,
                 Calibration = existing.Calibration,
+                CompatibilityDirectHit = existing.CompatibilityDirectHit,
             });
             var existingApplication = existing.Application;
             if (application.IsPeriodicDamage)
@@ -745,7 +756,8 @@ internal sealed class PeriodicDamageTracker
         }
 
         existing.Application = application;
-        CaptureIndependentEstimate(existing, recaptureCalibration: !isDuplicateObservation);
+        CaptureIndependentEstimate(existing, recaptureCalibration: !isDuplicateObservation,
+            compatibilityAtUtc: compatibilityConfirmationAtUtc);
         existing.NominalExpiresAtUtc = nominalExpiresAtUtc;
         existing.RetainUntilUtc = retainUntilUtc;
         existing.RemovedAtUtc = null;
@@ -800,6 +812,12 @@ internal sealed class PeriodicDamageTracker
             MeterAmount = meterAmount,
             SimulatedPeriodicAmount = tick.StatusId == 0 ? tracked?.IndependentEstimate : null,
             PeriodicEstimateInputs = tick.StatusId == 0 ? tracked?.EstimateInputs : null,
+            PeriodicCompatibilityEstimate = tick.StatusId == 0 && tracked?.EstimateInputs is { } inputs &&
+                tracked.CompatibilityDirectHit is { } compatibility
+                    ? new PeriodicCompatibilityEstimate(compatibility,
+                        inputs.BaseDamage * (1 + (inputs.CriticalMultiplier - 1) * inputs.CriticalRate) *
+                        (1 + 0.25 * compatibility.Factor))
+                    : null,
             PeriodicEstimateUnavailableReason = tick.StatusId != 0 ? "Observed source-specific tick" :
                 status is null ? "Missing application" :
                 HasAttributeChange(status.SourceStatuses) ? "Attribute-changing status" :
@@ -845,11 +863,18 @@ internal sealed class PeriodicDamageTracker
         return GetEstimateInputs(status)?.ExpectedAmount;
     }
 
-    private void CaptureIndependentEstimate(TrackedStatus status, bool recaptureCalibration = true)
+    private void CaptureIndependentEstimate(TrackedStatus status, bool recaptureCalibration = true,
+        DateTime? compatibilityAtUtc = null)
     {
         if (recaptureCalibration)
         {
             status.Calibration = GetCalibration(status.Application.Source);
+        }
+
+        if (recaptureCalibration || compatibilityAtUtc is not null)
+        {
+            status.CompatibilityDirectHit = directHitCompatibility.Capture(status.Application,
+                compatibilityAtUtc ?? status.Application.SeenAtUtc);
         }
 
         // Enrich packet metadata without substituting samples from after application.
@@ -1198,6 +1223,8 @@ internal sealed class PeriodicDamageTracker
         public PeriodicDamageEstimateInputs? EstimateInputs { get; set; }
 
         public CalibrationSnapshot Calibration { get; set; } = new(null, BaseRates.Default);
+
+        public PeriodicDirectHitSnapshot? CompatibilityDirectHit { get; set; }
     }
 
     private sealed record CalibrationSnapshot(double? DamagePerPotency, BaseRates BaseRates,

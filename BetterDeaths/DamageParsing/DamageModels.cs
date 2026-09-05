@@ -84,6 +84,17 @@ internal sealed record DamageBaseRateSnapshot(
     double Critical,
     double DirectHit);
 
+internal sealed record PeriodicDirectHitSnapshot(
+    DateTime SeenAtUtc,
+    int Samples,
+    int DirectHits,
+    double BuffRate,
+    double Factor);
+
+internal sealed record PeriodicCompatibilityEstimate(
+    PeriodicDirectHitSnapshot DirectHit,
+    double EstimatedDamage);
+
 internal sealed record PeriodicDamageEstimateInputs(
     double DamagePerPotency,
     double Potency,
@@ -274,6 +285,8 @@ internal sealed record ParsedDamageEvent(
     public double? SimulatedPeriodicAmount { get; init; }
 
     public PeriodicDamageEstimateInputs? PeriodicEstimateInputs { get; init; }
+
+    public PeriodicCompatibilityEstimate? PeriodicCompatibilityEstimate { get; init; }
 
     public string? PeriodicEstimateUnavailableReason { get; init; }
 
@@ -519,7 +532,12 @@ internal sealed record PeriodicEstimateDiagnostic(
     string? UnavailableReason,
     int TickCount,
     double AllocatedDamage,
-    double? EstimatedDamage);
+    double? EstimatedDamage)
+{
+    public int CompatibilityTickCount { get; init; }
+
+    public double? CompatibilityDamage { get; init; }
+}
 
 internal sealed record PeriodicTickDiagnostic(
     PeriodicAllocationBasis Basis,
