@@ -49,7 +49,7 @@ public sealed class DamageJobRegressionMatrixTests
         { "AST Combust III", 33, 0x0759, 70, false },
         { "SGE Eukrasian Dosis", 40, 0x0A36, 40, false },
         { "SGE Eukrasian Dosis II", 40, 0x0A37, 60, false },
-        { "SGE Eukrasian Dosis III", 40, 0x0A38, 85, false },
+        { "SGE Eukrasian Dosis III", 40, 0x0A38, 90, false },
         { "SGE Eukrasian Dyskrasia", 40, 0x0F39, 40, false },
         { "BLU Bad Breath", 36, 0x0012, 20, false },
         { "BLU Song of Torment", 36, 0x06B2, 50, false },

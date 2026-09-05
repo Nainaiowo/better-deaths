@@ -8,6 +8,174 @@ public sealed class PeriodicSnapshotTests
     private static readonly DamageActorIdentity Source = new(0x1001, "Source", 0, "", true, 22);
     private static readonly DamageActorIdentity Target = new(0x40000001, "Target", 0, "", false, 0);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConfirmationWithStatusSnapshotsAndItsDuplicateKeepOriginalCalibration(bool hasSnapshot)
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17 };
+        module.ObserveStatus(pending);
+        Calibrate(module, 9000, sequence: 2, seconds: 1);
+        var confirmation = pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(1.7),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = hasSnapshot
+        };
+        module.ObserveStatus(confirmation);
+        module.ObserveStatus(confirmation with { SeenAtUtc = Start.AddSeconds(1.8) });
+        var inputs = Assert.Single(Tick(module)).PeriodicEstimateInputs!;
+        Assert.Equal(10.0, inputs.DamagePerPotency);
+        Assert.Equal((byte)17, inputs.DamageLowByte);
+    }
+
+    [Fact]
+    public void UnknownSourceCannotConfirmPendingApplicationsForTwoPlayers()
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17 };
+        module.ObserveStatus(pending);
+        module.ObserveStatus(pending with { Source = Source with { EntityId = 0x1002 } });
+        var confirmation = pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(1.7),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false
+        };
+        module.ObserveStatus(confirmation with { Source = Source with { EntityId = 0 } });
+        Assert.Equal(DamageAttributionQuality.Unattributed, Assert.Single(Tick(module, seconds: 2)).AttributionQuality);
+        module.ObserveStatus(confirmation with { SeenAtUtc = Start.AddSeconds(3) });
+        Assert.Equal(Source.EntityId, Assert.Single(Tick(module, seconds: 5, sequence: 101)).Source.EntityId);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.7)]
+    [InlineData(4.0)]
+    public void DelayedStatusConfirmationRetainsThePendingActionSnapshot(double delay)
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000, rates: new(0.2, 0.3));
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17, CriticalRateLowByte = 200 };
+        module.ObserveStatus(pending);
+        Calibrate(module, 9000, sequence: 2, seconds: 0.2, rates: new(0.5, 0.7));
+        module.ObserveStatus(pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(delay),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            CriticalRateLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false,
+            SourceBaseRates = null,
+        });
+
+        var inputs = Assert.Single(Tick(module, seconds: delay + 1)).PeriodicEstimateInputs!;
+        Assert.Equal(10.0, inputs.DamagePerPotency);
+        Assert.Equal((byte)17, inputs.DamageLowByte);
+        Assert.Equal(0.2, inputs.CriticalRate, 6);
+        Assert.Equal(0.3, inputs.DirectHitRate, 6);
+    }
+
+    [Fact]
+    public void DelayedConfirmationDoesNotResetTickSpacing()
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17 };
+        module.ObserveStatus(pending);
+        Assert.NotEqual(Source.EntityId, Assert.Single(Tick(module, seconds: 1)).Source.EntityId);
+        module.ObserveStatus(pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(1.7),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false,
+        });
+        Assert.Equal(Source.EntityId, Assert.Single(Tick(module, seconds: 2, sequence: 101)).Source.EntityId);
+        var tooSoon = Assert.Single(Tick(module, seconds: 3, sequence: 102));
+        Assert.NotEqual(Source.EntityId, tooSoon.Source.EntityId);
+        Assert.Equal(600u, tooSoon.Amount);
+        Assert.Equal(Source.EntityId, Assert.Single(Tick(module, seconds: 5, sequence: 103)).Source.EntityId);
+    }
+
+    [Fact]
+    public void DeferredTickBeforeConfirmationCannotUseTheNewApplication()
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17 };
+        module.ObserveStatus(pending);
+        module.ObserveStatus(pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(1.7),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false,
+        });
+        var earlier = Assert.Single(Tick(module, seconds: 1));
+        Assert.NotEqual(Source.EntityId, earlier.Source.EntityId);
+        Assert.Equal(600u, earlier.Amount);
+    }
+
+    [Fact]
+    public void RefreshKeepsTheOldSnapshotUntilTheReplacementIsConfirmed()
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var old = Application() with { BaseDamageLowByte = 17 };
+        module.ObserveStatus(old);
+        module.ObserveStatus(old with { SeenAtUtc = Start.AddSeconds(4), DurationSeconds = 0, BaseDamageLowByte = 34 });
+        Assert.Equal((byte)17, Assert.Single(Tick(module, seconds: 5)).PeriodicEstimateInputs!.DamageLowByte);
+        module.ObserveStatus(old with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(6),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false,
+        });
+        Assert.Equal((byte)34, Assert.Single(Tick(module, seconds: 8, sequence: 101)).PeriodicEstimateInputs!.DamageLowByte);
+    }
+
+    [Fact]
+    public void ActualRecastDoesNotReuseThePreviousPendingCalibration()
+    {
+        var module = new DamageParsingModule();
+        Calibrate(module, 1000);
+        var pending = Application() with { DurationSeconds = 0, BaseDamageLowByte = 17 };
+        module.ObserveStatus(pending);
+        Calibrate(module, 9000, sequence: 2, seconds: 1);
+        module.ObserveStatus(pending with { SeenAtUtc = Start.AddSeconds(2), BaseDamageLowByte = 34 });
+        module.ObserveStatus(pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = Start.AddSeconds(3),
+            DurationSeconds = 30,
+            BaseDamageLowByte = null,
+            PeriodicPotency = null,
+            HasSourceStatusSnapshot = false,
+        });
+        var inputs = Assert.Single(Tick(module, seconds: 4)).PeriodicEstimateInputs!;
+        Assert.Equal(50.0, inputs.DamagePerPotency);
+        Assert.Equal((byte)34, inputs.DamageLowByte);
+    }
+
     [Fact]
     public void EnrichedSnapshotUsesCapturedBytesWithoutResamplingCalibration()
     {
@@ -80,12 +248,14 @@ public sealed class PeriodicSnapshotTests
     public void EnrichmentPreservesExplicitApplicationAttributes()
     {
         var module = new DamageParsingModule();
-        Calibrate(module, 1000);
+        Calibrate(module, 1000, rates: new(0.2, 0.3));
         var application = Application() with { SourceBaseRates = new(0.2, 0.3) };
         module.ObserveStatus(application);
         module.ObserveStatus(application with
         {
-            SeenAtUtc = Start.AddSeconds(0.3), BaseDamageLowByte = 17, SourceBaseRates = new(0.5, 0.7),
+            SeenAtUtc = Start.AddSeconds(0.3),
+            BaseDamageLowByte = 17,
+            SourceBaseRates = new(0.5, 0.7),
         });
 
         var tick = Assert.Single(Tick(module));
@@ -105,7 +275,8 @@ public sealed class PeriodicSnapshotTests
         Calibrate(module, 9000, sequence: 2, seconds: 4);
         module.ObserveStatus(application with
         {
-            ActionId = PeriodicDamageRefreshPolicy.IronJawsActionId, SeenAtUtc = Start.AddSeconds(4.1),
+            ActionId = PeriodicDamageRefreshPolicy.IronJawsActionId,
+            SeenAtUtc = Start.AddSeconds(4.1),
         });
 
         Assert.Equal(273.0, Assert.Single(Tick(module, seconds: 3)).PeriodicEstimateInputs!.BaseDamage);
@@ -141,7 +312,8 @@ public sealed class PeriodicSnapshotTests
         Calibrate(module, 9000, sequence: 2, seconds: 0.2);
         module.ObserveStatus(application with
         {
-            SeenAtUtc = Start.AddSeconds(0.3), HasSourceStatusSnapshot = true,
+            SeenAtUtc = Start.AddSeconds(0.3),
+            HasSourceStatusSnapshot = true,
             SourceStatuses = [new DamageStatusSnapshot(0x748, Source, 0, 15)],
         });
 

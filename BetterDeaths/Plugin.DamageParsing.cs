@@ -115,7 +115,7 @@ public sealed partial class Plugin
             }
 
             var actionCategoryId = GetActionCategoryId(packet.ActionId);
-            var potencyProfile = GetActionPotencyProfile(packet.ActionId);
+            var potencyProfile = GetActionPotencyProfile(packet.ActionId, GetAttributedDamageSource(source, sourceOwner));
             var calibratingDamageEffects = targets.Sum(target => target.Effects.Count(effect =>
                 effect.Type is 3 or 5 or 6));
             var statusApplications = BuildDamageStatusApplications(
@@ -137,8 +137,9 @@ public sealed partial class Plugin
                 CapturedAtUtc = packet.SeenAtUtc,
                 ActionCategoryId = actionCategoryId,
                 DirectPotency = potencyProfile.DirectPotency,
+                SecondaryTargetPotencyMultiplier = potencyProfile.SecondaryTargetMultiplier,
                 CanCalibratePotency = potencyProfile.DirectPotency is > 0.0 &&
-                    calibratingDamageEffects == 1,
+                    (calibratingDamageEffects == 1 || potencyProfile.SecondaryTargetMultiplier is > 0.0),
                 IsAutoAttack = actionCategoryId == 1,
                 ActionType = packet.ActionType,
                 SourceSequence = packet.SourceSequence,
@@ -176,7 +177,7 @@ public sealed partial class Plugin
         var applications = new List<DamageStatusApplication>();
         var attributedSource = GetAttributedDamageSource(source, sourceOwner);
         var actionDamageProfile = GetActionDamageProfile(packet.ActionId);
-        var potencyProfile = GetActionPotencyProfile(packet.ActionId);
+        var potencyProfile = GetActionPotencyProfile(packet.ActionId, attributedSource);
         string? snapshotKey = null;
         foreach (var target in packet.Targets)
         {
@@ -520,6 +521,7 @@ public sealed partial class Plugin
                 player is not null,
                 player?.ClassJob.RowId ?? 0)
             {
+                Level = player?.Level ?? 0,
                 BaseId = gameObject.BaseId,
                 ObjectKind = (byte)gameObject.ObjectKind,
                 SubKind = gameObject.SubKind,

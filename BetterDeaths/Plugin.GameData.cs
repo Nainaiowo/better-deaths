@@ -171,9 +171,10 @@ public sealed partial class Plugin
         return profile;
     }
 
-    private ActionPotencyProfile GetActionPotencyProfile(uint actionId)
+    private ActionPotencyProfile GetActionPotencyProfile(uint actionId, DamageActorIdentity? source = null)
     {
-        if (actionPotencyProfileCache.TryGetValue(actionId, out var cachedProfile))
+        var key = (actionId, source?.ClassJobId ?? 0, source?.Level ?? 0);
+        if (actionPotencyProfileCache.TryGetValue(key, out var cachedProfile))
         {
             return cachedProfile;
         }
@@ -185,7 +186,8 @@ public sealed partial class Plugin
                 .GetExcelSheet<ActionTransient>(Dalamud.Game.ClientLanguage.English)?
                 .GetRowOrDefault(actionId);
             profile = ActionPotencyProfileParser.Parse(
-                action?.Description.ExtractText() ?? string.Empty,
+                action is null ? string.Empty : ActionPotencyTextResolver.Resolve(
+                    action.Value.Description, key.Item2, key.Item3),
                 appliesPeriodicDamage: true);
         }
         catch (Exception ex)
@@ -193,7 +195,7 @@ public sealed partial class Plugin
             Log.Debug(ex, "Could not load action potency profile for {ActionId}.", actionId);
         }
 
-        actionPotencyProfileCache[actionId] = profile;
+        actionPotencyProfileCache[key] = profile;
         return profile;
     }
 

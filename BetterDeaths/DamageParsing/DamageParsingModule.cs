@@ -42,6 +42,14 @@ internal sealed class DamageParsingModule
 
     public Action<IReadOnlyList<ParsedDamageEvent>>? PeriodicEventsResolved { get; set; }
 
+    public void ResetCalibration()
+    {
+        lock (syncRoot)
+        {
+            periodicDamageTracker.ClearCalibration();
+        }
+    }
+
     public DamageEncounterSnapshot? LastEncounter
     {
         get
@@ -588,7 +596,7 @@ internal sealed class DamageParsingModule
         targets.Clear();
         pendingPeriodicTicks.Clear();
         stagedDamageBatches.Clear();
-        periodicDamageTracker.Clear();
+        periodicDamageTracker.Clear(preserveCalibration: true);
         effectiveDamageResolver.Clear();
         raidBuffTracker.Clear();
         startedAtUtc = null;
@@ -732,7 +740,7 @@ internal sealed class DamageParsingModule
 
         pendingPeriodicTicks.RemoveAll(entry => entry.Tick.SeenAtUtc < cutoff);
         stagedDamageBatches.Clear();
-        periodicDamageTracker.Clear();
+        periodicDamageTracker.Clear(preserveCalibration: true);
         effectiveDamageResolver.Clear();
         raidBuffTracker.Clear();
         latestPreEncounterActivityAtUtc = null;
@@ -1020,6 +1028,7 @@ internal sealed class DamageParsingModule
             OwnerName = ownerName,
             IsPlayer = actor.IsPlayer || known.IsPlayer,
             ClassJobId = actor.ClassJobId != 0 ? actor.ClassJobId : known.ClassJobId,
+            Level = actor.Level != 0 ? actor.Level : known.Level,
             BaseId = actor.BaseId != 0 ? actor.BaseId : known.BaseId,
             ObjectKind = actor.ObjectKind != 0 ? actor.ObjectKind : known.ObjectKind,
             SubKind = actor.SubKind != 0 ? actor.SubKind : known.SubKind,

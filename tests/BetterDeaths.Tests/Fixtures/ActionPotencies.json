@@ -1,0 +1,1334 @@
+[
+  {
+    "ActionId": 9,
+    "Name": "Fast Blade",
+    "JobId": 1,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],220,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 61,
+    "Name": "Twin Snakes",
+    "JobId": 2,
+    "Level": 100,
+    "Direct": 340.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==20],<if([gnum72>=94],420,<if([gnum68==20],<if([gnum72>=84],380,340)>,340)>)>,<if([gnum68==20],<if([gnum72>=84],380,340)>,340)>)>.<br>Can only be executed when in <colortype(506)><edgecolortype(507)>raptor<edgecolortype(0)><colortype(0)> form.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants a stack of <colortype(506)><edgecolortype(507)>Raptor's Fury<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Raptor's Fury Effect: <edgecolortype(0)><colortype(0)>Increases potency of <colortype(500)><edgecolortype(501)><if([gnum68==20],<if([gnum72>=92],Rising Raptor,True Strike)>,True Strike)><edgecolortype(0)><colortype(0)> by 200<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Changes form to <colortype(506)><edgecolortype(507)>coeurl<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 31,
+    "Name": "Heavy Swing",
+    "JobId": 3,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==21],<if([gnum72>=94],240,<if([gnum68==21],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==21],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 75,
+    "Name": "True Thrust",
+    "JobId": 4,
+    "Level": 100,
+    "Direct": 170.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==22],<if([gnum72>=76],230,170)>,170)>."
+  },
+  {
+    "ActionId": 97,
+    "Name": "Heavy Shot",
+    "JobId": 5,
+    "Level": 100,
+    "Direct": 160.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 160.<if([gnum72>=2],<if([gnum68==5],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>20% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,<if([gnum68==23],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>20% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,)>)>,)>"
+  },
+  {
+    "ActionId": 119,
+    "Name": "Stone",
+    "JobId": 6,
+    "Level": 100,
+    "Direct": 140.0,
+    "Periodic": null,
+    "Macro": "Deals earth damage with a potency of 140."
+  },
+  {
+    "ActionId": 141,
+    "Name": "Fire",
+    "JobId": 7,
+    "Level": 100,
+    "Direct": 180.0,
+    "Periodic": null,
+    "Macro": "Deals fire damage with a potency of 180.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Grants <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or removes <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)><br><if([gnum72>=42],<if([gnum68==7],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>40% chance to grant <colortype(506)><edgecolortype(507)>Firestarter<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Firestarter Effect: <edgecolortype(0)><colortype(0)>Next <colortype(500)><edgecolortype(501)>Fire III<edgecolortype(0)><colortype(0)> will cost no MP and have no cast time,<if([gnum68==25],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>40% chance to grant <colortype(506)><edgecolortype(507)>Firestarter<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Firestarter Effect: <edgecolortype(0)><colortype(0)>Next <colortype(500)><edgecolortype(501)>Fire III<edgecolortype(0)><colortype(0)> will cost no MP and have no cast time,)>)>,)>"
+  },
+  {
+    "ActionId": 163,
+    "Name": "Ruin",
+    "JobId": 26,
+    "Level": 100,
+    "Direct": 240.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 240."
+  },
+  {
+    "ActionId": 2240,
+    "Name": "Spinning Edge",
+    "JobId": 29,
+    "Level": 100,
+    "Direct": 180.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==30],<if([gnum72>=94],300,<if([gnum68==30],<if([gnum72>=84],220,180)>,180)>)>,<if([gnum68==30],<if([gnum72>=84],220,180)>,180)>)>.<if([gnum68==30],<if([gnum72>=62],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Ninki Gauge<edgecolortype(0)><colortype(0)> by 5,)>,)>"
+  },
+  {
+    "ActionId": 9,
+    "Name": "Fast Blade",
+    "JobId": 19,
+    "Level": 83,
+    "Direct": 150.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],220,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 9,
+    "Name": "Fast Blade",
+    "JobId": 19,
+    "Level": 84,
+    "Direct": 200.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],220,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 9,
+    "Name": "Fast Blade",
+    "JobId": 19,
+    "Level": 93,
+    "Direct": 200.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],220,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 9,
+    "Name": "Fast Blade",
+    "JobId": 19,
+    "Level": 94,
+    "Direct": 220.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],220,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==19],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 61,
+    "Name": "Twin Snakes",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": 420.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==20],<if([gnum72>=94],420,<if([gnum68==20],<if([gnum72>=84],380,340)>,340)>)>,<if([gnum68==20],<if([gnum72>=84],380,340)>,340)>)>.<br>Can only be executed when in <colortype(506)><edgecolortype(507)>raptor<edgecolortype(0)><colortype(0)> form.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants a stack of <colortype(506)><edgecolortype(507)>Raptor's Fury<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Raptor's Fury Effect: <edgecolortype(0)><colortype(0)>Increases potency of <colortype(500)><edgecolortype(501)><if([gnum68==20],<if([gnum72>=92],Rising Raptor,True Strike)>,True Strike)><edgecolortype(0)><colortype(0)> by 200<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Changes form to <colortype(506)><edgecolortype(507)>coeurl<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 31,
+    "Name": "Heavy Swing",
+    "JobId": 21,
+    "Level": 100,
+    "Direct": 240.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==21],<if([gnum72>=94],240,<if([gnum68==21],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==21],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 75,
+    "Name": "True Thrust",
+    "JobId": 22,
+    "Level": 100,
+    "Direct": 230.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==22],<if([gnum72>=76],230,170)>,170)>."
+  },
+  {
+    "ActionId": 97,
+    "Name": "Heavy Shot",
+    "JobId": 23,
+    "Level": 100,
+    "Direct": 160.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 160.<if([gnum72>=2],<if([gnum68==5],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>20% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,<if([gnum68==23],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>20% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,)>)>,)>"
+  },
+  {
+    "ActionId": 119,
+    "Name": "Stone",
+    "JobId": 24,
+    "Level": 100,
+    "Direct": 140.0,
+    "Periodic": null,
+    "Macro": "Deals earth damage with a potency of 140."
+  },
+  {
+    "ActionId": 141,
+    "Name": "Fire",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 180.0,
+    "Periodic": null,
+    "Macro": "Deals fire damage with a potency of 180.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Grants <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or removes <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)><br><if([gnum72>=42],<if([gnum68==7],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>40% chance to grant <colortype(506)><edgecolortype(507)>Firestarter<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Firestarter Effect: <edgecolortype(0)><colortype(0)>Next <colortype(500)><edgecolortype(501)>Fire III<edgecolortype(0)><colortype(0)> will cost no MP and have no cast time,<if([gnum68==25],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>40% chance to grant <colortype(506)><edgecolortype(507)>Firestarter<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Firestarter Effect: <edgecolortype(0)><colortype(0)>Next <colortype(500)><edgecolortype(501)>Fire III<edgecolortype(0)><colortype(0)> will cost no MP and have no cast time,)>)>,)>"
+  },
+  {
+    "ActionId": 163,
+    "Name": "Ruin",
+    "JobId": 27,
+    "Level": 100,
+    "Direct": 240.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 240."
+  },
+  {
+    "ActionId": 167,
+    "Name": "Energy Drain",
+    "JobId": 28,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 100.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Absorbs a portion of damage dealt as HP<br><if([gnum72>=70],<if([gnum68==28],<colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Increases <colortype(500)><edgecolortype(501)>Faerie Gauge<edgecolortype(0)><colortype(0)> by 10<br>,)>,)><colortype(504)><edgecolortype(505)>Aetherflow Gauge Cost:<edgecolortype(0)><colortype(0)> 1"
+  },
+  {
+    "ActionId": 2240,
+    "Name": "Spinning Edge",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": 300.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==30],<if([gnum72>=94],300,<if([gnum68==30],<if([gnum72>=84],220,180)>,180)>)>,<if([gnum68==30],<if([gnum72>=84],220,180)>,180)>)>.<if([gnum68==30],<if([gnum72>=62],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Ninki Gauge<edgecolortype(0)><colortype(0)> by 5,)>,)>"
+  },
+  {
+    "ActionId": 2866,
+    "Name": "Split Shot",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": 140.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 140.<if([gnum68==31],<if([gnum72>=30],<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Increases <colortype(500)><edgecolortype(501)>Heat Gauge<edgecolortype(0)><colortype(0)> by 5,)>,)>"
+  },
+  {
+    "ActionId": 3617,
+    "Name": "Hard Slash",
+    "JobId": 32,
+    "Level": 100,
+    "Direct": 300.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==32],<if([gnum72>=94],300,<if([gnum68==32],<if([gnum72>=84],180,150)>,150)>)>,<if([gnum68==32],<if([gnum72>=84],180,150)>,150)>)>."
+  },
+  {
+    "ActionId": 3596,
+    "Name": "Malefic",
+    "JobId": 33,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 150."
+  },
+  {
+    "ActionId": 7477,
+    "Name": "Hakaze",
+    "JobId": 34,
+    "Level": 100,
+    "Direct": 200.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==34],<if([gnum72>=66],200,180)>,180)>.<if([gnum72>=62],<if([gnum68==34],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Kenki Gauge<edgecolortype(0)><colortype(0)> by 5,)>,)>"
+  },
+  {
+    "ActionId": 7503,
+    "Name": "Jolt",
+    "JobId": 35,
+    "Level": 100,
+    "Direct": 170.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 170.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Increases both <colortype(506)><edgecolortype(507)>Black Mana<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>White Mana<edgecolortype(0)><colortype(0)> by 2"
+  },
+  {
+    "ActionId": 11385,
+    "Name": "Water Cannon",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 200.0,
+    "Periodic": null,
+    "Macro": "Deals water damage with a potency of 200."
+  },
+  {
+    "ActionId": 16137,
+    "Name": "Keen Edge",
+    "JobId": 37,
+    "Level": 100,
+    "Direct": 300.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==37],<if([gnum72>=94],300,<if([gnum68==37],<if([gnum72>=84],200,150)>,150)>)>,<if([gnum68==37],<if([gnum72>=84],200,150)>,150)>)>."
+  },
+  {
+    "ActionId": 15989,
+    "Name": "Cascade",
+    "JobId": 38,
+    "Level": 100,
+    "Direct": 220.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==38],<if([gnum72>=94],220,200)>,200)>.<br><if([gnum68==38],<if([gnum72>=20],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>50% chance of granting <colortype(506)><edgecolortype(507)>Silken Symmetry<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,)>,)>"
+  },
+  {
+    "ActionId": 24373,
+    "Name": "Slice",
+    "JobId": 39,
+    "Level": 100,
+    "Direct": 420.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==39],<if([gnum72>=94],420,<if([gnum68==39],<if([gnum72>=84],320,<if([gnum68==39],<if([gnum72>=60],300,260)>,260)>)>,<if([gnum68==39],<if([gnum72>=60],300,260)>,260)>)>)>,<if([gnum68==39],<if([gnum72>=84],320,<if([gnum68==39],<if([gnum72>=60],300,260)>,260)>)>,<if([gnum68==39],<if([gnum72>=60],300,260)>,260)>)>)>.<if([gnum68==39],<if([gnum72>=50],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Soul Gauge<edgecolortype(0)><colortype(0)> by 10,)>,)>"
+  },
+  {
+    "ActionId": 24283,
+    "Name": "Dosis",
+    "JobId": 40,
+    "Level": 53,
+    "Direct": 180.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=64],300,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)>"
+  },
+  {
+    "ActionId": 24283,
+    "Name": "Dosis",
+    "JobId": 40,
+    "Level": 54,
+    "Direct": 250.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=64],300,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)>"
+  },
+  {
+    "ActionId": 24283,
+    "Name": "Dosis",
+    "JobId": 40,
+    "Level": 63,
+    "Direct": 250.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=64],300,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)>"
+  },
+  {
+    "ActionId": 24283,
+    "Name": "Dosis",
+    "JobId": 40,
+    "Level": 64,
+    "Direct": 300.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=64],300,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>,<if([gnum68==40],<if([gnum72>=54],250,180)>,180)>)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)>"
+  },
+  {
+    "ActionId": 34608,
+    "Name": "Hunter's Sting",
+    "JobId": 41,
+    "Level": 100,
+    "Direct": 300.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==41],<if([gnum72>=74],300,280)>,280)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Hunter's Instinct<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Hunter's Instinct Effect: <edgecolortype(0)><colortype(0)>Increases damage dealt by 10%<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>40s<br>Can only be executed after successfully landing <colortype(500)><edgecolortype(501)>Steel Fangs<edgecolortype(0)><colortype(0)> or <colortype(500)><edgecolortype(501)>Reaving Fangs<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 34650,
+    "Name": "Fire in Red",
+    "JobId": 42,
+    "Level": 100,
+    "Direct": 490.0,
+    "Periodic": null,
+    "Macro": "Deals fire damage with a potency of <if([gnum68==42],<if([gnum72>=94],490,<if([gnum68==42],<if([gnum72>=84],420,<if([gnum68==42],<if([gnum72>=74],380,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>)>,<if([gnum68==42],<if([gnum72>=74],380,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>)>)>,<if([gnum68==42],<if([gnum72>=84],420,<if([gnum68==42],<if([gnum72>=74],380,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>)>,<if([gnum68==42],<if([gnum72>=74],380,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>,<if([gnum68==42],<if([gnum72>=54],310,250)>,250)>)>)>)>.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Grants <colortype(506)><edgecolortype(507)>Aetherhues<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s<br>Cannot be executed while under the effect of <colortype(506)><edgecolortype(507)>Subtractive Palette<edgecolortype(0)><colortype(0)>.<if([gnum68==42],<if([gnum72>=82],<br>When standing within the bounds of <colortype(500)><edgecolortype(501)>Starry Muse<edgecolortype(0)><colortype(0)>\\, consumes a stack of <colortype(506)><edgecolortype(507)>Hyperphantasia<edgecolortype(0)><colortype(0)> if available.,)>,)>"
+  },
+  {
+    "ActionId": 23,
+    "Name": "Circle of Scorn",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": 140.0,
+    "Periodic": 30.0,
+    "Macro": "Delivers an attack with a potency of 140 to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>30<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s"
+  },
+  {
+    "ActionId": 88,
+    "Name": "Chaos Thrust",
+    "JobId": 22,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 40.0,
+    "Macro": "Delivers an attack with a potency of 100.<br>140 when executed from a target's rear.<br><colortype(504)><edgecolortype(505)>Combo Action: <edgecolortype(0)><colortype(0)><colortype(500)><edgecolortype(501)>Disembowel<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Combo Potency: <edgecolortype(0)><colortype(0)>220<br><colortype(504)><edgecolortype(505)>Rear Combo Potency: <edgecolortype(0)><colortype(0)>260<br><colortype(504)><edgecolortype(505)>Combo Bonus: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>40<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>24s"
+  },
+  {
+    "ActionId": 100,
+    "Name": "Venomous Bite",
+    "JobId": 23,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": 15.0,
+    "Macro": "Delivers an attack with a potency of 100.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> <colortype(506)><edgecolortype(507)>Venom<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 15<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 45s"
+  },
+  {
+    "ActionId": 113,
+    "Name": "Windbite",
+    "JobId": 23,
+    "Level": 100,
+    "Direct": 60.0,
+    "Periodic": 20.0,
+    "Macro": "Deals wind damage with a potency of 60.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Wind damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 20<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 45s"
+  },
+  {
+    "ActionId": 121,
+    "Name": "Aero",
+    "JobId": 24,
+    "Level": 100,
+    "Direct": 50.0,
+    "Periodic": 30.0,
+    "Macro": "Deals wind damage with a potency of 50.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Wind damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 30<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 132,
+    "Name": "Aero II",
+    "JobId": 24,
+    "Level": 100,
+    "Direct": 50.0,
+    "Periodic": 50.0,
+    "Macro": "Deals wind damage with a potency of 50.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Wind damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 144,
+    "Name": "Thunder",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": 45.0,
+    "Macro": "Deals lightning damage with a potency of 100.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>45<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>24s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 153,
+    "Name": "Thunder III",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 120.0,
+    "Periodic": 50.0,
+    "Macro": "Deals lightning damage with a potency of 120.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>27s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 2270,
+    "Name": "Doton",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 80.0,
+    "Macro": "Creates a patch of corrupted earth, dealing damage with a potency of 80 to any enemies who enter.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 18s<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> <colortype(506)><edgecolortype(507)>Heavy<edgecolortype(0)><colortype(0)> +40%<br><colortype(504)><edgecolortype(505)>Mudra Combination:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Ten<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Chi<edgecolortype(0)><colortype(0)> or <colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Ten<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Chi<edgecolortype(0)><colortype(0)><br>Triggers the cooldown of weaponskills, mudra, and <colortype(500)><edgecolortype(501)>Ninjutsu<edgecolortype(0)><colortype(0)> upon execution.<br><br>"
+  },
+  {
+    "ActionId": 18880,
+    "Name": "Doton",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 80.0,
+    "Macro": "Creates a patch of corrupted earth, dealing damage with a potency of 80 to any enemies who enter.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 18s<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> <colortype(506)><edgecolortype(507)>Heavy<edgecolortype(0)><colortype(0)> +40%<br><colortype(504)><edgecolortype(505)>Mudra Combination:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Ten<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Chi<edgecolortype(0)><colortype(0)> or <colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Ten<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Chi<edgecolortype(0)><colortype(0)><br>Triggers the cooldown of weaponskills, mudra, and <colortype(500)><edgecolortype(501)>Ninjutsu<edgecolortype(0)><colortype(0)> upon execution.<br><br>"
+  },
+  {
+    "ActionId": 3639,
+    "Name": "Salted Earth",
+    "JobId": 32,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 50.0,
+    "Macro": "Creates a patch of salted earth at your feet, dealing unaspected damage with a potency of 50 to any enemies who enter.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 15s"
+  },
+  {
+    "ActionId": 3599,
+    "Name": "Combust",
+    "JobId": 33,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 50.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 50<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 3608,
+    "Name": "Combust II",
+    "JobId": 33,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 60.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 60<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 7406,
+    "Name": "Caustic Bite",
+    "JobId": 23,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": 20.0,
+    "Macro": "Delivers an attack with a potency of 150.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> <colortype(506)><edgecolortype(507)>Poison<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 20<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 45s<if([gnum68==23],<if([gnum72>=76],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>35% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,)>,)>"
+  },
+  {
+    "ActionId": 7407,
+    "Name": "Stormbite",
+    "JobId": 23,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": 25.0,
+    "Macro": "Deals wind damage with a potency of 100.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Wind damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 25<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 45s<if([gnum68==23],<if([gnum72>=76],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>35% chance of granting <colortype(506)><edgecolortype(507)>Hawk's Eye<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s,)>,)>"
+  },
+  {
+    "ActionId": 7418,
+    "Name": "Flamethrower",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 120.0,
+    "Macro": "Delivers damage over time to all enemies in a cone before you.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>120<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>10s<br>Effect ends upon using another action or moving (including facing a different direction).<br>Cancels auto-attack upon execution.<br>Triggers the cooldown of weaponskills upon execution. Cannot be executed during the cooldown of weaponskills."
+  },
+  {
+    "ActionId": 7420,
+    "Name": "Thunder IV",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 80.0,
+    "Periodic": 35.0,
+    "Macro": "Deals lightning damage with a potency of 80 to target and all enemies nearby it.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>35<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>21s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 7447,
+    "Name": "Thunder II",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 60.0,
+    "Periodic": 30.0,
+    "Macro": "Deals lightning damage with a potency of 60 to target and all enemies nearby it.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>30<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>18s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 7489,
+    "Name": "Higanbana",
+    "JobId": 34,
+    "Level": 100,
+    "Direct": 200.0,
+    "Periodic": 50.0,
+    "Macro": "Delivers an attack with a potency of 200.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==34],<if([gnum72>=94],50,45)>,45)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 60s<br><if([gnum68==34],<if([gnum72>=80],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants a stack of <colortype(506)><edgecolortype(507)>Meditation<edgecolortype(0)><colortype(0)>\\, up to a maximum of 3<br>,)>,)>Can only be executed after accumulating 1 <colortype(506)><edgecolortype(507)>Sen<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 11386,
+    "Name": "Song of Torment",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 50.0,
+    "Periodic": 50.0,
+    "Macro": "Deals unaspected damage with a potency of 50.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 11388,
+    "Name": "Bad Breath",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 20.0,
+    "Macro": "Blow noxious breath on all enemies in a cone before you, inflicting <colortype(506)><edgecolortype(507)>Slow<edgecolortype(0)><colortype(0)> +20%, <colortype(506)><edgecolortype(507)>Heavy<edgecolortype(0)><colortype(0)> +40%, <colortype(506)><edgecolortype(507)>Blind<edgecolortype(0)><colortype(0)>, and <colortype(506)><edgecolortype(507)>Paralysis<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)><colortype(506)><edgecolortype(507)>Poison<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>20<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Damage dealt reduced 10%<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Interrupts target"
+  },
+  {
+    "ActionId": 11390,
+    "Name": "Aqua Breath",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 140.0,
+    "Periodic": 20.0,
+    "Macro": "Deals water damage to all enemies in a cone before you with a potency of 140 for the first enemy, and 50% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Inflicts <colortype(506)><edgecolortype(507)>Dropsy<edgecolortype(0)><colortype(0)>, dealing water damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>20<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>12s"
+  },
+  {
+    "ActionId": 11426,
+    "Name": "Feather Rain",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 220.0,
+    "Periodic": 40.0,
+    "Macro": "Deals wind damage with a potency of 220 to all enemies at a designated location.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Wind damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>40<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>6s<br>Shares a recast timer with <colortype(500)><edgecolortype(501)>Eruption<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 16153,
+    "Name": "Sonic Break",
+    "JobId": 37,
+    "Level": 100,
+    "Direct": 340.0,
+    "Periodic": 120.0,
+    "Macro": "Delivers an attack with a potency of 340.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>120<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s<br>Can only be executed when <colortype(506)><edgecolortype(507)>Ready to Break<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 16159,
+    "Name": "Bow Shock",
+    "JobId": 37,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": 60.0,
+    "Macro": "Delivers an attack with a potency of 150 to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>60<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s"
+  },
+  {
+    "ActionId": 16499,
+    "Name": "Bioblaster",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": 50.0,
+    "Periodic": 50.0,
+    "Macro": "Delivers an attack with a potency of 50 to all enemies in a cone before you.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s<br><if([gnum68==31],<if([gnum72>=94],<colortype(504)><edgecolortype(505)>Maximum Charges: <edgecolortype(0)><colortype(0)>2<br>,)>,)>Shares a recast timer with <colortype(500)><edgecolortype(501)>Drill<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 16532,
+    "Name": "Dia",
+    "JobId": 24,
+    "Level": 93,
+    "Direct": 65.0,
+    "Periodic": 65.0,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==24],<if([gnum72>=94],85,65)>,65)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==24],<if([gnum72>=94],85,65)>,65)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 16532,
+    "Name": "Dia",
+    "JobId": 24,
+    "Level": 94,
+    "Direct": 85.0,
+    "Periodic": 85.0,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==24],<if([gnum72>=94],85,65)>,65)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==24],<if([gnum72>=94],85,65)>,65)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 16540,
+    "Name": "Biolysis",
+    "JobId": 28,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 85.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==28],<if([gnum72>=94],85,70)>,70)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 16554,
+    "Name": "Combust III",
+    "JobId": 33,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 70.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==33],<if([gnum72>=94],70,65)>,65)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 17864,
+    "Name": "Bio",
+    "JobId": 28,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 20.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 20<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 17865,
+    "Name": "Bio II",
+    "JobId": 28,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 40.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 40<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 22352,
+    "Name": "Lost Flare Star",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 300.0,
+    "Periodic": 350.0,
+    "Macro": "Consumes MP to deal unaspected damage with a potency of 300 to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 350<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 60s<br>The damage over time effect of Lost Flare Star can only be applied once per target at any given time. This effect cannot be stacked by multiple players."
+  },
+  {
+    "ActionId": 23279,
+    "Name": "Mustard Bomb",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 220.0,
+    "Periodic": 50.0,
+    "Macro": "Deals fire damage to target and all enemies nearby it with a potency of 220 for the first enemy, and 50% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Enemies affected by <colortype(506)><edgecolortype(507)>Lightheaded<edgecolortype(0)><colortype(0)> suffer damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s"
+  },
+  {
+    "ActionId": 23281,
+    "Name": "Aetherial Spark",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 50.0,
+    "Periodic": 50.0,
+    "Macro": "Deals unaspected damage with a potency of 50 to all enemies in a straight line before you.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 50<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 15s"
+  },
+  {
+    "ActionId": 23288,
+    "Name": "Phantom Flurry",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 200.0,
+    "Macro": "Deals physical damage over time with a potency of 200 to all enemies in a cone before you.<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>5s<br>Executing <colortype(500)><edgecolortype(501)>Phantom Flurry<edgecolortype(0)><colortype(0)> again before its effect expires deals physical damage to all enemies in a cone before you with a potency of 600 for the first enemy, and 50% less for all remaining enemies.<br>Effect ends upon using an action other than <colortype(500)><edgecolortype(501)>Phantom Flurry<edgecolortype(0)><colortype(0)> or moving (including facing a different direction).<br>Cancels auto-attack upon execution."
+  },
+  {
+    "ActionId": 23289,
+    "Name": "Phantom Flurry",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 200.0,
+    "Macro": "Deals physical damage over time with a potency of 200 to all enemies in a cone before you.<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>5s<br>Executing <colortype(500)><edgecolortype(501)>Phantom Flurry<edgecolortype(0)><colortype(0)> again before its effect expires deals physical damage to all enemies in a cone before you with a potency of 600 for the first enemy, and 50% less for all remaining enemies.<br>Effect ends upon using an action other than <colortype(500)><edgecolortype(501)>Phantom Flurry<edgecolortype(0)><colortype(0)> or moving (including facing a different direction).<br>Cancels auto-attack upon execution."
+  },
+  {
+    "ActionId": 23290,
+    "Name": "Nightbloom",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 400.0,
+    "Periodic": 75.0,
+    "Macro": "Deals unaspected damage to all nearby enemies with a potency of 400 for the first enemy, and 50% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Unaspected damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>75<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>60s<br>Shares a recast timer with <colortype(500)><edgecolortype(501)>Both Ends<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 24293,
+    "Name": "Eukrasian Dosis",
+    "JobId": 40,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 40.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=64],40,<if([gnum68==40],<if([gnum72>=54],35,30)>,30)>)>,<if([gnum68==40],<if([gnum72>=54],35,30)>,30)>)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)><br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Eukrasia<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 24308,
+    "Name": "Eukrasian Dosis II",
+    "JobId": 40,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 60.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>60<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)><br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Eukrasia<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 24314,
+    "Name": "Eukrasian Dosis III",
+    "JobId": 40,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 90.0,
+    "Macro": "Deals unaspected damage over time.<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=94],90,80)>,80)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>Effect cannot be stacked with <colortype(500)><edgecolortype(501)>Eukrasian Dyskrasia<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)><br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Eukrasia<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 25772,
+    "Name": "Chaotic Spring",
+    "JobId": 22,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 45.0,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==22],<if([gnum72>=94],140,100)>,100)>.<br><if([gnum68==22],<if([gnum72>=94],180,140)>,140)> when executed from a target's rear.<br><colortype(504)><edgecolortype(505)>Combo Action: <edgecolortype(0)><colortype(0)><if([gnum68==22],<if([gnum72>=96],<colortype(500)><edgecolortype(501)>Spiral Blow<edgecolortype(0)><colortype(0)>,<colortype(500)><edgecolortype(501)>Disembowel<edgecolortype(0)><colortype(0)>)>,<colortype(500)><edgecolortype(501)>Disembowel<edgecolortype(0)><colortype(0)>)><br><colortype(504)><edgecolortype(505)>Combo Potency: <edgecolortype(0)><colortype(0)><if([gnum68==22],<if([gnum72>=94],300,260)>,260)><br><colortype(504)><edgecolortype(505)>Rear Combo Potency: <edgecolortype(0)><colortype(0)><if([gnum68==22],<if([gnum72>=94],340,300)>,300)><br><colortype(504)><edgecolortype(505)>Combo Bonus: <edgecolortype(0)><colortype(0)>Damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>45<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>24s"
+  },
+  {
+    "ActionId": 25837,
+    "Name": "Slipstream",
+    "JobId": 27,
+    "Level": 100,
+    "Direct": 520.0,
+    "Periodic": 30.0,
+    "Macro": "Deals wind damage to target and all enemies nearby it with a potency of <if([gnum68==27],<if([gnum72>=94],520,430)>,430)> for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Creates a windstorm centered around the target, dealing damage to any enemies who enter<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>30<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>15s<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Garuda's Favor<edgecolortype(0)><colortype(0)>.<br>This action does not share a recast timer with any other actions. Upon execution, the recast timer for this action will be applied to all other weaponskills and magic actions.<br><br>"
+  },
+  {
+    "ActionId": 34567,
+    "Name": "Breath of Magic",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 120.0,
+    "Macro": "Deals unaspected damage over time with a potency of 120 to all enemies in a cone before you.<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>60s<br>Only one effect inflicted by this action can be active at a time."
+  },
+  {
+    "ActionId": 34569,
+    "Name": "Peat Pelt",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": 10.0,
+    "Macro": "Deals earth damage to target and all enemies nearby it with a potency of 100 for the first enemy, and 50% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Afflicts target with <colortype(506)><edgecolortype(507)>Begrimed<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Begrimed Effect:<edgecolortype(0)><colortype(0)> Earth damage over time<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 10<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 9s"
+  },
+  {
+    "ActionId": 34579,
+    "Name": "Mortal Flame",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 40.0,
+    "Macro": "Deals fire damage over time with a potency of 40.<br>Only one effect inflicted by this action can be active at a time.<br>Has no effect on targets outside of combat.<br>Effect ends upon target leaving combat."
+  },
+  {
+    "ActionId": 34581,
+    "Name": "Apokalypsis",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 140.0,
+    "Macro": "Delivers damage over time with a potency of 140 to all enemies in a straight line before you.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 10s<br>Effect ends upon using another action or moving (including facing a different direction).<br>Cancels auto-attack upon execution.<br>Shares a recast timer with <colortype(500)><edgecolortype(501)>Being Mortal<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 36986,
+    "Name": "High Thunder",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 150.0,
+    "Periodic": 60.0,
+    "Macro": "Deals lightning damage with a potency of 150.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>60<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 36987,
+    "Name": "High Thunder II",
+    "JobId": 25,
+    "Level": 100,
+    "Direct": 100.0,
+    "Periodic": 40.0,
+    "Macro": "Deals lightning damage with a potency of 100 to target and all enemies nearby it.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Lightning damage over time<br><colortype(504)><edgecolortype(505)>Potency: <edgecolortype(0)><colortype(0)>40<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>24s<br>Can only be cast while under the effect of <colortype(506)><edgecolortype(507)>Thunderhead<edgecolortype(0)><colortype(0)>, granted when gaining <colortype(506)><edgecolortype(507)>Astral Fire<edgecolortype(0)><colortype(0)> or <colortype(506)><edgecolortype(507)>Umbral Ice<edgecolortype(0)><colortype(0)> from an unaspected state, or changing between their influences.<br>Only one <colortype(500)><edgecolortype(501)>Thunder<edgecolortype(0)><colortype(0)> spell-induced damage over time effect per caster can be inflicted upon a single target."
+  },
+  {
+    "ActionId": 37012,
+    "Name": "Baneful Impaction",
+    "JobId": 28,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 140.0,
+    "Macro": "Deals unaspected damage over time to target and all enemies nearby it.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 140<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 15s<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Impact Imminent<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 37032,
+    "Name": "Eukrasian Dyskrasia",
+    "JobId": 40,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": 40.0,
+    "Macro": "Deals unaspected damage over time to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Potency:<edgecolortype(0)><colortype(0)> 40<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s<br>Effect cannot be stacked with <colortype(500)><edgecolortype(501)>Eukrasian Dosis III<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP to targets under the effect of <colortype(506)><edgecolortype(507)>Kardion<edgecolortype(0)><colortype(0)> granted by you<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],170,130)>,130)><br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Eukrasia<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 25859,
+    "Name": "Glare III",
+    "JobId": 24,
+    "Level": 93,
+    "Direct": 310.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==24],<if([gnum72>=94],350,310)>,310)>."
+  },
+  {
+    "ActionId": 25859,
+    "Name": "Glare III",
+    "JobId": 24,
+    "Level": 94,
+    "Direct": 350.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==24],<if([gnum72>=94],350,310)>,310)>."
+  },
+  {
+    "ActionId": 53,
+    "Name": "Bootshine",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==20],<if([gnum72>=84],220,180)>,180)>.<br><if([gnum72>=50],<if([gnum68==2],<colortype(504)><edgecolortype(505)>Opo-opo's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],420,380)>,380)><br>,<if([gnum68==20],<colortype(504)><edgecolortype(505)>Opo-opo's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],420,380)>,380)><br>,)>)>,)><colortype(504)><edgecolortype(505)>Opo-opo Form Bonus: <edgecolortype(0)><colortype(0)>Guarantees a critical hit<br>Damage dealt is increased when under an effect that raises critical hit rate.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Changes form to <colortype(506)><edgecolortype(507)>raptor<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s"
+  },
+  {
+    "ActionId": 54,
+    "Name": "True Strike",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==20],<if([gnum72>=84],300,260)>,260)>.<br><if([gnum72>=18],<if([gnum68==2],<colortype(504)><edgecolortype(505)>Raptor's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],500,460)>,460)><br>,<if([gnum68==20],<colortype(504)><edgecolortype(505)>Raptor's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],500,460)>,460)><br>,)>)>,)>Can only be executed when in <colortype(506)><edgecolortype(507)>raptor<edgecolortype(0)><colortype(0)> form.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Changes form to <colortype(506)><edgecolortype(507)>coeurl<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 56,
+    "Name": "Snap Punch",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==20],<if([gnum72>=84],270,230)>,230)>.<br><if([gnum68==20],<if([gnum72>=84],330,290)>,290)> when executed from a target's flank.<br><if([gnum72>=30],<if([gnum68==2],<colortype(504)><edgecolortype(505)>Coeurl's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],420,380)>,380)><br><colortype(504)><edgecolortype(505)>Flank Coeurl's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],480,440)>,440)><br>,<if([gnum68==20],<colortype(504)><edgecolortype(505)>Coeurl's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],420,380)>,380)><br><colortype(504)><edgecolortype(505)>Flank Coeurl's Fury Potency: <edgecolortype(0)><colortype(0)><if([gnum68==20],<if([gnum72>=84],480,440)>,440)><br>,)>)>,)>Can only be executed when in <colortype(506)><edgecolortype(507)>coeurl<edgecolortype(0)><colortype(0)> form.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Changes form to <colortype(506)><edgecolortype(507)>opo-opo<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 36945,
+    "Name": "Leaping Opo",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 260.<br><colortype(504)><edgecolortype(505)>Opo-opo's Fury Potency: <edgecolortype(0)><colortype(0)>460<br><colortype(504)><edgecolortype(505)>Opo-opo Form Bonus: <edgecolortype(0)><colortype(0)>Guarantees a critical hit<br>Damage dealt is increased when under an effect that raises critical hit rate.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Changes form to <colortype(506)><edgecolortype(507)>raptor<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 30s"
+  },
+  {
+    "ActionId": 7384,
+    "Name": "Holy Spirit",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==19],<if([gnum72>=94],400,<if([gnum68==19],<if([gnum72>=84],350,300)>,300)>)>,<if([gnum68==19],<if([gnum72>=84],350,300)>,300)>)>.<if([gnum68==19],<if([gnum72>=64],<br><colortype(504)><edgecolortype(505)>Divine Might Potency: <edgecolortype(0)><colortype(0)><if([gnum68==19],<if([gnum72>=94],500,<if([gnum68==19],<if([gnum72>=84],450,400)>,400)>)>,<if([gnum68==19],<if([gnum72>=84],450,400)>,400)>)>,)>,)><if([gnum68==19],<if([gnum72>=68],<br><colortype(504)><edgecolortype(505)>Requiescat Potency: <edgecolortype(0)><colortype(0)><if([gnum68==19],<if([gnum72>=94],700,<if([gnum68==19],<if([gnum72>=84],650,600)>,600)>)>,<if([gnum68==19],<if([gnum72>=84],650,600)>,600)>)><br>The effect of <colortype(506)><edgecolortype(507)>Divine Might<edgecolortype(0)><colortype(0)> will be prioritized over <colortype(506)><edgecolortype(507)>Requiescat<edgecolortype(0)><colortype(0)> when under the effect of both.,)>,)><if([gnum68==19],<if([gnum72>=84],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores own HP<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)>400,)>,)>"
+  },
+  {
+    "ActionId": 16458,
+    "Name": "Holy Circle",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 100 to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Divine Might Potency: <edgecolortype(0)><colortype(0)>250<br><colortype(504)><edgecolortype(505)>Requiescat Potency: <edgecolortype(0)><colortype(0)>350<br>The effect of <colortype(506)><edgecolortype(507)>Divine Might<edgecolortype(0)><colortype(0)> will be prioritized over <colortype(506)><edgecolortype(507)>Requiescat<edgecolortype(0)><colortype(0)> when under the effect of both.<if([gnum68==19],<if([gnum72>=84],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores own HP<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)>400,)>,)>"
+  },
+  {
+    "ActionId": 25750,
+    "Name": "Blade of Valor",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of <if([gnum68==19],<if([gnum72>=94],500,420)>,420)> for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Requiescat Potency: <edgecolortype(0)><colortype(0)><if([gnum68==19],<if([gnum72>=94],1\\,000,920)>,920)><br><colortype(504)><edgecolortype(505)>Combo Action: <edgecolortype(0)><colortype(0)><colortype(500)><edgecolortype(501)>Blade of Truth<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores own HP<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)>400<if([gnum68==19],<if([gnum72>=100],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Blade of Honor Ready<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>,)>,)><br>"
+  },
+  {
+    "ActionId": 7509,
+    "Name": "Scatter",
+    "JobId": 35,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 120 to target and all enemies nearby it.<br><if([gnum68==35],<if([gnum72>=50],<colortype(504)><edgecolortype(505)>Acceleration Potency: <edgecolortype(0)><colortype(0)>170<br>,)>,)><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Increases both <colortype(506)><edgecolortype(507)>Black Mana<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>White Mana<edgecolortype(0)><colortype(0)> by 3"
+  },
+  {
+    "ActionId": 16526,
+    "Name": "Impact",
+    "JobId": 35,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of <if([gnum68==35],<if([gnum72>=84],210,200)>,200)> to target and all enemies nearby it.<br><colortype(504)><edgecolortype(505)>Acceleration Potency: <edgecolortype(0)><colortype(0)><if([gnum68==35],<if([gnum72>=84],260,250)>,250)><br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases both <colortype(506)><edgecolortype(507)>Black Mana<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>White Mana<edgecolortype(0)><colortype(0)> by 3"
+  },
+  {
+    "ActionId": 24395,
+    "Name": "Void Reaping",
+    "JobId": 39,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==39],<if([gnum72>=94],580,460)>,460)>.<br><colortype(504)><edgecolortype(505)>Enhanced Void Reaping Potency: <edgecolortype(0)><colortype(0)><if([gnum68==39],<if([gnum72>=94],640,520)>,520)><br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Enhanced Cross Reaping<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br><if([gnum68==39],<if([gnum72>=86],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Void Shroud<edgecolortype(0)><colortype(0)><br>,)>,)>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Enshrouded<edgecolortype(0)><colortype(0)>.<br>Recast timer cannot be affected by status effects or gear attributes.<br><colortype(504)><edgecolortype(505)>Lemure Shroud Cost: <edgecolortype(0)><colortype(0)>1<br>This action does not share a recast timer with any other actions. Upon execution, the recast timer for this action will be applied to all other weaponskills and magic actions.<br><br>"
+  },
+  {
+    "ActionId": 34606,
+    "Name": "Steel Fangs",
+    "JobId": 41,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==41],<if([gnum72>=74],200,180)>,180)>.<br><colortype(504)><edgecolortype(505)>Honed Steel Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==41],<if([gnum72>=74],300,280)>,280)><br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Honed Reavers<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Honed Reavers Effect: <edgecolortype(0)><colortype(0)>Increases potency of <colortype(500)><edgecolortype(501)>Reaving Fangs<edgecolortype(0)><colortype(0)> by 100 and <colortype(500)><edgecolortype(501)>Reaving Maw<edgecolortype(0)><colortype(0)> by 20<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>60s<br>Effect cannot be stacked with <colortype(506)><edgecolortype(507)>Honed Steel<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 34580,
+    "Name": "Sea Shanty",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals water damage with a potency of 500 to all nearby enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Potency increases to 1,000 during rain, showers, and thunderstorms"
+  },
+  {
+    "ActionId": 23286,
+    "Name": "Peripheral Synthesis",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals physical damage to all enemies in a straight line before you with a potency of 220 for the first enemy, and 50% less for all remaining enemies.<br>Potency increased to 400 when target becomes afflicted with <colortype(506)><edgecolortype(507)>Lightheaded<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Inflicts <colortype(506)><edgecolortype(507)>Lightheaded<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>5s<br>Repeated use of this action in a short period will reduce the additional effect's duration, eventually rendering targets immune to <colortype(506)><edgecolortype(507)>Lightheaded<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 15,
+    "Name": "Riot Blade",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],170,<if([gnum68==19],<if([gnum72>=84],140,100)>,100)>)>,<if([gnum68==19],<if([gnum72>=84],140,100)>,100)>)>.<br><colortype(504)><edgecolortype(505)>Combo Action:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Fast Blade<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Combo Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==19],<if([gnum72>=94],330,<if([gnum68==19],<if([gnum72>=84],300,260)>,260)>)>,<if([gnum68==19],<if([gnum72>=84],300,260)>,260)>)><if([gnum68==19],<if([gnum72>=58],<br><colortype(504)><edgecolortype(505)>Combo Bonus:<edgecolortype(0)><colortype(0)> Restores MP,)>,)>"
+  },
+  {
+    "ActionId": 42,
+    "Name": "Storm's Path",
+    "JobId": 21,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==21],<if([gnum72>=94],220,<if([gnum68==21],<if([gnum72>=84],160,100)>,100)>)>,<if([gnum68==21],<if([gnum72>=84],160,100)>,100)>)>.<br><colortype(504)><edgecolortype(505)>Combo Action:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Maim<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Combo Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==21],<if([gnum72>=94],500,<if([gnum68==21],<if([gnum72>=84],440,380)>,380)>)>,<if([gnum68==21],<if([gnum72>=84],440,380)>,380)>)><br><colortype(504)><edgecolortype(505)>Combo Bonus:<edgecolortype(0)><colortype(0)> Restores own HP<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)>250<if([gnum68==21],<if([gnum72>=35],<br><colortype(504)><edgecolortype(505)>Combo Bonus:<edgecolortype(0)><colortype(0)> Increases <colortype(500)><edgecolortype(501)>Beast Gauge<edgecolortype(0)><colortype(0)> by 20,)>,)>"
+  },
+  {
+    "ActionId": 2255,
+    "Name": "Aeolian Edge",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==30],<if([gnum72>=94],220,<if([gnum68==30],<if([gnum72>=74],140,100)>,100)>)>,<if([gnum68==30],<if([gnum72>=74],140,100)>,100)>)>.<br><if([gnum68==30],<if([gnum72>=94],280,<if([gnum68==30],<if([gnum72>=74],200,160)>,160)>)>,<if([gnum68==30],<if([gnum72>=74],200,160)>,160)>)> when executed from a target's rear.<br><colortype(504)><edgecolortype(505)>Combo Action:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Gust Slash<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Combo Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==30],<if([gnum72>=94],400,<if([gnum68==30],<if([gnum72>=74],320,280)>,280)>)>,<if([gnum68==30],<if([gnum72>=74],320,280)>,280)>)><br><colortype(504)><edgecolortype(505)>Rear Combo Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==30],<if([gnum72>=94],460,<if([gnum68==30],<if([gnum72>=74],380,340)>,340)>)>,<if([gnum68==30],<if([gnum72>=74],380,340)>,340)>)><if([gnum68==30],<if([gnum72>=54],<br>Potencies are increased by 100 while under the effect of <colortype(506)><edgecolortype(507)>Kazematoi<edgecolortype(0)><colortype(0)>.,)>,)><if([gnum68==30],<if([gnum72>=62],<br><colortype(504)><edgecolortype(505)>Combo Bonus: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Ninki Gauge<edgecolortype(0)><colortype(0)> by <if([gnum68==30],<if([gnum72>=84],15,<if([gnum68==30],<if([gnum72>=78],10,5)>,5)>)>,<if([gnum68==30],<if([gnum72>=78],10,5)>,5)>)>,)>,)>"
+  },
+  {
+    "ActionId": 16003,
+    "Name": "Standard Finish",
+    "JobId": 38,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack to all nearby enemies. Potency varies with number of successful steps, dealing full potency for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>0 Steps: <edgecolortype(0)><colortype(0)>360<br><colortype(504)><edgecolortype(505)>1 Step: <edgecolortype(0)><colortype(0)>540<br><colortype(504)><edgecolortype(505)>2 Steps: <edgecolortype(0)><colortype(0)><if([gnum68==38],<if([gnum72>=94],850,800)>,800)><br><if([gnum68==38],<if([gnum72>=76],<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Standard Finish<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>Esprit<edgecolortype(0)><colortype(0)> to self and party member designated as your <colortype(506)><edgecolortype(507)>Dance Partner<edgecolortype(0)><colortype(0)>,<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Standard Finish<edgecolortype(0)><colortype(0)> to self and party member designated as your <colortype(506)><edgecolortype(507)>Dance Partner<edgecolortype(0)><colortype(0)>)>,<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Standard Finish<edgecolortype(0)><colortype(0)> to self and party member designated as your <colortype(506)><edgecolortype(507)>Dance Partner<edgecolortype(0)><colortype(0)>)><br>Damage bonus of <colortype(506)><edgecolortype(507)>Standard Finish<edgecolortype(0)><colortype(0)> varies with number of successful steps.<br><colortype(504)><edgecolortype(505)>1 Step: <edgecolortype(0)><colortype(0)>2%<br><colortype(504)><edgecolortype(505)>2 Steps: <edgecolortype(0)><colortype(0)>5%<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>60s<br><if([gnum68==38],<if([gnum72>=92],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Last Dance Ready<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>,)>,)>Can only be executed while <colortype(506)><edgecolortype(507)>Dancing<edgecolortype(0)><colortype(0)>.<br>This weaponskill does not share a recast timer with any other actions. Upon execution, the recast timer for this action will be applied to all other weaponskills and magic actions.<br><br>"
+  },
+  {
+    "ActionId": 16004,
+    "Name": "Technical Finish",
+    "JobId": 38,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack to all nearby enemies within 15 yalms. Potency varies with number of successful steps, dealing full potency for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>0 Steps: <edgecolortype(0)><colortype(0)>350<br><colortype(504)><edgecolortype(505)>1 Step: <edgecolortype(0)><colortype(0)>540<br><colortype(504)><edgecolortype(505)>2 Steps: <edgecolortype(0)><colortype(0)>720<br><colortype(504)><edgecolortype(505)>3 Steps: <edgecolortype(0)><colortype(0)>900<br><colortype(504)><edgecolortype(505)>4 Steps: <edgecolortype(0)><colortype(0)><if([gnum68==38],<if([gnum72>=94],1\\,300,1\\,200)>,1\\,200)><br><if([gnum68==38],<if([gnum72>=76],<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Technical Finish<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>Esprit<edgecolortype(0)><colortype(0)> to self and party members within 30 yalms,<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Technical Finish<edgecolortype(0)><colortype(0)> to self and party members within 30 yalms)>,<colortype(504)><edgecolortype(505)>Step Bonus: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Technical Finish<edgecolortype(0)><colortype(0)> to self and party members within 30 yalms)><br>Damage bonus of <colortype(506)><edgecolortype(507)>Technical Finish<edgecolortype(0)><colortype(0)> varies with number of successful steps.<br><colortype(504)><edgecolortype(505)>1 Step: <edgecolortype(0)><colortype(0)>1%<br><colortype(504)><edgecolortype(505)>2 Steps: <edgecolortype(0)><colortype(0)>2%<br><colortype(504)><edgecolortype(505)>3 Steps: <edgecolortype(0)><colortype(0)>3%<br><colortype(504)><edgecolortype(505)>4 Steps: <edgecolortype(0)><colortype(0)>5%<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>20s<br><if([gnum68==38],<if([gnum72>=82],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Flourishing Finish<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>,)>,)><if([gnum68==38],<if([gnum72>=100],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Dance of the Dawn Ready<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>,)>,)>Can only be executed while <colortype(506)><edgecolortype(507)>Dancing<edgecolortype(0)><colortype(0)>.<br>This weaponskill does not share a recast timer with any other actions. Upon execution, the recast timer for this action will be applied to all other weaponskills and magic actions.<br><br>"
+  },
+  {
+    "ActionId": 16500,
+    "Name": "Air Anchor",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": 660.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum68==31],<if([gnum72>=94],660,620)>,620)>.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Increases <colortype(500)><edgecolortype(501)>Battery Gauge<edgecolortype(0)><colortype(0)> by 20<br>This weaponskill does not share a recast timer with any other actions."
+  },
+  {
+    "ActionId": 16501,
+    "Name": "Automaton Queen",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deploys an Automaton Queen to fight at your side.<br>Potency of Automaton Queen actions increases as <colortype(500)><edgecolortype(501)>Battery Gauge<edgecolortype(0)><colortype(0)> exceeds required cost at time of deployment.<br><colortype(504)><edgecolortype(505)>Battery Gauge Cost: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>12s<br>Consumes <colortype(500)><edgecolortype(501)>Battery Gauge<edgecolortype(0)><colortype(0)> upon execution.<br>Shuts down when time expires or upon execution of <colortype(500)><edgecolortype(501)>Queen Overdrive<edgecolortype(0)><colortype(0)>.<br>Shares a recast timer with <colortype(500)><edgecolortype(501)>Queen Overdrive<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 2864,
+    "Name": "Rook Autoturret",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deploys a single-target battle turret which attacks using <colortype(500)><edgecolortype(501)>Volley Fire<edgecolortype(0)><colortype(0)>, dealing damage with a potency of 35.<br>Potency increases as <colortype(500)><edgecolortype(501)>Battery Gauge<edgecolortype(0)><colortype(0)> exceeds required cost at time of deployment, up to a maximum of 70.<br><colortype(504)><edgecolortype(505)>Battery Gauge Cost: <edgecolortype(0)><colortype(0)>50<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>9s<br>Consumes <colortype(500)><edgecolortype(501)>Battery Gauge<edgecolortype(0)><colortype(0)> upon execution.<br>Shuts down when time expires or upon execution of <colortype(500)><edgecolortype(501)>Rook Overdrive<edgecolortype(0)><colortype(0)>.<br>Shares a recast timer with <colortype(500)><edgecolortype(501)>Rook Overdrive<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 7439,
+    "Name": "Earthly Star",
+    "JobId": 33,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deploys an <colortype(500)><edgecolortype(501)>Earthly Star<edgecolortype(0)><colortype(0)> in the designated area and grants the effect of <colortype(506)><edgecolortype(507)>Earthly Dominance<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 10s<br>Executing <colortype(500)><edgecolortype(501)>Stellar Detonation<edgecolortype(0)><colortype(0)> while under the effect of <colortype(506)><edgecolortype(507)>Earthly Dominance<edgecolortype(0)><colortype(0)> creates a <colortype(500)><edgecolortype(501)>Stellar Burst<edgecolortype(0)><colortype(0)> dealing unaspected damage with a potency of 205 to all nearby enemies. Also restores own HP and the HP of all nearby party members.<br><colortype(504)><edgecolortype(505)>Cure Potency:<edgecolortype(0)><colortype(0)> 540<br>After 10s, <colortype(506)><edgecolortype(507)>Earthly Dominance<edgecolortype(0)><colortype(0)> effect is changed to <colortype(506)><edgecolortype(507)>Giant Dominance<edgecolortype(0)><colortype(0)>.<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 10s<br>Waiting 10s or executing <colortype(500)><edgecolortype(501)>Stellar Detonation<edgecolortype(0)><colortype(0)> while under the effect of <colortype(506)><edgecolortype(507)>Giant Dominance<edgecolortype(0)><colortype(0)> creates a <colortype(500)><edgecolortype(501)>Stellar Explosion<edgecolortype(0)><colortype(0)> dealing unaspected damage with a potency of 310 to all nearby enemies. Also restores own HP and the HP of all nearby party members.<br><colortype(504)><edgecolortype(505)>Cure Potency:<edgecolortype(0)><colortype(0)> 720"
+  },
+  {
+    "ActionId": 3543,
+    "Name": "Tornado Kick",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": 1200.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to target and all enemies nearby it with a potency of 1,200 for the first enemy, and 35% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Formless Fist<edgecolortype(0)><colortype(0)>, allowing the execution of a weaponskill that requires a certain form, without being in that form<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>Any additional effects associated with the executed action will also be applied.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Lunar Nadi<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>Solar Nadi<edgecolortype(0)><colortype(0)>, as well as three <colortype(506)><edgecolortype(507)>Beast Chakra<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 7449,
+    "Name": "Akh Morn",
+    "JobId": 27,
+    "Level": 100,
+    "Direct": 1300.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,300 for the first enemy, and 50% less for all remaining enemies.<br>Can only be executed while Demi-Bahamut is summoned.<br><br>"
+  },
+  {
+    "ActionId": 11407,
+    "Name": "Final Sting",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": 2000.0,
+    "Periodic": null,
+    "Macro": "Deals physical damage with a potency of 2,000 while incapacitating self.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Inflicts <colortype(506)><edgecolortype(507)>Brush with Death<edgecolortype(0)><colortype(0)> on self<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>600s<br>Effect will not be removed upon revival or further incapacitation.<br>Cannot be executed while under the effect of <colortype(506)><edgecolortype(507)>Brush with Death<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 11408,
+    "Name": "Self-destruct",
+    "JobId": 36,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Deals fire damage with a potency of 1,500 to all nearby enemies while incapacitating self.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Potency is increased to 1,800 when you are under the effect of <colortype(506)><edgecolortype(507)>Toad Oil<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Inflicts <colortype(506)><edgecolortype(507)>Brush with Death<edgecolortype(0)><colortype(0)> on self<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>600s<br>Effect will not be removed upon revival or further incapacitation.<br>Cannot be executed while under the effect of <colortype(506)><edgecolortype(507)>Brush with Death<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 16492,
+    "Name": "Hyosho Ranryu",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": 1300.0,
+    "Periodic": null,
+    "Macro": "Deals ice damage with a potency of 1,300.<br><colortype(504)><edgecolortype(505)>Mudra Combination: <edgecolortype(0)><colortype(0)><colortype(500)><edgecolortype(501)>Ten<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)> or <colortype(500)><edgecolortype(501)>Chi<edgecolortype(0)><colortype(0)>→<colortype(500)><edgecolortype(501)>Jin<edgecolortype(0)><colortype(0)><br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Kassatsu<edgecolortype(0)><colortype(0)>.<br>Triggers the cooldown of weaponskills, mudra, and <colortype(500)><edgecolortype(501)>Ninjutsu<edgecolortype(0)><colortype(0)> upon execution.<br><br>"
+  },
+  {
+    "ActionId": 16535,
+    "Name": "Afflatus Misery",
+    "JobId": 24,
+    "Level": 100,
+    "Direct": 1400.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of <if([gnum68==24],<if([gnum72>=94],1\\,400,1\\,240)>,1\\,240)> for the first enemy, and 50% less for all remaining enemies.<br>Can only be executed when the <colortype(506)><edgecolortype(507)>Blood Lily<edgecolortype(0)><colortype(0)> is in full bloom."
+  },
+  {
+    "ActionId": 24398,
+    "Name": "Communio",
+    "JobId": 39,
+    "Level": 100,
+    "Direct": 1100.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,100 for the first enemy, and 20% less for all remaining enemies.<br><if([gnum68==39],<if([gnum72>=100],<colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Perfectio Parata<edgecolortype(0)><colortype(0)> when executed while <colortype(506)><edgecolortype(507)>Perfectio Occulta<edgecolortype(0)><colortype(0)> is active<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>,)>,)><colortype(506)><edgecolortype(507)>Enshrouded<edgecolortype(0)><colortype(0)> effect expires upon execution.<br>Requires at least one stack of <colortype(506)><edgecolortype(507)>Lemure Shroud<edgecolortype(0)><colortype(0)> to execute."
+  },
+  {
+    "ActionId": 25760,
+    "Name": "Double Down",
+    "JobId": 37,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to all nearby enemies with a potency of 1,000 for the first enemy, and 15% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Cartridge Cost: <edgecolortype(0)><colortype(0)>2<br>This weaponskill does not share a recast timer with any other actions."
+  },
+  {
+    "ActionId": 25769,
+    "Name": "Phantom Rush",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": 1500.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to target and all enemies nearby it with a potency of <if([gnum68==20],<if([gnum72>=94],1\\,500,1\\,400)>,1\\,400)> for the first enemy, and 35% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Formless Fist<edgecolortype(0)><colortype(0)>, allowing the execution of a weaponskill that requires a certain form, without being in that form<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>Any additional effects associated with the executed action will also be applied.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Lunar Nadi<edgecolortype(0)><colortype(0)> and <colortype(506)><edgecolortype(507)>Solar Nadi<edgecolortype(0)><colortype(0)>, as well as three <colortype(506)><edgecolortype(507)>Beast Chakra<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 25781,
+    "Name": "Ogi Namikiri",
+    "JobId": 34,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Delivers a critical hit to all enemies in a cone before you with a potency of <if([gnum68==34],<if([gnum72>=94],1\\,000,860)>,860)> for the first enemy, and 40% less for all remaining enemies.<br>Damage dealt is increased when under an effect that raises critical hit rate.<br>Grants a stack of <colortype(506)><edgecolortype(507)>Meditation<edgecolortype(0)><colortype(0)>, up to a maximum of 3.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Ogi Namikiri Ready<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 34631,
+    "Name": "Ouroboros",
+    "JobId": 41,
+    "Level": 100,
+    "Direct": 1150.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 1,150 to the first enemy, and 75% less for all remaining enemies.<br><colortype(506)><edgecolortype(507)>Reawakened<edgecolortype(0)><colortype(0)> effect expires upon execution.<br>Requires at least one stack of <colortype(506)><edgecolortype(507)>Anguine Tribute<edgecolortype(0)><colortype(0)>.<br>This weaponskill does not share a recast timer with any other actions.<br><br>"
+  },
+  {
+    "ActionId": 34676,
+    "Name": "Mog of the Ages",
+    "JobId": 42,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Render your moogle portrait to life, dealing unaspected damage to all enemies in a straight line before you with a potency of <if([gnum68==42],<if([gnum72>=84],1\\,000,<if([gnum68==42],<if([gnum72>=54],800,500)>,500)>)>,<if([gnum68==42],<if([gnum72>=54],800,500)>,500)>)> for the first enemy, and 70% less for all remaining enemies.<br>Can only be executed while <colortype(506)><edgecolortype(507)>Moogle Portrait<edgecolortype(0)><colortype(0)> is active."
+  },
+  {
+    "ActionId": 34677,
+    "Name": "Retribution of the Madeen",
+    "JobId": 42,
+    "Level": 100,
+    "Direct": 1100.0,
+    "Periodic": null,
+    "Macro": "Render your Madeen portrait to life, dealing unaspected damage to all enemies in a straight line before you with a potency of 1,100 for the first enemy, and 70% less for all remaining enemies.<br>Can only be executed while <colortype(506)><edgecolortype(507)>Madeen Portrait<edgecolortype(0)><colortype(0)> is active.<br><br>"
+  },
+  {
+    "ActionId": 34681,
+    "Name": "Star Prism",
+    "JobId": 42,
+    "Level": 100,
+    "Direct": 1100.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage with a potency of 1,100 for the first enemy, and 70% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Restores HP of all party members within 30 yalms of target<br><colortype(504)><edgecolortype(505)>Cure Potency:<edgecolortype(0)><colortype(0)> 400<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Starstruck<edgecolortype(0)><colortype(0)>.<if([gnum68==42],<if([gnum72>=82],<br>When standing within the bounds of <colortype(500)><edgecolortype(501)>Starry Muse<edgecolortype(0)><colortype(0)>\\, consumes a stack of <colortype(506)><edgecolortype(507)>Hyperphantasia<edgecolortype(0)><colortype(0)> if available.,)>,)>"
+  },
+  {
+    "ActionId": 34688,
+    "Name": "Rainbow Drip",
+    "JobId": 42,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to all enemies in a straight line before you with a potency of 1,000 for the first enemy, and 85% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Grants <colortype(506)><edgecolortype(507)>White Paint<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Maximum Stacks: <edgecolortype(0)><colortype(0)>5<br>When <colortype(506)><edgecolortype(507)>Rainbow Bright<edgecolortype(0)><colortype(0)> is active, <colortype(500)><edgecolortype(501)>Rainbow Drip<edgecolortype(0)><colortype(0)> can be cast immediately and its recast timer is reduced.<br>This action does not share a recast timer with any other actions. Upon execution, the recast timer for this action will be applied to all other weaponskills and magic actions."
+  },
+  {
+    "ActionId": 36922,
+    "Name": "Blade of Honor",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,000 for the first enemy, and 60% less for all remaining enemies.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Blade of Honor Ready<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 36932,
+    "Name": "Disesteem",
+    "JobId": 32,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Deals physical damage to all enemies in a straight line before you with a potency of 1,000 for the first enemy, and 25% less for all remaining enemies.<br>Can only be executed while <colortype(506)><edgecolortype(507)>Scorn<edgecolortype(0)><colortype(0)> is active."
+  },
+  {
+    "ActionId": 36939,
+    "Name": "Lion Heart",
+    "JobId": 37,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to target and all enemies nearby it with a potency of 1,000 for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Combo Action: <edgecolortype(0)><colortype(0)><colortype(500)><edgecolortype(501)>Noble Blood<edgecolortype(0)><colortype(0)><br><br>"
+  },
+  {
+    "ActionId": 36949,
+    "Name": "Wind's Reply",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": 1040.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to all enemies in a straight line before you with a potency of 1,040 for the first enemy, and 35% less for all remaining enemies.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Wind's Rumination<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 36950,
+    "Name": "Fire's Reply",
+    "JobId": 20,
+    "Level": 100,
+    "Direct": 1400.0,
+    "Periodic": null,
+    "Macro": "Deals damage to target and all enemies nearby it with a potency of 1,400 for the first enemy, and 35% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Grants <colortype(506)><edgecolortype(507)>Formless Fist<edgecolortype(0)><colortype(0)>, allowing the execution of a weaponskill that requires a certain form, without being in that form<br><colortype(504)><edgecolortype(505)>Duration: <edgecolortype(0)><colortype(0)>30s<br>Any additional effects associated with the executed action will also be applied.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Fire's Rumination<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 36956,
+    "Name": "Starcross",
+    "JobId": 22,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Deals physical damage to target and all enemies nearby it with a potency of 1,000 for the first enemy, and 40% less for all remaining enemies.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Starcross Ready<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 36961,
+    "Name": "Tenri Jindo",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": 1100.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,100.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Tenri Jindo Ready<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 36973,
+    "Name": "Perfectio",
+    "JobId": 39,
+    "Level": 100,
+    "Direct": 1300.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to target and all enemies nearby it with a potency of 1,300 for the first enemy, and 20% less for all remaining enemies.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Perfectio Parata<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 36985,
+    "Name": "Dance of the Dawn",
+    "JobId": 38,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Delivers an attack to target and all enemies nearby it with a potency of 1,000 for the first enemy, and 60% less for all remaining enemies.<br><colortype(504)><edgecolortype(505)>Esprit Gauge Cost: <edgecolortype(0)><colortype(0)>50<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Dance of the Dawn Ready<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 36996,
+    "Name": "Sunflare",
+    "JobId": 27,
+    "Level": 100,
+    "Direct": 1000.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,000 for the first enemy, and 50% less for all remaining enemies.<br>Can only be executed while in <colortype(506)><edgecolortype(507)>Lightwyrm Trance<edgecolortype(0)><colortype(0)>.<br><br>"
+  },
+  {
+    "ActionId": 36999,
+    "Name": "Exodus",
+    "JobId": 27,
+    "Level": 100,
+    "Direct": 1500.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,500 for the first enemy, and 50% less for all remaining enemies.<br>Can only be executed while Solar Bahamut is summoned.<br><br>"
+  },
+  {
+    "ActionId": 37007,
+    "Name": "Prefulgence",
+    "JobId": 35,
+    "Level": 100,
+    "Direct": 1200.0,
+    "Periodic": null,
+    "Macro": "Deals unaspected damage to target and all enemies nearby it with a potency of 1,200 for the first enemy, and 55% less for all remaining enemies.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Prefulgence Ready<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 16465,
+    "Name": "Inner Chaos",
+    "JobId": 21,
+    "Level": 100,
+    "Direct": 700.0,
+    "Periodic": null,
+    "Macro": "Delivers a critical direct hit with a potency of 700.<br>Damage dealt is increased when under an effect that raises critical hit rate or direct hit rate.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Reduces the recast time of <colortype(500)><edgecolortype(501)>Infuriate<edgecolortype(0)><colortype(0)> by 5 seconds<br><colortype(504)><edgecolortype(505)>Beast Gauge Cost: <edgecolortype(0)><colortype(0)>50<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Nascent Chaos<edgecolortype(0)><colortype(0)>. Effect fades upon execution.<br><br>"
+  },
+  {
+    "ActionId": 36982,
+    "Name": "Full Metal Field",
+    "JobId": 31,
+    "Level": 100,
+    "Direct": 900.0,
+    "Periodic": null,
+    "Macro": "Delivers a critical direct hit to target and all enemies nearby it with a potency of 900 for the first enemy, and 25% less for all remaining enemies.<br>Damage dealt is increased when under an effect that raises critical hit rate or direct hit rate.<br>This action is not affected by <colortype(506)><edgecolortype(507)>Reassemble<edgecolortype(0)><colortype(0)>.<br>Can only be executed while under the effect of <colortype(506)><edgecolortype(507)>Full Metal Machinist<edgecolortype(0)><colortype(0)>."
+  },
+  {
+    "ActionId": 25755,
+    "Name": "Salt and Darkness",
+    "JobId": 32,
+    "Level": 100,
+    "Direct": 500.0,
+    "Periodic": null,
+    "Macro": "All enemies standing in the corrupted patch of <colortype(500)><edgecolortype(501)>Salted Earth<edgecolortype(0)><colortype(0)> take additional unaspected damage with a potency of 500 for the first enemy, and 25% less for all remaining enemies."
+  },
+  {
+    "ActionId": 25776,
+    "Name": "Hollow Nozuchi",
+    "JobId": 30,
+    "Level": 100,
+    "Direct": 70.0,
+    "Periodic": null,
+    "Macro": "All enemies standing in the corrupted earth of <colortype(500)><edgecolortype(501)>Doton<edgecolortype(0)><colortype(0)> take additional earth damage with a potency of 70.<br>Requires <colortype(500)><edgecolortype(501)>Hakke Mujinsatsu<edgecolortype(0)><colortype(0)> to be executed as a combo action or upon executing <colortype(500)><edgecolortype(501)>Katon<edgecolortype(0)><colortype(0)>, <colortype(500)><edgecolortype(501)>Goka Mekkyaku<edgecolortype(0)><colortype(0)>, or <colortype(500)><edgecolortype(501)>Phantom Kamaitachi<edgecolortype(0)><colortype(0)>.<br>Effect can only be triggered while <colortype(500)><edgecolortype(501)>Doton<edgecolortype(0)><colortype(0)> is active.<br><br>"
+  },
+  {
+    "ActionId": 120,
+    "Name": "Cure",
+    "JobId": 24,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Restores target's HP.<br><colortype(504)><edgecolortype(505)>Cure Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==24],<if([gnum72>=85],500,450)>,450)><if([gnum72>=32],<if([gnum68==6],<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> 15% chance next <colortype(500)><edgecolortype(501)>Cure II<edgecolortype(0)><colortype(0)> will cost no MP<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 15s,<if([gnum68==24],<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> 15% chance next <colortype(500)><edgecolortype(501)>Cure II<edgecolortype(0)><colortype(0)> will cost no MP<br><colortype(504)><edgecolortype(505)>Duration:<edgecolortype(0)><colortype(0)> 15s,)>)>,)>"
+  },
+  {
+    "ActionId": 3541,
+    "Name": "Clemency",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Restores target's HP.<br><colortype(504)><edgecolortype(505)>Cure Potency:<edgecolortype(0)><colortype(0)> 1,000<br><colortype(504)><edgecolortype(505)>Additional Effect:<edgecolortype(0)><colortype(0)> Restores to self 50% of HP restored to target if target is a party member"
+  },
+  {
+    "ActionId": 24284,
+    "Name": "Diagnosis",
+    "JobId": 40,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Restores target's HP.<br><colortype(504)><edgecolortype(505)>Cure Potency: <edgecolortype(0)><colortype(0)><if([gnum68==40],<if([gnum72>=85],450,400)>,400)>"
+  },
+  {
+    "ActionId": 41594,
+    "Name": "Deadly Blow",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of 200.<br>Potency scales with item level.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Potency increases by up to 250 as your HP decreases<if([gnum108>=3],<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)>Potency increases by up to 2\\,000 based on the amount of damage taken while under the effect of <colortype(506)><edgecolortype(507)>Pent-up Rage<edgecolortype(0)><colortype(0)>,)>"
+  },
+  {
+    "ActionId": 41605,
+    "Name": "Iainuki",
+    "JobId": 19,
+    "Level": 100,
+    "Direct": null,
+    "Periodic": null,
+    "Macro": "Delivers an attack with a potency of <if([gnum108>=5],500,300)> to all enemies in a cone before you.<br>Potency scales with item level.<br><colortype(504)><edgecolortype(505)>Additional Effect: <edgecolortype(0)><colortype(0)><if([gnum108>=5],10%,5%)> chance to kill target instantly, with some exceptions"
+  }
+]

@@ -70,6 +70,7 @@ public sealed partial class Plugin
     {
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
+        damageParsingModule.ResetCalibration();
         EnsureCurrentDutyInstancePullGroup();
         deathRecapPopupWindow.RefreshVisibility();
     }

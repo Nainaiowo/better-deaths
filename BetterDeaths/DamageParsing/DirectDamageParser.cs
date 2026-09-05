@@ -2,6 +2,7 @@ namespace BetterDeaths.DamageParsing;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 internal sealed class DirectDamageParser
 {
@@ -33,6 +34,7 @@ internal sealed class DirectDamageParser
         var parsed = new List<ParsedDamageEvent>();
         foreach (var target in packet.Targets)
         {
+            var singleDamageEffect = target.Effects.Count(effect => effect.Type is 3 or 5 or 6) == 1;
             foreach (var effect in target.Effects)
             {
                 if (!TryGetOutcome(effect.Type, out var outcome))
@@ -74,8 +76,9 @@ internal sealed class DirectDamageParser
                     effect.Param4)
                 {
                     CapturedAtUtc = packet.CapturedAtUtc,
-                    DirectPotency = packet.DirectPotency,
-                    CanCalibratePotency = packet.CanCalibratePotency,
+                    DirectPotency = packet.DirectPotency * (target.TargetIndex > 0
+                        ? packet.SecondaryTargetPotencyMultiplier ?? 1.0 : 1.0),
+                    CanCalibratePotency = packet.CanCalibratePotency && singleDamageEffect && !isSourceEntry,
                     MeterAmount = isDamage ? DecodeAmount(effect) : 0,
                     ElementType = (byte)(effect.Param1 >> 4),
                     ActionCategoryId = packet.ActionCategoryId,

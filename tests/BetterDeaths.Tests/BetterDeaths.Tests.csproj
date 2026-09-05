@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Lumina" Version="7.6.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
   </ItemGroup>
@@ -19,6 +20,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DamageModels.cs" Link="DamageParsing/DamageModels.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageBaseRatePolicy.cs" Link="DamageParsing/DamageBaseRatePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ActionPotencyProfileParser.cs" Link="DamageParsing/ActionPotencyProfileParser.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/ActionPotencyTextResolver.cs" Link="DamageParsing/ActionPotencyTextResolver.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterPreviewData.cs" Link="DamageParsing/DamageMeterPreviewData.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageMeterCombatantPolicy.cs" Link="DamageParsing/DamageMeterCombatantPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParityComparer.cs" Link="DamageParsing/DamageParityComparer.cs" />
@@ -75,5 +77,6 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Update="Fixtures/ActionPotencies.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

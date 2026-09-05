@@ -54,6 +54,8 @@ internal sealed record DamageActorIdentity(
     bool IsPlayer,
     uint ClassJobId)
 {
+    public byte Level { get; init; }
+
     public uint BaseId { get; init; }
 
     public byte ObjectKind { get; init; }
@@ -92,6 +94,16 @@ internal sealed record PeriodicDamageEstimateInputs(
     double DirectHitRate,
     double CriticalMultiplier)
 {
+    public int CalibrationSampleCount { get; init; }
+
+    public int CriticalSampleCount { get; init; }
+
+    public int DirectHitSampleCount { get; init; }
+
+    public DamageBaseRateSnapshot? CalibrationBaseRates { get; init; }
+
+    public bool UsedKnownAttributes { get; init; }
+
     public double ExpectedAmount => BaseDamage * (1 + (CriticalMultiplier - 1) * CriticalRate) *
         (1 + 0.25 * DirectHitRate);
 }
@@ -116,6 +128,8 @@ internal sealed record DamageActionPacket(
     public uint ActionCategoryId { get; init; }
 
     public double? DirectPotency { get; init; }
+
+    public double? SecondaryTargetPotencyMultiplier { get; init; }
 
     public bool CanCalibratePotency { get; init; }
 

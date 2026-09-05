@@ -62,6 +62,7 @@ public sealed partial class Plugin
         if (territoryId != currentTerritoryId)
         {
             ArchiveCurrentPullForReview("Left territory", suppressResetStateDeaths: false);
+            damageParsingModule.ResetCalibration();
             currentTerritoryId = territoryId;
             currentTerritoryName = GetTerritoryName(territoryId);
             ClearCurrentDutyInstancePullGroup();
