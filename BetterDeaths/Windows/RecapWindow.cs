@@ -18453,7 +18453,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered())
         {
-            SetThemedTooltip("When enabled, Debug writes captured rows to a local JSONL file. The newest rows are kept and the file is capped at 25 MB.");
+            SetThemedTooltip($"When enabled, Debug writes captured rows to a local JSONL file. The newest rows are kept and the file is capped at {FormatByteSize(plugin.DebugCaptureMaxFileSizeBytes)}.");
         }
 
         ImGui.SameLine();

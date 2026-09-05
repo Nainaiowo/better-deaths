@@ -90,6 +90,7 @@ internal sealed class PeriodicDamageTracker
             ++nextApplicationGeneration);
         CaptureIndependentEstimate(tracked);
         statuses[key] = tracked;
+        RetireExclusiveApplications(tracked);
     }
 
     public void Retire(uint targetEntityId, uint statusId, uint sourceEntityId, DateTime removedAtUtc)
@@ -225,6 +226,7 @@ internal sealed class PeriodicDamageTracker
             var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
             if (damageEvent.Source.IsPet ||
                 HasAttributeChange(damageEvent.SourceStatuses) ||
+                HasUnknownDamageModifier(damageEvent.SourceStatuses) ||
                 calibrationPotency is not > 0.0 ||
                 damageEvent.Blocked ||
                 damageEvent.Parried)
@@ -340,13 +342,24 @@ internal sealed class PeriodicDamageTracker
 
         var candidates = statuses.Values.Concat(statusHistory)
             .Where(status => IsEligibleForTick(status, tick))
-            .GroupBy(status => (status.Application.Source.EntityId, status.Application.StatusId))
-            .Select(group => group.Where(status => status.Application.SeenAtUtc <= tick.SeenAtUtc)
-                .OrderByDescending(status => status.Application.SeenAtUtc).FirstOrDefault() ??
-                group.OrderBy(status => status.Application.SeenAtUtc).First())
+            .GroupBy(status => (status.Application.Source.EntityId,
+                PeriodicDamageRefreshPolicy.GetExclusiveFamily(status.Application.StatusId) ?? status.Application.StatusId))
+            .Select(group => group.Where(status => status.ActivatedAtUtc <= tick.SeenAtUtc)
+                .OrderByDescending(status => status.ActivatedAtUtc)
+                .ThenByDescending(status => status.ApplicationGeneration).FirstOrDefault() ??
+                group.OrderBy(status => status.ActivatedAtUtc)
+                    .ThenByDescending(status => status.ApplicationGeneration).First())
             .OrderBy(status => status.Application.Source.EntityId)
             .ThenBy(status => status.Application.StatusId)
             .ToList();
+        if (candidates.Count > 1)
+        {
+            // Exhausted snapshots must not take a share of another effect's tick.
+            // With one candidate, the packet still provides an unambiguous amount.
+            candidates.RemoveAll(status =>
+                PeriodicDamageRefreshPolicy.GetMaximumTicks(status.Application.StatusId) is { } maximumTicks &&
+                status.TickCount >= maximumTicks);
+        }
         if (candidates.Count == 0)
         {
             var unknownSource = CreateUnknownSource(!tick.Target.IsPlayer);
@@ -367,6 +380,7 @@ internal sealed class PeriodicDamageTracker
         {
             var candidate = candidates[0];
             candidate.LastTickAtUtc = tick.SeenAtUtc;
+            candidate.TickCount++;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
             Learn(candidate, tick.Amount);
             return [CreateEvent(
@@ -393,6 +407,7 @@ internal sealed class PeriodicDamageTracker
             }
 
             candidate.LastTickAtUtc = tick.SeenAtUtc;
+            candidate.TickCount++;
             ConsumeLateTickIfNeeded(candidate, tick.SeenAtUtc);
             events.Add(CreateEvent(
                 tick,
@@ -697,10 +712,10 @@ internal sealed class PeriodicDamageTracker
                 CriticalRateLowByte = application.CriticalRateLowByte ?? existingApplication.CriticalRateLowByte,
                 EffectParameterByte = application.EffectParameterByte ?? existingApplication.EffectParameterByte,
                 SourceBaseRates = existingApplication.SourceBaseRates ?? application.SourceBaseRates,
-                SourceStatuses = existingApplication.HasSourceStatusSnapshot
+                SourceStatuses = existingApplication.HasSourceStatusSnapshot || existingApplication.SourceStatuses.Count > 0
                     ? existingApplication.SourceStatuses
                     : application.SourceStatuses,
-                TargetStatuses = existingApplication.HasTargetStatusSnapshot
+                TargetStatuses = existingApplication.HasTargetStatusSnapshot || existingApplication.TargetStatuses.Count > 0
                     ? existingApplication.TargetStatuses
                     : application.TargetStatuses,
                 HasSourceStatusSnapshot = existingApplication.HasSourceStatusSnapshot ||
@@ -719,6 +734,7 @@ internal sealed class PeriodicDamageTracker
                 };
                 CaptureIndependentEstimate(earlier);
                 statusHistory.Add(earlier);
+                RetireExclusiveApplications(earlier);
                 return;
             }
             statusHistory.Add(new TrackedStatus(existing.Application, existing.NominalExpiresAtUtc,
@@ -728,6 +744,8 @@ internal sealed class PeriodicDamageTracker
                     ? removed : IsPendingActionApplication(application) ? existing.RemovedAtUtc : application.SeenAtUtc,
                 ActivatedAtUtc = existing.ActivatedAtUtc,
                 LastTickAtUtc = existing.LastTickAtUtc,
+                TickCount = existing.TickCount,
+                LateTickConsumed = existing.LateTickConsumed,
                 IndependentEstimate = existing.IndependentEstimate,
                 EstimateInputs = existing.EstimateInputs,
                 Calibration = existing.Calibration,
@@ -751,6 +769,7 @@ internal sealed class PeriodicDamageTracker
             learnedApplicationTicks.Remove(GetApplicationKey(existing));
             existing.ApplicationGeneration = ++nextApplicationGeneration;
             existing.LastTickAtUtc = null;
+            existing.TickCount = 0;
             existing.AwaitingStatusConfirmation = IsPendingActionApplication(application);
             existing.ActivatedAtUtc = existing.AwaitingStatusConfirmation ? null : application.SeenAtUtc;
         }
@@ -762,6 +781,36 @@ internal sealed class PeriodicDamageTracker
         existing.RetainUntilUtc = retainUntilUtc;
         existing.RemovedAtUtc = null;
         existing.LateTickConsumed = false;
+        RetireExclusiveApplications(existing);
+    }
+
+    private void RetireExclusiveApplications(TrackedStatus current)
+    {
+        if (!current.Application.IsPeriodicDamage || current.Application.Source.EntityId == 0 ||
+            current.ActivatedAtUtc is not { } activatedAtUtc || current.AwaitingStatusConfirmation ||
+            PeriodicDamageRefreshPolicy.GetExclusiveFamily(current.Application.StatusId) is not { } family)
+        {
+            return;
+        }
+
+        foreach (var other in statuses.Values.Concat(statusHistory).Where(other =>
+                     other.Application.IsPeriodicDamage && !other.AwaitingStatusConfirmation &&
+                     other.ActivatedAtUtc is not null &&
+                     other.Application.Source.EntityId == current.Application.Source.EntityId &&
+                     other.Application.Target.EntityId == current.Application.Target.EntityId &&
+                     other.Application.StatusId != current.Application.StatusId &&
+                     PeriodicDamageRefreshPolicy.GetExclusiveFamily(other.Application.StatusId) == family))
+        {
+            // Keep the old snapshot for delayed ticks, but never resurrect it after replacement.
+            var currentIsNewer = activatedAtUtc > other.ActivatedAtUtc ||
+                activatedAtUtc == other.ActivatedAtUtc && current.ApplicationGeneration > other.ApplicationGeneration;
+            var retired = currentIsNewer ? other : current;
+            var replacedAtUtc = currentIsNewer ? activatedAtUtc : other.ActivatedAtUtc!.Value;
+            if (retired.RemovedAtUtc is null || retired.RemovedAtUtc > replacedAtUtc)
+            {
+                retired.RemovedAtUtc = replacedAtUtc;
+            }
+        }
     }
 
     private static bool IsPendingActionApplication(DamageStatusApplication application) =>
@@ -821,6 +870,7 @@ internal sealed class PeriodicDamageTracker
             PeriodicEstimateUnavailableReason = tick.StatusId != 0 ? "Observed source-specific tick" :
                 status is null ? "Missing application" :
                 HasAttributeChange(status.SourceStatuses) ? "Attribute-changing status" :
+                HasUnknownDamageModifier(status.SourceStatuses) ? "Unknown damage modifier" :
                 status.PeriodicPotency is not > 0 ? "Missing potency" :
                 tracked?.IndependentEstimate is null ? "Missing application-time calibration" : null,
             AttributedSource = source,
@@ -898,7 +948,8 @@ internal sealed class PeriodicDamageTracker
     private static PeriodicDamageEstimateInputs? GetEstimateInputs(TrackedStatus status, CalibrationSnapshot calibration)
     {
         var application = status.Application;
-        if (application.PeriodicPotency is not > 0.0 || HasAttributeChange(application.SourceStatuses))
+        if (application.PeriodicPotency is not > 0.0 || HasAttributeChange(application.SourceStatuses) ||
+            HasUnknownDamageModifier(application.SourceStatuses))
         {
             return null;
         }
@@ -980,6 +1031,9 @@ internal sealed class PeriodicDamageTracker
 
     private static bool HasAttributeChange(IReadOnlyList<DamageStatusSnapshot> statuses) =>
         statuses.Any(status => status.RemainingTime > 0 && PersonalDamageModifierPolicy.ChangesAttributes(status.StatusId));
+
+    private static bool HasUnknownDamageModifier(IReadOnlyList<DamageStatusSnapshot> statuses) =>
+        statuses.Any(status => status.RemainingTime > 0 && PersonalDamageModifierPolicy.HasUnknownStrength(status));
 
     private static double ResolveCriticalRate(byte? lowByte, double expectedRate)
     {
@@ -1073,7 +1127,7 @@ internal sealed class PeriodicDamageTracker
         var multiplier = effects
             .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
             .Aggregate(1.0, (total, effect) => total * (1.0 + effect.Amount));
-        return Math.Max(0.01, multiplier);
+        return Math.Max(0.0, multiplier);
     }
 
     private static string GetActorKey(DamageActorIdentity actor)
@@ -1135,7 +1189,8 @@ internal sealed class PeriodicDamageTracker
         uint TargetIdentity,
         uint SourceEntityId,
         uint StatusId,
-        string SnapshotKey);
+        string SnapshotKey,
+        ushort? DamageDownParameter);
 
     private readonly record struct AllocationWeight(
         double Value,
@@ -1152,7 +1207,8 @@ internal sealed class PeriodicDamageTracker
             application.Target.BaseId != 0 ? application.Target.BaseId : application.Target.EntityId,
             application.Source.EntityId,
             application.StatusId,
-            application.SnapshotKey);
+            application.SnapshotKey,
+            application.SourceStatuses.FirstOrDefault(status => status.StatusId == 0xB5F && status.RemainingTime > 0)?.Parameter);
     }
 
     private bool IsGroundDamageStatus(uint statusId)
@@ -1207,6 +1263,8 @@ internal sealed class PeriodicDamageTracker
         public DateTime RetainUntilUtc { get; set; } = retainUntilUtc;
 
         public DateTime? LastTickAtUtc { get; set; }
+
+        public int TickCount { get; set; }
 
         public DateTime? RemovedAtUtc { get; set; }
 

@@ -663,8 +663,10 @@ internal sealed class DamageParsingModule
 
     private IReadOnlyList<ParsedDamageEvent> ProcessPeriodicTickCore(PendingPeriodicTick entry)
     {
+        // Target DoTs already carry their application-time effects. Ground ticks
+        // keep their existing live-status fallback.
         var parsed = periodicDamageTracker.Process(entry.Tick)
-            .Select(raidBuffTracker.ApplyFallback)
+            .Select(damageEvent => entry.Tick.StatusId != 0 ? raidBuffTracker.ApplyFallback(damageEvent) : damageEvent)
             .ToList();
         if (parsed.Count == 0)
         {
@@ -681,6 +683,7 @@ internal sealed class DamageParsingModule
 
     private void ObserveStatusCore(DamageStatusApplication application)
     {
+        application = raidBuffTracker.ApplyFallback(application);
         periodicDamageTracker.Observe(application);
         raidBuffTracker.Observe(application);
         MarkPreEncounterActivity(application.SeenAtUtc);

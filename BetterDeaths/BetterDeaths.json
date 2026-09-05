@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Fixed pending DoT refresh snapshots being lost when the previous effect expires before confirmation. Added opt-in direct-hit estimation diagnostics with per-application sampling and encounter coverage summaries. New estimates remain diagnostic-only; displayed damage and rDPS do not use them.",
+  "Changelog": "Increased the optional debug capture limit from 25 MB to 75 MB. Improved DoT snapshots for variable-strength Damage Down and Thunder replacements, corrected snapshot selection around refresh confirmation, and prevented exhausted Thunder, Baneful Impaction, and Combust III effects from taking another effect's damage. Direct-hit estimates remain diagnostic-only.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

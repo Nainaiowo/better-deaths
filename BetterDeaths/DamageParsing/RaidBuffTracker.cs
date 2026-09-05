@@ -101,6 +101,19 @@ internal sealed class RaidBuffTracker
         };
     }
 
+    public DamageStatusApplication ApplyFallback(DamageStatusApplication application)
+    {
+        return application with
+        {
+            SourceStatuses = application.HasSourceStatusSnapshot
+                ? Enrich(application.SourceStatuses, application.Source.EntityId, application.SeenAtUtc)
+                : GetActive(application.Source.EntityId, application.SeenAtUtc),
+            TargetStatuses = application.HasTargetStatusSnapshot
+                ? Enrich(application.TargetStatuses, application.Target.EntityId, application.SeenAtUtc)
+                : GetActive(application.Target.EntityId, application.SeenAtUtc),
+        };
+    }
+
     private IReadOnlyList<DamageStatusSnapshot> Enrich(
         IReadOnlyList<DamageStatusSnapshot> snapshots,
         uint targetEntityId,
@@ -217,7 +230,8 @@ internal sealed class RaidBuffTracker
                 RemovedAtUtc = status.RemovedAtUtc ?? application.SeenAtUtc,
             });
         }
-        if (application.Parameter == 0 && status.Application.Parameter != 0)
+        if (application.Parameter == 0 && status.Application.Parameter != 0 &&
+            (application.StatusId != 0xB5F || status.RemovedAtUtc is null && application.SeenAtUtc <= status.ExpiresAtUtc))
         {
             application = application with { Parameter = status.Application.Parameter };
         }

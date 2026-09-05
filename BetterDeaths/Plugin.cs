@@ -66,8 +66,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxQueuedChatMessageLength = 450;
     private const int MaxDebugLogEntries = 1000;
     private const string DebugCaptureFileName = "debug-capture.jsonl";
-    private const long MaxDebugCaptureFileBytes = 25L * 1024L * 1024L;
-    private const long DebugCaptureTrimTargetBytes = 20L * 1024L * 1024L;
+    private const long MaxDebugCaptureFileBytes = 75L * 1024L * 1024L;
+    private const long DebugCaptureTrimTargetBytes = 60L * 1024L * 1024L;
     private const int MaxQueuedDebugCaptureFileLines = 5000;
     private const string RecordedPullHistoryFileName = "recorded-pulls.json";
     private const string RecordedPullIndexFileName = "recorded-pulls.index.json";

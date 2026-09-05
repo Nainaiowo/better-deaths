@@ -13,6 +13,7 @@ internal static class PersonalDamageModifierPolicy
         MedicatedStatusId,
         WeaknessStatusId,
         BrinkOfDeathStatusId,
+        0xB5F, // Damage Down (packet-specified strength)
         0x7D,  // Raging Strikes
         0x748, // Lance Charge
         0x77A, // Power Surge
@@ -38,12 +39,16 @@ internal static class PersonalDamageModifierPolicy
     public static bool ChangesAttributes(uint statusId) =>
         statusId is MedicatedStatusId or WeaknessStatusId or BrinkOfDeathStatusId;
 
+    public static bool HasUnknownStrength(DamageStatusSnapshot status) =>
+        status.StatusId == 0xB5F && status.Parameter is < 156 or > 255;
+
     public static double GetDefaultDurationSeconds(uint statusId)
     {
         return statusId switch
         {
             MedicatedStatusId => 30.0,
             WeaknessStatusId or BrinkOfDeathStatusId => 100.0,
+            0xB5F => 180.0,
             0x77A or 0xAA0 => 30.0,
             0x512 => 40.0,
             _ => 20.0,
@@ -57,6 +62,7 @@ internal static class PersonalDamageModifierPolicy
     {
         var amount = status.StatusId switch
         {
+            0xB5F when !HasUnknownStrength(status) => unchecked((sbyte)(byte)status.Parameter) / 100.0,
             0x7D => 0.15,
             0x748 => 0.10,
             0x77A or 0xAA0 => 0.10,

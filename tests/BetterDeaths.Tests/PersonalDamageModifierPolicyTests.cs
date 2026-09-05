@@ -254,6 +254,187 @@ public sealed class PersonalDamageModifierPolicyTests
             recipient: Dealer));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DamageDownNormalizesCalibrationWithoutChangingDirectDamage(bool useCachedStatus)
+    {
+        var module = new DamageParsingModule();
+        var debuff = Status(0xB5F, Target) with { Parameter = 0xA6 };
+        Assert.True(DamageStatusCapturePolicy.IsRelevant(debuff.StatusId));
+        Assert.Equal(180, PersonalDamageModifierPolicy.GetDefaultDurationSeconds(debuff.StatusId));
+        Assert.Empty(RaidBuffPolicy.GetEffects(debuff, false, Dealer));
+        if (useCachedStatus)
+        {
+            module.ObserveStatus(new(Dealer, Target, debuff.StatusId, "Damage Down", 0, 0, "",
+                SeenAtUtc.AddSeconds(-1), 180, false, false, false)
+            { Parameter = 0xA6 });
+        }
+        var packet = DirectPacket(100, useCachedStatus ? [] : [debuff]) with
+        {
+            HasSourceStatusSnapshot = !useCachedStatus,
+        };
+        var direct = Assert.Single(module.Process(packet));
+        Assert.Equal(100u, direct.Amount);
+        Assert.Contains(direct.SourceStatuses, status => status.StatusId == debuff.StatusId);
+        module.ObserveStatus(PeriodicApplication([useCachedStatus ? debuff with { Parameter = 0 } : debuff]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(10, tick.PeriodicEstimateInputs!.DamagePerPotency, 6);
+        Assert.Equal(0.1, tick.PeriodicEstimateInputs.DamageMultiplier, 6);
+        Assert.Equal(20, tick.PeriodicEstimateInputs.BaseDamage, 6);
+    }
+
+    [Theory]
+    [InlineData(false, 0.1)]
+    [InlineData(true, 0.125)]
+    public void DamageDownScalesOnlyTheAffectedSnapshotAndConservesCombinedDamage(bool fightOrFlight, double multiplier)
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        module.Process(DirectPacket(1000, [], ReferenceDealer, 2));
+        var statuses = new List<DamageStatusSnapshot> { Status(0xB5F, Target) with { Parameter = 0xA6 } };
+        if (fightOrFlight)
+        {
+            statuses.Add(Status(0x4C));
+        }
+        module.ObserveStatus(PeriodicApplication(statuses));
+        module.ObserveStatus(PeriodicApplication([], ReferenceDealer, 0x501));
+        var ticks = ProcessPeriodicTick(module);
+        var affected = ticks.Single(tick => tick.Source.EntityId == Dealer.EntityId);
+        var unaffected = ticks.Single(tick => tick.Source.EntityId == ReferenceDealer.EntityId);
+        Assert.Equal(multiplier, affected.PeriodicEstimateInputs!.DamageMultiplier, 6);
+        Assert.Equal(1, unaffected.PeriodicEstimateInputs!.DamageMultiplier, 6);
+        Assert.True(affected.Amount < unaffected.Amount);
+        Assert.Equal(600.0, ticks.Sum(tick => tick.EffectiveMeterAmount));
+    }
+
+    [Fact]
+    public void ExpiredDamageDownIsNotAppliedToSnapshot()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        module.ObserveStatus(PeriodicApplication([Status(0xB5F, Target) with { RemainingTime = 0 }]));
+        Assert.Equal(1, Assert.Single(ProcessPeriodicTick(module)).PeriodicEstimateInputs!.DamageMultiplier);
+    }
+
+    [Theory]
+    [InlineData(0xF6, -0.10)]
+    [InlineData(0xE2, -0.30)]
+    [InlineData(0xCE, -0.50)]
+    [InlineData(0xA6, -0.90)]
+    [InlineData(0x9C, -1.00)]
+    public void DamageDownUsesCapturedSignedPercentage(ushort parameter, double expected)
+    {
+        var status = Status(0xB5F, Target) with { Parameter = parameter };
+        Assert.False(PersonalDamageModifierPolicy.HasUnknownStrength(status));
+        Assert.Equal(expected, Assert.Single(PersonalDamageModifierPolicy.GetEffects(status, 3, 3)).Amount, 6);
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        module.ObserveStatus(PeriodicApplication([status]));
+        Assert.Equal(1 + expected, Assert.Single(ProcessPeriodicTick(module)).PeriodicEstimateInputs!.DamageMultiplier, 6);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(128)]
+    [InlineData(155)]
+    [InlineData(256)]
+    [InlineData(65535)]
+    public void UnknownDamageDownStrengthDoesNotInventCalibrationOrLoseObservedDamage(ushort parameter)
+    {
+        var status = Status(0xB5F, Target) with { Parameter = parameter };
+        var module = new DamageParsingModule();
+        Assert.Empty(PersonalDamageModifierPolicy.GetEffects(status, 3, 3));
+        module.Process(DirectPacket(100, [status]));
+        module.ObserveStatus(PeriodicApplication([]));
+        Assert.Null(Assert.Single(ProcessPeriodicTick(module)).PeriodicEstimateInputs);
+
+        module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        module.ObserveStatus(PeriodicApplication([status]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal("Unknown damage modifier", tick.PeriodicEstimateUnavailableReason);
+        Assert.Null(tick.SimulatedPeriodicAmount);
+        Assert.Equal(600u, tick.Amount);
+    }
+
+    [Fact]
+    public void CachedDamageDownSnapshotIsFrozenBeforeStatusConfirmation()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        var damageDown = new DamageStatusApplication(Dealer, Target, 0xB5F, "Damage Down", 0, 1, "",
+            SeenAtUtc.AddMilliseconds(10), 180, false, false, false)
+        { Parameter = 0xA6 };
+        module.ObserveStatus(damageDown);
+        var dot = PeriodicApplication([]) with { DurationSeconds = 0, HasSourceStatusSnapshot = false };
+        module.ObserveStatus(dot);
+        module.ObserveStatus(damageDown with { SeenAtUtc = SeenAtUtc.AddSeconds(1), Parameter = 0xF6 });
+        module.ObserveStatus(dot with
+        {
+            ActionId = 0,
+            SeenAtUtc = SeenAtUtc.AddSeconds(1.1),
+            DurationSeconds = 30,
+            CriticalRateLowByte = null,
+        });
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(0.1, tick.PeriodicEstimateInputs!.DamageMultiplier, 6);
+        Assert.Equal((ushort)0xA6, Assert.Single(tick.SourceStatuses).Parameter);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissingNewDamageDownStrengthDoesNotReuseRemovedOrExpiredApplication(bool expires)
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        var damageDown = new DamageStatusApplication(Dealer, Target, 0xB5F, "Damage Down", 0, 1, "",
+            SeenAtUtc.AddSeconds(-2), 1, false, false, false)
+        { Parameter = 0xA6 };
+        if (!expires)
+        {
+            damageDown = damageDown with { DurationSeconds = 180 };
+        }
+        module.ObserveStatus(damageDown);
+        if (!expires)
+        {
+            module.ObserveStatus(damageDown with { IsRemoval = true, SeenAtUtc = SeenAtUtc.AddSeconds(-1) });
+        }
+        module.ObserveStatus(damageDown with { ActionId = 0, Parameter = 0, SeenAtUtc = SeenAtUtc, DurationSeconds = 180 });
+        module.ObserveStatus(PeriodicApplication([Status(0xB5F, Target)]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal("Unknown damage modifier", tick.PeriodicEstimateUnavailableReason);
+    }
+
+    [Fact]
+    public void LearnedProfileDoesNotCrossDamageDownStrengthsWithIdenticalMemoryStatusKeys()
+    {
+        var module = new DamageParsingModule();
+        module.Process(DirectPacket(1000, []));
+        module.Process(DirectPacket(1000, [], ReferenceDealer, 2));
+        var application = PeriodicApplication([Status(0xB5F, Target) with { Parameter = 0xA6 }]) with
+        {
+            SnapshotKey = "0B5F:40000001:0",
+        };
+        module.ObserveStatus(application);
+        Assert.Equal(600u, Assert.Single(ProcessPeriodicTick(module)).Amount);
+        module.ObserveStatus(application with
+        {
+            SeenAtUtc = SeenAtUtc.AddSeconds(4),
+            SourceStatuses = [Status(0xB5F, Target) with { Parameter = 0xF6 }],
+        });
+        module.ObserveStatus(PeriodicApplication([], ReferenceDealer, 0x501) with { SeenAtUtc = SeenAtUtc.AddSeconds(4) });
+        var ticks = ProcessPeriodicTick(module, 6, 3);
+        var affected = Assert.Single(ticks, tick => tick.Source.EntityId == Dealer.EntityId);
+        var unaffected = Assert.Single(ticks, tick => tick.Source.EntityId == ReferenceDealer.EntityId);
+        Assert.Equal(0.9, affected.PeriodicEstimateInputs!.DamageMultiplier, 6);
+        Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, affected.PeriodicAllocationBasis);
+        Assert.True(affected.Amount < unaffected.Amount);
+        Assert.Equal(600.0, ticks.Sum(tick => tick.EffectiveMeterAmount));
+    }
+
     private static DamageStatusSnapshot Status(
         uint statusId,
         DamageActorIdentity? source = null)
@@ -268,7 +449,10 @@ public sealed class PersonalDamageModifierPolicyTests
         module.Process(DirectPacket(1_000, []));
         var pet = Dealer with
         {
-            EntityId = 0x40000002, IsPlayer = false, IsPartyMember = false, IsPet = true,
+            EntityId = 0x40000002,
+            IsPlayer = false,
+            IsPartyMember = false,
+            IsPet = true,
             OwnerEntityId = Dealer.EntityId,
         };
         for (var index = 0; index < 11; index++)
@@ -375,11 +559,11 @@ public sealed class PersonalDamageModifierPolicyTests
         };
     }
 
-    private static IReadOnlyList<ParsedDamageEvent> ProcessPeriodicTick(DamageParsingModule module)
+    private static IReadOnlyList<ParsedDamageEvent> ProcessPeriodicTick(DamageParsingModule module, double seconds = 3, long sequence = 2)
     {
         var tick = new PeriodicDamageTick(
-            2,
-            SeenAtUtc.AddSeconds(3),
+            sequence,
+            SeenAtUtc.AddSeconds(seconds),
             Target,
             0,
             string.Empty,
