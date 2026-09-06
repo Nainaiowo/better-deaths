@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DebugCaptureFileRetention.cs" Link="DebugCaptureFileRetention.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageModels.cs" Link="DamageParsing/DamageModels.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageBaseRatePolicy.cs" Link="DamageParsing/DamageBaseRatePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ActionPotencyProfileParser.cs" Link="DamageParsing/ActionPotencyProfileParser.cs" />

@@ -812,31 +812,7 @@ public sealed partial class Plugin
     {
         try
         {
-            if (!File.Exists(DebugCaptureFileFullPath) ||
-                new FileInfo(DebugCaptureFileFullPath).Length <= MaxDebugCaptureFileBytes)
-            {
-                return;
-            }
-
-            var lines = File.ReadAllLines(DebugCaptureFileFullPath, Encoding.UTF8);
-            var retainedLines = new List<string>();
-            var retainedBytes = 0L;
-            for (var index = lines.Length - 1; index >= 0; index--)
-            {
-                var line = lines[index];
-                var lineBytes = Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
-                if (retainedLines.Count > 0 && retainedBytes + lineBytes > DebugCaptureTrimTargetBytes)
-                {
-                    break;
-                }
-
-                retainedLines.Add(line);
-                retainedBytes += lineBytes;
-            }
-
-            retainedLines.Reverse();
-            File.WriteAllLines(DebugCaptureTempFilePath, retainedLines, Encoding.UTF8);
-            File.Move(DebugCaptureTempFilePath, DebugCaptureFileFullPath, true);
+            DebugCaptureFileRetention.TrimIfNeeded(DebugCaptureFileFullPath, DebugCaptureTempFilePath);
         }
         catch (Exception ex)
         {

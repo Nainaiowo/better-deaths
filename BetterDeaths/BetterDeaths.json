@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved DoT snapshot timing and personal damage-buff capture. Added healing-aware calibration and critical-hit history to periodic-damage diagnostics, with clearer fallback details and expanded automated coverage. Diagnostic estimates remain separate from displayed damage.",
+  "Changelog": "Increased the debug capture limit to 250 MiB, retaining the newest 200 MiB when the file rolls over. Reduced memory use during trimming while preserving complete capture records. Damage calculations are unchanged.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
