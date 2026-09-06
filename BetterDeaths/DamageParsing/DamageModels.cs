@@ -93,7 +93,18 @@ internal sealed record PeriodicDirectHitSnapshot(
 
 internal sealed record PeriodicCompatibilityEstimate(
     PeriodicDirectHitSnapshot DirectHit,
-    double EstimatedDamage);
+    double EstimatedDamage)
+{
+    public PeriodicDamageEstimateInputs? Inputs { get; init; }
+
+    public double? CapturedPotency { get; init; }
+
+    public bool UsedUnitCalibration { get; init; }
+
+    public bool UsedHealingCalibration { get; init; }
+
+    public string? Limitation { get; init; }
+}
 
 internal sealed record PeriodicDamageEstimateInputs(
     double DamagePerPotency,
@@ -139,6 +150,8 @@ internal sealed record DamageActionPacket(
     public uint ActionCategoryId { get; init; }
 
     public double? DirectPotency { get; init; }
+
+    public double? HealingPotency { get; init; }
 
     public double? SecondaryTargetPotencyMultiplier { get; init; }
 
@@ -535,6 +548,8 @@ internal sealed record PeriodicEstimateDiagnostic(
     double? EstimatedDamage)
 {
     public int CompatibilityTickCount { get; init; }
+
+    public int CompatibilityFallbackTickCount { get; init; }
 
     public double? CompatibilityDamage { get; init; }
 }

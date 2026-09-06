@@ -137,6 +137,7 @@ public sealed partial class Plugin
                 CapturedAtUtc = packet.SeenAtUtc,
                 ActionCategoryId = actionCategoryId,
                 DirectPotency = potencyProfile.DirectPotency,
+                HealingPotency = PeriodicCalibrationPolicy.HealingPotency(packet.ActionId),
                 SecondaryTargetPotencyMultiplier = potencyProfile.SecondaryTargetMultiplier,
                 CanCalibratePotency = potencyProfile.DirectPotency is > 0.0 &&
                     (calibratingDamageEffects == 1 || potencyProfile.SecondaryTargetMultiplier is > 0.0),
@@ -153,7 +154,7 @@ public sealed partial class Plugin
                 HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
             };
             var parsed = damageParsingModule.Process(damagePacket, allowAutomaticEncounterStart: false);
-            QueueDamageMeterActionDebug(packet, statusApplications);
+            QueueDamageMeterActionDebug(packet, damagePacket);
             QueueDamageMeterParsedDebug("Action", parsed);
         }
         catch (Exception ex)
@@ -619,7 +620,7 @@ public sealed partial class Plugin
 
     private void QueueDamageMeterActionDebug(
         RawActionEffectPacket packet,
-        IReadOnlyList<DamageStatusApplication> applications)
+        DamageActionPacket calibrationPacket)
     {
         if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.ActionPackets))
         {
@@ -637,13 +638,32 @@ public sealed partial class Plugin
             packet.CasterName,
             packet.ActionId,
             ActionName = GetActionName(packet.ActionId),
+            HealingCalibration = calibrationPacket.Targets.Any(target => target.Effects.Any(effect => effect.Type == 4))
+                ? new
+                {
+                    calibrationPacket.Source,
+                    calibrationPacket.SourceBaseRates,
+                    calibrationPacket.SourceStatuses,
+                    calibrationPacket.HasSourceStatusSnapshot,
+                    calibrationPacket.ActionCategoryId,
+                    calibrationPacket.HealingPotency,
+                    calibrationPacket.SourceSequence,
+                    Targets = calibrationPacket.Targets.Select(target => new
+                    {
+                        target.TargetIndex,
+                        target.Target,
+                        target.TargetStatuses,
+                        target.HasTargetStatusSnapshot,
+                    }),
+                }
+                : null,
             Targets = packet.Targets.Select(target => new
             {
                 target.TargetIndex,
                 TargetEntityId = GetDamageTargetEntityId(target.TargetId),
                 target.Effects,
             }),
-            StatusApplications = applications.Select(application => new
+            StatusApplications = calibrationPacket.StatusApplications.Select(application => new
             {
                 TargetEntityId = application.Target.EntityId,
                 SourceEntityId = application.Source.EntityId,

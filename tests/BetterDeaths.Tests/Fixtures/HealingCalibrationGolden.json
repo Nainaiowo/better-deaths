@@ -1,0 +1,7688 @@
+{
+  "Schema": 1,
+  "BinaryHashes": [
+    "5F6C7F576769A36C8C75F5C4647AB34E0C1720879394C04974157BF3E0C10EBC",
+    "F201E23A084FE435BDF7F5DD59C7F03C99DD28F072354A5A8B1BBFB863547C10"
+  ],
+  "Cases": [
+    {
+      "Action": 42,
+      "Category": 3,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 42,
+      "Category": 3,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 42,
+      "Category": 3,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 42,
+      "Category": 3,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 10,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 10,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 10,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 10,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 15.384615384615383,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 15.384615384615383,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 15.384615384615383,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 15.384615384615383,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 26.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 26.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 26.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 26.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 13.333333333333334,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 13.333333333333334,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 13.333333333333334,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 13.333333333333334,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 1,
+      "Scale": 17.39130434782609,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 10,
+      "Scale": 17.39130434782609,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 11,
+      "Scale": 17.39130434782609,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 20,
+      "Scale": 17.39130434782609,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 1,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 10,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 11,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 20,
+      "Scale": 19.047619047619047,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 1,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 10,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 11,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 20,
+      "Scale": 18.18181818181818,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 120,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 124,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 124,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 124,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 124,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 131,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 131,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 131,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 131,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 133,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 133,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 133,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 133,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 135,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 135,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 135,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 135,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 185,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 185,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 185,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 185,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 186,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 186,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 186,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 186,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 189,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 189,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 189,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 189,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 190,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 190,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 190,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 190,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 802,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 802,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 802,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 802,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 825,
+      "Category": 2,
+      "Potency": 150,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 66.66666666666667,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 825,
+      "Category": 2,
+      "Potency": 150,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 66.66666666666667,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 825,
+      "Category": 2,
+      "Potency": 150,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 66.66666666666667,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 825,
+      "Category": 2,
+      "Potency": 150,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 66.66666666666667,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 827,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 827,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 827,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 827,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3540,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3540,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3540,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3540,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3552,
+      "Category": 4,
+      "Potency": 1200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3552,
+      "Category": 4,
+      "Potency": 1200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3552,
+      "Category": 4,
+      "Potency": 1200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3552,
+      "Category": 4,
+      "Potency": 1200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3570,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3570,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3570,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3570,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3571,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3571,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3571,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3571,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3583,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3583,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3583,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3583,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3594,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3594,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3594,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3594,
+      "Category": 2,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3595,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3595,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3595,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3595,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3600,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3600,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3600,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3600,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3601,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3601,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3601,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3601,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3610,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3610,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3610,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3610,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3632,
+      "Category": 3,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3632,
+      "Category": 3,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3632,
+      "Category": 3,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3632,
+      "Category": 3,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3641,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3641,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3641,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3641,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 3643,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 3643,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 3643,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 3643,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7384,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7384,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7384,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7384,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7388,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7388,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7388,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7388,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7445,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7445,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7445,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7445,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7514,
+      "Category": 2,
+      "Potency": 350,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7514,
+      "Category": 2,
+      "Potency": 350,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7514,
+      "Category": 2,
+      "Potency": 350,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7514,
+      "Category": 2,
+      "Potency": 350,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 28.571428571428573,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1892
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2716
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2126
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 6.25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 6.25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 6.25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2498
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 6.25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 9.615384615384615,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 9.615384615384615,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 9.615384615384615,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        238
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 9.615384615384615,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        49
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        43
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        44
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 17.857142857142858,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 17.857142857142858,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 17.857142857142858,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        933
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 17.857142857142858,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        2611
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 8.333333333333334,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        3898
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        791
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        317
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1875
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        786
+      ],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 0,
+      "CriticalRate": 0
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1884
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 1,
+      "Scale": 10.869565217391305,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 10,
+      "Scale": 10.869565217391305,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 11,
+      "Scale": 10.869565217391305,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1202
+      ],
+      "Count": 20,
+      "Scale": 10.869565217391305,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        102
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        172
+      ],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 1,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 10,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 11,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2707
+      ],
+      "Count": 20,
+      "Scale": 11.904761904761905,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2620
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2621
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 1,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 10,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 11,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2622
+      ],
+      "Count": 20,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        2710
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 1,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 10,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 11,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        87
+      ],
+      "Count": 20,
+      "Scale": 10.416666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 1,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 10,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 11,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [
+        1912
+      ],
+      "Count": 20,
+      "Scale": 11.363636363636363,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 1,
+      "Scale": 8.928571428571427,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 10,
+      "Scale": 8.928571428571427,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 11,
+      "Scale": 8.928571428571427,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 7541,
+      "Category": 4,
+      "Potency": 800,
+      "SourceBuffs": [
+        1872,
+        49
+      ],
+      "TargetBuffs": [
+        102,
+        2622
+      ],
+      "Count": 20,
+      "Scale": 8.928571428571427,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16015,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16015,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16015,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16015,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16139,
+      "Category": 3,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16139,
+      "Category": 3,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16139,
+      "Category": 3,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16139,
+      "Category": 3,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16230,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16230,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16230,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16230,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16458,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16458,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16458,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16458,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16459,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16459,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16459,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16459,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16531,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 12.5,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16531,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 12.5,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16531,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 12.5,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16531,
+      "Category": 2,
+      "Potency": 800,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 12.5,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16534,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16534,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16534,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16534,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16543,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 31.25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16543,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 31.25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16543,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 31.25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16543,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 31.25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16544,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 31.25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16544,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 31.25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16544,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 31.25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16544,
+      "Category": 4,
+      "Potency": 320,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 31.25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16546,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16546,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16546,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16546,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16547,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16547,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16547,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16547,
+      "Category": 4,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16548,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16548,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16548,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16548,
+      "Category": 2,
+      "Potency": 180,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 55.55555555555556,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16553,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16553,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16553,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16553,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 16556,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 16556,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 16556,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 16556,
+      "Category": 4,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 17151,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 17151,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 17151,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 17151,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 17152,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 17152,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 17152,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 17152,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 21492,
+      "Category": 3,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 21492,
+      "Category": 3,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 21492,
+      "Category": 3,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 21492,
+      "Category": 3,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 23272,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 23272,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 23272,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 23272,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 23416,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 23416,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 23416,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 23416,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24283,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24283,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24283,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24283,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24284,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24284,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24284,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24284,
+      "Category": 2,
+      "Potency": 450,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 22.22222222222222,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24286,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24286,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24286,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24286,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24289,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24289,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24289,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24289,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24291,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24291,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24291,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24291,
+      "Category": 2,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24292,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 100,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24292,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 100,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24292,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 100,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24292,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 100,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24293,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24293,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24293,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24293,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24296,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24296,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24296,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24296,
+      "Category": 4,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24297,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24297,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24297,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24297,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24299,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24299,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24299,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24299,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24303,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24303,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24303,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24303,
+      "Category": 4,
+      "Potency": 700,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 14.285714285714286,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24304,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24304,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24304,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24304,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24306,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24306,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24306,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24306,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24307,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24307,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24307,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24307,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24310,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24310,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24310,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24310,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24312,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24312,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24312,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24312,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24313,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24313,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24313,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24313,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24314,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24314,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24314,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24314,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24315,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24315,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24315,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24315,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24316,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24316,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24316,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24316,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 24318,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 24318,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 24318,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 24318,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 25748,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 25748,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 25748,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 25748,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 25749,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 25749,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 25749,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 25749,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 25750,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 25750,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 25750,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 25750,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 25830,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 25830,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 25830,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 25830,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 25863,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 25863,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 25863,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 25863,
+      "Category": 4,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 27524,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 27524,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 27524,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 27524,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 34566,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 34566,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 34566,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 34566,
+      "Category": 2,
+      "Potency": 600,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 16.666666666666668,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 34681,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 25,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 34681,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 25,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 34681,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 25,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 34681,
+      "Category": 2,
+      "Potency": 400,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 25,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 36944,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 36944,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 36944,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 36944,
+      "Category": 4,
+      "Potency": 300,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 33.333333333333336,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 36997,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 20,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 36997,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 20,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 36997,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 20,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 36997,
+      "Category": 4,
+      "Potency": 500,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 20,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37010,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37010,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37010,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37010,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37013,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 50,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37013,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 50,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37013,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 50,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37013,
+      "Category": 2,
+      "Potency": 200,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 50,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37015,
+      "Category": 2,
+      "Potency": 360,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 27.77777777777778,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37015,
+      "Category": 2,
+      "Potency": 360,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 27.77777777777778,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37015,
+      "Category": 2,
+      "Potency": 360,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 27.77777777777778,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37015,
+      "Category": 2,
+      "Potency": 360,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 27.77777777777778,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37016,
+      "Category": 2,
+      "Potency": 240,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 41.666666666666664,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37016,
+      "Category": 2,
+      "Potency": 240,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 41.666666666666664,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37016,
+      "Category": 2,
+      "Potency": 240,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 41.666666666666664,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37016,
+      "Category": 2,
+      "Potency": 240,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 41.666666666666664,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37030,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 40,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37030,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 40,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37030,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 40,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37030,
+      "Category": 2,
+      "Potency": 250,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 40,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37032,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37032,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37032,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37032,
+      "Category": 2,
+      "Potency": 170,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 58.8235294117647,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    },
+    {
+      "Action": 37034,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 1,
+      "Scale": 100,
+      "CriticalCount": 1,
+      "CriticalRate": 1
+    },
+    {
+      "Action": 37034,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 10,
+      "Scale": 100,
+      "CriticalCount": 10,
+      "CriticalRate": 0.3
+    },
+    {
+      "Action": 37034,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 11,
+      "Scale": 100,
+      "CriticalCount": 11,
+      "CriticalRate": 0.2727272727272727
+    },
+    {
+      "Action": 37034,
+      "Category": 2,
+      "Potency": 100,
+      "SourceBuffs": [],
+      "TargetBuffs": [],
+      "Count": 20,
+      "Scale": 100,
+      "CriticalCount": 20,
+      "CriticalRate": 0.25
+    }
+  ],
+  "Coverage": [
+    {
+      "Id": 40,
+      "Name": "thrill of battle",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 42,
+      "Name": "storm\u0027s path",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 120,
+      "Name": "cure",
+      "NativePotency": 500,
+      "ReferencePotency": 500,
+      "Matches": true
+    },
+    {
+      "Id": 124,
+      "Name": "medica",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 131,
+      "Name": "cure iii",
+      "NativePotency": 600,
+      "ReferencePotency": 600,
+      "Matches": true
+    },
+    {
+      "Id": 133,
+      "Name": "medica ii",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 135,
+      "Name": "cure ii",
+      "NativePotency": 800,
+      "ReferencePotency": 800,
+      "Matches": true
+    },
+    {
+      "Id": 140,
+      "Name": "benediction",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 167,
+      "Name": "energy drain",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 185,
+      "Name": "adloquium",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 186,
+      "Name": "succor",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 189,
+      "Name": "lustrate",
+      "NativePotency": 600,
+      "ReferencePotency": 600,
+      "Matches": true
+    },
+    {
+      "Id": 190,
+      "Name": "physick",
+      "NativePotency": 450,
+      "ReferencePotency": 450,
+      "Matches": true
+    },
+    {
+      "Id": 342,
+      "Name": "soul drain",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 724,
+      "Name": "digest",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 802,
+      "Name": "embrace",
+      "NativePotency": 180,
+      "ReferencePotency": 180,
+      "Matches": true
+    },
+    {
+      "Id": 825,
+      "Name": "choco medica",
+      "NativePotency": 150,
+      "ReferencePotency": 150,
+      "Matches": true
+    },
+    {
+      "Id": 827,
+      "Name": "choco cure",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 1610,
+      "Name": "blood sword",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 1659,
+      "Name": "putrid cloud",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2010,
+      "Name": "lunar dynamo",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2058,
+      "Name": "pom cure",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2204,
+      "Name": "ripe banana",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2339,
+      "Name": "drain-mob",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2404,
+      "Name": "head over heals",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 2559,
+      "Name": "lunar dynamo 9ff",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 3419,
+      "Name": "aetherial distribution",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 3540,
+      "Name": "divine veil",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 3541,
+      "Name": "clemency",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 3552,
+      "Name": "equilibrium",
+      "NativePotency": 1200,
+      "ReferencePotency": 1200,
+      "Matches": true
+    },
+    {
+      "Id": 3570,
+      "Name": "tetragrammaton",
+      "NativePotency": 700,
+      "ReferencePotency": 700,
+      "Matches": true
+    },
+    {
+      "Id": 3571,
+      "Name": "assize",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 3583,
+      "Name": "indomitability",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 3594,
+      "Name": "benefic",
+      "NativePotency": 500,
+      "ReferencePotency": 500,
+      "Matches": true
+    },
+    {
+      "Id": 3595,
+      "Name": "aspected benefic",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 3600,
+      "Name": "helios",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 3601,
+      "Name": "aspected helios",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 3610,
+      "Name": "benefic ii",
+      "NativePotency": 800,
+      "ReferencePotency": 800,
+      "Matches": true
+    },
+    {
+      "Id": 3614,
+      "Name": "essential dignity",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 3632,
+      "Name": "souleater",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 3641,
+      "Name": "abyssal drain",
+      "NativePotency": 500,
+      "ReferencePotency": 500,
+      "Matches": true
+    },
+    {
+      "Id": 3643,
+      "Name": "carve and spit",
+      "NativePotency": 500,
+      "ReferencePotency": 500,
+      "Matches": true
+    },
+    {
+      "Id": 4747,
+      "Name": "bloodstain",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 5068,
+      "Name": "sanguine bite",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 7384,
+      "Name": "holy spirit",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 7388,
+      "Name": "shake it off",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 7433,
+      "Name": "plenary indulgence",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 7445,
+      "Name": "lady of crowns",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 7514,
+      "Name": "vercure",
+      "NativePotency": 350,
+      "ReferencePotency": 350,
+      "Matches": true
+    },
+    {
+      "Id": 7541,
+      "Name": "second wind",
+      "NativePotency": 800,
+      "ReferencePotency": 800,
+      "Matches": true
+    },
+    {
+      "Id": 8324,
+      "Name": "stellar detonation",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 11406,
+      "Name": "white wind",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 11409,
+      "Name": "transfusion",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 16015,
+      "Name": "curing waltz",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 16139,
+      "Name": "brutal shell",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 16230,
+      "Name": "smn physick",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 16458,
+      "Name": "holy circle",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 16459,
+      "Name": "confiteor",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 16531,
+      "Name": "afflatus solace",
+      "NativePotency": 800,
+      "ReferencePotency": 800,
+      "Matches": true
+    },
+    {
+      "Id": 16534,
+      "Name": "afflatus rapture",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 16543,
+      "Name": "fey blessing",
+      "NativePotency": 320,
+      "ReferencePotency": 320,
+      "Matches": true
+    },
+    {
+      "Id": 16544,
+      "Name": "fey blessing",
+      "NativePotency": 320,
+      "ReferencePotency": 320,
+      "Matches": true
+    },
+    {
+      "Id": 16546,
+      "Name": "consolation",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 16547,
+      "Name": "consolation",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 16548,
+      "Name": "seraphic veil",
+      "NativePotency": 180,
+      "ReferencePotency": 180,
+      "Matches": true
+    },
+    {
+      "Id": 16553,
+      "Name": "celestial opposition",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 16556,
+      "Name": "celestial intersection",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 16557,
+      "Name": "horoscope-1",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 16558,
+      "Name": "horoscope",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 17151,
+      "Name": "aspected benefic-horoscope",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 17152,
+      "Name": "aspected helios-horoscope",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 18303,
+      "Name": "pom cure 477f",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 18318,
+      "Name": "exuviation",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 18320,
+      "Name": "devour",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 20144,
+      "Name": "lunar dynamo 4eb0",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 20728,
+      "Name": "lost cure iii",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 20729,
+      "Name": "lost cure iv",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 21492,
+      "Name": "eukrasian dosis ii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 23272,
+      "Name": "angel\u0027s snack",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 23416,
+      "Name": "stotram heal",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 24283,
+      "Name": "dosis",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24284,
+      "Name": "diagnosis",
+      "NativePotency": 450,
+      "ReferencePotency": 450,
+      "Matches": true
+    },
+    {
+      "Id": 24286,
+      "Name": "prognosis",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 24289,
+      "Name": "phlegma",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24291,
+      "Name": "eukrasian diagnosis",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 24292,
+      "Name": "eukrasian prognosis ",
+      "NativePotency": 100,
+      "ReferencePotency": 100,
+      "Matches": true
+    },
+    {
+      "Id": 24293,
+      "Name": "eukrasian dosis",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24296,
+      "Name": "druochole",
+      "NativePotency": 600,
+      "ReferencePotency": 600,
+      "Matches": true
+    },
+    {
+      "Id": 24297,
+      "Name": "dyskrasia",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24299,
+      "Name": "ixochole",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 24301,
+      "Name": "pepsis",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 24303,
+      "Name": "taurochole",
+      "NativePotency": 700,
+      "ReferencePotency": 700,
+      "Matches": true
+    },
+    {
+      "Id": 24304,
+      "Name": "toxikon",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24306,
+      "Name": "dosis ii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24307,
+      "Name": "phlegma ii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24310,
+      "Name": "holos",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 24312,
+      "Name": "dosis iii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24313,
+      "Name": "phlegma iii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24314,
+      "Name": "eukrasian dosis iii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24315,
+      "Name": "dyskrasia ii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24316,
+      "Name": "toxikon ii",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 24318,
+      "Name": "pneuma attack",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 25748,
+      "Name": "blade of faith",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 25749,
+      "Name": "blade of truth",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 25750,
+      "Name": "blade of valor",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 25830,
+      "Name": "rekindle",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 25863,
+      "Name": "liturgy of the bell tick",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 25864,
+      "Name": "liturgy of the bell expire",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 25867,
+      "Name": "protraction",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 25875,
+      "Name": "microcosmos",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 27524,
+      "Name": "pneuma heal",
+      "NativePotency": 600,
+      "ReferencePotency": 600,
+      "Matches": true
+    },
+    {
+      "Id": 34566,
+      "Name": "rehydration",
+      "NativePotency": 600,
+      "ReferencePotency": 600,
+      "Matches": true
+    },
+    {
+      "Id": 34681,
+      "Name": "star prism",
+      "NativePotency": 400,
+      "ReferencePotency": 400,
+      "Matches": true
+    },
+    {
+      "Id": 36935,
+      "Name": "great nebula",
+      "NativePotency": null,
+      "ReferencePotency": 0,
+      "Matches": true
+    },
+    {
+      "Id": 36944,
+      "Name": "earth\u0027s reply\u0027",
+      "NativePotency": 300,
+      "ReferencePotency": 300,
+      "Matches": true
+    },
+    {
+      "Id": 36997,
+      "Name": "lux solaris",
+      "NativePotency": 500,
+      "ReferencePotency": 500,
+      "Matches": true
+    },
+    {
+      "Id": 37010,
+      "Name": "medica iii",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 37013,
+      "Name": "concitation",
+      "NativePotency": 200,
+      "ReferencePotency": 200,
+      "Matches": true
+    },
+    {
+      "Id": 37015,
+      "Name": "manifestation",
+      "NativePotency": 360,
+      "ReferencePotency": 360,
+      "Matches": true
+    },
+    {
+      "Id": 37016,
+      "Name": "accession",
+      "NativePotency": 240,
+      "ReferencePotency": 240,
+      "Matches": true
+    },
+    {
+      "Id": 37030,
+      "Name": "helios conjunction",
+      "NativePotency": 250,
+      "ReferencePotency": 250,
+      "Matches": true
+    },
+    {
+      "Id": 37032,
+      "Name": "eukrasian dyskrasia",
+      "NativePotency": 170,
+      "ReferencePotency": 170,
+      "Matches": true
+    },
+    {
+      "Id": 37034,
+      "Name": "eukrasian prognosis ii",
+      "NativePotency": 100,
+      "ReferencePotency": 100,
+      "Matches": true
+    }
+  ]
+}

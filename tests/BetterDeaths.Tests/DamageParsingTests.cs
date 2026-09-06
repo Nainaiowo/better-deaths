@@ -923,7 +923,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void DefersCombinedTickUntilNearbyStatusUpdateArrives()
+    public void DefersCombinedTickUntilEarlierStatusUpdateArrivesLate()
     {
         var module = new DamageParsingModule();
         var tick = CreatePeriodicTick(600) with { Source = Target };
@@ -931,7 +931,7 @@ public sealed class DamageParsingTests
         Assert.Empty(module.ProcessPeriodicTick(tick));
         module.ObserveStatus(CreatePeriodicStatus(Source, 900, "Burn") with
         {
-            SeenAtUtc = tick.SeenAtUtc.AddMilliseconds(10),
+            SeenAtUtc = tick.SeenAtUtc.AddMilliseconds(-10),
         });
         var parsed = module.FlushPendingPeriodicTicks(tick.SeenAtUtc.AddMilliseconds(50));
 

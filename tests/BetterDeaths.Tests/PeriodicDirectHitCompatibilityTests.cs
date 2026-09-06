@@ -208,14 +208,17 @@ public sealed class PeriodicDirectHitCompatibilityTests
     }
 
     [Fact]
-    public void MissingCalibrationDoesNotProduceACompatibilityDamageEstimate()
+    public void MissingCalibrationProducesOnlyAnExplicitDiagnosticFallback()
     {
         var module = new DamageParsingModule();
         module.ObserveStatus(Application() with { DurationSeconds = 30 });
         var tick = Tick(module, 33);
         Assert.Equal(600u, tick.Amount);
         Assert.Null(tick.PeriodicEstimateInputs);
-        Assert.Null(tick.PeriodicCompatibilityEstimate);
+        var estimate = Assert.IsType<PeriodicCompatibilityEstimate>(tick.PeriodicCompatibilityEstimate);
+        Assert.True(estimate.UsedUnitCalibration);
+        Assert.Equal(1.0, estimate.Inputs!.DamagePerPotency);
+        Assert.Equal("No usable damage or healing calibration", estimate.Limitation);
     }
 
     [Fact]

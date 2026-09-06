@@ -24,6 +24,11 @@ internal static class PersonalDamageModifierPolicy
         0x727, // No Mercy
         0x4C,  // Fight or Flight
         0x512, // Fugetsu
+        0x4D7, // Embolden (self)
+        0x49D, // Riddle of Fire
+        0xA75, // Surging Tempest
+        0xE54, // Hunter's Instinct
+        0xA1A, // Death's Design (owner-specific target debuff)
         0x6B4, // Boost
         0x6B6, // Waxing Nocturne
         0x6B7, // Mighty Guard
@@ -51,6 +56,8 @@ internal static class PersonalDamageModifierPolicy
             0xB5F => 180.0,
             0x77A or 0xAA0 => 30.0,
             0x512 => 40.0,
+            0xA75 or 0xA1A => 60.0,
+            0xE54 => 40.0,
             _ => 20.0,
         };
     }
@@ -58,7 +65,8 @@ internal static class PersonalDamageModifierPolicy
     public static IReadOnlyList<RaidBuffEffect> GetEffects(
         DamageStatusSnapshot status,
         uint actionCategoryId,
-        byte damageType)
+        byte damageType,
+        byte level = 0)
     {
         var amount = status.StatusId switch
         {
@@ -70,7 +78,10 @@ internal static class PersonalDamageModifierPolicy
             0xF04 => 0.15,
             0x727 => 0.20,
             0x4C => 0.25,
-            0x512 => 0.13,
+            0x512 => level is > 0 and < 78 ? 0.10 : 0.13,
+            0x4D7 when damageType == 5 => 0.10,
+            0x49D => 0.15,
+            0xA75 or 0xE54 => 0.10,
             0x6B4 when actionCategoryId == 2 => 0.50,
             0x6B6 => 0.50,
             0x6B7 => -0.40,
@@ -86,6 +97,16 @@ internal static class PersonalDamageModifierPolicy
                 RaidBuffEffectKind.DamageMultiplier,
                 amount,
                 status.Source)];
+    }
+
+    public static IReadOnlyList<RaidBuffEffect> GetTargetEffects(DamageStatusSnapshot status,
+        DamageActorIdentity recipient)
+    {
+        // This debuff benefits its owner only; it is not party damage credit.
+        return status.StatusId == 0xA1A && status.Source.EntityId != 0 &&
+            status.Source.EntityId == recipient.EntityId
+                ? [new RaidBuffEffect(status.StatusId, RaidBuffEffectKind.DamageMultiplier, 0.10, status.Source)]
+                : [];
     }
 
     private static bool IsPhysical(byte damageType)

@@ -23,6 +23,11 @@ internal sealed class PeriodicDamageTracker
     private readonly Dictionary<ApplicationKey, TickSamples> learnedApplicationTicks = [];
     private readonly Dictionary<ProfileKey, TickSamples> learnedProfileTicks = [];
     private readonly Dictionary<string, PotencySamples> sourcePotencySamples = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CompatibilityPotencySamples> compatibilityPotencySamples = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CompatibilityPotencySamples> compatibilityHealingSamples = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CompatibilityCriticalSamples> compatibilityCriticalSamples = new(StringComparer.Ordinal);
+    private readonly HashSet<string> healingEventIds = new(StringComparer.Ordinal);
+    private readonly Queue<string> healingEventOrder = new();
     private readonly Dictionary<string, HitRateSamples> sourceHitRateSamples = new(StringComparer.Ordinal);
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
     private readonly PeriodicDirectHitCompatibility directHitCompatibility = new();
@@ -181,11 +186,107 @@ internal sealed class PeriodicDamageTracker
         };
     }
 
+    public void ObserveActionCalibration(DamageActionPacket packet, IReadOnlyList<ParsedDamageEvent> damageEvents)
+    {
+        var damageBySlot = damageEvents.Count == 0 ? null :
+            damageEvents.ToDictionary(entry => (entry.TargetIndex, entry.EffectIndex));
+        foreach (var target in packet.Targets)
+        {
+            var firstHeal = true;
+            foreach (var effect in target.Effects)
+            {
+                if (effect.Type == 4)
+                {
+                    ObserveHealing(packet, target, effect, firstHeal);
+                    firstHeal = false;
+                }
+                else if (damageBySlot?.GetValueOrDefault((target.TargetIndex, effect.EffectIndex)) is { } damage)
+                {
+                    ObserveDirectDamage([damage]);
+                }
+            }
+        }
+    }
+
+    private void ObserveHealing(DamageActionPacket packet, DamageActionTarget target, DamageActionEffect effect, bool firstHeal)
+    {
+        var source = packet.Source;
+        if ((!source.IsPlayer && !source.IsPartyMember && !source.IsPet) || source.EntityId == 0 ||
+            source.IsLimitBreak || packet.ActionCategoryId == 9)
+        {
+            return;
+        }
+        var id = DirectDamageParser.BuildEventId(packet, target, effect);
+        if (!healingEventIds.Add(id))
+        {
+            return;
+        }
+        healingEventOrder.Enqueue(id);
+        while (healingEventOrder.Count > 8192)
+        {
+            healingEventIds.Remove(healingEventOrder.Dequeue());
+        }
+
+        GetSourceSamples(source, source.IsPet ? null : packet.SourceBaseRates);
+        var sourceKey = GetActorKey(source);
+        var critical = (effect.Param1 & 0x20) != 0;
+        ObserveCompatibilityCritical(sourceKey, critical, packet.ActionId, packet.SourceStatuses, target.TargetStatuses);
+
+        // Reflections, lifesteal and extra triggered heals still provide crit
+        // observations, but are not measurements of the primary heal's potency.
+        if (!firstHeal || (effect.Param4 & 0x80) != 0)
+        {
+            return;
+        }
+        if (!compatibilityHealingSamples.TryGetValue(sourceKey, out var samples))
+        {
+            samples = new CompatibilityPotencySamples();
+            compatibilityHealingSamples[sourceKey] = samples;
+        }
+        var sample = 0.0;
+        if (packet.HealingPotency is > 0 && packet.HasSourceStatusSnapshot && target.HasTargetStatusSnapshot &&
+            PeriodicCalibrationPolicy.HealingMultiplier(packet.ActionCategoryId, packet.SourceStatuses,
+                target.TargetStatuses) is { } multiplier)
+        {
+            sample = DirectDamageParser.DecodeAmount(effect);
+            if (critical)
+            {
+                sample /= 1.35 + compatibilityCriticalSamples[sourceKey].CalibrationRate;
+            }
+            sample /= packet.HealingPotency.Value;
+            sample /= multiplier;
+        }
+        samples.Add(double.IsFinite(sample) && sample > 0 ? sample : 0);
+    }
+
+    private void ObserveCompatibilityCritical(string sourceKey, bool critical, uint actionId,
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses, IReadOnlyList<DamageStatusSnapshot> targetStatuses)
+    {
+        if (!compatibilityCriticalSamples.TryGetValue(sourceKey, out var samples))
+        {
+            samples = new CompatibilityCriticalSamples();
+            compatibilityCriticalSamples[sourceKey] = samples;
+        }
+        if (!PeriodicCalibrationPolicy.ExcludesCriticalSample(actionId, sourceStatuses, targetStatuses))
+        {
+            samples.Rate = (samples.Rate * samples.Count + (critical ? 1.0 : 0.0)) / (samples.Count + 1);
+            samples.Count++;
+        }
+    }
+
     public void ObserveDirectDamage(IEnumerable<ParsedDamageEvent> damageEvents)
     {
         foreach (var damageEvent in damageEvents)
         {
             directHitCompatibility.Observe(damageEvent);
+            if (!damageEvent.IsPeriodic && damageEvent.Outcome == DamageEventOutcome.Damage &&
+                (damageEvent.Source.IsPlayer || damageEvent.Source.IsPartyMember || damageEvent.Source.IsPet) &&
+                !damageEvent.Source.IsLimitBreak && damageEvent.ActionCategoryId != 9)
+            {
+                GetSourceSamples(damageEvent.Source, damageEvent.Source.IsPet ? null : damageEvent.SourceBaseRates);
+                ObserveCompatibilityCritical(GetActorKey(damageEvent.Source), damageEvent.Critical, damageEvent.ActionId,
+                    damageEvent.SourceStatuses, damageEvent.TargetStatuses);
+            }
             if (damageEvent.IsPeriodic || damageEvent.MeterEligibility != DamageMeterEligibility.Eligible ||
                 damageEvent.Outcome != DamageEventOutcome.Damage || damageEvent.Amount == 0)
             {
@@ -224,6 +325,7 @@ internal sealed class PeriodicDamageTracker
             }
 
             var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
+            ObserveCompatibilityPotency(damageEvent, sourceKey, effects, calibrationPotency);
             if (damageEvent.Source.IsPet ||
                 HasAttributeChange(damageEvent.SourceStatuses) ||
                 HasUnknownDamageModifier(damageEvent.SourceStatuses) ||
@@ -441,6 +543,11 @@ internal sealed class PeriodicDamageTracker
     public void ClearCalibration()
     {
         sourcePotencySamples.Clear();
+        compatibilityPotencySamples.Clear();
+        compatibilityHealingSamples.Clear();
+        compatibilityCriticalSamples.Clear();
+        healingEventIds.Clear();
+        healingEventOrder.Clear();
         sourceHitRateSamples.Clear();
         directHitCompatibility.Clear();
     }
@@ -456,6 +563,9 @@ internal sealed class PeriodicDamageTracker
              (knownRates.Critical != samples.KnownCriticalRate || knownRates.DirectHit != samples.KnownDirectHitRate)))
         {
             sourcePotencySamples.Remove(key);
+            compatibilityPotencySamples.Remove(key);
+            compatibilityHealingSamples.Remove(key);
+            compatibilityCriticalSamples.Remove(key);
             samples = null;
         }
 
@@ -503,15 +613,16 @@ internal sealed class PeriodicDamageTracker
 
     private bool IsEligibleForTick(TrackedStatus status, PeriodicDamageTick tick)
     {
+        // Buffering tolerates delivery order, not activation after the tick's timestamp.
         if (!status.Application.IsPeriodicDamage ||
             IsGroundDamageStatus(status.Application.StatusId) ||
             status.Application.Target.EntityId != tick.Target.EntityId ||
             status.ActivatedAtUtc is not { } activatedAtUtc ||
-            tick.SeenAtUtc.AddSeconds(DeferredStatusArrivalToleranceSeconds) < activatedAtUtc ||
+            tick.SeenAtUtc < activatedAtUtc ||
             !IsActiveAt(
                 status,
                 tick.SeenAtUtc,
-                allowDeferredApplication: true,
+                allowDeferredApplication: false,
                 allowLatePeriodicTick: true))
         {
             return false;
@@ -656,7 +767,7 @@ internal sealed class PeriodicDamageTracker
         var confirmsPendingAction = existing.AwaitingStatusConfirmation && isStatusAcknowledgement &&
             application.SeenAtUtc >= existing.Application.SeenAtUtc &&
             application.SeenAtUtc <= existing.NominalExpiresAtUtc;
-        var compatibilityConfirmationAtUtc = confirmsPendingAction ? application.SeenAtUtc : (DateTime?)null;
+        var compatibilityConfirmation = confirmsPendingAction ? application : null;
         var repeatsConfirmation = isStatusAcknowledgement && existing.ActivatedAtUtc is { } activatedAtUtc &&
             Math.Abs((application.SeenAtUtc - activatedAtUtc).TotalSeconds) <= DuplicateApplicationWindowSeconds;
         var isDuplicateObservation = !isExplicitResnapshot && existing.RemovedAtUtc is null &&
@@ -750,6 +861,9 @@ internal sealed class PeriodicDamageTracker
                 EstimateInputs = existing.EstimateInputs,
                 Calibration = existing.Calibration,
                 CompatibilityDirectHit = existing.CompatibilityDirectHit,
+                CompatibilityCalibration = existing.CompatibilityCalibration,
+                CompatibilityEstimate = existing.CompatibilityEstimate,
+                CompatibilityApplication = existing.CompatibilityApplication,
             });
             var existingApplication = existing.Application;
             if (application.IsPeriodicDamage)
@@ -776,7 +890,7 @@ internal sealed class PeriodicDamageTracker
 
         existing.Application = application;
         CaptureIndependentEstimate(existing, recaptureCalibration: !isDuplicateObservation,
-            compatibilityAtUtc: compatibilityConfirmationAtUtc);
+            compatibilityConfirmation: compatibilityConfirmation);
         existing.NominalExpiresAtUtc = nominalExpiresAtUtc;
         existing.RetainUntilUtc = retainUntilUtc;
         existing.RemovedAtUtc = null;
@@ -861,12 +975,7 @@ internal sealed class PeriodicDamageTracker
             MeterAmount = meterAmount,
             SimulatedPeriodicAmount = tick.StatusId == 0 ? tracked?.IndependentEstimate : null,
             PeriodicEstimateInputs = tick.StatusId == 0 ? tracked?.EstimateInputs : null,
-            PeriodicCompatibilityEstimate = tick.StatusId == 0 && tracked?.EstimateInputs is { } inputs &&
-                tracked.CompatibilityDirectHit is { } compatibility
-                    ? new PeriodicCompatibilityEstimate(compatibility,
-                        inputs.BaseDamage * (1 + (inputs.CriticalMultiplier - 1) * inputs.CriticalRate) *
-                        (1 + 0.25 * compatibility.Factor))
-                    : null,
+            PeriodicCompatibilityEstimate = tick.StatusId == 0 ? tracked?.CompatibilityEstimate : null,
             PeriodicEstimateUnavailableReason = tick.StatusId != 0 ? "Observed source-specific tick" :
                 status is null ? "Missing application" :
                 HasAttributeChange(status.SourceStatuses) ? "Attribute-changing status" :
@@ -914,22 +1023,110 @@ internal sealed class PeriodicDamageTracker
     }
 
     private void CaptureIndependentEstimate(TrackedStatus status, bool recaptureCalibration = true,
-        DateTime? compatibilityAtUtc = null)
+        DamageStatusApplication? compatibilityConfirmation = null)
     {
         if (recaptureCalibration)
         {
             status.Calibration = GetCalibration(status.Application.Source);
         }
 
-        if (recaptureCalibration || compatibilityAtUtc is not null)
+        if (recaptureCalibration || compatibilityConfirmation is not null)
         {
-            status.CompatibilityDirectHit = directHitCompatibility.Capture(status.Application,
-                compatibilityAtUtc ?? status.Application.SeenAtUtc);
+            // Confirmation-time context belongs to the diagnostic model only.
+            status.CompatibilityApplication = compatibilityConfirmation is { } confirmation
+                ? status.Application with
+                {
+                    SeenAtUtc = confirmation.SeenAtUtc,
+                    SourceStatuses = confirmation.SourceStatuses,
+                    TargetStatuses = confirmation.TargetStatuses,
+                }
+                : status.Application;
+            status.CompatibilityDirectHit = directHitCompatibility.Capture(status.CompatibilityApplication,
+                status.CompatibilityApplication.SeenAtUtc);
+            status.CompatibilityCalibration = GetCompatibilityCalibration(status.Application.Source);
         }
 
         // Enrich packet metadata without substituting samples from after application.
-        status.EstimateInputs = GetEstimateInputs(status, status.Calibration);
+        status.EstimateInputs = GetEstimateInputs(status.Application, status.Calibration);
         status.IndependentEstimate = status.EstimateInputs?.ExpectedAmount;
+        status.CompatibilityApplication = status.CompatibilityApplication with
+        {
+            PeriodicPotency = status.Application.PeriodicPotency,
+            BaseDamageLowByte = status.Application.BaseDamageLowByte,
+            CriticalRateLowByte = status.Application.CriticalRateLowByte,
+        };
+        var compatibilityInputs = GetEstimateInputs(status.CompatibilityApplication, status.CompatibilityCalibration,
+            compatibility: true);
+        status.CompatibilityEstimate = compatibilityInputs is { } inputs && status.CompatibilityDirectHit is { } directHit
+            ? new PeriodicCompatibilityEstimate(directHit,
+                inputs.BaseDamage * (1 + (inputs.CriticalMultiplier - 1) * inputs.CriticalRate) *
+                (1 + 0.25 * directHit.Factor))
+            {
+                Inputs = inputs,
+                CapturedPotency = status.Application.PeriodicPotency,
+                UsedUnitCalibration = inputs.CalibrationSampleCount == 0,
+                UsedHealingCalibration = status.CompatibilityCalibration.UsedHealingCalibration,
+                Limitation = inputs.CalibrationSampleCount == 0 ? "No usable damage or healing calibration" : null,
+            }
+            : null;
+    }
+
+    private void ObserveCompatibilityPotency(ParsedDamageEvent damageEvent, string sourceKey,
+        IReadOnlyList<RaidBuffEffect> effects, double? potency)
+    {
+        if (damageEvent.Source.IsPet || damageEvent.IsSourceEntry)
+        {
+            return;
+        }
+        if (!compatibilityPotencySamples.TryGetValue(sourceKey, out var samples))
+        {
+            samples = new CompatibilityPotencySamples();
+            compatibilityPotencySamples[sourceKey] = samples;
+        }
+
+        var multiplier = GetCompatibilityDamageMultiplier(effects, damageEvent.SourceStatuses);
+        var sample = 0.0;
+        if (potency is > 0 && multiplier > 0 && !damageEvent.Blocked && !damageEvent.Parried &&
+            !HasUnknownDamageModifier(damageEvent.SourceStatuses) &&
+            !(samples.HistoryIndex > 10 && HasAttributeChange(damageEvent.SourceStatuses)))
+        {
+            sample = damageEvent.Amount;
+            if (damageEvent.DirectHit)
+            {
+                sample /= DirectHitMultiplier;
+            }
+            if (damageEvent.Critical)
+            {
+                sample /= 1.35 + (compatibilityCriticalSamples.GetValueOrDefault(sourceKey)?.CalibrationRate ?? 0.15);
+            }
+            sample /= potency.Value;
+            sample /= multiplier;
+        }
+        // Invalid samples still age the diagnostic rolling history and warm-up index.
+        samples.Add(double.IsFinite(sample) && sample > 0 ? sample : 0);
+    }
+
+    private CalibrationSnapshot GetCompatibilityCalibration(DamageActorIdentity source)
+    {
+        var key = GetActorKey(source);
+        compatibilityPotencySamples.TryGetValue(key, out var samples);
+        var median = samples?.Median;
+        var healing = median is not > 0;
+        if (healing)
+        {
+            compatibilityHealingSamples.TryGetValue(key, out samples);
+            median = samples?.Median;
+        }
+        compatibilityCriticalSamples.TryGetValue(key, out var critical);
+        return GetCalibration(source) with
+        {
+            DamagePerPotency = median is > 0 ? median : 1.0,
+            PotencySamples = samples?.PositiveCount ?? 0,
+            BaseRates = new BaseRates(critical?.Rate ?? 0, DefaultDirectHitRate),
+            CriticalSamples = critical?.Count ?? 0,
+            UsedKnownAttributes = false,
+            UsedHealingCalibration = healing && median is > 0,
+        };
     }
 
     private CalibrationSnapshot GetCalibration(DamageActorIdentity source)
@@ -943,12 +1140,12 @@ internal sealed class PeriodicDamageTracker
     }
 
     private PeriodicDamageEstimateInputs? GetEstimateInputs(TrackedStatus status) =>
-        GetEstimateInputs(status, GetCalibration(status.Application.Source));
+        GetEstimateInputs(status.Application, GetCalibration(status.Application.Source));
 
-    private static PeriodicDamageEstimateInputs? GetEstimateInputs(TrackedStatus status, CalibrationSnapshot calibration)
+    private static PeriodicDamageEstimateInputs? GetEstimateInputs(DamageStatusApplication application, CalibrationSnapshot calibration,
+        bool compatibility = false)
     {
-        var application = status.Application;
-        if (application.PeriodicPotency is not > 0.0 || HasAttributeChange(application.SourceStatuses) ||
+        if (application.PeriodicPotency is not > 0.0 || !compatibility && HasAttributeChange(application.SourceStatuses) ||
             HasUnknownDamageModifier(application.SourceStatuses))
         {
             return null;
@@ -966,11 +1163,17 @@ internal sealed class PeriodicDamageTracker
             application.ActionCategoryId,
             application.DamageType,
             application.ElementType);
-        var damageMultiplier = GetDamageMultiplier(effects);
-        var baseAmount = application.PeriodicPotency.Value * calibration.DamagePerPotency.Value * damageMultiplier;
+        var damageMultiplier = compatibility
+            ? GetCompatibilityDamageMultiplier(effects, application.SourceStatuses)
+            : GetDamageMultiplier(effects);
+        // Keep the diagnostic profile separate from current game-data potency.
+        var potency = compatibility && application.StatusId == 0xA38 ? 85.0 : application.PeriodicPotency.Value;
+        var baseAmount = compatibility
+            ? potency * damageMultiplier * calibration.DamagePerPotency.Value
+            : potency * calibration.DamagePerPotency.Value * damageMultiplier;
         baseAmount = ReconstructBaseAmount(baseAmount, application.BaseDamageLowByte);
 
-        var baseRates = application.SourceBaseRates is null
+        var baseRates = compatibility || application.SourceBaseRates is null
             ? calibration.BaseRates
             : new BaseRates(
                 application.SourceBaseRates.Critical,
@@ -981,21 +1184,26 @@ internal sealed class PeriodicDamageTracker
         var directHitBuffRate = effects
             .Where(effect => effect.Kind == RaidBuffEffectKind.DirectHitChance)
             .Sum(effect => effect.Amount);
-        var expectedCriticalRate = Math.Clamp(baseRates.Critical + criticalBuffRate, 0.0, 1.0);
+        // The diagnostic model has no inferred crit chance until its history is warm.
+        // An encoded byte can still supply the application rate below.
+        var expectedCriticalRate = compatibility && calibration.CriticalSamples < MinimumObservedRateSamples
+            ? 0.0
+            : Math.Clamp(baseRates.Critical + criticalBuffRate, 0.0, 1.0);
         var criticalRate = ResolveCriticalRate(
             application.CriticalRateLowByte,
             expectedCriticalRate);
         var directHitRate = Math.Clamp(baseRates.DirectHit + directHitBuffRate, 0.0, 1.0);
-        var criticalMultiplier = GetCriticalMultiplier(
-            Math.Clamp(criticalRate - criticalBuffRate, 0.05, 0.95));
-        var inputs = new PeriodicDamageEstimateInputs(calibration.DamagePerPotency.Value, application.PeriodicPotency.Value,
+        var criticalMultiplier = compatibility
+            ? Math.Max(1.4, 1.35 + criticalRate - criticalBuffRate)
+            : GetCriticalMultiplier(Math.Clamp(criticalRate - criticalBuffRate, 0.05, 0.95));
+        var inputs = new PeriodicDamageEstimateInputs(calibration.DamagePerPotency.Value, potency,
             damageMultiplier, application.BaseDamageLowByte, baseAmount, criticalRate, directHitRate, criticalMultiplier)
         {
             CalibrationSampleCount = calibration.PotencySamples,
             CriticalSampleCount = calibration.CriticalSamples,
             DirectHitSampleCount = calibration.DirectHitSamples,
             CalibrationBaseRates = new DamageBaseRateSnapshot(calibration.BaseRates.Critical, calibration.BaseRates.DirectHit),
-            UsedKnownAttributes = application.SourceBaseRates is not null || calibration.UsedKnownAttributes,
+            UsedKnownAttributes = !compatibility && (application.SourceBaseRates is not null || calibration.UsedKnownAttributes),
         };
         return double.IsFinite(inputs.ExpectedAmount) && inputs.ExpectedAmount >= 0.0
             ? inputs
@@ -1103,15 +1311,10 @@ internal sealed class PeriodicDamageTracker
                 }
             }
 
-            if (isTargetStatus)
-            {
-                continue;
-            }
-
-            foreach (var effect in PersonalDamageModifierPolicy.GetEffects(
-                         status,
-                         actionCategoryId,
-                         damageType))
+            var personalEffects = isTargetStatus
+                ? PersonalDamageModifierPolicy.GetTargetEffects(status, recipient)
+                : PersonalDamageModifierPolicy.GetEffects(status, actionCategoryId, damageType, recipient.Level);
+            foreach (var effect in personalEffects)
             {
                 var sourceKey = GetActorKey(effect.Source);
                 if (seen.Add((effect.StatusId, effect.Kind, sourceKey)))
@@ -1128,6 +1331,18 @@ internal sealed class PeriodicDamageTracker
             .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
             .Aggregate(1.0, (total, effect) => total * (1.0 + effect.Amount));
         return Math.Max(0.0, multiplier);
+    }
+
+    private static double GetCompatibilityDamageMultiplier(IReadOnlyList<RaidBuffEffect> effects,
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
+    {
+        var multiplier = 1.0 + effects.Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+            .Sum(effect => effect.Amount);
+        var active = sourceStatuses.Where(status => status.RemainingTime > 0).Select(status => status.StatusId).ToHashSet();
+        multiplier += active.Contains(0x31) ? 0.15 : 0;
+        // A tracked Weakness can linger until removal delivery when Brink replaces it.
+        multiplier -= active.Contains(0x2C) ? 0.50 : active.Contains(0x2B) ? 0.25 : 0;
+        return multiplier < 0 ? 1.0 : multiplier;
     }
 
     private static string GetActorKey(DamageActorIdentity actor)
@@ -1283,10 +1498,26 @@ internal sealed class PeriodicDamageTracker
         public CalibrationSnapshot Calibration { get; set; } = new(null, BaseRates.Default);
 
         public PeriodicDirectHitSnapshot? CompatibilityDirectHit { get; set; }
+
+        public CalibrationSnapshot CompatibilityCalibration { get; set; } = new(1.0, BaseRates.Default);
+
+        public PeriodicCompatibilityEstimate? CompatibilityEstimate { get; set; }
+
+        public DamageStatusApplication CompatibilityApplication { get; set; } = application;
     }
 
     private sealed record CalibrationSnapshot(double? DamagePerPotency, BaseRates BaseRates,
-        int PotencySamples = 0, int CriticalSamples = 0, int DirectHitSamples = 0, bool UsedKnownAttributes = false);
+        int PotencySamples = 0, int CriticalSamples = 0, int DirectHitSamples = 0, bool UsedKnownAttributes = false,
+        bool UsedHealingCalibration = false);
+
+    private sealed class CompatibilityCriticalSamples
+    {
+        public int Count { get; set; }
+
+        public double Rate { get; set; }
+
+        public double CalibrationRate => Count > 10 ? Math.Max(0.05, Rate) : 0.15;
+    }
 
     private sealed class TickSamples
     {
@@ -1319,6 +1550,23 @@ internal sealed class PeriodicDamageTracker
             {
                 values.Dequeue();
             }
+        }
+    }
+
+    private sealed class CompatibilityPotencySamples
+    {
+        private readonly double[] values = new double[MaximumPotencySamples];
+
+        public int HistoryIndex { get; private set; }
+
+        public int PositiveCount => values.Count(value => value > 0);
+
+        public double Median => PeriodicDamageTracker.Median(values.Where(value => value > 0));
+
+        public void Add(double value)
+        {
+            HistoryIndex = (HistoryIndex + 1) % values.Length;
+            values[HistoryIndex] = value;
         }
     }
 

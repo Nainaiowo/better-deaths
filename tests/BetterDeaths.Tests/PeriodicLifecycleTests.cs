@@ -94,6 +94,52 @@ public sealed class PeriodicLifecycleTests
         Assert.Equal(0xF1Fu, Assert.Single(Tick(tracker, 0)).StatusId);
     }
 
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(1415, false)]
+    [InlineData(490000, false)]
+    public void BufferedTickUsesConfirmationTimeNotBufferArrivalWindow(long offsetTicks, bool eligible)
+    {
+        var module = new DamageParsingModule();
+        var tickAt = new DateTime(2026, 9, 5, 12, 53, 26, DateTimeKind.Utc).AddTicks(7218234);
+        var pending = Application(0xF1F, 0) with
+        {
+            SeenAtUtc = tickAt.AddSeconds(-1),
+            ActionId = 36986,
+            DurationSeconds = 0,
+        };
+        module.ObserveStatus(pending);
+        module.ProcessPeriodicTick(new PeriodicDamageTick(1, tickAt, Target, 0, "", 0, 27588, null));
+        module.ObserveStatus(pending with
+        {
+            ActionId = 0,
+            SeenAtUtc = tickAt.AddTicks(offsetTicks),
+            DurationSeconds = 30,
+        });
+
+        var tick = Assert.Single(module.FlushPendingPeriodicTicks(tickAt.AddMilliseconds(50)));
+        Assert.Equal(eligible, tick.Source.EntityId == Source.EntityId);
+        Assert.Equal(27588u, tick.Amount);
+    }
+
+    [Fact]
+    public void ExcludingPrematureThunderTickPreservesItsFinalTickBudget()
+    {
+        var tracker = new PeriodicDamageTracker();
+        tracker.Observe(Application(0x500, 0, 60) with { Source = OtherSource });
+        tracker.Observe(Application(0xF1F, 1) with { ActionId = 36986, DurationSeconds = 0 });
+        tracker.Observe(Application(0xF1F, 2.0001415));
+        Assert.Equal(0x500u, Assert.Single(Tick(tracker, 2)).StatusId);
+        for (var index = 1; index <= 10; index++)
+        {
+            var ticks = Tick(tracker, 2 + index * 3);
+            Assert.Contains(ticks, tick => tick.StatusId == 0xF1F);
+            Assert.Equal(600.0, ticks.Sum(tick => tick.EffectiveMeterAmount));
+        }
+    }
+
     [Fact]
     public void TickBeforeRefreshConfirmationUsesPreviousApplicationsSnapshot()
     {

@@ -46,10 +46,86 @@ public sealed class PersonalDamageModifierPolicyTests
         { 0x727, 0.20 },
         { 0x4C, 0.25 },
         { 0x512, 0.13 },
+        { 0x49D, 0.15 },
+        { 0xA75, 0.10 },
+        { 0xE54, 0.10 },
         { 0x6B6, 0.50 },
         { 0x6B7, -0.40 },
         { 0x9C2, 1.00 },
     };
+
+    [Theory]
+    [InlineData(1, 0.0)]
+    [InlineData(3, 0.0)]
+    [InlineData(5, 0.10)]
+    [InlineData(7, 0.0)]
+    public void SelfEmboldenOnlyNormalizesMagicDamage(byte damageType, double expected)
+    {
+        Assert.True(DamageStatusCapturePolicy.IsRelevant(0x4D7));
+        Assert.Equal(expected, PersonalDamageModifierPolicy.GetEffects(Status(0x4D7), 4, damageType)
+            .Sum(effect => effect.Amount), 9);
+        Assert.Empty(RaidBuffPolicy.GetEffects(Status(0x4D7), false, Dealer));
+    }
+
+    [Theory]
+    [InlineData(50, 0.10)]
+    [InlineData(77, 0.10)]
+    [InlineData(78, 0.13)]
+    [InlineData(100, 0.13)]
+    public void FugetsuUsesTheCapturedLevelTrait(byte level, double expected)
+    {
+        Assert.Equal(expected, Assert.Single(PersonalDamageModifierPolicy.GetEffects(Status(0x512), 2, 3, level)).Amount);
+    }
+
+    [Fact]
+    public void DeathsDesignOnlyNormalizesItsOwnersDamageAndNeverAddsRaidCredit()
+    {
+        Assert.True(DamageStatusCapturePolicy.IsRelevant(0xA1A));
+        var status = new DamageStatusSnapshot(0xA1A, Dealer, 0, 60);
+        Assert.Equal(0.10, Assert.Single(PersonalDamageModifierPolicy.GetTargetEffects(status, Dealer)).Amount);
+        Assert.Empty(PersonalDamageModifierPolicy.GetTargetEffects(status, ReferenceDealer));
+        Assert.Empty(PersonalDamageModifierPolicy.GetTargetEffects(status with { Source = Dealer with { EntityId = 0 } }, Dealer));
+        Assert.Empty(PersonalDamageModifierPolicy.GetEffects(status, 2, 3));
+        Assert.Empty(RaidBuffPolicy.GetEffects(status, true, Dealer));
+    }
+
+    [Theory]
+    [InlineData(0x4D7u, 1100u)]
+    [InlineData(0x49Du, 1150u)]
+    [InlineData(0xA75u, 1100u)]
+    [InlineData(0xE54u, 1100u)]
+    public void NewlyCapturedModifiersNormalizeCalibrationWithoutChangingPacketDamage(uint statusId, uint amount)
+    {
+        var module = new DamageParsingModule();
+        var direct = Assert.Single(module.Process(DirectPacket(amount, [Status(statusId)]) with
+        {
+            Targets = [new(0, Target, [new(0, 3, 0, 5, 0, 0, amount)])],
+        }));
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(amount, direct.Amount);
+        Assert.Equal(10, tick.PeriodicEstimateInputs!.DamagePerPotency, 8);
+        Assert.Equal(600u, tick.Amount);
+    }
+
+    [Theory]
+    [InlineData(true, 10.0)]
+    [InlineData(false, 11.0)]
+    public void TargetPersonalModifierNormalizationChecksOwnership(bool owner, double expectedScale)
+    {
+        var module = new DamageParsingModule();
+        var debuff = new DamageStatusSnapshot(0xA1A, owner ? Dealer : ReferenceDealer, 0, 60);
+        var direct = Assert.Single(module.Process(DirectPacket(1100, []) with
+        {
+            Targets = [new(0, Target, [new(0, 3, 0, 3, 0, 0, 1100)])
+                { TargetStatuses = [debuff], HasTargetStatusSnapshot = true }],
+        }));
+        module.ObserveStatus(PeriodicApplication([]));
+        var tick = Assert.Single(ProcessPeriodicTick(module));
+        Assert.Equal(1100u, direct.Amount);
+        Assert.Equal(expectedScale, tick.PeriodicEstimateInputs!.DamagePerPotency, 8);
+        Assert.Equal(600u, tick.Amount);
+    }
 
     [Theory]
     [MemberData(nameof(UniversalModifiers))]

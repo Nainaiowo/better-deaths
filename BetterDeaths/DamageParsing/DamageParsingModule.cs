@@ -75,6 +75,7 @@ internal sealed class DamageParsingModule
             var unseen = FilterNewDirectEvents(decoded);
             if (decoded.Count > 0 && unseen.Count == 0)
             {
+                periodicDamageTracker.ObserveActionCalibration(packet, []);
                 if (startedAtUtc is not null || combatActive)
                 {
                     packetCount++;
@@ -87,9 +88,9 @@ internal sealed class DamageParsingModule
                 .Select(raidBuffTracker.ApplyFallback)
                 .Select(ApplyMeterEligibility)
                 .ToList();
+            periodicDamageTracker.ObserveActionCalibration(packet, parsed);
             if (parsed.Count > 0)
             {
-                periodicDamageTracker.ObserveDirectDamage(parsed);
                 parsed = effectiveDamageResolver.ObserveDirect(parsed).ToList();
                 RecordParsedEvents(parsed, 1, allowAutomaticEncounterStart);
             }
@@ -447,6 +448,8 @@ internal sealed class DamageParsingModule
                         estimates.Key is null ? estimates.Sum(damageEvent => damageEvent.SimulatedPeriodicAmount) : null)
                     {
                         CompatibilityTickCount = estimates.Count(damageEvent => damageEvent.PeriodicCompatibilityEstimate is not null),
+                        CompatibilityFallbackTickCount = estimates.Count(damageEvent =>
+                            damageEvent.PeriodicCompatibilityEstimate?.UsedUnitCalibration == true),
                         CompatibilityDamage = estimates.Any(damageEvent => damageEvent.PeriodicCompatibilityEstimate is not null)
                             ? estimates.Sum(damageEvent => damageEvent.PeriodicCompatibilityEstimate?.EstimatedDamage ?? 0) : null,
                     })

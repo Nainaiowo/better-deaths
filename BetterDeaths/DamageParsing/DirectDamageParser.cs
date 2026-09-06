@@ -143,7 +143,7 @@ internal sealed class DirectDamageParser
             DamageActionEffectKind.PartialInvulnerable;
     }
 
-    private static string BuildEventId(
+    internal static string BuildEventId(
         DamageActionPacket packet,
         DamageActionTarget target,
         DamageActionEffect effect)

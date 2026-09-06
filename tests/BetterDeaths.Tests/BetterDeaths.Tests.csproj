@@ -32,6 +32,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/JobDamageCalibrationPolicy.cs" Link="DamageParsing/JobDamageCalibrationPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageTracker.cs" Link="DamageParsing/PeriodicDamageTracker.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDirectHitCompatibility.cs" Link="DamageParsing/PeriodicDirectHitCompatibility.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/PeriodicCalibrationPolicy.cs" Link="DamageParsing/PeriodicCalibrationPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageRefreshPolicy.cs" Link="DamageParsing/PeriodicDamageRefreshPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PersonalDamageModifierPolicy.cs" Link="DamageParsing/PersonalDamageModifierPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffPolicy.cs" Link="DamageParsing/RaidBuffPolicy.cs" />
@@ -79,5 +80,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <None Update="Fixtures/ActionPotencies.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/PeriodicApplicationGolden.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/HealingCalibrationGolden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
