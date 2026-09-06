@@ -164,6 +164,8 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
         PushPopupStyle();
     }
 
+    public override bool DrawConditions() => !plugin.IsDungeonCaptureBlocked;
+
     public override void PostDraw()
     {
         PopPopupStyle();

@@ -80,6 +80,55 @@ public sealed class RaidDamageCalculatorTests
     }
 
     [Fact]
+    public void SharedPreparationPreservesRawAndEffectiveCreditSeparately()
+    {
+        var events = Enumerable.Range(0, 60).Select(index => CreateEvent(1000, critical: true, directHit: true) with
+        {
+            SeenAtUtc = SeenAtUtc.AddSeconds(60 - index),
+            SourceStatuses = [Status(0x4A1, Buffer), Status(0x312, SecondBuffer)],
+            IsPeriodic = index % 2 == 0,
+            CriticalRateLowByte = index % 2 == 0 ? (byte)180 : null,
+            MeterAmount = index % 3 == 0 ? 0.0 : 800.5,
+            CalculatedAmount = index % 3 == 0 ? 0.0 : 400.25,
+            MeterEligibility = index % 5 == 0 ? DamageMeterEligibility.FriendlyTarget : DamageMeterEligibility.Eligible,
+        }).ToArray();
+        var sources = new[] { SourceSummary(Dealer, 60000) };
+        var raw = RaidDamageCalculator.Calculate(events, sources,
+            entry => entry.MeterEligibility != DamageMeterEligibility.FriendlyTarget ? entry.RawMeterAmount : 0.0);
+        var effective = RaidDamageCalculator.Calculate(events, sources, entry => entry.MeterAggregateAmount);
+        var shared = RaidDamageCalculator.CalculateBoth(events, sources);
+        Assert.Equal(raw.OrderBy(entry => entry.Key), shared.Raw.OrderBy(entry => entry.Key));
+        Assert.Equal(effective.OrderBy(entry => entry.Key), shared.Effective.OrderBy(entry => entry.Key));
+        Assert.NotEqual(raw[RaidDamageCalculator.GetActorKey(Dealer)], effective[RaidDamageCalculator.GetActorKey(Dealer)]);
+    }
+
+    [Fact]
+    public void PeriodicRatePreparationAllocationsGrowLinearly()
+    {
+        var sources = new[] { SourceSummary(Dealer, 0) };
+        ParsedDamageEvent[] Events(int count) => Enumerable.Range(0, count).Select(index => CreateEvent(1000) with
+        {
+            IsPeriodic = true,
+            CriticalRateLowByte = (byte)(100 + index % 10),
+            SourceStatuses = [Status(0x312, Buffer)],
+        }).ToArray();
+        var small = Events(1000);
+        var large = Events(2000);
+        RaidDamageCalculator.Calculate(small, sources);
+        RaidDamageCalculator.Calculate(large, sources);
+        long Allocated(ParsedDamageEvent[] events)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            RaidDamageCalculator.Calculate(events, sources);
+            return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        var smallBytes = Allocated(small);
+        var largeBytes = Allocated(large);
+        Assert.True(largeBytes < smallBytes * 2.5, $"Allocations grew from {smallBytes} to {largeBytes} bytes.");
+    }
+
+    [Fact]
     public void AlliancePlayersParticipateInRaidDamageCredit()
     {
         var allianceDealer = Dealer with { IsPartyMember = false };

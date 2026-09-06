@@ -45,9 +45,31 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
+    private sealed record ContentCaptureState(uint TerritoryId, bool IsDungeon);
+    private ContentCaptureState? contentCaptureState;
+
+    public bool IsDungeonCaptureBlocked
+    {
+        get
+        {
+            var territoryId = (uint)ClientState.TerritoryType;
+            var cached = contentCaptureState;
+            if (cached?.TerritoryId == territoryId)
+            {
+                return cached.IsDungeon;
+            }
+
+            var territory = DataManager.GetExcelSheet<TerritoryType>()?.GetRowOrDefault(territoryId);
+            var blocked = territory is { } row && ContentCapturePolicy.IsDungeon(
+                row.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0, row.TerritoryIntendedUse.RowId);
+            contentCaptureState = new ContentCaptureState(territoryId, blocked);
+            return blocked;
+        }
+    }
+
     private void OnDutyReset(IDutyStateEventArgs args)
     {
-        if (IsPvPCaptureBlocked())
+        if (IsPvPCaptureBlocked() || IsDungeonCaptureBlocked)
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
             currentMembers.Clear();
@@ -254,9 +276,9 @@ public sealed partial class Plugin
         return ClientState.IsPvP;
     }
 
-    private static bool IsDutyCaptureActive()
+    private bool IsDutyCaptureActive()
     {
-        return DutyState.IsDutyStarted;
+        return DutyState.IsDutyStarted && !IsDungeonCaptureBlocked;
     }
 
     private bool ShouldCaptureLiveCombat(DateTime now)

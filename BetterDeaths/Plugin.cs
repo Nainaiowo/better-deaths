@@ -333,15 +333,13 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly object recordedPullLock = new();
     private IReadOnlyList<RecordedPullSummary> recordedPullSummaries = [];
     private readonly List<DebugLogEntry> debugLogEntries = [];
-    private readonly Dictionary<string, DebugStatusSnapshot> debugStatusSnapshotsByMember = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> debugStatusPersistSignaturesByMember = new(StringComparer.Ordinal);
+    private readonly DebugStatusCapture debugStatusCapture = new();
     private readonly Dictionary<string, DebugEffectResultSnapshot> debugEffectResultSnapshotsByTarget = new(StringComparer.Ordinal);
     private readonly List<DebugEffectResultSnapshot> debugEffectResultHistory = [];
     private readonly List<DebugActorControlEvent> debugActorControlEvents = [];
     private readonly List<AddonInspectorEvent> addonInspectorEvents = [];
     private readonly Dictionary<string, DateTime> addonInspectorEventSeenAtBySignature = new(StringComparer.Ordinal);
-    private readonly Queue<string> debugCaptureFileLines = new();
-    private readonly Queue<IReadOnlyList<string>> debugCaptureWriteBatches = new();
+    private readonly Queue<DebugCaptureFileRecord> debugCaptureFileRecords = new();
     private readonly object debugCaptureFileLock = new();
     private readonly DalamudLinkPayload deathChatLinkPayload;
     private readonly Dictionary<string, List<CombatEventRecord>> recentEventsByMember = new(StringComparer.Ordinal);
@@ -569,7 +567,7 @@ public sealed partial class Plugin : IDalamudPlugin
         : lastKnownPullElapsedSeconds;
 
     internal DamageParsing.DamageEncounterSnapshot? CurrentDamageEncounter =>
-        damageParsingModule.GetCurrentEncounter();
+        damageParsingModule.GetLiveEncounter();
 
     internal DamageParsing.DamageEncounterSnapshot? LastDamageEncounter =>
         damageParsingModule.LastEncounter;
@@ -590,6 +588,7 @@ public sealed partial class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         NormalizeUserConfiguration();
         LoadRecordedDamageEncounters();
+        damageParsingModule.LiveSnapshotFailed = error => Log.Warning(error, "Could not refresh Better Deaths live meter.");
         damageParsingModule.PeriodicEventsResolved = parsed =>
             QueueDamageMeterParsedDebug("PeriodicResolved", parsed);
         BeginLoadRecordedPullHistory();
@@ -797,9 +796,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
             ObserveDamageMeterOffensiveCasts(now);
             UpdateCombatTimerState(now);
-            damageParsingModule.SetCombatActive(IsEffectiveInCombat(), now);
+            damageParsingModule.SetCombatActive(ShouldAcceptDamageParserCapture(now) && IsEffectiveInCombat(), now);
             damageParsingModule.FlushPendingPeriodicTicks(now);
             RefreshPartyState();
+            damageParsingModule.RefreshLiveEncounter(now);
             FlushDebugCaptureFile(now);
             PruneLiveCaptureState(now);
             PruneRecentOwnSharedDeathPosts(now);
@@ -1266,9 +1266,9 @@ public sealed partial class Plugin : IDalamudPlugin
             record.ResultCurrentHp,
             record.ResultShieldHp,
             record.ResultMaxHp,
-            record.Statuses,
-            record.SourceStatuses,
-            record.ResultStatuses);
+            record.Statuses.ToArray(),
+            record.SourceStatuses.ToArray(),
+            record.ResultStatuses.ToArray());
     }
 
     private static long GetDirectorySizeBytes(string directoryPath)

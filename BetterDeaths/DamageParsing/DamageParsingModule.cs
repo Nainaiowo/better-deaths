@@ -3,12 +3,14 @@ namespace BetterDeaths.DamageParsing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 internal sealed class DamageParsingModule
 {
     private static readonly TimeSpan DeferredPeriodicTickDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan PreEncounterRetention = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan OffensiveCastRetention = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan LiveSnapshotRefreshInterval = TimeSpan.FromMilliseconds(500);
     private readonly object syncRoot = new();
     private readonly DirectDamageParser parser = new();
     private readonly EffectiveDamageResolver effectiveDamageResolver = new();
@@ -39,6 +41,16 @@ internal sealed class DamageParsingModule
     private long mutationRevision;
     private long cachedCurrentEncounterRevision = -1;
     private long cachedCurrentEncounterTimeBucket = -1;
+    private DamageEncounterSnapshot? liveEncounter;
+    private long liveEncounterRevision = -1;
+    private DateTime liveEncounterRefreshedAtUtc;
+    private bool liveEncounterRequested;
+    private long encounterGeneration;
+    private LiveSnapshotBuild? liveSnapshotBuild;
+    private sealed record LiveSnapshotBuild(long Generation, long Revision, Task<DamageEncounterSnapshot> Work);
+
+    internal Task? PendingLiveSnapshot => liveSnapshotBuild?.Work;
+    public Action<Exception>? LiveSnapshotFailed { get; set; }
 
     public Action<IReadOnlyList<ParsedDamageEvent>>? PeriodicEventsResolved { get; set; }
 
@@ -253,6 +265,63 @@ internal sealed class DamageParsingModule
         return GetCurrentEncounter(null);
     }
 
+    // Drawing only requests and reads a published snapshot; refresh work runs from framework update.
+    public DamageEncounterSnapshot? GetLiveEncounter()
+    {
+        lock (syncRoot)
+        {
+            liveEncounterRequested = true;
+            return liveEncounter;
+        }
+    }
+
+    public void RefreshLiveEncounter(DateTime nowUtc)
+    {
+        lock (syncRoot)
+        {
+            if (liveSnapshotBuild is { } build)
+            {
+                if (!build.Work.IsCompleted)
+                {
+                    return;
+                }
+
+                liveSnapshotBuild = null;
+                if (build.Work.IsCompletedSuccessfully)
+                {
+                    if (build.Generation == encounterGeneration && startedAtUtc is not null)
+                    {
+                        liveEncounter = build.Work.Result;
+                        liveEncounterRevision = build.Revision;
+                    }
+                }
+                else if (build.Work.Exception is { } error)
+                {
+                    LiveSnapshotFailed?.Invoke(error);
+                }
+            }
+
+            if (!liveEncounterRequested)
+            {
+                return;
+            }
+
+            liveEncounterRequested = false;
+            if (startedAtUtc is null || latestEventAtUtc is null ||
+                (liveEncounter is not null && liveEncounterRevision == mutationRevision) ||
+                (liveEncounterRefreshedAtUtc != default && nowUtc >= liveEncounterRefreshedAtUtc &&
+                 nowUtc - liveEncounterRefreshedAtUtc < LiveSnapshotRefreshInterval))
+            {
+                return;
+            }
+
+            var input = CaptureSnapshotInput(latestEventAtUtc.Value, null, string.Empty);
+            liveSnapshotBuild = new LiveSnapshotBuild(encounterGeneration, mutationRevision,
+                Task.Run(() => CompleteSnapshot(input, includeEvents: false, includeDiagnostics: false)));
+            liveEncounterRefreshedAtUtc = nowUtc;
+        }
+    }
+
     internal DamageEncounterSnapshot? GetCurrentEncounter(DateTime? nowUtc)
     {
         lock (syncRoot)
@@ -305,6 +374,45 @@ internal sealed class DamageParsingModule
         string reason,
         bool includeEvents)
     {
+        return BuildSnapshotCore(snapshotAtUtc, endedAtUtc, reason, includeEvents, includeDiagnostics: true);
+    }
+
+    private DamageEncounterSnapshot BuildSnapshotCore(
+        DateTime snapshotAtUtc,
+        DateTime? endedAtUtc,
+        string reason,
+        bool includeEvents,
+        bool includeDiagnostics)
+    {
+        return CompleteSnapshot(CaptureSnapshotInput(snapshotAtUtc, endedAtUtc, reason), includeEvents, includeDiagnostics);
+    }
+
+    private DamageEncounterSnapshot CaptureSnapshotInput(DateTime snapshotAtUtc, DateTime? endedAtUtc, string reason)
+    {
+        var sourceSnapshots = sources
+            .Select(entry => entry.Value.ToSnapshot(sourceActivities.GetValueOrDefault(entry.Key)))
+            .OrderByDescending(source => source.EffectiveMeterDamage)
+            .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var targetSnapshots = targets.Values
+            .Select(target => target.ToSnapshot())
+            .OrderByDescending(target => target.TotalDamage)
+            .ThenBy(target => target.Target.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        // Parsed records are immutable; copy the event collection before releasing the module lock.
+        return new DamageEncounterSnapshot(startedAtUtc!.Value, snapshotAtUtc, endedAtUtc, reason,
+            0, packetCount, duplicateEventCount, events.ToArray(), sourceSnapshots, targetSnapshots)
+        {
+            MeterStartedAtUtc = meterStartedAtUtc,
+            MeterSnapshotAtUtc = latestMeterDamageAtUtc,
+            MeterEndedAtUtc = endedAtUtc is null ? null : latestMeterDamageAtUtc,
+        };
+    }
+
+    private static DamageEncounterSnapshot CompleteSnapshot(
+        DamageEncounterSnapshot input, bool includeEvents, bool includeDiagnostics)
+    {
+        var events = input.Events;
         IReadOnlyList<ParsedDamageEvent> snapshotEvents = includeEvents
             ? events
                 .OrderBy(entry => entry.SeenAtUtc)
@@ -313,21 +421,8 @@ internal sealed class DamageParsingModule
                 .ThenBy(entry => entry.EffectIndex)
                 .ToList()
             : [];
-        var sourceSnapshots = sources
-            .Select(entry => entry.Value.ToSnapshot(sourceActivities.GetValueOrDefault(entry.Key)))
-            .OrderByDescending(source => source.EffectiveMeterDamage)
-            .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var raidAdjustments = RaidDamageCalculator.Calculate(
-            events,
-            sourceSnapshots,
-            damageEvent => damageEvent.MeterEligibility != DamageMeterEligibility.FriendlyTarget
-                ? damageEvent.RawMeterAmount
-                : 0.0);
-        var meterRaidAdjustments = RaidDamageCalculator.Calculate(
-            events,
-            sourceSnapshots,
-            damageEvent => damageEvent.MeterAggregateAmount);
+        var sourceSnapshots = input.Sources.ToList();
+        var (raidAdjustments, meterRaidAdjustments) = RaidDamageCalculator.CalculateBoth(events, sourceSnapshots);
         sourceSnapshots = sourceSnapshots
             .Select(source => ApplyRaidAdjustment(source, raidAdjustments, meterRaidAdjustments))
             .ToList();
@@ -348,30 +443,11 @@ internal sealed class DamageParsingModule
             .OrderByDescending(source => source.EffectiveMeterDamage)
             .ThenBy(source => source.Source.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var targetSnapshots = targets.Values
-            .Select(target => target.ToSnapshot())
-            .OrderByDescending(target => target.TotalDamage)
-            .ThenBy(target => target.Target.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var snapshot = new DamageEncounterSnapshot(
-            startedAtUtc!.Value,
-            snapshotAtUtc,
-            endedAtUtc,
-            reason,
-            sourceSnapshots.Aggregate(0UL, (total, source) => total + source.TotalDamage),
-            packetCount,
-            duplicateEventCount,
-            snapshotEvents,
-            sourceSnapshots,
-            targetSnapshots);
-        return snapshot with
+        return input with
         {
-            MeterStartedAtUtc = meterStartedAtUtc,
-            MeterSnapshotAtUtc = latestMeterDamageAtUtc,
-            MeterEndedAtUtc = endedAtUtc is null
-                ? null
-                : latestMeterDamageAtUtc,
+            TotalDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.TotalDamage),
+            Events = snapshotEvents,
+            Sources = sourceSnapshots,
             MeterDamage = sourceSnapshots.Sum(source => source.EffectiveMeterDamage),
             RawMeterDamage = sourceSnapshots.Sum(source => source.ObservedMeterDamage),
             EstimatedDamage = sourceSnapshots.Aggregate(0UL, (total, source) => total + source.EstimatedDamage),
@@ -380,7 +456,7 @@ internal sealed class DamageParsingModule
                 total + source.TotalDamage - source.EstimatedDamage - source.UnattributedDamage),
             RaidAdjustedDamage = sourceSnapshots.Sum(source => source.RaidAdjustedDamage),
             MeterRaidAdjustedDamage = sourceSnapshots.Sum(source => source.EffectiveMeterRaidAdjustedDamage),
-            Diagnostics = BuildDiagnostics(events),
+            Diagnostics = includeDiagnostics ? BuildDiagnostics(events) : DamageEncounterDiagnostics.Empty,
         };
     }
 
@@ -620,6 +696,11 @@ internal sealed class DamageParsingModule
         cachedCurrentEncounter = null;
         cachedCurrentEncounterRevision = -1;
         cachedCurrentEncounterTimeBucket = -1;
+        liveEncounter = null;
+        liveEncounterRevision = -1;
+        liveEncounterRefreshedAtUtc = default;
+        liveEncounterRequested = false;
+        encounterGeneration++;
     }
 
     private IReadOnlyList<ParsedDamageEvent> FlushPendingPeriodicTicksCore(

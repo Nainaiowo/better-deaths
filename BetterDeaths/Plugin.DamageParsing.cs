@@ -643,7 +643,7 @@ public sealed partial class Plugin
                 {
                     calibrationPacket.Source,
                     calibrationPacket.SourceBaseRates,
-                    calibrationPacket.SourceStatuses,
+                    SourceStatuses = calibrationPacket.SourceStatuses.ToArray(),
                     calibrationPacket.HasSourceStatusSnapshot,
                     calibrationPacket.ActionCategoryId,
                     calibrationPacket.HealingPotency,
@@ -652,17 +652,17 @@ public sealed partial class Plugin
                     {
                         target.TargetIndex,
                         target.Target,
-                        target.TargetStatuses,
+                        TargetStatuses = target.TargetStatuses.ToArray(),
                         target.HasTargetStatusSnapshot,
-                    }),
+                    }).ToArray(),
                 }
                 : null,
             Targets = packet.Targets.Select(target => new
             {
                 target.TargetIndex,
                 TargetEntityId = GetDamageTargetEntityId(target.TargetId),
-                target.Effects,
-            }),
+                Effects = target.Effects.ToArray(),
+            }).ToArray(),
             StatusApplications = calibrationPacket.StatusApplications.Select(application => new
             {
                 TargetEntityId = application.Target.EntityId,
@@ -675,7 +675,7 @@ public sealed partial class Plugin
                 application.BaseDamageLowByte,
                 application.CriticalRateLowByte,
                 application.IsRemoval,
-            }),
+            }).ToArray(),
         });
     }
 
@@ -794,7 +794,7 @@ public sealed partial class Plugin
                     SourceName = status.Source.Name,
                     status.Parameter,
                     status.RemainingTime,
-                }),
+                }).ToArray(),
                 TargetStatuses = damageEvent.TargetStatuses.Select(status => new
                 {
                     status.StatusId,
@@ -802,8 +802,8 @@ public sealed partial class Plugin
                     SourceName = status.Source.Name,
                     status.Parameter,
                     status.RemainingTime,
-                }),
-            }),
+                }).ToArray(),
+            }).ToArray(),
         });
     }
 
@@ -863,7 +863,7 @@ public sealed partial class Plugin
                     source.ExternalBuffDamageReceived,
                     source.RaidBuffDamageGiven,
                     source.SingleTargetBuffDamageReceived,
-                }),
+                }).ToArray(),
             });
         }
 

@@ -45,14 +45,6 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
-    private sealed record DebugCaptureFileRecord(
-        DateTime SeenAtUtc,
-        float PullElapsedSeconds,
-        uint TerritoryId,
-        string TerritoryName,
-        string Kind,
-        JsonElement Data);
-
     private sealed record DebugActionEffectRecord(
         DateTime SeenAtUtc,
         float PullElapsedSeconds,
@@ -92,10 +84,7 @@ public sealed partial class Plugin
 
     public IReadOnlyList<DebugLogEntry> DebugLogEntries => debugLogEntries;
 
-    public IReadOnlyList<DebugStatusSnapshot> DebugStatusSnapshots => debugStatusSnapshotsByMember.Values
-        .OrderBy(snapshot => snapshot.PartyIndex)
-        .ThenBy(snapshot => snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
-        .ToList();
+    public IReadOnlyList<DebugStatusSnapshot> DebugStatusSnapshots => debugStatusCapture.GetHistory();
 
     public IReadOnlyList<DebugEffectResultSnapshot> DebugEffectResultSnapshots => debugEffectResultSnapshotsByTarget.Values
         .OrderBy(snapshot => snapshot.PullElapsedSeconds)
@@ -157,7 +146,7 @@ public sealed partial class Plugin
         {
             lock (debugCaptureFileLock)
             {
-                return debugCaptureFileLines.Count;
+                return debugCaptureFileRecords.Count;
             }
         }
     }
@@ -242,8 +231,7 @@ public sealed partial class Plugin
     public void ClearDebugLog()
     {
         debugLogEntries.Clear();
-        debugStatusSnapshotsByMember.Clear();
-        debugStatusPersistSignaturesByMember.Clear();
+        debugStatusCapture.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
@@ -290,8 +278,7 @@ public sealed partial class Plugin
 
         lock (debugCaptureFileLock)
         {
-            debugCaptureFileLines.Clear();
-            debugCaptureWriteBatches.Clear();
+            debugCaptureFileRecords.Clear();
         }
 
         try
@@ -546,20 +533,14 @@ public sealed partial class Plugin
 
     private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
     {
-        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
+        if (!Configuration.DebugLogEnabled || debugCaptureFrozen || IsDungeonCaptureBlocked)
         {
             return;
         }
 
         foreach (var member in members)
         {
-            var statuses = member.Statuses.ToList();
-            if (debugStatusSnapshotsByMember.TryGetValue(member.MemberKey, out var existing))
-            {
-                statuses = MergeDebugStatuses(existing.Statuses, statuses);
-            }
-
-            debugStatusSnapshotsByMember[member.MemberKey] = new DebugStatusSnapshot(
+            var snapshot = new DebugStatusSnapshot(
                 now,
                 CurrentPullElapsedSeconds,
                 member.MemberKey,
@@ -572,61 +553,21 @@ public sealed partial class Plugin
                 member.MaxHp,
                 member.IsDead,
                 member.IsPartyMember,
-                statuses)
+                member.Statuses)
             {
                 HasWorldObject = member.HasWorldObject,
                 WorldObjectIsDead = member.WorldObjectIsDead,
             };
-            var snapshot = debugStatusSnapshotsByMember[member.MemberKey];
-            var signature = BuildDebugStatusPersistSignature(snapshot);
-            if (!debugStatusPersistSignaturesByMember.TryGetValue(member.MemberKey, out var existingSignature) ||
-                !string.Equals(signature, existingSignature, StringComparison.Ordinal))
+            if (debugStatusCapture.Observe(snapshot) is { } changed)
             {
-                debugStatusPersistSignaturesByMember[member.MemberKey] = signature;
-                QueueDebugCaptureRecord("StatusSnapshot", snapshot);
+                QueueDebugCaptureRecord("StatusSnapshot", changed);
             }
         }
     }
 
-    private static List<StatusSnapshot> MergeDebugStatuses(
-        IReadOnlyList<StatusSnapshot> existingStatuses,
-        IReadOnlyList<StatusSnapshot> currentStatuses)
-    {
-        var merged = new Dictionary<(uint Id, uint SourceId), StatusSnapshot>();
-        foreach (var status in existingStatuses)
-        {
-            merged[(status.Id, status.SourceId)] = status;
-        }
-
-        foreach (var status in currentStatuses)
-        {
-            merged[(status.Id, status.SourceId)] = status;
-        }
-
-        return merged.Values.ToList();
-    }
-
-    private static string BuildDebugStatusPersistSignature(DebugStatusSnapshot snapshot)
-    {
-        return string.Join(
-            "|",
-            snapshot.IsDead ? "dead" : "alive",
-            snapshot.HasWorldObject ? "world" : "missing",
-            snapshot.WorldObjectIsDead ? "world-dead" : "world-not-dead",
-            snapshot.CurrentHp,
-            snapshot.ShieldHp,
-            snapshot.MaxHp,
-            string.Join(
-                ";",
-                snapshot.Statuses
-                    .OrderBy(status => status.Id)
-                    .ThenBy(status => status.SourceId)
-                    .Select(status => $"{status.Id}:{status.SourceId}:{status.StackCount}")));
-    }
-
     private void ClearDebugDataForDutyEnter()
     {
-        if (debugStatusSnapshotsByMember.Count == 0 &&
+        if (debugStatusCapture.Count == 0 &&
             debugEffectResultSnapshotsByTarget.Count == 0 &&
             debugEffectResultHistory.Count == 0 &&
             debugActorControlEvents.Count == 0 &&
@@ -637,8 +578,7 @@ public sealed partial class Plugin
         }
 
         debugLogEntries.Clear();
-        debugStatusSnapshotsByMember.Clear();
-        debugStatusPersistSignaturesByMember.Clear();
+        debugStatusCapture.Clear();
         debugEffectResultSnapshotsByTarget.Clear();
         debugEffectResultHistory.Clear();
         debugActorControlEvents.Clear();
@@ -648,7 +588,7 @@ public sealed partial class Plugin
 
     private void AddDebugLog(string message)
     {
-        if (!Configuration.DebugLogEnabled)
+        if (!Configuration.DebugLogEnabled || IsDungeonCaptureBlocked)
         {
             return;
         }
@@ -665,7 +605,7 @@ public sealed partial class Plugin
 
     private void QueueDebugCaptureRecord<T>(string kind, T data)
     {
-        if (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled)
+        if (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled || IsDungeonCaptureBlocked)
         {
             return;
         }
@@ -678,14 +618,13 @@ public sealed partial class Plugin
                 currentTerritoryId,
                 currentTerritoryName,
                 kind,
-                JsonSerializer.SerializeToElement(data, DebugCaptureJsonOptions));
-            var line = JsonSerializer.Serialize(record, DebugCaptureJsonOptions);
+                data);
             lock (debugCaptureFileLock)
             {
-                debugCaptureFileLines.Enqueue(line);
-                while (debugCaptureFileLines.Count > MaxQueuedDebugCaptureFileLines)
+                debugCaptureFileRecords.Enqueue(record);
+                while (debugCaptureFileRecords.Count > MaxQueuedDebugCaptureFileLines)
                 {
-                    debugCaptureFileLines.Dequeue();
+                    debugCaptureFileRecords.Dequeue();
                 }
             }
         }
@@ -703,30 +642,20 @@ public sealed partial class Plugin
         }
 
         var currentTime = now ?? DateTime.UtcNow;
-        List<string> lines = [];
         lock (debugCaptureFileLock)
         {
-            if (debugCaptureFileLines.Count == 0)
+            if (debugCaptureFileRecords.Count == 0)
             {
                 return;
             }
 
             if (!force &&
-                debugCaptureFileLines.Count < 500 &&
+                debugCaptureFileRecords.Count < 500 &&
                 currentTime - lastDebugCaptureFlushAtUtc < DebugCaptureFlushInterval)
             {
                 return;
             }
 
-            while (debugCaptureFileLines.Count > 0)
-            {
-                lines.Add(debugCaptureFileLines.Dequeue());
-            }
-        }
-
-        lock (debugCaptureFileLock)
-        {
-            debugCaptureWriteBatches.Enqueue(lines);
             lastDebugCaptureFlushAtUtc = currentTime;
             if (debugCaptureWriteTask is null || debugCaptureWriteTask.IsCompleted)
             {
@@ -739,22 +668,38 @@ public sealed partial class Plugin
     {
         while (true)
         {
-            IReadOnlyList<string> lines;
+            List<DebugCaptureFileRecord> records = [];
             lock (debugCaptureFileLock)
             {
-                if (debugCaptureWriteBatches.Count == 0)
+                if (debugCaptureFileRecords.Count == 0)
                 {
                     debugCaptureWriteTask = null;
                     return;
                 }
 
-                lines = debugCaptureWriteBatches.Dequeue();
+                while (records.Count < 500 && debugCaptureFileRecords.Count > 0)
+                {
+                    records.Add(debugCaptureFileRecords.Dequeue());
+                }
             }
 
             try
             {
                 Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
-                File.AppendAllLines(DebugCaptureFileFullPath, lines, Encoding.UTF8);
+                using (var writer = new StreamWriter(DebugCaptureFileFullPath, append: true, Encoding.UTF8))
+                {
+                    foreach (var record in records)
+                    {
+                        try
+                        {
+                            writer.WriteLine(record.Serialize(DebugCaptureJsonOptions));
+                        }
+                        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+                        {
+                            Log.Warning(ex, "Could not serialize Better Deaths debug capture row {Kind}.", record.Kind);
+                        }
+                    }
+                }
                 TrimDebugCaptureFileToCap();
             }
             catch (Exception ex)

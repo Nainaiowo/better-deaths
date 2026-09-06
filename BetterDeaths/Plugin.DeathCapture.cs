@@ -679,7 +679,7 @@ public sealed partial class Plugin
             debugEffectResultHistory.RemoveAt(0);
         }
 
-        QueueDebugCaptureRecord("EffectResult", snapshot);
+        QueueDebugCaptureRecord("EffectResult", snapshot with { Statuses = snapshot.Statuses.ToArray() });
         AddDebugLog(
             $"EffectResult {targetName}: HP {packet.CurrentHp:N0}/{packet.MaxHp:N0}, shield {packet.ShieldPercent:N0}% ({shieldHp:N0}), effects {statuses.Count:N0}/{packet.EffectCount:N0}, seq {packet.RelatedActionSequence}.");
     }

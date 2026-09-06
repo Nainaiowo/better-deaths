@@ -22,20 +22,54 @@ internal static class RaidDamageCalculator
         IReadOnlyList<DamageSourceSummary> sources,
         Func<ParsedDamageEvent, double>? amountSelector = null)
     {
-        var adjustments = sources.ToDictionary(
-            source => GetActorKey(source.Source),
-            source => new MutableAdjustment(source.Source),
-            StringComparer.Ordinal);
-        var orderedEvents = events
+        return Calculate(Prepare(events), sources, amountSelector);
+    }
+
+    internal static (
+        IReadOnlyDictionary<string, RaidDamageAdjustment> Raw,
+        IReadOnlyDictionary<string, RaidDamageAdjustment> Effective) CalculateBoth(
+        IReadOnlyList<ParsedDamageEvent> events,
+        IReadOnlyList<DamageSourceSummary> sources)
+    {
+        var input = Prepare(events);
+        return (
+            Calculate(input, sources, entry => entry.MeterEligibility != DamageMeterEligibility.FriendlyTarget
+                ? entry.RawMeterAmount : 0.0),
+            Calculate(input, sources, entry => entry.MeterAggregateAmount));
+    }
+
+    private static CalculationInput Prepare(IReadOnlyList<ParsedDamageEvent> events)
+    {
+        var ordered = events
             .OrderBy(entry => entry.SeenAtUtc)
             .ThenBy(entry => entry.PacketSequence)
             .ThenBy(entry => entry.TargetIndex)
             .ThenBy(entry => entry.EffectIndex)
-            .ToList();
-        var rateSamples = BuildRateSamples(orderedEvents);
+            .ToArray();
+        var effects = ordered.Select(GetEffects).ToArray();
+        var samples = BuildRateSamples(ordered, effects);
+        // Rate history is complete before redistribution; its medians are invariant per source.
+        var rates = samples.Keys.ToDictionary(key => key, key => GetEstimatedRates(samples, key), StringComparer.Ordinal);
+        return new CalculationInput(ordered, effects, rates);
+    }
 
-        foreach (var damageEvent in orderedEvents)
+    private sealed record CalculationInput(
+        IReadOnlyList<ParsedDamageEvent> Events,
+        IReadOnlyList<RaidBuffEffect>[] Effects,
+        IReadOnlyDictionary<string, BaseRates> Rates);
+
+    private static IReadOnlyDictionary<string, RaidDamageAdjustment> Calculate(
+        CalculationInput input,
+        IReadOnlyList<DamageSourceSummary> sources,
+        Func<ParsedDamageEvent, double>? amountSelector)
+    {
+        var adjustments = sources.ToDictionary(
+            source => GetActorKey(source.Source),
+            source => new MutableAdjustment(source.Source),
+            StringComparer.Ordinal);
+        for (var index = 0; index < input.Events.Count; index++)
         {
+            var damageEvent = input.Events[index];
             var damageAmount = amountSelector?.Invoke(damageEvent) ?? damageEvent.Amount;
             if (damageEvent.Outcome != DamageEventOutcome.Damage ||
                 !double.IsFinite(damageAmount) ||
@@ -57,10 +91,8 @@ internal static class RaidDamageCalculator
                 adjustments[recipientKey] = recipientAdjustment;
             }
 
-            var effects = GetEffects(damageEvent);
-            var rates = GetEstimatedRates(
-                rateSamples,
-                GetRateActorKey(recipient));
+            var effects = input.Effects[index];
+            var rates = input.Rates.GetValueOrDefault(GetRateActorKey(recipient), BaseRates.Default);
             var externalDamageBuffs = effects
                 .Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier &&
                     IsExternalPlayerBuff(effect.Source, recipient))
@@ -466,11 +498,13 @@ internal static class RaidDamageCalculator
     }
 
     private static Dictionary<string, RateSamples> BuildRateSamples(
-        IReadOnlyList<ParsedDamageEvent> events)
+        IReadOnlyList<ParsedDamageEvent> events,
+        IReadOnlyList<RaidBuffEffect>[] eventEffects)
     {
         var samples = new Dictionary<string, RateSamples>(StringComparer.Ordinal);
-        foreach (var damageEvent in events)
+        for (var index = 0; index < events.Count; index++)
         {
+            var damageEvent = events[index];
             var source = damageEvent.AttributedSource ?? damageEvent.Source;
             if (!IsPlayerCombatant(source) || source.IsLimitBreak)
             {
@@ -497,7 +531,7 @@ internal static class RaidDamageCalculator
                 continue;
             }
 
-            var effects = GetEffects(damageEvent);
+            var effects = eventEffects[index];
             if (!RaidBuffPolicy.IsGuaranteedCritical(damageEvent) &&
                 effects.All(effect => effect.Kind != RaidBuffEffectKind.CriticalChance))
             {
@@ -513,10 +547,14 @@ internal static class RaidDamageCalculator
             }
         }
 
-        foreach (var damageEvent in events.Where(damageEvent =>
-                     damageEvent.IsPeriodic &&
-                     damageEvent.CriticalRateLowByte is not null))
+        for (var index = 0; index < events.Count; index++)
         {
+            var damageEvent = events[index];
+            if (!damageEvent.IsPeriodic || damageEvent.CriticalRateLowByte is null)
+            {
+                continue;
+            }
+
             var source = damageEvent.AttributedSource ?? damageEvent.Source;
             if (!IsPlayerCombatant(source) || source.IsLimitBreak)
             {
@@ -530,7 +568,7 @@ internal static class RaidDamageCalculator
                 continue;
             }
 
-            var criticalBuffRate = GetEffects(damageEvent)
+            var criticalBuffRate = eventEffects[index]
                 .Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance)
                 .Sum(effect => effect.Amount);
             var observedRate = sample.CriticalSwings >= MinimumObservedRateSamples
