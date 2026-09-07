@@ -23,6 +23,11 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
         }
 
         Prune(application.SeenAtUtc);
+        ObserveCore(application);
+    }
+
+    private void ObserveCore(DamageStatusApplication application)
+    {
         if (application.IsRemoval)
         {
             foreach (var status in statuses.Values.Concat(history).Where(status =>
@@ -41,19 +46,16 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             return;
         }
 
-        var matchingKeys = statuses
-            .Where(entry => entry.Key.TargetEntityId == application.Target.EntityId &&
-                entry.Key.StatusId == application.StatusId)
-            .Select(entry => entry.Key)
-            .ToList();
-        if (application.Source.EntityId == 0 && matchingKeys.Count > 0)
+        if (application.Source.EntityId == 0)
         {
+            var matchingKeys = statuses.Keys.Where(key => key.TargetEntityId == application.Target.EntityId &&
+                key.StatusId == application.StatusId).ToList();
             foreach (var key in matchingKeys)
             {
                 Update(statuses[key], application with { Source = statuses[key].Application.Source });
             }
-
-            return;
+            if (matchingKeys.Count > 0)
+                return;
         }
 
         if (application.Source.EntityId != 0)
@@ -72,6 +74,69 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
         else
         {
             statuses[statusKey] = Create(application);
+        }
+    }
+
+    public void ObserveSnapshots(DamageStatusApplication application)
+    {
+        if (application.HasSourceStatusSnapshot)
+            ObserveSnapshot(application.Source with { EntityId = application.SourceStatusActorId ?? application.Source.EntityId },
+                application.SourceStatuses, application.SeenAtUtc);
+        if (application.HasTargetStatusSnapshot &&
+            (!application.HasSourceStatusSnapshot || application.Target.EntityId != (application.SourceStatusActorId ?? application.Source.EntityId)))
+            ObserveSnapshot(application.Target, application.TargetStatuses, application.SeenAtUtc);
+    }
+
+    public void ObserveSnapshots(ParsedDamageEvent damageEvent)
+    {
+        if (damageEvent.HasSourceStatusSnapshot)
+            ObserveSnapshot(damageEvent.Source, damageEvent.SourceStatuses, damageEvent.SeenAtUtc);
+        var target = damageEvent.PacketTarget ?? damageEvent.Target;
+        if (damageEvent.HasTargetStatusSnapshot &&
+            (!damageEvent.HasSourceStatusSnapshot || target.EntityId != damageEvent.Source.EntityId))
+            ObserveSnapshot(target, damageEvent.TargetStatuses, damageEvent.SeenAtUtc);
+    }
+
+    public void ObserveSnapshots(DamageActionPacket packet)
+    {
+        if (packet.HasSourceStatusSnapshot)
+            ObserveSnapshot(packet.Source, packet.SourceStatuses, packet.SeenAtUtc);
+        foreach (var target in packet.Targets.DistinctBy(target => target.Target.EntityId))
+            if (target.HasTargetStatusSnapshot &&
+                (!packet.HasSourceStatusSnapshot || target.Target.EntityId != packet.Source.EntityId))
+                ObserveSnapshot(target.Target, target.TargetStatuses, packet.SeenAtUtc);
+    }
+
+    private void ObserveSnapshot(DamageActorIdentity target, IReadOnlyList<DamageStatusSnapshot> snapshots, DateTime seenAtUtc)
+    {
+        if (target.EntityId == 0)
+            return;
+
+        Prune(seenAtUtc);
+        var present = snapshots.Where(snapshot => DamageStatusCapturePolicy.IsRelevant(snapshot.StatusId) &&
+            float.IsFinite(snapshot.RemainingTime) && snapshot.RemainingTime > 0).ToList();
+        // A captured status list is evidence of landed buffs, including auras without a gain packet.
+        // An absent status retires only history at or before this snapshot, never a later application.
+        var current = statuses.Values.Where(status => status.Application.Target.EntityId == target.EntityId).ToList();
+        var candidates = current.Any(status => status.Application.SeenAtUtc > seenAtUtc)
+            ? current.Concat(history.Where(status => status.Application.Target.EntityId == target.EntityId)) : current;
+        foreach (var status in candidates.Where(status => status.Application.SeenAtUtc <= seenAtUtc &&
+                     (status.RemovedAtUtc is null || status.RemovedAtUtc > seenAtUtc)))
+        {
+            if (!present.Any(snapshot => snapshot.StatusId == status.Application.StatusId &&
+                    (snapshot.Source.EntityId == 0 || status.Application.Source.EntityId == 0 ||
+                        snapshot.Source.EntityId == status.Application.Source.EntityId)))
+                status.RemovedAtUtc = seenAtUtc;
+        }
+
+        foreach (var snapshot in present)
+        {
+            var source = snapshot.Source;
+            if (statuses.TryGetValue(new StatusKey(target.EntityId, snapshot.StatusId, source.EntityId), out var tracked))
+                source = ChooseMoreCompleteSource(source, tracked.Application.Source);
+            ObserveCore(new DamageStatusApplication(target, source, snapshot.StatusId, string.Empty,
+                0, 0, string.Empty, seenAtUtc, snapshot.RemainingTime, false, false, false)
+            { Parameter = snapshot.Parameter });
         }
     }
 
@@ -110,8 +175,8 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
         return application with
         {
             SourceStatuses = application.HasSourceStatusSnapshot
-                ? Enrich(application.SourceStatuses, application.Source.EntityId, application.SeenAtUtc)
-                : GetActive(application.Source.EntityId, application.SeenAtUtc),
+                ? Enrich(application.SourceStatuses, application.SourceStatusActorId ?? application.Source.EntityId, application.SeenAtUtc)
+                : GetActive(application.SourceStatusActorId ?? application.Source.EntityId, application.SeenAtUtc),
             TargetStatuses = application.HasTargetStatusSnapshot
                 ? Enrich(application.TargetStatuses, application.Target.EntityId, application.SeenAtUtc)
                 : GetActive(application.Target.EntityId, application.SeenAtUtc),
@@ -120,7 +185,7 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
 
     public DamageStatusApplication ApplyConfirmed(DamageStatusApplication application) => application with
     {
-        SourceStatuses = GetActive(application.Source.EntityId, application.SeenAtUtc),
+        SourceStatuses = GetActive(application.SourceStatusActorId ?? application.Source.EntityId, application.SeenAtUtc),
         TargetStatuses = GetActive(application.Target.EntityId, application.SeenAtUtc),
     };
 
@@ -246,12 +311,13 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             application = application with { Parameter = status.Application.Parameter };
         }
 
+        var futureRemoval = status.RemovedAtUtc > application.SeenAtUtc ? status.RemovedAtUtc : null;
         status.Application = application;
         status.ExpiresAtUtc = application.SeenAtUtc.AddSeconds(
             application.DurationSeconds > 0.0f
                 ? application.DurationSeconds
                 : GetDefaultDurationSeconds(application.StatusId));
-        status.RemovedAtUtc = null;
+        status.RemovedAtUtc = futureRemoval;
     }
 
     private void Prune(DateTime seenAtUtc)

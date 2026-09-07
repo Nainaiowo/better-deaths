@@ -198,6 +198,9 @@ internal sealed record DamageStatusApplication(
     bool IsReactiveDamage,
     bool IsRemoval)
 {
+    // Pet applications can be owner-attributed while retaining the pet's captured buffs.
+    public uint? SourceStatusActorId { get; init; }
+
     public double? PeriodicPotency { get; init; }
 
     public byte? BaseDamageLowByte { get; init; }
@@ -297,6 +300,9 @@ internal sealed record ParsedDamageEvent(
     public bool CanCalibratePotency { get; init; }
 
     public double? MeterAmount { get; init; }
+
+    // Null preserves target-slot interpretation for captures made before identity-based scaling.
+    public bool? IsSecondaryTarget { get; init; }
 
     // Independent expected tick, never substituted for the observed allocation.
     public double? SimulatedPeriodicAmount { get; init; }

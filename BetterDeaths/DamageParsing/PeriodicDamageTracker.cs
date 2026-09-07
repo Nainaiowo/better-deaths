@@ -34,8 +34,10 @@ internal sealed class PeriodicDamageTracker
     private readonly RaidBuffTracker confirmedBuffs = new(confirmedOnly: true);
     private long nextApplicationGeneration;
 
-    public void Observe(DamageStatusApplication application)
+    public void Observe(DamageStatusApplication application, DamageStatusApplication? capturedApplication = null, bool observeSnapshots = true)
     {
+        if (observeSnapshots)
+            confirmedBuffs.ObserveSnapshots(capturedApplication ?? application);
         confirmedBuffs.Observe(application);
         if (application.IsRemoval)
         {
@@ -191,6 +193,7 @@ internal sealed class PeriodicDamageTracker
 
     public void ObserveActionCalibration(DamageActionPacket packet, IReadOnlyList<ParsedDamageEvent> damageEvents)
     {
+        ObserveActionSnapshots(packet);
         var damageBySlot = damageEvents.Count == 0 ? null :
             damageEvents.ToDictionary(entry => (entry.TargetIndex, entry.EffectIndex));
         foreach (var target in packet.Targets)
@@ -205,11 +208,13 @@ internal sealed class PeriodicDamageTracker
                 }
                 else if (damageBySlot?.GetValueOrDefault((target.TargetIndex, effect.EffectIndex)) is { } damage)
                 {
-                    ObserveDirectDamage([damage]);
+                    ObserveDirectDamage([damage], observeSnapshots: false);
                 }
             }
         }
     }
+
+    public void ObserveActionSnapshots(DamageActionPacket packet) => confirmedBuffs.ObserveSnapshots(packet);
 
     private void ObserveHealing(DamageActionPacket packet, DamageActionTarget target, DamageActionEffect effect, bool firstHeal)
     {
@@ -277,10 +282,12 @@ internal sealed class PeriodicDamageTracker
         }
     }
 
-    public void ObserveDirectDamage(IEnumerable<ParsedDamageEvent> damageEvents)
+    public void ObserveDirectDamage(IEnumerable<ParsedDamageEvent> damageEvents, bool observeSnapshots = true)
     {
         foreach (var damageEvent in damageEvents)
         {
+            if (observeSnapshots && !damageEvent.IsPeriodic)
+                confirmedBuffs.ObserveSnapshots(damageEvent);
             directHitCompatibility.Observe(damageEvent);
             if (!damageEvent.IsPeriodic && damageEvent.Outcome == DamageEventOutcome.Damage &&
                 (damageEvent.Source.IsPlayer || damageEvent.Source.IsPartyMember || damageEvent.Source.IsPet) &&
@@ -829,6 +836,7 @@ internal sealed class PeriodicDamageTracker
                 CriticalRateLowByte = application.CriticalRateLowByte ?? existingApplication.CriticalRateLowByte,
                 EffectParameterByte = application.EffectParameterByte ?? existingApplication.EffectParameterByte,
                 SourceBaseRates = existingApplication.SourceBaseRates ?? application.SourceBaseRates,
+                SourceStatusActorId = existingApplication.SourceStatusActorId ?? application.SourceStatusActorId,
                 SourceStatuses = existingApplication.HasSourceStatusSnapshot || existingApplication.SourceStatuses.Count > 0
                     ? existingApplication.SourceStatuses
                     : application.SourceStatuses,

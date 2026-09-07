@@ -32,8 +32,15 @@ internal sealed class DirectDamageParser
     public IReadOnlyList<ParsedDamageEvent> Parse(DamageActionPacket packet)
     {
         var parsed = new List<ParsedDamageEvent>();
+        var primaryTargetId = packet.Targets.FirstOrDefault(target => target.TargetIndex == 0)?.Target.EntityId ?? 0;
+        var knownTargetScaling = packet.Targets.Sum(target => target.Effects.Count(effect => effect.Type is 3 or 5 or 6)) == 1 ||
+            packet.SecondaryTargetPotencyMultiplier is > 0.0 and <= 1.0 ||
+            primaryTargetId != 0 && packet.Targets.All(target => target.Target.EntityId == primaryTargetId ||
+                !target.Effects.Any(effect => effect.Type is 3 or 5 or 6 && (effect.Param4 & 0x80) == 0));
         foreach (var target in packet.Targets)
         {
+            var isSecondaryTarget = primaryTargetId != 0
+                ? target.Target.EntityId != primaryTargetId : target.TargetIndex > 0;
             var singleDamageEffect = target.Effects.Count(effect => effect.Type is 3 or 5 or 6) == 1;
             foreach (var effect in target.Effects)
             {
@@ -77,9 +84,11 @@ internal sealed class DirectDamageParser
                 {
                     CapturedAtUtc = packet.CapturedAtUtc,
                     DirectPotency = (effect.Type == 3 && effect.Param2 != 0
-                        ? packet.ComboPotency ?? packet.DirectPotency : packet.DirectPotency) * (target.TargetIndex > 0
+                        ? packet.ComboPotency ?? packet.DirectPotency : packet.DirectPotency) * (isSecondaryTarget
                         ? packet.SecondaryTargetPotencyMultiplier ?? 1.0 : 1.0),
-                    CanCalibratePotency = packet.CanCalibratePotency && singleDamageEffect && !isSourceEntry,
+                    CanCalibratePotency = packet.CanCalibratePotency && knownTargetScaling &&
+                        target.Target.EntityId != 0 && singleDamageEffect && !isSourceEntry,
+                    IsSecondaryTarget = isSecondaryTarget,
                     MeterAmount = isDamage ? DecodeAmount(effect) : 0,
                     ElementType = (byte)(effect.Param1 >> 4),
                     ActionCategoryId = packet.ActionCategoryId,

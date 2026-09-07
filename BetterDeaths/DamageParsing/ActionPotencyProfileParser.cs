@@ -151,7 +151,7 @@ internal static partial class ActionPotencyProfileParser
     [GeneratedRegex(@"\bfor the first enemy, and (\d+)% less for all remaining enemies\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TargetFalloffRegex();
 
-    [GeneratedRegex(@"\bto (?:all nearby enemies|target and all enemies nearby it)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bto (?:all nearby enemies|target and all enemies nearby it|all enemies in a (?:cone|straight line) before you)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UniformAreaDamageRegex();
 
     [GeneratedRegex(@"\b(?:less|reduced|decreases|remaining|divided|split)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

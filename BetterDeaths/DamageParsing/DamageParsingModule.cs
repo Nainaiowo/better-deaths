@@ -109,7 +109,7 @@ internal sealed class DamageParsingModule
 
             foreach (var application in packet.StatusApplications)
             {
-                ObserveStatusCore(application);
+                ObserveStatusCore(application, observeSnapshots: false);
             }
 
             ObserveOutgoingActivity(packet);
@@ -765,10 +765,11 @@ internal sealed class DamageParsingModule
         return parsed;
     }
 
-    private void ObserveStatusCore(DamageStatusApplication application)
+    private void ObserveStatusCore(DamageStatusApplication application, bool observeSnapshots = true)
     {
+        var capturedApplication = application;
         application = raidBuffTracker.ApplyFallback(application);
-        periodicDamageTracker.Observe(application);
+        periodicDamageTracker.Observe(application, capturedApplication, observeSnapshots);
         raidBuffTracker.Observe(application);
         MarkPreEncounterActivity(application.SeenAtUtc);
     }

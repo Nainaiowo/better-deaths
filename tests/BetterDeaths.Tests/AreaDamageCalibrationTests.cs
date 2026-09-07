@@ -17,6 +17,18 @@ public sealed class AreaDamageCalibrationTests
     [InlineData("Deals damage with a potency of 100 for the first enemy, and 150% less for all remaining enemies.", null)]
     [InlineData("Deals damage with a potency of 100 to all nearby enemies. Combo Potency: 200", 1.0)]
     [InlineData("Deals damage with a potency of 100.", null)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a cone before you.", 1.0)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a straight line before you.", 1.0)]
+    [InlineData("Delivers an attack to all enemies in a straight line before you with a potency of 400.", 1.0)]
+    [InlineData("Delivers an attack with a potency of 100 to all enemies in a straight line before you. Combo Action: Previous attack Combo Potency: 120", 1.0)]
+    [InlineData("Delivers an attack to all enemies in a cone before you with a potency of 600 for the first enemy, and 50% less for all remaining enemies.", 0.5)]
+    [InlineData("Delivers an attack to all enemies in a straight line before you with a potency of 600 for the first enemy, and 25% less for all remaining enemies.", 0.75)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a cone before you. Damage is reduced against secondary targets.", null)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a straight line before you. Damage is split among targets.", null)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a cone before you. Potency increases with each target.", null)]
+    [InlineData("Delivers an attack with a potency of 110 to all enemies in a straight line before you. Additional Effect: Potency is increased to 600 when the target is afflicted with Petrification.", null)]
+    [InlineData("Delivers damage over time to all enemies in a cone before you. Potency: 120 Duration: 10s", null)]
+    [InlineData("Deals a 20-yalm knockback to all enemies in a cone before you.", null)]
     public void OnlyRecognizedTargetScalingEnablesAreaCalibration(string text, double? expected)
     {
         Assert.Equal(expected, ActionPotencyProfileParser.Parse(text, false).SecondaryTargetMultiplier);
@@ -48,6 +60,48 @@ public sealed class AreaDamageCalibrationTests
         var inputs = Assert.Single(module.FlushPendingPeriodicTicks(time.AddSeconds(3.1))).PeriodicEstimateInputs!;
         Assert.Equal(10.0, inputs.DamagePerPotency);
         Assert.Equal(2, inputs.CalibrationSampleCount);
+    }
+
+    [Theory]
+    [InlineData("cone", false)]
+    [InlineData("straight line", false)]
+    [InlineData("cone", true)]
+    [InlineData("straight line", true)]
+    public void UniformAreaWordingCalibratesAllTargetsThroughTheModule(string shape, bool combo)
+    {
+        var profile = ActionPotencyProfileParser.Parse(
+            $"Delivers an attack with a potency of 100 to all enemies in a {shape} before you. Combo Potency: 200", false);
+        var source = new DamageActorIdentity(0x1001, "Player", 0, "", true, 23);
+        var enemy = new DamageActorIdentity(0x40000001, "Enemy", 0, "", false, 0);
+        var time = new DateTime(2026, 9, 7, 0, 0, 0, DateTimeKind.Utc);
+        var amount = combo ? 2000u : 1000u;
+        var module = new DamageParsingModule();
+        var packet = new DamageActionPacket(1, time, 1, source, 50000, "Area attack",
+            Enumerable.Range(0, 3).Select(index => new DamageActionTarget(index,
+                enemy with { EntityId = enemy.EntityId + (uint)index },
+                [new(0, 3, 0, 0, 0, 0, amount) { Param2 = combo ? (byte)1 : (byte)0 }])).ToArray())
+        {
+            DirectPotency = profile.DirectPotency,
+            ComboPotency = profile.ComboPotency,
+            SecondaryTargetPotencyMultiplier = profile.SecondaryTargetMultiplier,
+            CanCalibratePotency = profile.DirectPotency > 0,
+        };
+        var hits = module.Process(packet);
+        Assert.Equal(3, hits.Count);
+        Assert.All(hits, hit =>
+        {
+            Assert.True(hit.CanCalibratePotency);
+            Assert.Equal(combo ? 200 : 100, hit.DirectPotency);
+            Assert.Equal(amount, hit.Amount);
+        });
+        Assert.Empty(module.Process(packet));
+        module.ObserveStatus(new(enemy, source, 50000, "DoT", 0, 50000, "Area attack",
+            time.AddSeconds(1), 30, true, false, false) { PeriodicPotency = 20 });
+        module.ProcessPeriodicTick(new(2, time.AddSeconds(3), enemy, 0, "", 0, 600, null));
+        var inputs = Assert.Single(module.FlushPendingPeriodicTicks(time.AddSeconds(3), true))
+            .PeriodicCompatibilityEstimate!.Inputs!;
+        Assert.Equal(3, inputs.CalibrationSampleCount);
+        Assert.Equal(10, inputs.DamagePerPotency);
     }
 
     [Fact]

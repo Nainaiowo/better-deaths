@@ -162,7 +162,7 @@ internal static class PeriodicCalibrationPotencyPolicy
             return damageEvent.DirectPotency!.Value;
 
         var combo = damageEvent.RawEffectType == 3 && damageEvent.RawParam2 != 0;
-        var potency = damageEvent.TargetIndex > 0
+        var potency = (damageEvent.IsSecondaryTarget ?? damageEvent.TargetIndex > 0)
             ? combo ? profile.SecondaryCombo : profile.Secondary
             : combo ? profile.Combo : profile.Primary;
         if (source.ClassJobId == 22 && source.Level < 76)

@@ -116,8 +116,6 @@ public sealed partial class Plugin
 
             var actionCategoryId = GetActionCategoryId(packet.ActionId);
             var potencyProfile = GetActionPotencyProfile(packet.ActionId, GetAttributedDamageSource(source, sourceOwner));
-            var calibratingDamageEffects = targets.Sum(target => target.Effects.Count(effect =>
-                effect.Type is 3 or 5 or 6));
             var statusApplications = BuildDamageStatusApplications(
                 packet,
                 damageSeenAtUtc,
@@ -140,8 +138,7 @@ public sealed partial class Plugin
                 ComboPotency = potencyProfile.ComboPotency,
                 HealingPotency = PeriodicCalibrationPolicy.HealingPotency(packet.ActionId),
                 SecondaryTargetPotencyMultiplier = potencyProfile.SecondaryTargetMultiplier,
-                CanCalibratePotency = potencyProfile.DirectPotency is > 0.0 &&
-                    (calibratingDamageEffects == 1 || potencyProfile.SecondaryTargetMultiplier is > 0.0),
+                CanCalibratePotency = potencyProfile.DirectPotency is > 0.0,
                 IsAutoAttack = actionCategoryId == 1,
                 ActionType = packet.ActionType,
                 SourceSequence = packet.SourceSequence,
@@ -223,6 +220,7 @@ public sealed partial class Plugin
                     ElementType = actionDamageProfile.ElementType,
                     SourceBaseRates = CaptureDamageBaseRates(attributedSource),
                     SourceStatuses = sourceStatuses,
+                    SourceStatusActorId = source.EntityId,
                     TargetStatuses = targetStatuses,
                     HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
                     HasTargetStatusSnapshot = target.TargetSnapshot is not null,
@@ -394,6 +392,7 @@ public sealed partial class Plugin
             Parameter = rawStatus?.StackCount ?? (ushort)Math.Min(packet.Param2, ushort.MaxValue),
             SnapshotKey = isRemoval ? string.Empty : BuildDamageSnapshotKey(packet.SourceSnapshot),
             SourceStatuses = BuildDamageStatusSnapshots(packet.SourceSnapshot),
+            SourceStatusActorId = rawStatusSource.EntityId,
             TargetStatuses = BuildDamageStatusSnapshots(packet.TargetSnapshot),
             HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
             HasTargetStatusSnapshot = packet.TargetSnapshot is not null,
@@ -742,6 +741,11 @@ public sealed partial class Plugin
             application.IsReactiveDamage,
             application.IsRemoval,
             application.SnapshotKey,
+            application.HasSourceStatusSnapshot,
+            application.SourceStatusActorId,
+            application.HasTargetStatusSnapshot,
+            SourceStatuses = application.SourceStatuses.ToArray(),
+            TargetStatuses = application.TargetStatuses.ToArray(),
         });
     }
 
@@ -783,6 +787,7 @@ public sealed partial class Plugin
                 damageEvent.CapturedAtUtc,
                 damageEvent.DirectPotency,
                 damageEvent.CanCalibratePotency,
+                damageEvent.IsSecondaryTarget,
                 damageEvent.SourceBaseRates,
                 Outcome = damageEvent.Outcome.ToString(),
                 Attribution = damageEvent.AttributionQuality.ToString(),

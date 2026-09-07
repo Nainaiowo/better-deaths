@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved damage-over-time estimates and their contribution to player and ability totals. Corrected combo, secondary-target, and level-dependent calibration, plus buff timing at DoT confirmation. Added regression coverage for refreshes, pets, healing-only openers, and multi-player encounters. Existing performance improvements and content restrictions are unchanged.",
+  "Changelog": "Improved damage-over-time calibration for repeated-target hits and uniform cone and line attacks. Improved confirmed buff snapshots and pet-source tracking, and expanded diagnostic snapshots for investigating remaining estimate differences. Added regression coverage while preserving captured direct damage and existing content restrictions.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
