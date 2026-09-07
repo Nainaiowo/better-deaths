@@ -76,7 +76,8 @@ internal sealed class DirectDamageParser
                     effect.Param4)
                 {
                     CapturedAtUtc = packet.CapturedAtUtc,
-                    DirectPotency = packet.DirectPotency * (target.TargetIndex > 0
+                    DirectPotency = (effect.Type == 3 && effect.Param2 != 0
+                        ? packet.ComboPotency ?? packet.DirectPotency : packet.DirectPotency) * (target.TargetIndex > 0
                         ? packet.SecondaryTargetPotencyMultiplier ?? 1.0 : 1.0),
                     CanCalibratePotency = packet.CanCalibratePotency && singleDamageEffect && !isSourceEntry,
                     MeterAmount = isDamage ? DecodeAmount(effect) : 0,

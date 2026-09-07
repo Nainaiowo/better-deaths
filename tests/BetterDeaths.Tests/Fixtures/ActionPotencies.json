@@ -931,7 +931,7 @@
     "Name": "Riot Blade",
     "JobId": 19,
     "Level": 100,
-    "Direct": null,
+    "Direct": 170,
     "Periodic": null,
     "Macro": "Delivers an attack with a potency of <if([gnum68==19],<if([gnum72>=94],170,<if([gnum68==19],<if([gnum72>=84],140,100)>,100)>)>,<if([gnum68==19],<if([gnum72>=84],140,100)>,100)>)>.<br><colortype(504)><edgecolortype(505)>Combo Action:<edgecolortype(0)><colortype(0)> <colortype(500)><edgecolortype(501)>Fast Blade<edgecolortype(0)><colortype(0)><br><colortype(504)><edgecolortype(505)>Combo Potency:<edgecolortype(0)><colortype(0)> <if([gnum68==19],<if([gnum72>=94],330,<if([gnum68==19],<if([gnum72>=84],300,260)>,260)>)>,<if([gnum68==19],<if([gnum72>=84],300,260)>,260)>)><if([gnum68==19],<if([gnum72>=58],<br><colortype(504)><edgecolortype(505)>Combo Bonus:<edgecolortype(0)><colortype(0)> Restores MP,)>,)>"
   },

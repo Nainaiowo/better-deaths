@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 
 internal sealed record ActionPotencyProfile(double? DirectPotency, double? PeriodicPotency)
 {
+    public double? ComboPotency { get; init; }
     public double? SecondaryTargetMultiplier { get; init; }
 
     public static ActionPotencyProfile Empty { get; } = new(null, null);
@@ -16,7 +17,6 @@ internal static partial class ActionPotencyProfileParser
 {
     private static readonly string[] VariableDirectPotencyMarkers =
     [
-        "combo potency",
         "rear potency",
         "flank potency",
         "potency increases",
@@ -59,10 +59,17 @@ internal static partial class ActionPotencyProfileParser
         // potencies. None of those is a reliable fixed-potency calibration hit.
         var directMatch = DirectDamageRegex().Match(directSection);
         var damageText = CurePotencyRegex().Replace(normalized, "healing strength");
+        var combos = ComboPotencyRegex().Matches(damageText);
+        var hasSimpleCombo = combos.Count == 1 && TryGetFirstPotency(combos[0].Value) is > 0 && !damageText.Contains('?') &&
+            !VariableDirectPotencyMarkers.Any(marker => damageText.Contains(marker, StringComparison.OrdinalIgnoreCase)) &&
+            !damageText.Contains("rear combo", StringComparison.OrdinalIgnoreCase) &&
+            !damageText.Contains("flank combo", StringComparison.OrdinalIgnoreCase);
+        var calibrationSection = hasSimpleCombo ? ComboPotencyRegex().Replace(directSection, "") : directSection;
+        var conditionalText = hasSimpleCombo ? ComboPotencyRegex().Replace(damageText, "") : damageText;
         double? directPotency = !directMatch.Success || directSection.Contains('?') ||
-            PotencyRegex().Matches(directSection).Count != 1 ||
+            PotencyRegex().Matches(calibrationSection).Count != 1 ||
             VariableDirectPotencyMarkers.Any(marker => directSection.Contains(marker, StringComparison.OrdinalIgnoreCase)) ||
-            ConditionalDamageRegex().IsMatch(damageText)
+            ConditionalDamageRegex().IsMatch(conditionalText)
                 ? null
                 : TryGetFirstPotency(directMatch.Value);
 
@@ -80,6 +87,7 @@ internal static partial class ActionPotencyProfileParser
 
         return new ActionPotencyProfile(directPotency, periodicPotency)
         {
+            ComboPotency = directPotency is > 0 && hasSimpleCombo ? TryGetFirstPotency(combos[0].Value) : null,
             SecondaryTargetMultiplier = directPotency is > 0 ? GetSecondaryTargetMultiplier(directSection) : null,
         };
     }
@@ -133,6 +141,9 @@ internal static partial class ActionPotencyProfileParser
 
     [GeneratedRegex(@"\bCure potency\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CurePotencyRegex();
+
+    [GeneratedRegex(@"\bCombo Potency:\s*[\d,]+(?:\.\d+)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ComboPotencyRegex();
 
     [GeneratedRegex(@"\b(?:combo potency|potency (?:increases|increased|is increased|varies|scales)|potencies are increased)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ConditionalDamageRegex();

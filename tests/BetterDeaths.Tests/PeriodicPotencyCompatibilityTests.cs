@@ -47,7 +47,7 @@ public sealed class PeriodicPotencyCompatibilityTests
         Assert.Null(tick.SimulatedPeriodicAmount);
         Assert.Equal("Attribute-changing status", tick.PeriodicEstimateUnavailableReason);
         Assert.Equal(600u, tick.Amount);
-        Assert.Equal(600.0, tick.EffectiveMeterAmount);
+        Assert.Equal(estimate.EstimatedDamage, tick.EffectiveMeterAmount);
     }
 
     [Theory]
@@ -191,6 +191,10 @@ public sealed class PeriodicPotencyCompatibilityTests
             DurationSeconds = 30,
             SourceStatuses = expires ? [] : buffs,
         };
+        if (!expires)
+        {
+            tracker.Observe(new(Source, Source, 0x4A1, "Buff", 0, 0, "", Start.AddSeconds(1.5), 30, false, false, false));
+        }
         tracker.Observe(confirmation);
         tracker.Observe(confirmation with { SeenAtUtc = Start.AddSeconds(2.1), SourceStatuses = [] });
         var tick = Tick(tracker);

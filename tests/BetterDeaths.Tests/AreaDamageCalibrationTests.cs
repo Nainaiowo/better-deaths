@@ -15,7 +15,7 @@ public sealed class AreaDamageCalibrationTests
     [InlineData("Deals damage with a potency of 100 to all nearby enemies. Damage is divided among targets.", null)]
     [InlineData("Deals damage with a potency of 100 to target and all enemies nearby it, with 50% less damage.", null)]
     [InlineData("Deals damage with a potency of 100 for the first enemy, and 150% less for all remaining enemies.", null)]
-    [InlineData("Deals damage with a potency of 100 to all nearby enemies. Combo Potency: 200", null)]
+    [InlineData("Deals damage with a potency of 100 to all nearby enemies. Combo Potency: 200", 1.0)]
     [InlineData("Deals damage with a potency of 100.", null)]
     public void OnlyRecognizedTargetScalingEnablesAreaCalibration(string text, double? expected)
     {

@@ -261,7 +261,7 @@ public sealed class PersonalDamageModifierPolicyTests
         // 20 potency * 10 damage/potency, 15% crit with 1.5 multiplier, 5% DH.
         Assert.Equal(217.6875, tick.SimulatedPeriodicAmount!.Value, 6);
         Assert.Equal(600u, tick.Amount);
-        Assert.Equal(600, tick.EffectiveMeterAmount);
+        Assert.Equal(217.6875, tick.EffectiveMeterAmount, 6);
         var restored = System.Text.Json.JsonSerializer.Deserialize<ParsedDamageEvent>(
             System.Text.Json.JsonSerializer.Serialize(tick))!;
         Assert.Equal(tick.SimulatedPeriodicAmount, restored.SimulatedPeriodicAmount);
@@ -295,8 +295,9 @@ public sealed class PersonalDamageModifierPolicyTests
         var damageEvent = damageEvents.Single(entry =>
             entry.AttributedSource?.EntityId == Dealer.EntityId);
 
-        Assert.Equal(314.0, damageEvent.EffectiveMeterAmount);
-        Assert.Equal(600.0, damageEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(314u, damageEvent.Amount);
+        Assert.Equal(600.0, damageEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(239.45625, damageEvent.EffectiveMeterAmount, 6);
         Assert.Equal(3u, damageEvent.ActionCategoryId);
     }
 
@@ -317,8 +318,10 @@ public sealed class PersonalDamageModifierPolicyTests
         var damageEvent = damageEvents.Single(entry =>
             entry.AttributedSource?.EntityId == Dealer.EntityId);
 
-        Assert.Equal(349.0, damageEvent.EffectiveMeterAmount);
-        Assert.Equal(600.0, damageEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(349u, damageEvent.Amount);
+        Assert.Equal(600.0, damageEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(1.3915, damageEvent.PeriodicEstimateInputs!.DamageMultiplier, 6);
+        Assert.Equal(1.35, damageEvent.PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 6);
     }
 
     [Fact]
@@ -381,7 +384,7 @@ public sealed class PersonalDamageModifierPolicyTests
         Assert.Equal(multiplier, affected.PeriodicEstimateInputs!.DamageMultiplier, 6);
         Assert.Equal(1, unaffected.PeriodicEstimateInputs!.DamageMultiplier, 6);
         Assert.True(affected.Amount < unaffected.Amount);
-        Assert.Equal(600.0, ticks.Sum(tick => tick.EffectiveMeterAmount));
+        Assert.Equal(600.0, ticks.Sum(tick => (double)tick.Amount));
     }
 
     [Fact]
@@ -508,7 +511,7 @@ public sealed class PersonalDamageModifierPolicyTests
         Assert.Equal(0.9, affected.PeriodicEstimateInputs!.DamageMultiplier, 6);
         Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, affected.PeriodicAllocationBasis);
         Assert.True(affected.Amount < unaffected.Amount);
-        Assert.Equal(600.0, ticks.Sum(tick => tick.EffectiveMeterAmount));
+        Assert.Equal(600.0, ticks.Sum(tick => (double)tick.Amount));
     }
 
     private static DamageStatusSnapshot Status(

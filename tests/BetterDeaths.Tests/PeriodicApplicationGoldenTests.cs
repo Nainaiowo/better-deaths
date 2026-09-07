@@ -34,7 +34,7 @@ public sealed class PeriodicApplicationGoldenTests
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public void MatchesFrozenApplicationMathWithoutReplacingObservedAmounts(int index, string _)
+    public void MatchesFrozenApplicationMathAndUsesCalibratedMeterAmounts(int index, string _)
     {
         var fixture = Data.Cases[index];
         var tracker = new PeriodicDamageTracker();
@@ -59,7 +59,8 @@ public sealed class PeriodicApplicationGoldenTests
         var tick = Assert.Single(tracker.Process(new(1, Start.AddSeconds(3), Target,
             fixture.Ground ? fixture.Status : 0, fixture.Name, 0, 12345, fixture.Ground ? Source : null)));
         Assert.Equal(12345u, tick.Amount);
-        Assert.Equal(12345, tick.EffectiveMeterAmount);
+        Assert.Equal(fixture.Warm && !fixture.Ground, tick.PeriodicMeterUsesEstimate);
+        Assert.Equal(fixture.Warm && !fixture.Ground ? fixture.Expected : 12345, tick.EffectiveMeterAmount, 6);
         if (fixture.Ground)
         {
             Assert.Null(tick.PeriodicCompatibilityEstimate);

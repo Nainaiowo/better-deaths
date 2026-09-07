@@ -31,10 +31,12 @@ internal sealed class PeriodicDamageTracker
     private readonly Dictionary<string, HitRateSamples> sourceHitRateSamples = new(StringComparer.Ordinal);
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
     private readonly PeriodicDirectHitCompatibility directHitCompatibility = new();
+    private readonly RaidBuffTracker confirmedBuffs = new(confirmedOnly: true);
     private long nextApplicationGeneration;
 
     public void Observe(DamageStatusApplication application)
     {
+        confirmedBuffs.Observe(application);
         if (application.IsRemoval)
         {
             Retire(application.Target.EntityId, application.StatusId, application.Source.EntityId, application.SeenAtUtc);
@@ -130,6 +132,7 @@ internal sealed class PeriodicDamageTracker
 
     public void Refresh(uint targetEntityId, uint statusId, DateTime seenAtUtc)
     {
+        confirmedBuffs.Refresh(targetEntityId, statusId, seenAtUtc);
         foreach (var status in statuses.Values.Where(status =>
                      status.Application.Target.EntityId == targetEntityId &&
                      status.Application.StatusId == statusId))
@@ -325,7 +328,8 @@ internal sealed class PeriodicDamageTracker
             }
 
             var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
-            ObserveCompatibilityPotency(damageEvent, sourceKey, effects, calibrationPotency);
+            ObserveCompatibilityPotency(damageEvent, sourceKey, effects,
+                JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent, meterProfile: true));
             if (damageEvent.Source.IsPet ||
                 HasAttributeChange(damageEvent.SourceStatuses) ||
                 HasUnknownDamageModifier(damageEvent.SourceStatuses) ||
@@ -503,7 +507,8 @@ internal sealed class PeriodicDamageTracker
         for (var index = 0; index < candidates.Count; index++)
         {
             var candidate = candidates[index];
-            if (allocations[index].Amount == 0)
+            if (allocations[index].Amount == 0 &&
+                !CanUseMeterEstimate(candidate.Application.Source, candidate.CompatibilityEstimate))
             {
                 continue;
             }
@@ -529,6 +534,7 @@ internal sealed class PeriodicDamageTracker
 
     public void Clear(bool preserveCalibration = false)
     {
+        confirmedBuffs.Clear();
         statuses.Clear();
         statusHistory.Clear();
         learnedApplicationTicks.Clear();
@@ -947,6 +953,8 @@ internal sealed class PeriodicDamageTracker
         var statusName = status?.StatusName ??
             (!string.IsNullOrWhiteSpace(tick.StatusName) ? tick.StatusName : "Unattributed DoT");
         var statusIconId = status?.StatusIconId ?? tick.StatusIconId;
+        var estimate = tick.StatusId == 0 ? tracked?.CompatibilityEstimate : null;
+        var useEstimate = CanUseMeterEstimate(source, estimate);
         return new ParsedDamageEvent(
             $"periodic:{tick.PacketSequence}:{tick.Target.EntityId:X8}:{statusId}:{source.EntityId:X8}:{allocationIndex}",
             tick.PacketSequence,
@@ -972,7 +980,8 @@ internal sealed class PeriodicDamageTracker
             0)
         {
             CapturedAtUtc = tick.CapturedAtUtc,
-            MeterAmount = meterAmount,
+            MeterAmount = useEstimate ? estimate!.EstimatedDamage : meterAmount,
+            PeriodicMeterUsesEstimate = useEstimate,
             SimulatedPeriodicAmount = tick.StatusId == 0 ? tracked?.IndependentEstimate : null,
             PeriodicEstimateInputs = tick.StatusId == 0 ? tracked?.EstimateInputs : null,
             PeriodicCompatibilityEstimate = tick.StatusId == 0 ? tracked?.CompatibilityEstimate : null,
@@ -983,7 +992,7 @@ internal sealed class PeriodicDamageTracker
                 status.PeriodicPotency is not > 0 ? "Missing potency" :
                 tracked?.IndependentEstimate is null ? "Missing application-time calibration" : null,
             AttributedSource = source,
-            AttributionQuality = quality,
+            AttributionQuality = useEstimate ? DamageAttributionQuality.Estimated : quality,
             IsPeriodic = true,
             DamageType = status?.DamageType ?? 0,
             ElementType = status?.ElementType ?? 0,
@@ -1017,6 +1026,11 @@ internal sealed class PeriodicDamageTracker
         };
     }
 
+    private static bool CanUseMeterEstimate(DamageActorIdentity source, PeriodicCompatibilityEstimate? estimate) =>
+        (source.IsPlayer || source.IsPartyMember) &&
+        estimate is { UsedUnitCalibration: false, Inputs.CalibrationSampleCount: > 0 } &&
+        double.IsFinite(estimate.EstimatedDamage) && estimate.EstimatedDamage >= 0;
+
     private double? EstimateTickWeight(TrackedStatus status)
     {
         return GetEstimateInputs(status)?.ExpectedAmount;
@@ -1032,14 +1046,13 @@ internal sealed class PeriodicDamageTracker
 
         if (recaptureCalibration || compatibilityConfirmation is not null)
         {
-            // Confirmation-time context belongs to the diagnostic model only.
+            // Action announcements can precede the buff reaching this actor.
+            // Confirmation must use statuses that have actually landed.
             status.CompatibilityApplication = compatibilityConfirmation is { } confirmation
-                ? status.Application with
+                ? confirmedBuffs.ApplyConfirmed(status.Application with
                 {
                     SeenAtUtc = confirmation.SeenAtUtc,
-                    SourceStatuses = confirmation.SourceStatuses,
-                    TargetStatuses = confirmation.TargetStatuses,
-                }
+                })
                 : status.Application;
             status.CompatibilityDirectHit = directHitCompatibility.Capture(status.CompatibilityApplication,
                 status.CompatibilityApplication.SeenAtUtc);
@@ -1063,6 +1076,7 @@ internal sealed class PeriodicDamageTracker
                 (1 + 0.25 * directHit.Factor))
             {
                 Inputs = inputs,
+                CalibrationProfileVersion = PeriodicCalibrationPotencyPolicy.Version,
                 CapturedPotency = status.Application.PeriodicPotency,
                 UsedUnitCalibration = inputs.CalibrationSampleCount == 0,
                 UsedHealingCalibration = status.CompatibilityCalibration.UsedHealingCalibration,
@@ -1167,7 +1181,9 @@ internal sealed class PeriodicDamageTracker
             ? GetCompatibilityDamageMultiplier(effects, application.SourceStatuses)
             : GetDamageMultiplier(effects);
         // Keep the diagnostic profile separate from current game-data potency.
-        var potency = compatibility && application.StatusId == 0xA38 ? 85.0 : application.PeriodicPotency.Value;
+        var potency = compatibility
+            ? PeriodicCalibrationPotencyPolicy.GetPeriodicPotency(application)
+            : application.PeriodicPotency.Value;
         var baseAmount = compatibility
             ? potency * damageMultiplier * calibration.DamagePerPotency.Value
             : potency * calibration.DamagePerPotency.Value * damageMultiplier;
@@ -1178,9 +1194,9 @@ internal sealed class PeriodicDamageTracker
             : new BaseRates(
                 application.SourceBaseRates.Critical,
                 application.SourceBaseRates.DirectHit);
-        var criticalBuffRate = effects
-            .Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance)
-            .Sum(effect => effect.Amount);
+        var criticalBuffRate = compatibility
+            ? PeriodicCalibrationPolicy.CriticalBuffRate(application.SourceStatuses, application.TargetStatuses)
+            : effects.Where(effect => effect.Kind == RaidBuffEffectKind.CriticalChance).Sum(effect => effect.Amount);
         var directHitBuffRate = effects
             .Where(effect => effect.Kind == RaidBuffEffectKind.DirectHitChance)
             .Sum(effect => effect.Amount);

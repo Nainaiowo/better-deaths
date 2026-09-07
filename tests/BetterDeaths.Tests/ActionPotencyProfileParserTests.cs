@@ -31,7 +31,6 @@ public sealed class ActionPotencyProfileParserTests
     [InlineData("Delivers an attack with a potency of 270. 330 when executed from a target's flank.", null, null)]
     [InlineData("Deals unaspected damage with a potency of 400. Divine Might Potency: 500 Requiescat Potency: 700", null, null)]
     [InlineData("Deals water damage with a potency of 500. Additional Effect: Potency increases to 1,000 during rain", null, null)]
-    [InlineData("Deals damage with a potency of 200. Additional Effect: Grants a buff Combo Potency: 400", null, null)]
     [InlineData("Restores target's HP. Cure Potency: 1,000", null, null)]
     [InlineData("Deals damage over time. Potency: ? Duration: 30s Additional Effect: Healing Cure Potency: 170", null, null)]
     [InlineData("Deals damage with a potency of 1,10.", null, null)]
@@ -64,13 +63,14 @@ public sealed class ActionPotencyProfileParserTests
     }
 
     [Fact]
-    public void RejectsVariableDirectPotencyForCalibration()
+    public void SeparatesBaseAndComboPotencyForPacketSelection()
     {
         var profile = ActionPotencyProfileParser.Parse(
             "Delivers an attack with a potency of 100. Combo Potency: 400",
             appliesPeriodicDamage: false);
 
-        Assert.Null(profile.DirectPotency);
+        Assert.Equal(100, profile.DirectPotency);
+        Assert.Equal(400, profile.ComboPotency);
         Assert.Null(profile.PeriodicPotency);
     }
 

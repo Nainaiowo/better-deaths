@@ -59,8 +59,8 @@ public sealed class ActionPotencyTextResolverTests
         var description = ReadOnlySeString.FromMacroString(
             "Deals lightning damage with a potency of 150.<br>Additional Effect: Lightning damage over time<br>Potency: 60<br>Duration: 30s");
         Assert.Equal(new ActionPotencyProfile(150, 60), Parse(description, 25, 100));
-        Assert.Null(Parse(ReadOnlySeString.FromMacroString(
-            "Delivers an attack with a potency of <num(100)>. Combo Potency: 400"), 21, 100).DirectPotency);
+        Assert.Equal(new ActionPotencyProfile(100, null) { ComboPotency = 400 }, Parse(ReadOnlySeString.FromMacroString(
+            "Delivers an attack with a potency of <num(100)>. Combo Potency: 400"), 21, 100));
     }
 
     [Fact]
@@ -112,7 +112,8 @@ public sealed class ActionPotencyTextResolverTests
 
         Assert.Equal(9072u, direct.Amount);
         Assert.Equal(2, ticks.Count);
-        Assert.Equal(7930.0, ticks.Sum(tick => tick.RawMeterAmount));
+        Assert.Equal(7930.0, ticks.Sum(tick => (double)tick.Amount));
+        Assert.All(ticks, tick => Assert.Equal(tick.PeriodicCompatibilityEstimate!.EstimatedDamage, tick.RawMeterAmount));
         Assert.Equal(85, healerTick.PeriodicEstimateInputs!.Potency);
         Assert.True(healerTick.SimulatedPeriodicAmount > 0);
         Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, healerTick.PeriodicAllocationBasis);

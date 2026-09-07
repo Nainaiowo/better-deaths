@@ -1400,7 +1400,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void CircleOfScornKeepsTheObservedMeterTotalWhenItsEstimateDiffers()
+    public void CircleOfScornUsesTheCalibratedMeterTotalAndPreservesObservedDamage()
     {
         var paladin = Source with { ClassJobId = 19 };
         var module = new DamageParsingModule();
@@ -1425,11 +1425,11 @@ public sealed class DamageParsingTests
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(600u, periodicEvent.Amount);
-        Assert.Equal(600.0, periodicEvent.EffectiveMeterAmount);
+        Assert.Equal(326.53125, periodicEvent.EffectiveMeterAmount, 6);
         Assert.Equal(1600ul, snapshot.TotalDamage);
-        Assert.Equal(1600.0, snapshot.EffectiveMeterDamage);
+        Assert.Equal(1326.53125, snapshot.EffectiveMeterDamage, 6);
         Assert.Equal(1600ul, Assert.Single(snapshot.Sources).TotalDamage);
-        Assert.Equal(1600.0, Assert.Single(snapshot.Sources).EffectiveMeterDamage);
+        Assert.Equal(1326.53125, Assert.Single(snapshot.Sources).EffectiveMeterDamage, 6);
     }
 
     [Fact]
@@ -1490,8 +1490,9 @@ public sealed class DamageParsingTests
             CreatePeriodicTick(1200, 3, SeenAtUtc.AddSeconds(3)));
         var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x74A);
 
-        Assert.Equal(600.0, periodicEvent.EffectiveMeterAmount);
-        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(600u, periodicEvent.Amount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(544.21875, periodicEvent.EffectiveMeterAmount, 6);
     }
 
     [Fact]
@@ -1549,8 +1550,9 @@ public sealed class DamageParsingTests
             CreatePeriodicTick(1800, 4, SeenAtUtc.AddSeconds(4)));
         var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0xF1F);
 
-        Assert.Equal(900.0, periodicEvent.EffectiveMeterAmount);
-        Assert.Equal(1800.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(900u, periodicEvent.Amount);
+        Assert.Equal(1800.0, periodicEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(653.0625, periodicEvent.EffectiveMeterAmount, 6);
     }
 
     [Fact]
@@ -1584,13 +1586,13 @@ public sealed class DamageParsingTests
         var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
 
         Assert.Equal(700u, periodicEvents.Aggregate(0u, (total, entry) => total + entry.Amount));
-        Assert.Equal(700.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(489.796875, periodicEvents.Sum(entry => entry.EffectiveMeterAmount), 6);
         Assert.Equal(311u, periodicEvents.Single(entry => entry.StatusId == 0x04B0).Amount);
         Assert.Equal(389u, periodicEvents.Single(entry => entry.StatusId == 0x04B1).Amount);
         Assert.Equal(1700ul, snapshot.TotalDamage);
-        Assert.Equal(1700.0, snapshot.EffectiveMeterDamage);
-        Assert.Equal(700.0, snapshot.Diagnostics.PeriodicRawMeterDamage);
-        Assert.Equal(700.0, snapshot.Diagnostics.PeriodicEffectiveMeterDamage);
+        Assert.Equal(1489.796875, snapshot.EffectiveMeterDamage, 6);
+        Assert.Equal(489.796875, snapshot.Diagnostics.PeriodicRawMeterDamage, 6);
+        Assert.Equal(489.796875, snapshot.Diagnostics.PeriodicEffectiveMeterDamage, 6);
         var tickDiagnostic = Assert.Single(snapshot.Diagnostics.PeriodicTicks);
         Assert.Equal(PeriodicAllocationBasis.PotencyEstimate, tickDiagnostic.Basis);
         Assert.Equal(2, tickDiagnostic.CandidateCount);
@@ -1603,9 +1605,9 @@ public sealed class DamageParsingTests
             Assert.True(diagnostic.AverageWeight > 0.0);
         });
         var targetDiagnostic = Assert.Single(snapshot.Diagnostics.Targets);
-        Assert.Equal(1700.0, targetDiagnostic.RawDamage);
+        Assert.Equal(1489.796875, targetDiagnostic.RawDamage, 6);
         Assert.Equal(1000.0, targetDiagnostic.DirectRawDamage);
-        Assert.Equal(700.0, targetDiagnostic.PeriodicRawDamage);
+        Assert.Equal(489.796875, targetDiagnostic.PeriodicRawDamage, 6);
     }
 
     [Fact]
@@ -1653,8 +1655,9 @@ public sealed class DamageParsingTests
             CreatePeriodicTick(1200, 2, SeenAtUtc.AddSeconds(3)));
         var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x4B0);
 
-        Assert.Equal(401.0, periodicEvent.EffectiveMeterAmount);
-        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(401u, periodicEvent.Amount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(202.5, periodicEvent.EffectiveMeterAmount, 6);
         Assert.Empty(periodicEvent.SourceStatuses);
         Assert.True(periodicEvent.HasSourceStatusSnapshot);
     }
@@ -1704,8 +1707,9 @@ public sealed class DamageParsingTests
             CreatePeriodicTick(1200, 2, SeenAtUtc.AddSeconds(12)));
         var periodicEvent = periodicEvents.Single(entry => entry.StatusId == 0x4B0);
 
-        Assert.Equal(401.0, periodicEvent.EffectiveMeterAmount);
-        Assert.Equal(1200.0, periodicEvents.Sum(entry => entry.EffectiveMeterAmount));
+        Assert.Equal(401u, periodicEvent.Amount);
+        Assert.Equal(1200.0, periodicEvents.Sum(entry => (double)entry.Amount));
+        Assert.Equal(202.5, periodicEvent.EffectiveMeterAmount, 6);
         Assert.Empty(periodicEvent.SourceStatuses);
         Assert.True(periodicEvent.HasSourceStatusSnapshot);
     }
@@ -2003,7 +2007,7 @@ public sealed class DamageParsingTests
         var periodicEvent = Assert.Single(ProcessPeriodicTick(module, tick));
 
         Assert.Equal(600u, periodicEvent.Amount);
-        Assert.Equal(100.0, periodicEvent.EffectiveMeterAmount, 6);
+        Assert.Equal(periodicEvent.RawMeterAmount / 6.0, periodicEvent.EffectiveMeterAmount, 6);
         Assert.Equal(500.0, periodicEvent.OverkillDamage);
         Assert.Equal(DamageResolutionQuality.Resolved, periodicEvent.ResolutionQuality);
     }

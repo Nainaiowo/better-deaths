@@ -95,6 +95,8 @@ internal sealed record PeriodicCompatibilityEstimate(
     PeriodicDirectHitSnapshot DirectHit,
     double EstimatedDamage)
 {
+    public int CalibrationProfileVersion { get; init; }
+
     public PeriodicDamageEstimateInputs? Inputs { get; init; }
 
     public double? CapturedPotency { get; init; }
@@ -154,6 +156,8 @@ internal sealed record DamageActionPacket(
     public double? HealingPotency { get; init; }
 
     public double? SecondaryTargetPotencyMultiplier { get; init; }
+
+    public double? ComboPotency { get; init; }
 
     public bool CanCalibratePotency { get; init; }
 
@@ -300,6 +304,8 @@ internal sealed record ParsedDamageEvent(
     public PeriodicDamageEstimateInputs? PeriodicEstimateInputs { get; init; }
 
     public PeriodicCompatibilityEstimate? PeriodicCompatibilityEstimate { get; init; }
+
+    public bool PeriodicMeterUsesEstimate { get; init; }
 
     public string? PeriodicEstimateUnavailableReason { get; init; }
 

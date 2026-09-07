@@ -466,7 +466,7 @@ internal sealed class DamageParsingModule
         var damagingEvents = damageEvents
             .Where(damageEvent =>
                 damageEvent.Outcome == DamageEventOutcome.Damage &&
-                damageEvent.Amount > 0)
+                (damageEvent.Amount > 0 || damageEvent.RawMeterAmount > 0))
             .ToList();
         var eligibleEvents = damagingEvents
             .Where(damageEvent => damageEvent.MeterEligibility == DamageMeterEligibility.Eligible)
@@ -511,7 +511,7 @@ internal sealed class DamageParsingModule
                 group.Key.PeriodicCandidateCount,
                 group.Count(),
                 group.Average(damageEvent => damageEvent.PeriodicAllocationWeight),
-                group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                group.Sum(damageEvent => (double)damageEvent.Amount),
                 group.Sum(damageEvent => damageEvent.EffectiveMeterAmount))
             {
                 IndependentEstimates = group
@@ -520,7 +520,7 @@ internal sealed class DamageParsingModule
                     .Select(estimates => new PeriodicEstimateDiagnostic(
                         estimates.Key,
                         estimates.Count(),
-                        estimates.Sum(damageEvent => damageEvent.RawMeterAmount),
+                        estimates.Sum(damageEvent => (double)damageEvent.Amount),
                         estimates.Key is null ? estimates.Sum(damageEvent => damageEvent.SimulatedPeriodicAmount) : null)
                     {
                         CompatibilityTickCount = estimates.Count(damageEvent => damageEvent.PeriodicCompatibilityEstimate is not null),
@@ -550,7 +550,7 @@ internal sealed class DamageParsingModule
                     : PeriodicAllocationBasis.None,
                 CandidateCount = group.Max(damageEvent => damageEvent.PeriodicCandidateCount),
                 CombinedDamage = group.Max(damageEvent => (double)damageEvent.PeriodicCombinedAmount),
-                AllocatedDamage = group.Sum(damageEvent => damageEvent.RawMeterAmount),
+                AllocatedDamage = group.Sum(damageEvent => (double)damageEvent.Amount),
             })
             .GroupBy(tick => new { tick.Basis, tick.CandidateCount })
             .Select(group => new PeriodicTickDiagnostic(
@@ -862,7 +862,8 @@ internal sealed class DamageParsingModule
 
     private static bool IsEncounterStartingDamage(ParsedDamageEvent damageEvent)
     {
-        if (damageEvent.Outcome != DamageEventOutcome.Damage || damageEvent.Amount == 0)
+        if (damageEvent.Outcome != DamageEventOutcome.Damage ||
+            damageEvent.Amount == 0 && damageEvent.RawMeterAmount <= 0)
         {
             return false;
         }
@@ -1140,7 +1141,7 @@ internal sealed class DamageParsingModule
     private static bool IsMeterDamage(ParsedDamageEvent damageEvent, DamageActorIdentity attributedSource)
     {
         return damageEvent.Outcome == DamageEventOutcome.Damage &&
-            damageEvent.Amount > 0 &&
+            (damageEvent.Amount > 0 || damageEvent.RawMeterAmount > 0) &&
             damageEvent.MeterEligibility == DamageMeterEligibility.Eligible &&
             IsAlliedMeterSource(attributedSource);
     }

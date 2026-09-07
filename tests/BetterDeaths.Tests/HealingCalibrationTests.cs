@@ -229,7 +229,7 @@ public sealed class HealingCalibrationTests
         };
 
     private static DamageActionPacket Damage(int sequence, uint amount, bool critical = false) =>
-        new(sequence, Start.AddSeconds(sequence), (uint)sequence, Source, 25859, "Glare III",
+        new(sequence, Start.AddSeconds(sequence), (uint)sequence, Source, 50000, "Synthetic calibration hit",
             [new(0, Enemy, [new(0, 3, critical ? (byte)0x20 : (byte)0, 0, 0, 0, amount)])])
         {
             DirectPotency = 100,

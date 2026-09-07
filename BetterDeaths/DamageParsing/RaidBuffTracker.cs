@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-internal sealed class RaidBuffTracker
+internal sealed class RaidBuffTracker(bool confirmedOnly = false)
 {
     private const double ExpiryGraceSeconds = 1.0;
     private const double HistoryRetentionSeconds = 5.0;
@@ -13,6 +13,10 @@ internal sealed class RaidBuffTracker
 
     public void Observe(DamageStatusApplication application)
     {
+        if (confirmedOnly && application.ActionId != 0 && application.DurationSeconds <= 0)
+        {
+            return;
+        }
         if (!DamageStatusCapturePolicy.IsRelevant(application.StatusId))
         {
             return;
@@ -113,6 +117,12 @@ internal sealed class RaidBuffTracker
                 : GetActive(application.Target.EntityId, application.SeenAtUtc),
         };
     }
+
+    public DamageStatusApplication ApplyConfirmed(DamageStatusApplication application) => application with
+    {
+        SourceStatuses = GetActive(application.Source.EntityId, application.SeenAtUtc),
+        TargetStatuses = GetActive(application.Target.EntityId, application.SeenAtUtc),
+    };
 
     private IReadOnlyList<DamageStatusSnapshot> Enrich(
         IReadOnlyList<DamageStatusSnapshot> snapshots,

@@ -1,0 +1,1349 @@
+{
+  "Schema": 1,
+  "ProfileVersion": 1,
+  "Direct": [
+    {
+      "Id": 9,
+      "Name": "fast blade",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 15,
+      "Name": "riot blade",
+      "Primary": 170,
+      "Combo": 330,
+      "Secondary": 170,
+      "SecondaryCombo": 330
+    },
+    {
+      "Id": 31,
+      "Name": "heavy swing",
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 37,
+      "Name": "maim",
+      "Primary": 190,
+      "Combo": 340,
+      "Secondary": 190,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 45,
+      "Name": "storm's eye",
+      "Primary": 220,
+      "Combo": 500,
+      "Secondary": 220,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 61,
+      "Name": "twin snakes",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 64,
+      "Name": "steel peak",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 75,
+      "Name": "true thrust",
+      "Primary": 230,
+      "Combo": 230,
+      "Secondary": 230,
+      "SecondaryCombo": 230
+    },
+    {
+      "Id": 78,
+      "Name": "vorpal thrust",
+      "Primary": 130,
+      "Combo": 280,
+      "Secondary": 130,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 87,
+      "Name": "disembowel",
+      "Primary": 140,
+      "Combo": 250,
+      "Secondary": 140,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 92,
+      "Name": "jump",
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 2240,
+      "Name": "spinning edge",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 2242,
+      "Name": "gust slash",
+      "Primary": 240,
+      "Combo": 400,
+      "Secondary": 240,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 2247,
+      "Name": "throwing dagger",
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 2265,
+      "Name": "fuma shuriken",
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 2267,
+      "Name": "raiton",
+      "Primary": 740,
+      "Combo": 740,
+      "Secondary": 740,
+      "SecondaryCombo": 740
+    },
+    {
+      "Id": 2271,
+      "Name": "suiton",
+      "Primary": 580,
+      "Combo": 580,
+      "Secondary": 580,
+      "SecondaryCombo": 580
+    },
+    {
+      "Id": 3539,
+      "Name": "royal authority",
+      "Primary": 200,
+      "Combo": 460,
+      "Secondary": 200,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 3547,
+      "Name": "the forbidden chakra",
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 3555,
+      "Name": "geirskogul",
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 3558,
+      "Name": "empyreal arrow",
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 3562,
+      "Name": "sidewinder",
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 3617,
+      "Name": "hard slash",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 3623,
+      "Name": "syphon strike",
+      "Primary": 240,
+      "Combo": 380,
+      "Secondary": 240,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 3643,
+      "Name": "carve and spit",
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 7387,
+      "Name": "upheaval",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7391,
+      "Name": "quietus",
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 7392,
+      "Name": "bloodspiller",
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 7400,
+      "Name": "nastrond",
+      "Primary": 720,
+      "Combo": 720,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7409,
+      "Name": "refulgent arrow",
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 7411,
+      "Name": "heated split shot",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 7412,
+      "Name": "heated slug shot",
+      "Primary": 140,
+      "Combo": 320,
+      "Secondary": 140,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 7413,
+      "Name": "heated clean shot",
+      "Primary": 160,
+      "Combo": 420,
+      "Secondary": 160,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7477,
+      "Name": "hakaze",
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 7478,
+      "Name": "jinpu",
+      "Primary": 140,
+      "Combo": 300,
+      "Secondary": 140,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 7479,
+      "Name": "shifu",
+      "Primary": 140,
+      "Combo": 300,
+      "Secondary": 140,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 7480,
+      "Name": "yukikaze",
+      "Primary": 160,
+      "Combo": 340,
+      "Secondary": 160,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 7505,
+      "Name": "verthunder",
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7507,
+      "Name": "veraero",
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7510,
+      "Name": "verfire",
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7511,
+      "Name": "verstone",
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7515,
+      "Name": "displacement",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 7517,
+      "Name": "fleche",
+      "Primary": 480,
+      "Combo": 480,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 7519,
+      "Name": "contre sixte",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7525,
+      "Name": "verflare",
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 293,
+      "SecondaryCombo": 293
+    },
+    {
+      "Id": 7526,
+      "Name": "verholy",
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 293,
+      "SecondaryCombo": 293
+    },
+    {
+      "Id": 7527,
+      "Name": "enchanted riposte",
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 7528,
+      "Name": "enchanted zwerchhau",
+      "Primary": 190,
+      "Combo": 380,
+      "Secondary": 190,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7529,
+      "Name": "enchanted redoublement",
+      "Primary": 190,
+      "Combo": 560,
+      "Secondary": 190,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 15989,
+      "Name": "cascade",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 15990,
+      "Name": "fountain",
+      "Primary": 120,
+      "Combo": 280,
+      "Secondary": 120,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 15991,
+      "Name": "reverse cascade",
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 15992,
+      "Name": "fountainfall",
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 16005,
+      "Name": "saber dance",
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 216,
+      "SecondaryCombo": 216
+    },
+    {
+      "Id": 16007,
+      "Name": "fan dance",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16009,
+      "Name": "fan dance iii",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 88,
+      "SecondaryCombo": 88
+    },
+    {
+      "Id": 16137,
+      "Name": "keen edge",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16145,
+      "Name": "solid barrel",
+      "Primary": 240,
+      "Combo": 460,
+      "Secondary": 240,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 16146,
+      "Name": "gnashing fang",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 16147,
+      "Name": "savage claw",
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 16150,
+      "Name": "wicked talon",
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 560,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 16156,
+      "Name": "jugular rip",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 16157,
+      "Name": "abdomen tear",
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 16158,
+      "Name": "eye gouge",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16162,
+      "Name": "burst strike",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 16165,
+      "Name": "blasting zone",
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 800,
+      "SecondaryCombo": 800
+    },
+    {
+      "Id": 16460,
+      "Name": "atonement",
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 460,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 16468,
+      "Name": "stalwart soul",
+      "Primary": 120,
+      "Combo": 160,
+      "Secondary": 120,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 16479,
+      "Name": "raiden thrust",
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 16480,
+      "Name": "stardiver",
+      "Primary": 840,
+      "Combo": 840,
+      "Secondary": 504,
+      "SecondaryCombo": 504
+    },
+    {
+      "Id": 16495,
+      "Name": "burst shot",
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 16497,
+      "Name": "auto crossbow",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16498,
+      "Name": "drill",
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 650,
+      "SecondaryCombo": 650
+    },
+    {
+      "Id": 16500,
+      "Name": "air anchor",
+      "Primary": 660,
+      "Combo": 660,
+      "Secondary": 660,
+      "SecondaryCombo": 660
+    },
+    {
+      "Id": 16514,
+      "Name": "fountain of fire",
+      "Primary": 580,
+      "Combo": 580,
+      "Secondary": 580,
+      "SecondaryCombo": 580
+    },
+    {
+      "Id": 16524,
+      "Name": "verthunder ii",
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16525,
+      "Name": "veraero ii",
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16527,
+      "Name": "engagement",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16528,
+      "Name": "enchanted reprise",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 16530,
+      "Name": "scorch",
+      "Primary": 750,
+      "Combo": 750,
+      "Secondary": 338,
+      "SecondaryCombo": 338
+    },
+    {
+      "Id": 16532,
+      "Name": "dia",
+      "Primary": 85,
+      "Combo": 85,
+      "Secondary": 85,
+      "SecondaryCombo": 85
+    },
+    {
+      "Id": 16535,
+      "Name": "afflatus misery",
+      "Primary": 1400,
+      "Combo": 1400,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 16539,
+      "Name": "art of war",
+      "Primary": 165,
+      "Combo": 165,
+      "Secondary": 165,
+      "SecondaryCombo": 165
+    },
+    {
+      "Id": 17870,
+      "Name": "ruin ii",
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 24283,
+      "Name": "dosis",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24289,
+      "Name": "phlegma",
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 24304,
+      "Name": "toxikon",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 24312,
+      "Name": "dosis iii",
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 24316,
+      "Name": "toxikon ii",
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 190,
+      "SecondaryCombo": 190
+    },
+    {
+      "Id": 24318,
+      "Name": "pneuma attack",
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 228,
+      "SecondaryCombo": 228
+    },
+    {
+      "Id": 24373,
+      "Name": "slice",
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 24374,
+      "Name": "waxing slice",
+      "Primary": 260,
+      "Combo": 500,
+      "Secondary": 260,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 24375,
+      "Name": "infernal slice",
+      "Primary": 280,
+      "Combo": 600,
+      "Secondary": 280,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 24376,
+      "Name": "spinning scythe",
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 24377,
+      "Name": "nightmare scythe",
+      "Primary": 120,
+      "Combo": 180,
+      "Secondary": 120,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 24378,
+      "Name": "shadow of death",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24379,
+      "Name": "whorl of death",
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 24380,
+      "Name": "soul slice",
+      "Primary": 520,
+      "Combo": 520,
+      "Secondary": 520,
+      "SecondaryCombo": 520
+    },
+    {
+      "Id": 24386,
+      "Name": "harpe",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24388,
+      "Name": "harvest moon",
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 24390,
+      "Name": "unveiled gibbet",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 24391,
+      "Name": "unveiled gallows",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 24399,
+      "Name": "lemure's slice",
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 25759,
+      "Name": "hypervelocity",
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25769,
+      "Name": "phantom rush",
+      "Primary": 1500,
+      "Combo": 1500,
+      "Secondary": 975,
+      "SecondaryCombo": 975
+    },
+    {
+      "Id": 25771,
+      "Name": "heavens' thrust",
+      "Primary": 160,
+      "Combo": 460,
+      "Secondary": 160,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 25773,
+      "Name": "wyrmwind thrust",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 25777,
+      "Name": "forked raiju",
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 25778,
+      "Name": "fleeting raiju",
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 25781,
+      "Name": "ogi namikiri",
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 25782,
+      "Name": "kaeshi: namikiri",
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 25788,
+      "Name": "chain saw",
+      "Primary": 660,
+      "Combo": 660,
+      "Secondary": 465,
+      "SecondaryCombo": 465
+    },
+    {
+      "Id": 25791,
+      "Name": "fan dance iv",
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 184,
+      "SecondaryCombo": 184
+    },
+    {
+      "Id": 25820,
+      "Name": "astral impulse",
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 25823,
+      "Name": "ruby rite",
+      "Primary": 620,
+      "Combo": 620,
+      "Secondary": 620,
+      "SecondaryCombo": 620
+    },
+    {
+      "Id": 25824,
+      "Name": "topaz rite",
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 25825,
+      "Name": "emerald rite",
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 25835,
+      "Name": "crimson cyclone",
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 224,
+      "SecondaryCombo": 224
+    },
+    {
+      "Id": 25836,
+      "Name": "mountain buster",
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 64,
+      "SecondaryCombo": 64
+    },
+    {
+      "Id": 25837,
+      "Name": "slipstream",
+      "Primary": 520,
+      "Combo": 520,
+      "Secondary": 208,
+      "SecondaryCombo": 208
+    },
+    {
+      "Id": 25855,
+      "Name": "verthunder iii",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 25856,
+      "Name": "veraero iii",
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 25858,
+      "Name": "resolution",
+      "Primary": 850,
+      "Combo": 850,
+      "Secondary": 383,
+      "SecondaryCombo": 383
+    },
+    {
+      "Id": 25859,
+      "Name": "glare iii",
+      "Primary": 350,
+      "Combo": 350,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 25865,
+      "Name": "broil iv",
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 25871,
+      "Name": "fall malific",
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 270,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 25872,
+      "Name": "gravity ii",
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 25874,
+      "Name": "macrocosmos",
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 25882,
+      "Name": "flint strike",
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 390,
+      "SecondaryCombo": 390
+    },
+    {
+      "Id": 25885,
+      "Name": "crimson strike",
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 224,
+      "SecondaryCombo": 224
+    },
+    {
+      "Id": 34608,
+      "Name": "hunter's sting",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34609,
+      "Name": "swiftskin's sting",
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34623,
+      "Name": "vicepit",
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 34626,
+      "Name": "reawaken",
+      "Primary": 750,
+      "Combo": 750,
+      "Secondary": 188,
+      "SecondaryCombo": 188
+    },
+    {
+      "Id": 36918,
+      "Name": "supplication",
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 36919,
+      "Name": "sepulchre",
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 36937,
+      "Name": "reign of beasts",
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 36938,
+      "Name": "noble blood",
+      "Primary": 900,
+      "Combo": 900,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 36952,
+      "Name": "drakesbane",
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 460,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 36978,
+      "Name": "blazing shot",
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 36998,
+      "Name": "enkindle solar bahamut",
+      "Primary": 1400,
+      "Combo": 1400,
+      "Secondary": 560,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 37005,
+      "Name": "vice of thorns",
+      "Primary": 950,
+      "Combo": 950,
+      "Secondary": 428,
+      "SecondaryCombo": 428
+    }
+  ],
+  "Periodic": [
+    {
+      "Id": 18,
+      "Name": "Bad Breath",
+      "Potency": 20
+    },
+    {
+      "Id": 118,
+      "Name": "chaos thrust",
+      "Potency": 40
+    },
+    {
+      "Id": 124,
+      "Name": "venomous bite",
+      "Potency": 15
+    },
+    {
+      "Id": 129,
+      "Name": "windbite",
+      "Potency": 20
+    },
+    {
+      "Id": 143,
+      "Name": "aero",
+      "Potency": 30
+    },
+    {
+      "Id": 144,
+      "Name": "aero ii",
+      "Potency": 50
+    },
+    {
+      "Id": 161,
+      "Name": "thunder",
+      "Potency": 45
+    },
+    {
+      "Id": 162,
+      "Name": "thunder ii",
+      "Potency": 30
+    },
+    {
+      "Id": 163,
+      "Name": "thunder iii",
+      "Potency": 50
+    },
+    {
+      "Id": 179,
+      "Name": "bio",
+      "Potency": 20
+    },
+    {
+      "Id": 189,
+      "Name": "bio ii",
+      "Potency": 40
+    },
+    {
+      "Id": 236,
+      "Name": "choco beak",
+      "Potency": 20
+    },
+    {
+      "Id": 248,
+      "Name": "circle of scorn",
+      "Potency": 30
+    },
+    {
+      "Id": 838,
+      "Name": "combust",
+      "Potency": 50
+    },
+    {
+      "Id": 843,
+      "Name": "combust ii",
+      "Potency": 60
+    },
+    {
+      "Id": 1200,
+      "Name": "caustic bite",
+      "Potency": 20
+    },
+    {
+      "Id": 1201,
+      "Name": "stormbite",
+      "Potency": 25
+    },
+    {
+      "Id": 1210,
+      "Name": "thunder iv",
+      "Potency": 35
+    },
+    {
+      "Id": 1228,
+      "Name": "higanbana",
+      "Potency": 50
+    },
+    {
+      "Id": 1714,
+      "Name": "nightbloom",
+      "Potency": 75
+    },
+    {
+      "Id": 1723,
+      "Name": "feather rain",
+      "Potency": 40
+    },
+    {
+      "Id": 1736,
+      "Name": "dropsy",
+      "Potency": 20
+    },
+    {
+      "Id": 1837,
+      "Name": "sonic break",
+      "Potency": 120
+    },
+    {
+      "Id": 1838,
+      "Name": "bow shock",
+      "Potency": 60
+    },
+    {
+      "Id": 1866,
+      "Name": "bioblaster",
+      "Potency": 50
+    },
+    {
+      "Id": 1871,
+      "Name": "dia",
+      "Potency": 85
+    },
+    {
+      "Id": 1881,
+      "Name": "combust iii",
+      "Potency": 70
+    },
+    {
+      "Id": 1895,
+      "Name": "biolysis",
+      "Potency": 85
+    },
+    {
+      "Id": 2440,
+      "Name": "lost flare star",
+      "Potency": 350
+    },
+    {
+      "Id": 2499,
+      "Name": "incendiary burns",
+      "Potency": 50
+    },
+    {
+      "Id": 2614,
+      "Name": "eukrasian dosis",
+      "Potency": 40
+    },
+    {
+      "Id": 2615,
+      "Name": "eukrasian dosis ii",
+      "Potency": 60
+    },
+    {
+      "Id": 2616,
+      "Name": "eukrasian dosis iii",
+      "Potency": 85
+    },
+    {
+      "Id": 2719,
+      "Name": "chaotic spring",
+      "Potency": 45
+    },
+    {
+      "Id": 3636,
+      "Name": "begrimed",
+      "Potency": 10
+    },
+    {
+      "Id": 3643,
+      "Name": "mortal flame",
+      "Potency": 40
+    },
+    {
+      "Id": 3712,
+      "Name": "breath of magic",
+      "Potency": 120
+    },
+    {
+      "Id": 3871,
+      "Name": "high thunder",
+      "Potency": 60
+    },
+    {
+      "Id": 3872,
+      "Name": "high thunder ii",
+      "Potency": 40
+    },
+    {
+      "Id": 3883,
+      "Name": "baneful impaction",
+      "Potency": 140
+    },
+    {
+      "Id": 3897,
+      "Name": "eukrasian dyskrasia",
+      "Potency": 40
+    }
+  ]
+}

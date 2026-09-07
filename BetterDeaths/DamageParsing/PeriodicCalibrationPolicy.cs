@@ -3,8 +3,7 @@ namespace BetterDeaths.DamageParsing;
 using System.Collections.Generic;
 using System.Linq;
 
-// Diagnostic calibration rules only; these do not change captured damage or
-// the game-stat-based estimate used by the live meter.
+// Calibration inputs for periodic estimates; captured direct damage stays unchanged.
 internal static class PeriodicCalibrationPolicy
 {
     // Fixed diagnostic inputs, deliberately separate from current game tooltips.
@@ -57,6 +56,24 @@ internal static class PeriodicCalibrationPolicy
         102 or 172 or 591 or 697 or 933 or 2707 or 2611 or 2620 or 2621 or 2622 or
         3898 or 791 or 2710 or 317 or 1875 or 87 or 1912 or 1872 or
         2216 or 2125 or 1825 or 786 or 851 or 86 or 1177 or 0x74 or 0x4C5;
+
+    public static double CriticalBuffRate(IReadOnlyList<DamageStatusSnapshot> sourceStatuses,
+        IReadOnlyList<DamageStatusSnapshot> targetStatuses)
+    {
+        var rate = sourceStatuses.Where(status => status.RemainingTime >= 1)
+            .DistinctBy(status => (status.StatusId, status.Source.EntityId))
+            .Sum(status => status.StatusId switch
+            {
+                2216 => 0.02,
+                786 => 0.10,
+                2125 or 1825 => 0.20,
+                851 or 86 => 1.0,
+                _ => 0.0,
+            });
+        if (targetStatuses.Any(status => status.StatusId == 0x4C5)) rate += 0.10;
+        if (sourceStatuses.Any(status => status.StatusId is 0x74 or 0x353)) return 1.0;
+        return rate;
+    }
 
     public static double? HealingMultiplier(uint category, IReadOnlyList<DamageStatusSnapshot> source,
         IReadOnlyList<DamageStatusSnapshot> target)

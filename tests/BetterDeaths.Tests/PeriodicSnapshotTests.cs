@@ -299,7 +299,8 @@ public sealed class PeriodicSnapshotTests
 
         var ticks = Tick(module, amount: combined).OrderBy(entry => entry.StatusId).ToList();
         Assert.Equal(new double?[] { 100.0, 200.0 }, ticks.Select(entry => entry.SimulatedPeriodicAmount));
-        Assert.Equal((double)combined, ticks.Sum(entry => entry.RawMeterAmount));
+        Assert.Equal((double)combined, ticks.Sum(entry => (double)entry.Amount));
+        Assert.Equal(303.75, ticks.Sum(entry => entry.RawMeterAmount), 6);
     }
 
     [Fact]

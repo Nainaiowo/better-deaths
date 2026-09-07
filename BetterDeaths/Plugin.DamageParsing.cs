@@ -137,6 +137,7 @@ public sealed partial class Plugin
                 CapturedAtUtc = packet.SeenAtUtc,
                 ActionCategoryId = actionCategoryId,
                 DirectPotency = potencyProfile.DirectPotency,
+                ComboPotency = potencyProfile.ComboPotency,
                 HealingPotency = PeriodicCalibrationPolicy.HealingPotency(packet.ActionId),
                 SecondaryTargetPotencyMultiplier = potencyProfile.SecondaryTargetMultiplier,
                 CanCalibratePotency = potencyProfile.DirectPotency is > 0.0 &&
@@ -771,6 +772,7 @@ public sealed partial class Plugin
                 damageEvent.SimulatedPeriodicAmount,
                 damageEvent.PeriodicEstimateInputs,
                 damageEvent.PeriodicCompatibilityEstimate,
+                damageEvent.PeriodicMeterUsesEstimate,
                 damageEvent.PeriodicEstimateUnavailableReason,
                 damageEvent.CalculatedAmount,
                 Resolution = damageEvent.ResolutionQuality.ToString(),
