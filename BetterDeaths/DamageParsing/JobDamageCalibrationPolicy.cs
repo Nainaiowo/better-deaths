@@ -61,13 +61,14 @@ internal static class JobDamageCalibrationPolicy
 
     public static double? GetCalibrationPotency(ParsedDamageEvent damageEvent, bool meterProfile = false)
     {
-        if (!damageEvent.CanCalibratePotency || damageEvent.DirectPotency is not > 0.0)
+        var source = damageEvent.AttributedSource ?? damageEvent.Source;
+        var catalogProfile = meterProfile && source.Level > 0 && PeriodicCalibrationCatalog.Contains(damageEvent.ActionId);
+        if (!catalogProfile && (!damageEvent.CanCalibratePotency || damageEvent.DirectPotency is not > 0.0))
         {
             return null;
         }
 
-        var source = damageEvent.AttributedSource ?? damageEvent.Source;
-        if (BlackMageClassJobIds.Contains(source.ClassJobId) &&
+        if (!catalogProfile && BlackMageClassJobIds.Contains(source.ClassJobId) &&
             BlackMageElementalActionIds.Contains(damageEvent.ActionId))
         {
             return null;
@@ -75,7 +76,9 @@ internal static class JobDamageCalibrationPolicy
 
         var potency = meterProfile
             ? PeriodicCalibrationPotencyPolicy.GetDirectPotency(damageEvent)
-            : damageEvent.DirectPotency.Value;
+            : damageEvent.DirectPotency!.Value;
+        if (potency <= 0)
+            return null;
         if (source.ClassJobId == MachinistClassJobId &&
             MachinistOverheatedActionIds.Contains(damageEvent.ActionId) &&
             damageEvent.SourceStatuses.Any(status =>

@@ -215,6 +215,10 @@ public sealed partial class Plugin
                             packet.SourceSnapshot ?? CaptureRawCombatSnapshot(packet.CasterEntityId)),
                     // Variable-strength raid buffs store their applied percentage in Param0.
                     Parameter = (ushort)effect.Param0,
+                    HasParameter = effect.Param0 != 0,
+                    AppliedParameter = isRemoval ? null : (byte)effect.Param0,
+                    ObservationKind = DamageStatusObservationKind.Announcement,
+                    ApplicationSequence = packet.ActionSequence,
                     ActionCategoryId = actionCategoryId,
                     DamageType = actionDamageProfile.DamageType,
                     ElementType = actionDamageProfile.ElementType,
@@ -254,7 +258,11 @@ public sealed partial class Plugin
                 status.StatusId,
                 statusSource,
                 status.StackCount,
-                status.RemainingTime));
+                DamageStatusTiming.DecodeRemaining(status.RemainingTime))
+            {
+                HasParameter = !RaidBuffPolicy.UsesApplicationParameter(status.StatusId) && status.StackCount != 0,
+                StatusSlot = status.StatusSlot,
+            });
         }
 
         return statuses;
@@ -289,8 +297,21 @@ public sealed partial class Plugin
                 0,
                 string.Empty,
                 damageSeenAtUtc,
-                status.Duration,
-                false);
+                DamageStatusTiming.DecodeRemaining(status.Duration),
+                false) with
+            {
+                Parameter = status.StackCount,
+                HasParameter = !RaidBuffPolicy.UsesApplicationParameter(status.EffectId) && status.StackCount != 0,
+                StatusSlot = status.EffectIndex,
+                ObservationKind = DamageStatusObservationKind.Landing,
+                ApplicationSequence = packet.RelatedActionSequence,
+                SnapshotKey = BuildDamageSnapshotKey(status.SourceSnapshot),
+                SourceStatusActorId = rawSource.EntityId,
+                SourceStatuses = BuildDamageStatusSnapshots(status.SourceSnapshot),
+                TargetStatuses = BuildDamageStatusSnapshots(packet.TargetSnapshot),
+                HasSourceStatusSnapshot = status.SourceSnapshot is not null,
+                HasTargetStatusSnapshot = packet.TargetSnapshot is not null,
+            };
             damageParsingModule.ObserveStatus(application);
             QueueDamageMeterStatusDebug("EffectResult", application);
         }
@@ -380,10 +401,13 @@ public sealed partial class Plugin
             0,
             string.Empty,
             packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc,
-            isRemoval ? 0.0f : rawStatus?.RemainingTime ?? 0.0f,
+            isRemoval ? 0.0f : DamageStatusTiming.DecodeRemaining(rawStatus?.RemainingTime ?? 0.0f),
             isRemoval) with
         {
             Parameter = rawStatus?.StackCount ?? (ushort)Math.Min(packet.Param2, ushort.MaxValue),
+            HasParameter = !RaidBuffPolicy.UsesApplicationParameter(statusId) && rawStatus?.StackCount > 0,
+            StatusSlot = rawStatus?.StatusSlot,
+            ObservationKind = DamageStatusObservationKind.Observation,
             SnapshotKey = isRemoval ? string.Empty : BuildDamageSnapshotKey(packet.SourceSnapshot),
             SourceStatuses = BuildDamageStatusSnapshots(packet.SourceSnapshot),
             SourceStatusActorId = rawStatusSource.EntityId,
@@ -665,6 +689,11 @@ public sealed partial class Plugin
                 application.StatusName,
                 application.SnapshotKey,
                 application.Parameter,
+                application.HasParameter,
+                application.AppliedParameter,
+                application.StatusSlot,
+                application.ObservationKind,
+                application.ApplicationSequence,
                 application.PeriodicPotency,
                 application.BaseDamageLowByte,
                 application.CriticalRateLowByte,
@@ -730,6 +759,11 @@ public sealed partial class Plugin
             application.ActionName,
             application.DurationSeconds,
             application.Parameter,
+            application.HasParameter,
+            application.AppliedParameter,
+            application.StatusSlot,
+            application.ObservationKind,
+            application.ApplicationSequence,
             application.PeriodicPotency,
             application.BaseDamageLowByte,
             application.CriticalRateLowByte,

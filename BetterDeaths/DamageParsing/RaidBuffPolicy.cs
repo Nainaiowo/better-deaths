@@ -57,6 +57,7 @@ internal static class RaidBuffPolicy
         0x8AA, // Army's Paeon
         0xB94, // Radiant Finale
         0x71E, // Technical Finish
+        0x71D, // Standard Finish (self/application origin)
         0x839, // Standard Finish (partner)
         0x721, // Devilment
         0x312, // Battle Litany
@@ -130,49 +131,17 @@ internal static class RaidBuffPolicy
         0xDDE, // Decimate
     ];
 
-    private static readonly HashSet<uint> BalancePreferredClassJobIds =
-    [
-        1,  // Gladiator
-        2,  // Pugilist
-        3,  // Marauder
-        4,  // Lancer
-        19, // Paladin
-        20, // Monk
-        21, // Warrior
-        22, // Dragoon
-        29, // Rogue
-        30, // Ninja
-        32, // Dark Knight
-        34, // Samurai
-        37, // Gunbreaker
-        39, // Reaper
-        41, // Viper
-    ];
-
-    private static readonly HashSet<uint> SpearPreferredClassJobIds =
-    [
-        5,  // Archer
-        6,  // Conjurer
-        7,  // Thaumaturge
-        23, // Bard
-        24, // White Mage
-        25, // Black Mage
-        26, // Arcanist
-        27, // Summoner
-        28, // Scholar
-        31, // Machinist
-        33, // Astrologian
-        35, // Red Mage
-        36, // Blue Mage
-        38, // Dancer
-        40, // Sage
-        42, // Pictomancer
-    ];
-
     public static bool IsRelevantStatus(uint statusId)
     {
         return RelevantStatusIds.Contains(statusId);
     }
+
+    public static bool UsesApplicationParameter(uint statusId) =>
+        statusId is 0x75A or 0x75D or 0xF2F or 0xF31 or 0xB94 or 0x71D or 0x71E or 0x839;
+
+    public static bool HasUnknownStrength(DamageStatusSnapshot status) =>
+        UsesApplicationParameter(status.StatusId) && status.AppliedParameter is null &&
+        (status.HasParameter == false || status.HasParameter is null && status.Parameter == 0);
 
     public static double GetDefaultDurationSeconds(uint statusId)
     {
@@ -180,7 +149,7 @@ internal static class RaidBuffPolicy
         {
             0x75A or 0x75D or 0xF2F or 0xF31 => 15.0,
             0x8A8 or 0x8A9 or 0x8AA => 45.0,
-            0x839 => 60.0,
+            0x71D or 0x839 => 60.0,
             0x6B5 or 0x6B9 => 15.0,
             0x849 or 0x84A or 0x84B => 30.0,
             BerserkStatusId or InnerReleaseStatusId => 15.0,
@@ -211,24 +180,17 @@ internal static class RaidBuffPolicy
 
         return status.StatusId switch
         {
-            0x75A or 0xF2F => [Damage(status, GetAstrologianCardAmount(
-                status.Parameter,
-                BalancePreferredClassJobIds.Contains(recipient.ClassJobId)),
-                targeting: RaidBuffTargeting.SingleTarget)],
-            0x75D or 0xF31 => [Damage(status, GetAstrologianCardAmount(
-                status.Parameter,
-                SpearPreferredClassJobIds.Contains(recipient.ClassJobId)),
+            0x75A or 0xF2F or 0x75D or 0xF31 => [Damage(status, GetAppliedAmount(status),
                 targeting: RaidBuffTargeting.SingleTarget)],
             0x756 => [Damage(status, 0.06)],
             0x8D => [DirectHit(status, 0.20)],
             0x8A8 => [Critical(status, 0.02)],
             0x8A9 => [Damage(status, 0.01)],
             0x8AA => [DirectHit(status, 0.03)],
-            0xB94 => [Damage(status, GetRadiantFinaleAmount(status.Parameter))],
-            0x71E => [Damage(status, GetTechnicalFinishAmount(status.Parameter))],
-            0x839 => [Damage(
+            0xB94 or 0x71E => [Damage(status, GetAppliedAmount(status))],
+            0x71D or 0x839 => [Damage(
                 status,
-                GetStandardFinishAmount(status.Parameter),
+                GetAppliedAmount(status),
                 targeting: RaidBuffTargeting.SingleTarget)],
             0x721 =>
             [
@@ -306,43 +268,9 @@ internal static class RaidBuffPolicy
         return damageEvent.ActionCategoryId == 3 && !damageEvent.IsAutoAttack;
     }
 
-    private static double GetRadiantFinaleAmount(ushort parameter)
-    {
-        return parameter switch
-        {
-            1 => 0.02,
-            2 => 0.02,
-            3 => 0.06,
-            4 => 0.04,
-            _ => 0.06,
-        };
-    }
-
-    private static double GetAstrologianCardAmount(ushort parameter, bool preferredRole)
-    {
-        if (parameter is 3 or 6)
-        {
-            return parameter / 100.0;
-        }
-
-        return preferredRole ? 0.06 : 0.03;
-    }
-
-    private static double GetTechnicalFinishAmount(ushort parameter)
-    {
-        return parameter switch
-        {
-            1 => 0.01,
-            2 => 0.02,
-            3 => 0.03,
-            _ => 0.05,
-        };
-    }
-
-    private static double GetStandardFinishAmount(ushort parameter)
-    {
-        return parameter is 1 or 2 ? 0.02 : 0.05;
-    }
+    private static double GetAppliedAmount(DamageStatusSnapshot status) =>
+        status.AppliedParameter is { } applied ? (sbyte)applied / 100.0 :
+        HasUnknownStrength(status) ? 0.0 : status.Parameter / 100.0;
 
     private static RaidBuffEffect Damage(
         DamageStatusSnapshot status,

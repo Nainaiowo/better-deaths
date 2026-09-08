@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>1.0.0.32</Version>
+    <Version>1.0.0.33</Version>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
@@ -11,6 +11,9 @@
     <PackageProjectUrl>https://github.com/Nainaiowo/better-deaths</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="DamageParsing/PeriodicCalibrationCatalog.json" LogicalName="BetterDeaths.DamageParsing.PeriodicCalibrationCatalog.json" />
+  </ItemGroup>
   <Target Name="ValidateDalamudPackageManifest" AfterTargets="Build" DependsOnTargets="DefaultDalamudPackagerDebug;DefaultDalamudPackagerRelease">
     <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; '$(MSBuildProjectDirectory)/../scripts/validate-package-manifest.ps1' -ProjectDir '$(MSBuildProjectDirectory)' -OutputPath '$(OutputPath)' -AssemblyName '$(AssemblyName)'&quot;" />
     <Exec Condition="'$(OS)' != 'Windows_NT'" Command="pwsh -NoProfile -Command &quot;&amp; '$(MSBuildProjectDirectory)/../scripts/validate-package-manifest.ps1' -ProjectDir '$(MSBuildProjectDirectory)' -OutputPath '$(OutputPath)' -AssemblyName '$(AssemblyName)'&quot;" />

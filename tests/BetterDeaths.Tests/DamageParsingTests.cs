@@ -1246,7 +1246,7 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
-    public void ExactGroundTickAdvancesThatOwnersSchedule()
+    public void ExactGroundTickDoesNotAdvanceTheInferredOwnerSchedule()
     {
         const uint statusId = 0x1234;
         var module = new DamageParsingModule();
@@ -1257,7 +1257,7 @@ public sealed class DamageParsingTests
             SeenAtUtc = SeenAtUtc.AddMilliseconds(100),
         });
 
-        Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+        var exact = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
             450,
             1,
             SeenAtUtc.AddSeconds(3)) with
@@ -1275,7 +1275,12 @@ public sealed class DamageParsingTests
             StatusName = "Ground fire",
         }));
 
-        Assert.Equal(secondSource.EntityId, sourceLess.AttributedSource?.EntityId);
+        Assert.Equal(Source.EntityId, exact.AttributedSource?.EntityId);
+        Assert.Equal(450, exact.RawMeterAmount);
+        Assert.Equal(Source.EntityId, sourceLess.AttributedSource?.EntityId);
+        var next = Assert.Single(ProcessPeriodicTick(module, CreatePeriodicTick(
+            470, 3, SeenAtUtc.AddSeconds(6.1)) with { StatusId = statusId, StatusName = "Ground fire" }));
+        Assert.Equal(secondSource.EntityId, next.AttributedSource?.EntityId);
     }
 
     [Fact]

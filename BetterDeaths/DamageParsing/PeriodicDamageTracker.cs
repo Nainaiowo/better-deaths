@@ -32,9 +32,18 @@ internal sealed class PeriodicDamageTracker
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
     private readonly PeriodicDirectHitCompatibility directHitCompatibility = new();
     private readonly RaidBuffTracker confirmedBuffs = new(confirmedOnly: true);
+    private readonly DamageStatusSlotTracker slots = new();
     private long nextApplicationGeneration;
 
     public void Observe(DamageStatusApplication application, DamageStatusApplication? capturedApplication = null, bool observeSnapshots = true)
+    {
+        var replaced = slots.Observe(application);
+        ObserveStatus(application, capturedApplication, observeSnapshots);
+        if (replaced is not null)
+            Retire(replaced.Target.EntityId, replaced.StatusId, replaced.Source.EntityId, replaced.SeenAtUtc, replaced.StatusSlot);
+    }
+
+    private void ObserveStatus(DamageStatusApplication application, DamageStatusApplication? capturedApplication, bool observeSnapshots)
     {
         if (observeSnapshots)
             confirmedBuffs.ObserveSnapshots(capturedApplication ?? application);
@@ -102,7 +111,7 @@ internal sealed class PeriodicDamageTracker
         RetireExclusiveApplications(tracked);
     }
 
-    public void Retire(uint targetEntityId, uint statusId, uint sourceEntityId, DateTime removedAtUtc)
+    public void Retire(uint targetEntityId, uint statusId, uint sourceEntityId, DateTime removedAtUtc, byte? statusSlot = null)
     {
         // Target DoTs can expire between a replacement cast and its status result.
         // Preserve the pending snapshot, without changing ground-effect attribution.
@@ -110,6 +119,7 @@ internal sealed class PeriodicDamageTracker
                      .Where(status => (!status.AwaitingStatusConfirmation || IsGroundDamageStatus(status.Application.StatusId)) &&
                          status.Application.Target.EntityId == targetEntityId &&
                          status.Application.StatusId == statusId && status.Application.SeenAtUtc <= removedAtUtc &&
+                         (statusSlot is null || status.Application.StatusSlot == statusSlot) &&
                          (sourceEntityId == 0 || status.Application.Source.EntityId == sourceEntityId)))
         {
             if (status.RemovedAtUtc is null || status.RemovedAtUtc > removedAtUtc)
@@ -397,11 +407,7 @@ internal sealed class PeriodicDamageTracker
             {
                 var matchingStatus = matchingStatuses.FirstOrDefault(status =>
                     status.Application.Source.EntityId == tick.Source.EntityId);
-                if (matchingStatus is not null)
-                {
-                    matchingStatus.LastTickAtUtc = tick.SeenAtUtc;
-                }
-
+                // Only inferred ground ticks advance the owner-selection schedule.
                 ConsumeLateTickIfNeeded(matchingStatus, tick.SeenAtUtc);
                 return [CreateEvent(
                     tick,
@@ -539,10 +545,12 @@ internal sealed class PeriodicDamageTracker
         return events;
     }
 
-    public void Clear(bool preserveCalibration = false)
+    public void Clear(bool preserveCalibration = false, bool preserveConfirmedBuffs = false)
     {
-        confirmedBuffs.Clear();
+        if (!preserveConfirmedBuffs)
+            confirmedBuffs.Clear();
         statuses.Clear();
+        slots.Clear();
         statusHistory.Clear();
         learnedApplicationTicks.Clear();
         learnedProfileTicks.Clear();
@@ -825,6 +833,7 @@ internal sealed class PeriodicDamageTracker
                 Parameter = application.Parameter != 0
                     ? application.Parameter
                     : existingApplication.Parameter,
+                StatusSlot = application.StatusSlot ?? existingApplication.StatusSlot,
                 ActionCategoryId = application.ActionCategoryId != 0
                     ? application.ActionCategoryId
                     : existingApplication.ActionCategoryId,
@@ -1092,7 +1101,11 @@ internal sealed class PeriodicDamageTracker
                 CapturedPotency = status.Application.PeriodicPotency,
                 UsedUnitCalibration = inputs.CalibrationSampleCount == 0,
                 UsedHealingCalibration = status.CompatibilityCalibration.UsedHealingCalibration,
-                Limitation = inputs.CalibrationSampleCount == 0 ? "No usable damage or healing calibration" : null,
+                Limitation = status.CompatibilityApplication.SourceStatuses.Any(snapshot =>
+                    PeriodicCalibrationCatalog.SupportsVariableDamageStatus(snapshot.StatusId) &&
+                    RaidBuffPolicy.HasUnknownStrength(snapshot))
+                    ? "Unknown application-time buff strength"
+                    : inputs.CalibrationSampleCount == 0 ? "No usable damage or healing calibration" : null,
             }
             : null;
     }
@@ -1364,7 +1377,10 @@ internal sealed class PeriodicDamageTracker
     private static double GetCompatibilityDamageMultiplier(IReadOnlyList<RaidBuffEffect> effects,
         IReadOnlyList<DamageStatusSnapshot> sourceStatuses)
     {
-        var multiplier = 1.0 + effects.Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier)
+        // Captured effects remain available to review and attribution; this model admits only its catalog's variable modifiers.
+        var multiplier = 1.0 + effects.Where(effect => effect.Kind == RaidBuffEffectKind.DamageMultiplier &&
+                (!RaidBuffPolicy.UsesApplicationParameter(effect.StatusId) ||
+                 PeriodicCalibrationCatalog.SupportsVariableDamageStatus(effect.StatusId)))
             .Sum(effect => effect.Amount);
         var active = sourceStatuses.Where(status => status.RemainingTime > 0).Select(status => status.StatusId).ToHashSet();
         multiplier += active.Contains(0x31) ? 0.15 : 0;
@@ -1382,6 +1398,7 @@ internal sealed class PeriodicDamageTracker
 
     private void Prune(DateTime now)
     {
+        slots.Prune(now);
         foreach (var retired in statusHistory.Where(status => status.RemovedAtUtc is { } removed &&
                      removed.AddSeconds(PeriodicStatusRetentionSeconds) < now).ToList())
         {

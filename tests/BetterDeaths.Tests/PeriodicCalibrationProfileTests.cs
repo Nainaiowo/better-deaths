@@ -37,7 +37,8 @@ public sealed class PeriodicCalibrationProfileTests
                     JobDamageCalibrationPolicy.GetCalibrationPotency(hit, meterProfile: true));
                 Assert.Equal(10000, hit.RawMeterAmount);
                 Assert.Equal(10000u, hit.Amount);
-                Assert.Null(JobDamageCalibrationPolicy.GetCalibrationPotency(hit with { CanCalibratePotency = false }, meterProfile: true));
+                Assert.Equal(JobDamageCalibrationPolicy.GetCalibrationPotency(hit, meterProfile: true),
+                    JobDamageCalibrationPolicy.GetCalibrationPotency(hit with { CanCalibratePotency = false }, meterProfile: true));
                 Assert.Equal(111, JobDamageCalibrationPolicy.GetCalibrationPotency(hit with { Source = Source with { Level = 0 }, AttributedSource = Source with { Level = 0 } }, meterProfile: true));
             }
     }
@@ -46,7 +47,7 @@ public sealed class PeriodicCalibrationProfileTests
     public void PeriodicProfilesAreSeparateFromCapturedTooltipsAndAmbiguousSharedStatus()
     {
         Assert.Equal(1, Data.Schema);
-        Assert.Equal(PeriodicCalibrationPotencyPolicy.Version, Data.ProfileVersion);
+        Assert.Equal(1, Data.ProfileVersion); // Retain the original numeric baseline across catalog versions.
         Assert.Equal(142, Data.Direct.Select(r => r.Id).Distinct().Count());
         Assert.Equal(41, Data.Periodic.Select(r => r.Id).Distinct().Count());
         foreach (var row in Data.Periodic)
@@ -101,7 +102,7 @@ public sealed class PeriodicCalibrationProfileTests
         var tick = Assert.Single(tracker.Process(new(1, Start.AddSeconds(3), Target, 0, "", 0, 30000, null)));
         Assert.Equal(expectedBase, tick.PeriodicCompatibilityEstimate!.Inputs!.BaseDamage);
         Assert.Equal(expectedDamage, tick.RawMeterAmount, 6);
-        Assert.Equal(1, tick.PeriodicCompatibilityEstimate.CalibrationProfileVersion);
+        Assert.Equal(PeriodicCalibrationPotencyPolicy.Version, tick.PeriodicCompatibilityEstimate.CalibrationProfileVersion);
         Assert.Equal(30000u, tick.Amount);
     }
 

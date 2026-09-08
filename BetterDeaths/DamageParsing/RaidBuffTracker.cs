@@ -6,27 +6,110 @@ using System.Linq;
 
 internal sealed class RaidBuffTracker(bool confirmedOnly = false)
 {
-    private const double ExpiryGraceSeconds = 1.0;
     private const double HistoryRetentionSeconds = 5.0;
+    private const double PendingApplicationRetentionSeconds = 35.0;
     private readonly Dictionary<StatusKey, TrackedStatus> statuses = [];
     private readonly List<TrackedStatus> history = [];
+    private readonly Dictionary<StatusKey, PendingApplication> pendingApplications = [];
+    private readonly Dictionary<(StatusKey Status, uint Sequence), PendingApplication> applicationHistory = [];
+    private readonly DamageStatusSlotTracker slots = new();
 
     public void Observe(DamageStatusApplication application)
     {
-        if (confirmedOnly && application.ActionId != 0 && application.DurationSeconds <= 0)
-        {
-            return;
-        }
         if (!DamageStatusCapturePolicy.IsRelevant(application.StatusId))
         {
+            if (slots.Observe(application) is { } replaced)
+                ObserveState(replaced);
             return;
         }
 
         Prune(application.SeenAtUtc);
-        ObserveCore(application);
+        var key = new StatusKey(application.Target.EntityId, application.StatusId, application.Source.EntityId);
+        if (!application.IsRemoval && (application.ObservationKind == DamageStatusObservationKind.Announcement ||
+                confirmedOnly && application.ActionId != 0 && application.DurationSeconds <= 0))
+        {
+            // Announcements describe the next application, never the currently active one.
+            if (application.Source.EntityId != 0 &&
+                (!pendingApplications.TryGetValue(key, out var prior) || prior.SeenAtUtc <= application.SeenAtUtc))
+            {
+                if (prior is not null && application.ApplicationSequence is > 0 &&
+                    prior.ApplicationSequence == application.ApplicationSequence && !HasParameter(application))
+                    application = application with { Parameter = prior.Parameter, HasParameter = prior.HasParameter };
+                if (prior is not null && application.ApplicationSequence is > 0 &&
+                    prior.ApplicationSequence == application.ApplicationSequence)
+                    application = application with { AppliedParameter = application.AppliedParameter ?? prior.AppliedParameter };
+                pendingApplications[key] = new(application.SeenAtUtc, application.ApplicationSequence,
+                    application.Parameter, HasParameter(application), application.AppliedParameter);
+                applicationHistory[(key, application.ApplicationSequence.GetValueOrDefault())] = pendingApplications[key];
+            }
+            return;
+        }
+        if (application.IsRemoval)
+        {
+            foreach (var pendingKey in pendingApplications.Where(entry =>
+                         entry.Key.TargetEntityId == application.Target.EntityId && entry.Key.StatusId == application.StatusId &&
+                         (application.Source.EntityId == 0 || entry.Key.SourceEntityId == application.Source.EntityId) &&
+                         entry.Value.SeenAtUtc <= application.SeenAtUtc).Select(entry => entry.Key).ToList())
+                pendingApplications.Remove(pendingKey);
+        }
+        var startsApplication = false;
+        if (!application.IsRemoval && pendingApplications.TryGetValue(key, out var pending) &&
+            pending.SeenAtUtc <= application.SeenAtUtc &&
+            application.ObservationKind is DamageStatusObservationKind.Landing or DamageStatusObservationKind.Unspecified &&
+            application.ActionId == 0 && HasDuration(application) &&
+            (application.ApplicationSequence is null or 0 || pending.ApplicationSequence is null or 0 ||
+                application.ApplicationSequence == pending.ApplicationSequence))
+        {
+            if (!HasParameter(application) && pending.AppliedParameter is null)
+                application = application with { Parameter = pending.Parameter, HasParameter = pending.HasParameter };
+            application = application with { AppliedParameter = application.AppliedParameter ?? pending.AppliedParameter };
+            if (application.ApplicationSequence is null or 0)
+                application = application with { ApplicationSequence = pending.ApplicationSequence };
+            pendingApplications.Remove(key);
+            startsApplication = true;
+        }
+        if (!application.IsRemoval && application.ObservationKind == DamageStatusObservationKind.Landing &&
+            application.AppliedParameter is null && FindAssociatedApplication(application) is { } associated)
+        {
+            application = application with
+            {
+                AppliedParameter = associated.AppliedParameter,
+                Parameter = associated.AppliedParameter is null && !HasParameter(application) ? associated.Parameter : application.Parameter,
+                HasParameter = associated.AppliedParameter is null && !HasParameter(application) ? associated.HasParameter : application.HasParameter,
+                ApplicationSequence = application.ApplicationSequence is > 0 ? application.ApplicationSequence : associated.ApplicationSequence,
+            };
+        }
+        ObserveCore(application, startsApplication);
     }
 
-    private void ObserveCore(DamageStatusApplication application)
+    private void ObserveCore(DamageStatusApplication application, bool startsApplication = false)
+    {
+        var replaced = slots.Observe(application);
+        ObserveState(application, startsApplication);
+        if (replaced is not null)
+            ObserveState(replaced);
+    }
+
+    private PendingApplication? FindAssociatedApplication(DamageStatusApplication application)
+    {
+        var exact = Find(new StatusKey(application.Target.EntityId, application.StatusId, application.Source.EntityId));
+        if (exact is not null)
+            return exact;
+        var origin = application.StatusId == 0x839
+            ? new StatusKey(application.Source.EntityId, 0x71D, application.Source.EntityId)
+            : new StatusKey(application.Target.OwnerEntityId, application.StatusId, application.Source.EntityId);
+        return origin.TargetEntityId == 0 ? null : Find(origin);
+
+        PendingApplication? Find(StatusKey key) => applicationHistory
+            .Where(entry => entry.Key.Status == key && entry.Value.SeenAtUtc <= application.SeenAtUtc &&
+                entry.Value.SeenAtUtc.AddSeconds(PendingApplicationRetentionSeconds) >= application.SeenAtUtc &&
+                (application.ApplicationSequence is null or 0 || entry.Value.ApplicationSequence is null or 0 ||
+                    application.ApplicationSequence == entry.Value.ApplicationSequence))
+            .OrderByDescending(entry => entry.Value.SeenAtUtc)
+            .Select(entry => entry.Value).FirstOrDefault();
+    }
+
+    private void ObserveState(DamageStatusApplication application, bool startsApplication = false)
     {
         if (application.IsRemoval)
         {
@@ -34,6 +117,8 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
                          status.Application.Target.EntityId == application.Target.EntityId &&
                          status.Application.StatusId == application.StatusId &&
                          status.Application.SeenAtUtc <= application.SeenAtUtc &&
+                         (application.ApplicationSequence is null or 0 || status.Application.ApplicationSequence is null or 0 ||
+                             application.ApplicationSequence == status.Application.ApplicationSequence) &&
                          (application.Source.EntityId == 0 ||
                              status.Application.Source.EntityId == application.Source.EntityId)))
             {
@@ -50,11 +135,13 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
         {
             var matchingKeys = statuses.Keys.Where(key => key.TargetEntityId == application.Target.EntityId &&
                 key.StatusId == application.StatusId).ToList();
-            foreach (var key in matchingKeys)
+            // Missing identity cannot refresh several different providers at once.
+            if (matchingKeys.Count == 1)
             {
-                Update(statuses[key], application with { Source = statuses[key].Application.Source });
+                Update(statuses[matchingKeys[0]], application with { Source = statuses[matchingKeys[0]].Application.Source }, startsApplication);
+                return;
             }
-            if (matchingKeys.Count > 0)
+            if (matchingKeys.Count > 1)
                 return;
         }
 
@@ -69,12 +156,10 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             application.Source.EntityId);
         if (statuses.TryGetValue(statusKey, out var existing))
         {
-            Update(existing, application);
+            Update(existing, application, startsApplication);
         }
-        else
-        {
+        else if (HasDuration(application))
             statuses[statusKey] = Create(application);
-        }
     }
 
     public void ObserveSnapshots(DamageStatusApplication application)
@@ -113,8 +198,7 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             return;
 
         Prune(seenAtUtc);
-        var present = snapshots.Where(snapshot => DamageStatusCapturePolicy.IsRelevant(snapshot.StatusId) &&
-            float.IsFinite(snapshot.RemainingTime) && snapshot.RemainingTime > 0).ToList();
+        var present = snapshots.Where(snapshot => DamageStatusCapturePolicy.IsRelevant(snapshot.StatusId)).ToList();
         // A captured status list is evidence of landed buffs, including auras without a gain packet.
         // An absent status retires only history at or before this snapshot, never a later application.
         var current = statuses.Values.Where(status => status.Application.Target.EntityId == target.EntityId).ToList();
@@ -131,12 +215,17 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
 
         foreach (var snapshot in present)
         {
+            if (!float.IsFinite(snapshot.RemainingTime) || snapshot.RemainingTime <= 0)
+                continue;
             var source = snapshot.Source;
             if (statuses.TryGetValue(new StatusKey(target.EntityId, snapshot.StatusId, source.EntityId), out var tracked))
                 source = ChooseMoreCompleteSource(source, tracked.Application.Source);
             ObserveCore(new DamageStatusApplication(target, source, snapshot.StatusId, string.Empty,
                 0, 0, string.Empty, seenAtUtc, snapshot.RemainingTime, false, false, false)
-            { Parameter = snapshot.Parameter });
+            { Parameter = snapshot.Parameter, HasParameter = snapshot.HasParameter ?? snapshot.Parameter != 0,
+                AppliedParameter = snapshot.AppliedParameter, StatusSlot = snapshot.StatusSlot,
+                ApplicationSequence = snapshot.ApplicationSequence,
+                ObservationKind = DamageStatusObservationKind.Observation });
         }
     }
 
@@ -145,11 +234,13 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
         Prune(seenAtUtc);
         foreach (var status in statuses.Values.Where(status =>
                      status.Application.Target.EntityId == targetEntityId &&
-                     status.Application.StatusId == statusId))
+                     status.Application.StatusId == statusId &&
+                     status.Application.SeenAtUtc <= seenAtUtc &&
+                     (status.RemovedAtUtc is null || status.RemovedAtUtc > seenAtUtc) &&
+                     status.ExpiresAtUtc > seenAtUtc))
         {
-            status.ExpiresAtUtc = seenAtUtc.AddSeconds(
-                GetDefaultDurationSeconds(statusId));
-            status.RemovedAtUtc = null;
+            Update(status, status.Application with { SeenAtUtc = seenAtUtc,
+                DurationSeconds = (float)GetDefaultDurationSeconds(statusId) });
         }
     }
 
@@ -208,9 +299,10 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
                     status.Application.StatusId == snapshot.StatusId &&
                     status.Application.SeenAtUtc <= seenAtUtc &&
                     (status.RemovedAtUtc is null || seenAtUtc < status.RemovedAtUtc) &&
-                    seenAtUtc <= status.ExpiresAtUtc.AddSeconds(ExpiryGraceSeconds) &&
+                    seenAtUtc < status.ExpiresAtUtc &&
                     (snapshot.Source.EntityId == 0 ||
-                        status.Application.Source.EntityId == snapshot.Source.EntityId))
+                        status.Application.Source.EntityId == snapshot.Source.EntityId) &&
+                    (snapshot.ApplicationSequence is null or 0 || status.Application.ApplicationSequence == snapshot.ApplicationSequence))
                 .OrderByDescending(status => status.Application.SeenAtUtc)
                 .FirstOrDefault();
             if (tracked is null)
@@ -222,9 +314,13 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             enriched[index] = snapshot with
             {
                 Source = ChooseMoreCompleteSource(snapshot.Source, tracked.Application.Source),
-                Parameter = tracked.Application.Parameter != 0
+                Parameter = HasParameter(tracked.Application)
                     ? tracked.Application.Parameter
                     : snapshot.Parameter,
+                HasParameter = HasParameter(tracked.Application) ? true : snapshot.HasParameter,
+                AppliedParameter = snapshot.AppliedParameter ?? tracked.Application.AppliedParameter,
+                StatusSlot = snapshot.StatusSlot ?? tracked.Application.StatusSlot,
+                ApplicationSequence = snapshot.ApplicationSequence ?? tracked.Application.ApplicationSequence,
             };
         }
 
@@ -257,6 +353,9 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
     {
         statuses.Clear();
         history.Clear();
+        pendingApplications.Clear();
+        applicationHistory.Clear();
+        slots.Clear();
     }
 
     private IReadOnlyList<DamageStatusSnapshot> GetActive(uint targetEntityId, DateTime seenAtUtc)
@@ -270,34 +369,70 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             .Where(status => status.Application.Target.EntityId == targetEntityId &&
                 status.Application.SeenAtUtc <= seenAtUtc &&
                 (status.RemovedAtUtc is null || seenAtUtc < status.RemovedAtUtc) &&
-                seenAtUtc <= status.ExpiresAtUtc.AddSeconds(ExpiryGraceSeconds))
+                seenAtUtc < status.ExpiresAtUtc)
             .GroupBy(status => (status.Application.StatusId, status.Application.Source.EntityId))
             .Select(group => group.OrderByDescending(status => status.Application.SeenAtUtc).First())
             .Select(status => new DamageStatusSnapshot(
                 status.Application.StatusId,
                 status.Application.Source,
                 status.Application.Parameter,
-                Math.Max(0.0f, (float)(status.ExpiresAtUtc - seenAtUtc).TotalSeconds)))
+                Math.Max(0.0f, (float)(status.ExpiresAtUtc - seenAtUtc).TotalSeconds))
+            {
+                HasParameter = HasParameter(status.Application),
+                AppliedParameter = status.Application.AppliedParameter,
+                StatusSlot = status.Application.StatusSlot,
+                ApplicationSequence = status.Application.ApplicationSequence,
+            })
             .ToList();
     }
 
     private static TrackedStatus Create(DamageStatusApplication application)
     {
-        var duration = application.DurationSeconds > 0.0f
-            ? application.DurationSeconds
-            : GetDefaultDurationSeconds(application.StatusId);
-        return new TrackedStatus(application, application.SeenAtUtc.AddSeconds(duration));
+        return new TrackedStatus(application, application.SeenAtUtc.AddSeconds(application.DurationSeconds));
     }
 
-    private void Update(TrackedStatus status, DamageStatusApplication application)
+    private static bool HasParameter(DamageStatusApplication application) => application.HasParameter ?? application.Parameter != 0;
+
+    private static bool HasDuration(DamageStatusApplication application) =>
+        float.IsFinite(application.DurationSeconds) && application.DurationSeconds > 0;
+
+    private void Update(TrackedStatus status, DamageStatusApplication application, bool startsApplication = false)
     {
         if (application.SeenAtUtc < status.Application.SeenAtUtc)
         {
-            var earlier = Create(application);
-            earlier.RemovedAtUtc = status.Application.SeenAtUtc;
+            var previous = history.Where(entry =>
+                    entry.Application.Target.EntityId == application.Target.EntityId &&
+                    entry.Application.Source.EntityId == application.Source.EntityId &&
+                    entry.Application.StatusId == application.StatusId &&
+                    entry.Application.SeenAtUtc <= application.SeenAtUtc &&
+                    entry.ExpiresAtUtc > application.SeenAtUtc &&
+                    (entry.RemovedAtUtc is null || entry.RemovedAtUtc > application.SeenAtUtc) &&
+                    (application.ApplicationSequence is null or 0 || entry.Application.ApplicationSequence == application.ApplicationSequence))
+                .OrderByDescending(entry => entry.Application.SeenAtUtc).FirstOrDefault();
+            var sameApplication = !startsApplication && previous is not null &&
+                (application.ObservationKind != DamageStatusObservationKind.Landing ||
+                    application.ApplicationSequence is > 0 && application.ApplicationSequence == previous.Application.ApplicationSequence);
+            if (!HasDuration(application) && !sameApplication)
+                return;
+            if (sameApplication && !HasParameter(application) && HasParameter(previous!.Application))
+                application = application with { Parameter = previous.Application.Parameter, HasParameter = true };
+            if (sameApplication)
+                application = application with { AppliedParameter = application.AppliedParameter ?? previous!.Application.AppliedParameter,
+                    StatusSlot = application.StatusSlot ?? previous!.Application.StatusSlot };
+            var earlier = new TrackedStatus(application, HasDuration(application)
+                ? application.SeenAtUtc.AddSeconds(application.DurationSeconds) : previous!.ExpiresAtUtc);
+            earlier.RemovedAtUtc = sameApplication && previous!.RemovedAtUtc < status.Application.SeenAtUtc
+                ? previous.RemovedAtUtc : status.Application.SeenAtUtc;
             history.Add(earlier);
             return;
         }
+        var wasActive = (status.RemovedAtUtc is null || status.RemovedAtUtc > application.SeenAtUtc) &&
+            application.SeenAtUtc < status.ExpiresAtUtc;
+        if (!wasActive && !HasDuration(application))
+            return;
+        // A new sequenced landing is a replacement even when the previous buff is still active.
+        startsApplication |= application.ObservationKind == DamageStatusObservationKind.Landing &&
+            !(application.ApplicationSequence is > 0 && application.ApplicationSequence == status.Application.ApplicationSequence);
         if (application.SeenAtUtc > status.Application.SeenAtUtc)
         {
             history.Add(new TrackedStatus(status.Application, status.ExpiresAtUtc)
@@ -305,23 +440,37 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
                 RemovedAtUtc = status.RemovedAtUtc ?? application.SeenAtUtc,
             });
         }
-        if (application.Parameter == 0 && status.Application.Parameter != 0 &&
-            (application.StatusId != 0xB5F || status.RemovedAtUtc is null && application.SeenAtUtc <= status.ExpiresAtUtc))
+        if (!startsApplication && wasActive && !HasParameter(application) && HasParameter(status.Application))
         {
-            application = application with { Parameter = status.Application.Parameter };
+            application = application with { Parameter = status.Application.Parameter, HasParameter = true };
         }
+        if (!startsApplication && wasActive)
+            application = application with { AppliedParameter = application.AppliedParameter ?? status.Application.AppliedParameter,
+                StatusSlot = application.StatusSlot ?? status.Application.StatusSlot };
 
         var futureRemoval = status.RemovedAtUtc > application.SeenAtUtc ? status.RemovedAtUtc : null;
+        var expiresAtUtc = HasDuration(application) ? application.SeenAtUtc.AddSeconds(application.DurationSeconds) : status.ExpiresAtUtc;
+        if (!startsApplication && application.ApplicationSequence is null or 0)
+            application = application with { ApplicationSequence = status.Application.ApplicationSequence };
         status.Application = application;
-        status.ExpiresAtUtc = application.SeenAtUtc.AddSeconds(
-            application.DurationSeconds > 0.0f
-                ? application.DurationSeconds
-                : GetDefaultDurationSeconds(application.StatusId));
+        status.ExpiresAtUtc = expiresAtUtc;
         status.RemovedAtUtc = futureRemoval;
     }
 
     private void Prune(DateTime seenAtUtc)
     {
+        slots.Prune(seenAtUtc);
+        foreach (var key in applicationHistory.Where(entry =>
+                     entry.Value.SeenAtUtc.AddSeconds(PendingApplicationRetentionSeconds) < seenAtUtc)
+                     .Select(entry => entry.Key).ToArray())
+            applicationHistory.Remove(key);
+        if (pendingApplications.Count > 0)
+        {
+            foreach (var key in pendingApplications.Where(entry =>
+                         entry.Value.SeenAtUtc.AddSeconds(PendingApplicationRetentionSeconds) < seenAtUtc)
+                         .Select(entry => entry.Key).ToList())
+                pendingApplications.Remove(key);
+        }
         history.RemoveAll(status => (status.RemovedAtUtc ?? status.ExpiresAtUtc)
             .AddSeconds(HistoryRetentionSeconds) < seenAtUtc);
         foreach (var key in statuses
@@ -347,6 +496,9 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
     }
 
     private readonly record struct StatusKey(uint TargetEntityId, uint StatusId, uint SourceEntityId);
+
+    private sealed record PendingApplication(DateTime SeenAtUtc, uint? ApplicationSequence, ushort Parameter, bool HasParameter,
+        byte? AppliedParameter);
 
     private sealed class TrackedStatus(DamageStatusApplication application, DateTime expiresAtUtc)
     {

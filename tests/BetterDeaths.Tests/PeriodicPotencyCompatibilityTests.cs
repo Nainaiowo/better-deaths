@@ -275,7 +275,7 @@ public sealed class PeriodicPotencyCompatibilityTests
     private static void Hit(PeriodicDamageTracker tracker, uint amount, uint status = 0, bool canCalibrate = true,
         DamageStatusSnapshot[]? statuses = null, double potency = 100, DamageBaseRateSnapshot? rates = null)
     {
-        var packet = new DamageActionPacket(1, Start, 1, Source, 100, "Spell",
+        var packet = new DamageActionPacket(1, Start, 1, Source, canCalibrate ? 100u : 50000u, "Spell",
             [new(0, Target, [new(0, 3, 0, 0, 0, 0, amount)])])
         {
             DirectPotency = potency,

@@ -217,6 +217,136 @@ public sealed class ConfirmedBuffSnapshotTests
     }
 
     [Theory]
+    [InlineData(0xB94u, 2)]
+    [InlineData(0x71Eu, 4)]
+    [InlineData(0x839u, 2)]
+    [InlineData(0x75Au, 3)]
+    [InlineData(0xB5Fu, 236)]
+    public void LandedBuffRecoversAnnouncedStrengthWhenStatusListReportsZero(uint status, ushort parameter)
+    {
+        var tracker = new RaidBuffTracker(confirmedOnly: true);
+        var announced = Buff(0) with { StatusId = status, ActionId = 100, DurationSeconds = 0, Parameter = parameter };
+        tracker.Observe(announced);
+        Assert.Empty(tracker.ApplyConfirmed(Application(0.5)).SourceStatuses);
+        tracker.Observe(announced with { SeenAtUtc = Start.AddSeconds(1), ActionId = 0, DurationSeconds = 20, Parameter = 0 });
+        tracker.ObserveSnapshots(Application(2) with
+        {
+            HasSourceStatusSnapshot = true, SourceStatuses = [new(status, Provider, 0, 19)],
+        });
+        Assert.Equal(parameter, Assert.Single(tracker.ApplyConfirmed(Application(3)).SourceStatuses).Parameter);
+    }
+
+    [Fact]
+    public void ConfirmedNonzeroStrengthWinsOverAnnouncedStrength()
+    {
+        var tracker = new RaidBuffTracker(confirmedOnly: true);
+        tracker.Observe(Buff(0) with { StatusId = 0xB94, ActionId = 100, DurationSeconds = 0, Parameter = 6 });
+        tracker.Observe(Buff(1) with { StatusId = 0xB94, Parameter = 2 });
+        Assert.Equal(2, Assert.Single(tracker.ApplyConfirmed(Application(2)).SourceStatuses).Parameter);
+    }
+
+    [Fact]
+    public void PendingParameterDoesNotUpgradeAnExistingBuffFromAnUnknownSnapshot()
+    {
+        var tracker = new RaidBuffTracker(confirmedOnly: true);
+        tracker.Observe(Buff(0) with { StatusId = 0xB94, Parameter = 2 });
+        tracker.Observe(Buff(1) with { StatusId = 0xB94, ActionId = 100, DurationSeconds = 0, Parameter = 6 });
+        tracker.ObserveSnapshots(Application(1.5) with
+        {
+            HasSourceStatusSnapshot = true, SourceStatuses = [new(0xB94, Provider, 0, 18)],
+        });
+        Assert.Equal(2, Assert.Single(tracker.ApplyConfirmed(Application(1.6)).SourceStatuses).Parameter);
+        tracker.Observe(Buff(2) with { StatusId = 0xB94, Parameter = 0 });
+        Assert.Equal(6, Assert.Single(tracker.ApplyConfirmed(Application(3)).SourceStatuses).Parameter);
+    }
+
+    [Fact]
+    public void CapturedRadiantFinaleConfirmationUsesTwoPercentInsteadOfTheUnknownDefault()
+    {
+        var module = new DamageParsingModule();
+        module.Process(new(1, Start, 1, Player, 100, "Hit", [new(0, Enemy, [new(0, 3, 0, 0, 0, 0, 1000)])])
+        { DirectPotency = 100, CanCalibratePotency = true });
+        module.ObserveStatus(Buff(0.1) with { StatusId = 0xB94, ActionId = 100, DurationSeconds = 0, Parameter = 2 });
+        module.ObserveStatus(Buff(0.2) with { StatusId = 0xB94, Parameter = 0 });
+        var dot = Application(1) with
+        {
+            PeriodicPotency = 20, HasSourceStatusSnapshot = true,
+            SourceStatuses = [new(0xB94, Provider, 0, 19)],
+        };
+        module.ObserveStatus(dot);
+        module.ObserveStatus(dot with
+        {
+            SeenAtUtc = Start.AddSeconds(2), ActionId = 0, DurationSeconds = 30,
+            HasSourceStatusSnapshot = false, SourceStatuses = [],
+        });
+        module.ProcessPeriodicTick(new(100, Start.AddSeconds(3), Enemy, 0, "", 0, 600, null));
+        var tick = Assert.Single(module.FlushPendingPeriodicTicks(Start.AddSeconds(3), true));
+        Assert.Equal(1.02, tick.PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 6);
+    }
+
+    [Theory]
+    [InlineData(2218u, 2216u, (byte)15, 1.0, 1.60)]
+    [InlineData(2216u, 2217u, (byte)35, 1.01, 1.64)]
+    public void LandingSnapshotReplacesThePreviousSongForTheWholeApplication(
+        uint oldSong, uint newSong, byte lowCrit, double damageMultiplier, double criticalMultiplier)
+    {
+        var module = new DamageParsingModule();
+        for (var i = 0; i < 20; i++)
+            module.Process(new(i + 1, Start.AddMilliseconds(i), (uint)(i + 1), Player, 100, "Hit",
+                [new(0, Enemy, [new(0, 3, i < 5 ? (byte)0x20 : (byte)0, 0, 0, 0, 1000)])])
+            { DirectPotency = 100, CanCalibratePotency = true, HasSourceStatusSnapshot = true });
+        var dot = Application(1) with
+        {
+            PeriodicPotency = 20, CriticalRateLowByte = lowCrit,
+            HasSourceStatusSnapshot = true, SourceStatuses = [new(oldSong, Provider, 0, 3)],
+        };
+        module.ObserveStatus(dot);
+        module.ObserveStatus(dot with
+        {
+            ActionId = 0, SeenAtUtc = Start.AddSeconds(2), DurationSeconds = 30,
+            SourceStatuses = [new(newSong, Provider, 0, 5)],
+            HasTargetStatusSnapshot = true, TargetStatuses = [],
+            BaseDamageLowByte = null, CriticalRateLowByte = null,
+        });
+        module.ProcessPeriodicTick(new(100, Start.AddSeconds(3), Enemy, 0, "", 0, 600, null));
+        var first = Assert.Single(module.FlushPendingPeriodicTicks(Start.AddSeconds(3), true));
+        Assert.Equal(damageMultiplier, first.PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 6);
+        Assert.Equal(criticalMultiplier, first.PeriodicCompatibilityEstimate.Inputs.CriticalMultiplier, 6);
+        Assert.Equal(0, first.PeriodicCompatibilityEstimate.DirectHit.BuffRate);
+        module.ObserveStatus(Buff(4) with { StatusId = newSong, IsRemoval = true });
+        module.ProcessPeriodicTick(new(101, Start.AddSeconds(6), Enemy, 0, "", 0, 600, null));
+        var later = Assert.Single(module.FlushPendingPeriodicTicks(Start.AddSeconds(6), true));
+        Assert.Equal(first.PeriodicCompatibilityEstimate, later.PeriodicCompatibilityEstimate);
+    }
+
+    [Theory]
+    [InlineData("other-source")]
+    [InlineData("other-target")]
+    [InlineData("future")]
+    [InlineData("expired")]
+    [InlineData("removed")]
+    [InlineData("source-less-removal")]
+    [InlineData("superseded")]
+    [InlineData("cleared")]
+    public void UnrelatedOrInvalidatedAnnouncementsCannotSupplyStrength(string scenario)
+    {
+        var tracker = new RaidBuffTracker(confirmedOnly: true);
+        var announced = Buff(scenario == "future" ? 2 : 0) with
+        { StatusId = 0xB94, ActionId = 100, DurationSeconds = 0, Parameter = 2 };
+        if (scenario == "other-source") announced = announced with { Source = Provider with { EntityId = 0x1003 } };
+        if (scenario == "other-target") announced = announced with { Target = Enemy };
+        tracker.Observe(announced);
+        if (scenario == "cleared") tracker.Clear();
+        if (scenario == "removed") tracker.Observe(Buff(0.5) with { StatusId = 0xB94, IsRemoval = true });
+        if (scenario == "source-less-removal") tracker.Observe(Buff(0.5) with
+        { StatusId = 0xB94, IsRemoval = true, Source = Provider with { EntityId = 0 } });
+        if (scenario == "superseded") tracker.Observe(announced with { SeenAtUtc = Start.AddSeconds(0.5), Parameter = 0 });
+        var at = scenario == "expired" ? 36 : 1;
+        tracker.Observe(Buff(at) with { StatusId = 0xB94, Parameter = 0 });
+        Assert.Equal(0, Assert.Single(tracker.ApplyConfirmed(Application(at)).SourceStatuses).Parameter);
+    }
+
+    [Theory]
     [MemberData(nameof(DamageJobRegressionMatrixTests.CurrentPeriodicDamageMatrix), MemberType = typeof(DamageJobRegressionMatrixTests))]
     public void EveryPeriodicWorkflowUsesTheSameConfirmedBuffPath(string _, uint job, uint status, double potency, bool ground)
     {
@@ -287,6 +417,43 @@ public sealed class ConfirmedBuffSnapshotTests
         tracker.Observe(dot with { SeenAtUtc = Start.AddSeconds(2), ActionId = 0, DurationSeconds = 30 });
         var tick = Assert.Single(tracker.Process(new(100, Start.AddSeconds(3), Enemy, 0, "", 0, 600, null)));
         Assert.Equal(0.03, tick.PeriodicCompatibilityEstimate!.DirectHit.BuffRate, 6);
+    }
+
+    [Theory]
+    [MemberData(nameof(DamageJobRegressionMatrixTests.CurrentPeriodicDamageMatrix), MemberType = typeof(DamageJobRegressionMatrixTests))]
+    public void EveryPeriodicWorkflowUsesFreshSourceAndTargetSnapshotsAtLanding(string _, uint job, uint status, double potency, bool ground)
+    {
+        var module = new DamageParsingModule();
+        var player = Player with { ClassJobId = job };
+        for (var i = 0; i < 20; i++)
+            module.Process(new(i + 1, Start.AddMilliseconds(i), (uint)(i + 1), player, 100, "Hit",
+                [new(0, Enemy, [new(0, 3, 0, 0, 0, 0, 1000)])])
+            { DirectPotency = 100, CanCalibratePotency = true, HasSourceStatusSnapshot = true });
+        var dot = Application(1) with
+        {
+            Source = player, StatusId = status, PeriodicPotency = potency,
+            HasSourceStatusSnapshot = true, SourceStatuses = [new(2218, Provider, 0, 5)],
+        };
+        module.ObserveStatus(dot);
+        module.ObserveStatus(dot with
+        {
+            ActionId = 0, SeenAtUtc = Start.AddSeconds(2), DurationSeconds = 30,
+            SourceStatuses = [new(2216, Provider, 0, 5)],
+            HasTargetStatusSnapshot = true, TargetStatuses = [new(0x4C5, Provider, 0, 5)],
+        });
+        module.ProcessPeriodicTick(new(100, Start.AddSeconds(3), Enemy, ground ? status : 0, "", 0, 600,
+            ground ? player : null));
+        var tick = Assert.Single(module.FlushPendingPeriodicTicks(Start.AddSeconds(3), true));
+        if (ground)
+        {
+            Assert.False(tick.PeriodicMeterUsesEstimate);
+            Assert.Equal(600, tick.RawMeterAmount);
+            return;
+        }
+        var estimate = Assert.IsType<PeriodicCompatibilityEstimate>(tick.PeriodicCompatibilityEstimate);
+        Assert.Equal(0, estimate.DirectHit.BuffRate);
+        Assert.Equal(0.12, estimate.Inputs!.CriticalRate, 6);
+        Assert.Equal(1.4, estimate.Inputs.CriticalMultiplier, 6);
     }
 
     private static DamageStatusApplication Application(double seconds) => new(Enemy, Player, 50000,

@@ -29,7 +29,7 @@ public sealed class DamageWorkflowGoldenTests
             Assert.Matches("^[0-9A-F]{64}$", hash.GetString()!);
         var scenarios = Data.GetProperty("Scenarios").EnumerateArray().ToArray();
         foreach (var family in new[] { "calibration:", "healing-opener:", "bard-refresh:", "ground-owners:", "pet-replacement:",
-            "scholar-dual-effects", "samurai-application-buff:", "black-mage-thunder-replacement" })
+            "scholar-dual-effects", "samurai-application-buff:", "black-mage-thunder-replacement", "variable-buff-lifecycle:" })
             Assert.Contains(scenarios, s => s.GetProperty("Name").GetString()!.StartsWith(family, StringComparison.Ordinal));
         foreach (var scenario in scenarios)
             Assert.NotEmpty(scenario.GetProperty("Steps").EnumerateArray());
@@ -93,7 +93,7 @@ public sealed class DamageWorkflowGoldenTests
             }
         }
 
-        var current = module.GetCurrentEncounter()!;
+        var current = module.GetCurrentEncounter(last)!;
         module.GetLiveEncounter();
         module.RefreshLiveEncounter(last.AddSeconds(1));
         await module.PendingLiveSnapshot!;

@@ -300,7 +300,7 @@ public sealed class RaidDamageCalculatorTests
     {
         var damageEvent = CreateEvent(105) with
         {
-            SourceStatuses = [Status(0x839, Buffer)],
+            SourceStatuses = [Status(0x839, Buffer) with { AppliedParameter = 5 }],
             HasSourceStatusSnapshot = true,
         };
         var result = Calculate(damageEvent);
@@ -330,7 +330,7 @@ public sealed class RaidDamageCalculatorTests
         {
             SourceStatuses =
             [
-                Status(0x839, Buffer),
+                Status(0x839, Buffer) with { AppliedParameter = 5 },
                 Status(0x4A1, SecondBuffer),
             ],
             HasSourceStatusSnapshot = true,
@@ -352,7 +352,7 @@ public sealed class RaidDamageCalculatorTests
     {
         var damageEvent = CreateEvent(106) with
         {
-            SourceStatuses = [Status(statusId, Buffer)],
+            SourceStatuses = [Status(statusId, Buffer) with { AppliedParameter = 5 }],
             HasSourceStatusSnapshot = true,
         };
         var result = Calculate(damageEvent);
@@ -683,7 +683,7 @@ public sealed class RaidDamageCalculatorTests
     [InlineData(0x71E, 3, 103, 3)]
     [InlineData(0x71E, 5, 105, 5)]
     [InlineData(0x839, 2, 102, 2)]
-    [InlineData(0x839, 1, 102, 2)]
+    [InlineData(0x839, 1, 101, 1)]
     [InlineData(0x839, 5, 105, 5)]
     public void VariableStrengthDamageBuffUsesAppliedPercentage(
         uint statusId,
@@ -777,7 +777,7 @@ public sealed class RaidDamageCalculatorTests
     [InlineData(34, 106, 6)]
     [InlineData(24, 103, 3)]
     [InlineData(42, 103, 3)]
-    public void BalanceUsesRecipientRoleWhenStatusHasNoStrength(
+    public void BalanceUsesCapturedStrengthAcrossRecipientRoles(
         uint classJobId,
         uint damage,
         double expectedCredit)
@@ -787,7 +787,7 @@ public sealed class RaidDamageCalculatorTests
         {
             Source = recipient,
             AttributedSource = recipient,
-            SourceStatuses = [Status(0xF2F, Buffer)],
+            SourceStatuses = [Status(0xF2F, Buffer) with { AppliedParameter = (byte)expectedCredit }],
             HasSourceStatusSnapshot = true,
         };
         var result = Calculate(damageEvent);
@@ -801,7 +801,7 @@ public sealed class RaidDamageCalculatorTests
     [InlineData(42, 106, 6)]
     [InlineData(20, 103, 3)]
     [InlineData(37, 103, 3)]
-    public void SpearUsesRecipientRoleWhenStatusHasNoStrength(
+    public void SpearUsesCapturedStrengthAcrossRecipientRoles(
         uint classJobId,
         uint damage,
         double expectedCredit)
@@ -811,7 +811,7 @@ public sealed class RaidDamageCalculatorTests
         {
             Source = recipient,
             AttributedSource = recipient,
-            SourceStatuses = [Status(0xF31, Buffer)],
+            SourceStatuses = [Status(0xF31, Buffer) with { AppliedParameter = (byte)expectedCredit }],
             HasSourceStatusSnapshot = true,
         };
         var result = Calculate(damageEvent);

@@ -996,9 +996,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
             var maxHp = battleChara.MaxHp;
             var statuses = new List<RawStatusSnapshot>();
-            foreach (var status in battleChara.StatusList)
+            for (var index = 0; index < battleChara.StatusList.Length; index++)
             {
-                if (status.StatusId == 0 ||
+                var status = battleChara.StatusList[index];
+                if (status is null || status.StatusId == 0 ||
                     relevantDamageStatusesOnly &&
                     !DamageStatusCapturePolicy.IsRelevant(status.StatusId))
                 {
@@ -1009,7 +1010,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     status.StatusId,
                     status.SourceId,
                     status.Param,
-                    status.RemainingTime));
+                    status.RemainingTime) { StatusSlot = (byte)index });
             }
 
             return new RawCombatSnapshot(

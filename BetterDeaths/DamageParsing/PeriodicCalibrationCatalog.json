@@ -1,0 +1,4725 @@
+{
+  "Version": 2,
+  "Actions": [
+    {
+      "Id": 9,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 15,
+      "Primary": 170,
+      "Combo": 330,
+      "Secondary": 170,
+      "SecondaryCombo": 330
+    },
+    {
+      "Id": 16,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 21,
+      "Primary": 100,
+      "Combo": 330,
+      "Secondary": 100,
+      "SecondaryCombo": 330
+    },
+    {
+      "Id": 23,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 24,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 29,
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 270,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 31,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 37,
+      "Primary": 190,
+      "Combo": 340,
+      "Secondary": 190,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 41,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 42,
+      "Primary": 220,
+      "Combo": 500,
+      "Secondary": 220,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 45,
+      "Primary": 220,
+      "Combo": 500,
+      "Secondary": 220,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 46,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 49,
+      "Primary": 330,
+      "Combo": 330,
+      "Secondary": 330,
+      "SecondaryCombo": 330
+    },
+    {
+      "Id": 51,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 53,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 54,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 56,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 61,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 62,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 64,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 66,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 70,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 74,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 75,
+      "Primary": 230,
+      "Combo": 230,
+      "Secondary": 230,
+      "SecondaryCombo": 230
+    },
+    {
+      "Id": 78,
+      "Primary": 130,
+      "Combo": 280,
+      "Secondary": 130,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 84,
+      "Primary": 100,
+      "Combo": 380,
+      "Secondary": 100,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 86,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 87,
+      "Primary": 140,
+      "Combo": 250,
+      "Secondary": 140,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 88,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 90,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 92,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 96,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 97,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 98,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 100,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 106,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 110,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 113,
+      "Primary": 60,
+      "Combo": 60,
+      "Secondary": 60,
+      "SecondaryCombo": 60
+    },
+    {
+      "Id": 117,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 119,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 121,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 127,
+      "Primary": 190,
+      "Combo": 190,
+      "Secondary": 190,
+      "SecondaryCombo": 190
+    },
+    {
+      "Id": 132,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 139,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 141,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 142,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 144,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 146,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 147,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 152,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 153,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 154,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 156,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 159,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 162,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 163,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 167,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 172,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 181,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 342,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 724,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 817,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 819,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 820,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 821,
+      "Primary": 170,
+      "Combo": 170,
+      "Secondary": 170,
+      "SecondaryCombo": 170
+    },
+    {
+      "Id": 822,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 823,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 824,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 1242,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 1485,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 1610,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2010,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2240,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 2242,
+      "Primary": 240,
+      "Combo": 400,
+      "Secondary": 240,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 2246,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 2247,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 2248,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 2254,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 2255,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2258,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2265,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 2266,
+      "Primary": 350,
+      "Combo": 350,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 2267,
+      "Primary": 740,
+      "Combo": 740,
+      "Secondary": 740,
+      "SecondaryCombo": 740
+    },
+    {
+      "Id": 2268,
+      "Primary": 350,
+      "Combo": 350,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 2269,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 2271,
+      "Primary": 580,
+      "Combo": 580,
+      "Secondary": 580,
+      "SecondaryCombo": 580
+    },
+    {
+      "Id": 2339,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2404,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2559,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2866,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 2868,
+      "Primary": 100,
+      "Combo": 210,
+      "Secondary": 100,
+      "SecondaryCombo": 210
+    },
+    {
+      "Id": 2870,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 2872,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 2873,
+      "Primary": 100,
+      "Combo": 270,
+      "Secondary": 100,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 2874,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 2890,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 91,
+      "SecondaryCombo": 91
+    },
+    {
+      "Id": 2891,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 2892,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3342,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3538,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 3539,
+      "Primary": 200,
+      "Combo": 460,
+      "Secondary": 200,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 3543,
+      "Primary": 1200,
+      "Combo": 1200,
+      "Secondary": 780,
+      "SecondaryCombo": 780
+    },
+    {
+      "Id": 3545,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 520,
+      "SecondaryCombo": 520
+    },
+    {
+      "Id": 3547,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 3549,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3550,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3554,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3555,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 3556,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3558,
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 3560,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 3562,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 3563,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3566,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 3568,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 3571,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 3576,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3577,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3578,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 3579,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3582,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 3584,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 3588,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3589,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 3596,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 3598,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 3615,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 3617,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 3621,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 3623,
+      "Primary": 240,
+      "Combo": 380,
+      "Secondary": 240,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 3624,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 3632,
+      "Primary": 260,
+      "Combo": 480,
+      "Secondary": 260,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 3641,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 3643,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 4060,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 4747,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 5068,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 5071,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 5937,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 5940,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7381,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 7383,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 7384,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7386,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 7387,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7391,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 7392,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 7397,
+      "Primary": 100,
+      "Combo": 120,
+      "Secondary": 100,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 7399,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7400,
+      "Primary": 720,
+      "Combo": 720,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7401,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 7402,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7406,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 7407,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 7409,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 7410,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 7411,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 7412,
+      "Primary": 140,
+      "Combo": 320,
+      "Secondary": 140,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 7413,
+      "Primary": 160,
+      "Combo": 420,
+      "Secondary": 160,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7416,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7420,
+      "Primary": 80,
+      "Combo": 80,
+      "Secondary": 80,
+      "SecondaryCombo": 80
+    },
+    {
+      "Id": 7422,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 450,
+      "SecondaryCombo": 450
+    },
+    {
+      "Id": 7426,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7428,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 7431,
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 7435,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 7442,
+      "Primary": 190,
+      "Combo": 190,
+      "Secondary": 190,
+      "SecondaryCombo": 190
+    },
+    {
+      "Id": 7444,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 7447,
+      "Primary": 60,
+      "Combo": 60,
+      "Secondary": 60,
+      "SecondaryCombo": 60
+    },
+    {
+      "Id": 7449,
+      "Primary": 1300,
+      "Combo": 1300,
+      "Secondary": 650,
+      "SecondaryCombo": 650
+    },
+    {
+      "Id": 7477,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 7478,
+      "Primary": 140,
+      "Combo": 300,
+      "Secondary": 140,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 7479,
+      "Primary": 140,
+      "Combo": 300,
+      "Secondary": 140,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 7480,
+      "Primary": 160,
+      "Combo": 340,
+      "Secondary": 160,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 7481,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7482,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7483,
+      "Primary": 90,
+      "Combo": 90,
+      "Secondary": 90,
+      "SecondaryCombo": 90
+    },
+    {
+      "Id": 7484,
+      "Primary": 100,
+      "Combo": 120,
+      "Secondary": 100,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 7485,
+      "Primary": 100,
+      "Combo": 120,
+      "Secondary": 100,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 7486,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 7487,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 7488,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 7489,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 7490,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 7491,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 7492,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 7493,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 7496,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 7503,
+      "Primary": 170,
+      "Combo": 170,
+      "Secondary": 170,
+      "SecondaryCombo": 170
+    },
+    {
+      "Id": 7504,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 7505,
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7506,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 7507,
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 7509,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 7510,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7511,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7512,
+      "Primary": 100,
+      "Combo": 150,
+      "Secondary": 100,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 7513,
+      "Primary": 60,
+      "Combo": 60,
+      "Secondary": 60,
+      "SecondaryCombo": 60
+    },
+    {
+      "Id": 7515,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 7516,
+      "Primary": 100,
+      "Combo": 230,
+      "Secondary": 100,
+      "SecondaryCombo": 230
+    },
+    {
+      "Id": 7517,
+      "Primary": 480,
+      "Combo": 480,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 7519,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 7524,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 7525,
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 293,
+      "SecondaryCombo": 293
+    },
+    {
+      "Id": 7526,
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 293,
+      "SecondaryCombo": 293
+    },
+    {
+      "Id": 7527,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 7528,
+      "Primary": 190,
+      "Combo": 380,
+      "Secondary": 190,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 7529,
+      "Primary": 190,
+      "Combo": 560,
+      "Secondary": 190,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 7530,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 7535,
+      "Primary": 210,
+      "Combo": 210,
+      "Secondary": 210,
+      "SecondaryCombo": 210
+    },
+    {
+      "Id": 8324,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 8842,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11384,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 11385,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 11386,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 11387,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11389,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 75,
+      "SecondaryCombo": 75
+    },
+    {
+      "Id": 11390,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 70,
+      "SecondaryCombo": 70
+    },
+    {
+      "Id": 11391,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 11394,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 11395,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 11396,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 11397,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11398,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11399,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 11400,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11402,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 11404,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 11405,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11407,
+      "Primary": 2000,
+      "Combo": 2000,
+      "Secondary": 2000,
+      "SecondaryCombo": 2000
+    },
+    {
+      "Id": 11408,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11413,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11419,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 11420,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 11422,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 11423,
+      "Primary": 10,
+      "Combo": 10,
+      "Secondary": 10,
+      "SecondaryCombo": 10
+    },
+    {
+      "Id": 11425,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 11426,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 11427,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 11428,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 11429,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 11430,
+      "Primary": 350,
+      "Combo": 350,
+      "Secondary": 175,
+      "SecondaryCombo": 175
+    },
+    {
+      "Id": 12921,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 13738,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 15989,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 15990,
+      "Primary": 120,
+      "Combo": 280,
+      "Secondary": 120,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 15991,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 15992,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 15993,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 15994,
+      "Primary": 100,
+      "Combo": 160,
+      "Secondary": 100,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 15995,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 15996,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 16003,
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 144,
+      "SecondaryCombo": 144
+    },
+    {
+      "Id": 16004,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16005,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 216,
+      "SecondaryCombo": 216
+    },
+    {
+      "Id": 16007,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16008,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 16009,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 88,
+      "SecondaryCombo": 88
+    },
+    {
+      "Id": 16137,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16139,
+      "Primary": 240,
+      "Combo": 380,
+      "Secondary": 240,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 16141,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 16143,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 16144,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 16145,
+      "Primary": 240,
+      "Combo": 460,
+      "Secondary": 240,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 16146,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 16147,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 16149,
+      "Primary": 100,
+      "Combo": 160,
+      "Secondary": 100,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 16150,
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 560,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 16153,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 16156,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 16157,
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 16158,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16159,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 16162,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 16163,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16165,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 800,
+      "SecondaryCombo": 800
+    },
+    {
+      "Id": 16191,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16192,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16193,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16194,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16195,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16196,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16457,
+      "Primary": 100,
+      "Combo": 220,
+      "Secondary": 100,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 16458,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16459,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16460,
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 460,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 16461,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 16462,
+      "Primary": 100,
+      "Combo": 140,
+      "Secondary": 100,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16463,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16465,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16466,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 16467,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16468,
+      "Primary": 120,
+      "Combo": 160,
+      "Secondary": 120,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 16470,
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 460,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 16473,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16474,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 16476,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16477,
+      "Primary": 100,
+      "Combo": 150,
+      "Secondary": 100,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 16478,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 16479,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 16480,
+      "Primary": 840,
+      "Combo": 840,
+      "Secondary": 504,
+      "SecondaryCombo": 504
+    },
+    {
+      "Id": 16481,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 800,
+      "SecondaryCombo": 800
+    },
+    {
+      "Id": 16483,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16484,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 16485,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 16486,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16487,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16488,
+      "Primary": 100,
+      "Combo": 120,
+      "Secondary": 100,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 16491,
+      "Primary": 850,
+      "Combo": 850,
+      "Secondary": 850,
+      "SecondaryCombo": 850
+    },
+    {
+      "Id": 16492,
+      "Primary": 1300,
+      "Combo": 1300,
+      "Secondary": 1300,
+      "SecondaryCombo": 1300
+    },
+    {
+      "Id": 16494,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16495,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 16496,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16497,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16498,
+      "Primary": 650,
+      "Combo": 650,
+      "Secondary": 650,
+      "SecondaryCombo": 650
+    },
+    {
+      "Id": 16499,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 16500,
+      "Primary": 660,
+      "Combo": 660,
+      "Secondary": 660,
+      "SecondaryCombo": 660
+    },
+    {
+      "Id": 16503,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16504,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16505,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16507,
+      "Primary": 890,
+      "Combo": 890,
+      "Secondary": 890,
+      "SecondaryCombo": 890
+    },
+    {
+      "Id": 16508,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 16510,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 16511,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16514,
+      "Primary": 580,
+      "Combo": 580,
+      "Secondary": 580,
+      "SecondaryCombo": 580
+    },
+    {
+      "Id": 16515,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 16518,
+      "Primary": 1300,
+      "Combo": 1300,
+      "Secondary": 650,
+      "SecondaryCombo": 650
+    },
+    {
+      "Id": 16519,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 16524,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16525,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 16526,
+      "Primary": 210,
+      "Combo": 210,
+      "Secondary": 210,
+      "SecondaryCombo": 210
+    },
+    {
+      "Id": 16527,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 16528,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 16529,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 16530,
+      "Primary": 750,
+      "Combo": 750,
+      "Secondary": 338,
+      "SecondaryCombo": 338
+    },
+    {
+      "Id": 16532,
+      "Primary": 85,
+      "Combo": 85,
+      "Secondary": 85,
+      "SecondaryCombo": 85
+    },
+    {
+      "Id": 16533,
+      "Primary": 290,
+      "Combo": 290,
+      "Secondary": 290,
+      "SecondaryCombo": 290
+    },
+    {
+      "Id": 16535,
+      "Primary": 1400,
+      "Combo": 1400,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 16539,
+      "Primary": 165,
+      "Combo": 165,
+      "Secondary": 165,
+      "SecondaryCombo": 165
+    },
+    {
+      "Id": 16541,
+      "Primary": 255,
+      "Combo": 255,
+      "Secondary": 255,
+      "SecondaryCombo": 255
+    },
+    {
+      "Id": 16555,
+      "Primary": 230,
+      "Combo": 230,
+      "Secondary": 230,
+      "SecondaryCombo": 230
+    },
+    {
+      "Id": 16647,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 16681,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 17206,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 17869,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 17870,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 17907,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 18295,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 18296,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 18297,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 18298,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 18299,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 18300,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 18305,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 125,
+      "SecondaryCombo": 125
+    },
+    {
+      "Id": 18308,
+      "Primary": 210,
+      "Combo": 210,
+      "Secondary": 210,
+      "SecondaryCombo": 210
+    },
+    {
+      "Id": 18310,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 18311,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 18313,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 18314,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 18316,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 18319,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 18320,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 18323,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 18324,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 18325,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 19357,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 19895,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 20144,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 22025,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 22328,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 22352,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 23264,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 23265,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 23266,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 23268,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 23269,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 23270,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 23271,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 23274,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 23275,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 23278,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 23279,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 23281,
+      "Primary": 50,
+      "Combo": 50,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 23282,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 23283,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 23284,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 23285,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 23286,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 23287,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 23289,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 23290,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 23348,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24283,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24289,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 24297,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 24304,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 24306,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 24307,
+      "Primary": 490,
+      "Combo": 490,
+      "Secondary": 245,
+      "SecondaryCombo": 245
+    },
+    {
+      "Id": 24312,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 24313,
+      "Primary": 690,
+      "Combo": 690,
+      "Secondary": 345,
+      "SecondaryCombo": 345
+    },
+    {
+      "Id": 24315,
+      "Primary": 170,
+      "Combo": 170,
+      "Secondary": 170,
+      "SecondaryCombo": 170
+    },
+    {
+      "Id": 24316,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 190,
+      "SecondaryCombo": 190
+    },
+    {
+      "Id": 24318,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 228,
+      "SecondaryCombo": 228
+    },
+    {
+      "Id": 24373,
+      "Primary": 420,
+      "Combo": 420,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 24374,
+      "Primary": 260,
+      "Combo": 500,
+      "Secondary": 260,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 24375,
+      "Primary": 280,
+      "Combo": 600,
+      "Secondary": 280,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 24376,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 24377,
+      "Primary": 120,
+      "Combo": 180,
+      "Secondary": 120,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 24378,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24379,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 24380,
+      "Primary": 520,
+      "Combo": 520,
+      "Secondary": 520,
+      "SecondaryCombo": 520
+    },
+    {
+      "Id": 24381,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 24382,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24383,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24384,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 24385,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24386,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 24388,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 24389,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 24390,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 24391,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 24392,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 24393,
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 420,
+      "SecondaryCombo": 420
+    },
+    {
+      "Id": 24395,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24396,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 24397,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 24398,
+      "Primary": 1100,
+      "Combo": 1100,
+      "Secondary": 880,
+      "SecondaryCombo": 880
+    },
+    {
+      "Id": 24399,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 24400,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 25747,
+      "Primary": 450,
+      "Combo": 450,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25748,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25749,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25750,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25752,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 25753,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25756,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 375,
+      "SecondaryCombo": 375
+    },
+    {
+      "Id": 25757,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 450,
+      "SecondaryCombo": 450
+    },
+    {
+      "Id": 25759,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25760,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 850,
+      "SecondaryCombo": 850
+    },
+    {
+      "Id": 25763,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 25764,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25765,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 25767,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 25768,
+      "Primary": 900,
+      "Combo": 900,
+      "Secondary": 585,
+      "SecondaryCombo": 585
+    },
+    {
+      "Id": 25769,
+      "Primary": 1500,
+      "Combo": 1500,
+      "Secondary": 975,
+      "SecondaryCombo": 975
+    },
+    {
+      "Id": 25770,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 25771,
+      "Primary": 160,
+      "Combo": 460,
+      "Secondary": 160,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 25772,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25773,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 25774,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 25776,
+      "Primary": 70,
+      "Combo": 70,
+      "Secondary": 70,
+      "SecondaryCombo": 70
+    },
+    {
+      "Id": 25777,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 25778,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 25780,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 25781,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 25782,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 25783,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 25784,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 25786,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 25787,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25788,
+      "Primary": 660,
+      "Combo": 660,
+      "Secondary": 465,
+      "SecondaryCombo": 465
+    },
+    {
+      "Id": 25790,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 25791,
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 184,
+      "SecondaryCombo": 184
+    },
+    {
+      "Id": 25792,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 25794,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25795,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 25797,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 25808,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 25809,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 25810,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 25811,
+      "Primary": 380,
+      "Combo": 380,
+      "Secondary": 380,
+      "SecondaryCombo": 380
+    },
+    {
+      "Id": 25812,
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 270,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 25813,
+      "Primary": 170,
+      "Combo": 170,
+      "Secondary": 170,
+      "SecondaryCombo": 170
+    },
+    {
+      "Id": 25814,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 25815,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 25816,
+      "Primary": 70,
+      "Combo": 70,
+      "Secondary": 70,
+      "SecondaryCombo": 70
+    },
+    {
+      "Id": 25817,
+      "Primary": 410,
+      "Combo": 410,
+      "Secondary": 410,
+      "SecondaryCombo": 410
+    },
+    {
+      "Id": 25818,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 25819,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25820,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 25821,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25823,
+      "Primary": 620,
+      "Combo": 620,
+      "Secondary": 620,
+      "SecondaryCombo": 620
+    },
+    {
+      "Id": 25824,
+      "Primary": 340,
+      "Combo": 340,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 25825,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 25826,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 25827,
+      "Primary": 190,
+      "Combo": 190,
+      "Secondary": 190,
+      "SecondaryCombo": 190
+    },
+    {
+      "Id": 25828,
+      "Primary": 130,
+      "Combo": 130,
+      "Secondary": 130,
+      "SecondaryCombo": 130
+    },
+    {
+      "Id": 25829,
+      "Primary": 90,
+      "Combo": 90,
+      "Secondary": 90,
+      "SecondaryCombo": 90
+    },
+    {
+      "Id": 25832,
+      "Primary": 210,
+      "Combo": 210,
+      "Secondary": 210,
+      "SecondaryCombo": 210
+    },
+    {
+      "Id": 25833,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 25834,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 25835,
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 224,
+      "SecondaryCombo": 224
+    },
+    {
+      "Id": 25836,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 64,
+      "SecondaryCombo": 64
+    },
+    {
+      "Id": 25837,
+      "Primary": 520,
+      "Combo": 520,
+      "Secondary": 208,
+      "SecondaryCombo": 208
+    },
+    {
+      "Id": 25843,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25844,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25845,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25846,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 25847,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 25848,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 25849,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 25850,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 25851,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 25852,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25853,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25854,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 25855,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 25856,
+      "Primary": 440,
+      "Combo": 440,
+      "Secondary": 440,
+      "SecondaryCombo": 440
+    },
+    {
+      "Id": 25858,
+      "Primary": 850,
+      "Combo": 850,
+      "Secondary": 383,
+      "SecondaryCombo": 383
+    },
+    {
+      "Id": 25859,
+      "Primary": 350,
+      "Combo": 350,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 25860,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 25865,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 25866,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 25871,
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 270,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 25872,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 25874,
+      "Primary": 270,
+      "Combo": 270,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 25882,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 390,
+      "SecondaryCombo": 390
+    },
+    {
+      "Id": 25885,
+      "Primary": 560,
+      "Combo": 560,
+      "Secondary": 224,
+      "SecondaryCombo": 224
+    },
+    {
+      "Id": 34563,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34564,
+      "Primary": 110,
+      "Combo": 110,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 34568,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 250,
+      "SecondaryCombo": 250
+    },
+    {
+      "Id": 34569,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 50,
+      "SecondaryCombo": 50
+    },
+    {
+      "Id": 34570,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 34571,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 220,
+      "SecondaryCombo": 220
+    },
+    {
+      "Id": 34572,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 34573,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34574,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 34576,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34577,
+      "Primary": 220,
+      "Combo": 220,
+      "Secondary": 110,
+      "SecondaryCombo": 110
+    },
+    {
+      "Id": 34578,
+      "Primary": 250,
+      "Combo": 250,
+      "Secondary": 125,
+      "SecondaryCombo": 125
+    },
+    {
+      "Id": 34580,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34582,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 34606,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34607,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34608,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34609,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34610,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34611,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34612,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34613,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34614,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34615,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34616,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 34617,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 34618,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 34619,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 34620,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 34621,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34622,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34623,
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 34624,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34625,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 34626,
+      "Primary": 750,
+      "Combo": 750,
+      "Secondary": 188,
+      "SecondaryCombo": 188
+    },
+    {
+      "Id": 34627,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34628,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34629,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34630,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34631,
+      "Primary": 1150,
+      "Combo": 1150,
+      "Secondary": 288,
+      "SecondaryCombo": 288
+    },
+    {
+      "Id": 34632,
+      "Primary": 200,
+      "Combo": 200,
+      "Secondary": 200,
+      "SecondaryCombo": 200
+    },
+    {
+      "Id": 34633,
+      "Primary": 680,
+      "Combo": 680,
+      "Secondary": 170,
+      "SecondaryCombo": 170
+    },
+    {
+      "Id": 34634,
+      "Primary": 280,
+      "Combo": 280,
+      "Secondary": 280,
+      "SecondaryCombo": 280
+    },
+    {
+      "Id": 34635,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 34636,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34637,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34638,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34639,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34640,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 80,
+      "SecondaryCombo": 80
+    },
+    {
+      "Id": 34641,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 80,
+      "SecondaryCombo": 80
+    },
+    {
+      "Id": 34642,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 80,
+      "SecondaryCombo": 80
+    },
+    {
+      "Id": 34643,
+      "Primary": 320,
+      "Combo": 320,
+      "Secondary": 80,
+      "SecondaryCombo": 80
+    },
+    {
+      "Id": 34644,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34645,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34650,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34651,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34652,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34653,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34654,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34655,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34656,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34657,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34658,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34659,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34660,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34661,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34662,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34663,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34670,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34671,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34672,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34673,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34676,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34677,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34678,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34679,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34680,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34681,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 34688,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36918,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 36919,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 36921,
+      "Primary": 580,
+      "Combo": 580,
+      "Secondary": 232,
+      "SecondaryCombo": 232
+    },
+    {
+      "Id": 36922,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 36924,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 350,
+      "SecondaryCombo": 350
+    },
+    {
+      "Id": 36925,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36928,
+      "Primary": 620,
+      "Combo": 620,
+      "Secondary": 620,
+      "SecondaryCombo": 620
+    },
+    {
+      "Id": 36929,
+      "Primary": 720,
+      "Combo": 720,
+      "Secondary": 720,
+      "SecondaryCombo": 720
+    },
+    {
+      "Id": 36930,
+      "Primary": 820,
+      "Combo": 820,
+      "Secondary": 820,
+      "SecondaryCombo": 820
+    },
+    {
+      "Id": 36931,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 36932,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 750,
+      "SecondaryCombo": 750
+    },
+    {
+      "Id": 36936,
+      "Primary": 120,
+      "Combo": 120,
+      "Secondary": 120,
+      "SecondaryCombo": 120
+    },
+    {
+      "Id": 36937,
+      "Primary": 800,
+      "Combo": 800,
+      "Secondary": 480,
+      "SecondaryCombo": 480
+    },
+    {
+      "Id": 36938,
+      "Primary": 900,
+      "Combo": 900,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 36939,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 36945,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36946,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36947,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36948,
+      "Primary": 900,
+      "Combo": 900,
+      "Secondary": 585,
+      "SecondaryCombo": 585
+    },
+    {
+      "Id": 36949,
+      "Primary": 1040,
+      "Combo": 1040,
+      "Secondary": 676,
+      "SecondaryCombo": 676
+    },
+    {
+      "Id": 36950,
+      "Primary": 1400,
+      "Combo": 1400,
+      "Secondary": 910,
+      "SecondaryCombo": 910
+    },
+    {
+      "Id": 36952,
+      "Primary": 460,
+      "Combo": 460,
+      "Secondary": 460,
+      "SecondaryCombo": 460
+    },
+    {
+      "Id": 36953,
+      "Primary": 550,
+      "Combo": 550,
+      "Secondary": 275,
+      "SecondaryCombo": 275
+    },
+    {
+      "Id": 36954,
+      "Primary": 130,
+      "Combo": 340,
+      "Secondary": 130,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 36955,
+      "Primary": 140,
+      "Combo": 300,
+      "Secondary": 140,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 36956,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 600,
+      "SecondaryCombo": 600
+    },
+    {
+      "Id": 36957,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 36958,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 36959,
+      "Primary": 400,
+      "Combo": 400,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 36960,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36961,
+      "Primary": 1100,
+      "Combo": 1100,
+      "Secondary": 1100,
+      "SecondaryCombo": 1100
+    },
+    {
+      "Id": 36963,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 36964,
+      "Primary": 940,
+      "Combo": 940,
+      "Secondary": 564,
+      "SecondaryCombo": 564
+    },
+    {
+      "Id": 36965,
+      "Primary": 410,
+      "Combo": 410,
+      "Secondary": 410,
+      "SecondaryCombo": 410
+    },
+    {
+      "Id": 36966,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36967,
+      "Primary": 410,
+      "Combo": 410,
+      "Secondary": 410,
+      "SecondaryCombo": 410
+    },
+    {
+      "Id": 36968,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36969,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 560,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 36970,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36971,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36972,
+      "Primary": 260,
+      "Combo": 260,
+      "Secondary": 260,
+      "SecondaryCombo": 260
+    },
+    {
+      "Id": 36973,
+      "Primary": 1300,
+      "Combo": 1300,
+      "Secondary": 1040,
+      "SecondaryCombo": 1040
+    },
+    {
+      "Id": 36974,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36975,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 180,
+      "SecondaryCombo": 180
+    },
+    {
+      "Id": 36976,
+      "Primary": 640,
+      "Combo": 640,
+      "Secondary": 320,
+      "SecondaryCombo": 320
+    },
+    {
+      "Id": 36977,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36978,
+      "Primary": 240,
+      "Combo": 240,
+      "Secondary": 240,
+      "SecondaryCombo": 240
+    },
+    {
+      "Id": 36979,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 126,
+      "SecondaryCombo": 126
+    },
+    {
+      "Id": 36980,
+      "Primary": 180,
+      "Combo": 180,
+      "Secondary": 126,
+      "SecondaryCombo": 126
+    },
+    {
+      "Id": 36981,
+      "Primary": 660,
+      "Combo": 660,
+      "Secondary": 495,
+      "SecondaryCombo": 495
+    },
+    {
+      "Id": 36982,
+      "Primary": 900,
+      "Combo": 900,
+      "Secondary": 675,
+      "SecondaryCombo": 675
+    },
+    {
+      "Id": 36983,
+      "Primary": 540,
+      "Combo": 540,
+      "Secondary": 216,
+      "SecondaryCombo": 216
+    },
+    {
+      "Id": 36984,
+      "Primary": 850,
+      "Combo": 850,
+      "Secondary": 340,
+      "SecondaryCombo": 340
+    },
+    {
+      "Id": 36985,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 400,
+      "SecondaryCombo": 400
+    },
+    {
+      "Id": 36986,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 36987,
+      "Primary": 100,
+      "Combo": 100,
+      "Secondary": 100,
+      "SecondaryCombo": 100
+    },
+    {
+      "Id": 36989,
+      "Primary": 0,
+      "Combo": 0,
+      "Secondary": 0,
+      "SecondaryCombo": 0
+    },
+    {
+      "Id": 36990,
+      "Primary": 500,
+      "Combo": 500,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 36991,
+      "Primary": 700,
+      "Combo": 700,
+      "Secondary": 700,
+      "SecondaryCombo": 700
+    },
+    {
+      "Id": 36993,
+      "Primary": 160,
+      "Combo": 160,
+      "Secondary": 160,
+      "SecondaryCombo": 160
+    },
+    {
+      "Id": 36994,
+      "Primary": 640,
+      "Combo": 640,
+      "Secondary": 640,
+      "SecondaryCombo": 640
+    },
+    {
+      "Id": 36995,
+      "Primary": 300,
+      "Combo": 300,
+      "Secondary": 300,
+      "SecondaryCombo": 300
+    },
+    {
+      "Id": 36996,
+      "Primary": 1000,
+      "Combo": 1000,
+      "Secondary": 500,
+      "SecondaryCombo": 500
+    },
+    {
+      "Id": 36998,
+      "Primary": 1400,
+      "Combo": 1400,
+      "Secondary": 560,
+      "SecondaryCombo": 560
+    },
+    {
+      "Id": 36999,
+      "Primary": 1500,
+      "Combo": 1500,
+      "Secondary": 750,
+      "SecondaryCombo": 750
+    },
+    {
+      "Id": 37002,
+      "Primary": 140,
+      "Combo": 140,
+      "Secondary": 140,
+      "SecondaryCombo": 140
+    },
+    {
+      "Id": 37003,
+      "Primary": 150,
+      "Combo": 150,
+      "Secondary": 150,
+      "SecondaryCombo": 150
+    },
+    {
+      "Id": 37004,
+      "Primary": 360,
+      "Combo": 360,
+      "Secondary": 360,
+      "SecondaryCombo": 360
+    },
+    {
+      "Id": 37005,
+      "Primary": 950,
+      "Combo": 950,
+      "Secondary": 428,
+      "SecondaryCombo": 428
+    },
+    {
+      "Id": 37006,
+      "Primary": 600,
+      "Combo": 600,
+      "Secondary": 270,
+      "SecondaryCombo": 270
+    },
+    {
+      "Id": 37007,
+      "Primary": 1200,
+      "Combo": 1200,
+      "Secondary": 540,
+      "SecondaryCombo": 540
+    },
+    {
+      "Id": 37009,
+      "Primary": 640,
+      "Combo": 640,
+      "Secondary": 384,
+      "SecondaryCombo": 384
+    },
+    {
+      "Id": 37029,
+      "Primary": 860,
+      "Combo": 860,
+      "Secondary": 430,
+      "SecondaryCombo": 430
+    },
+    {
+      "Id": 37033,
+      "Primary": 690,
+      "Combo": 690,
+      "Secondary": 345,
+      "SecondaryCombo": 345
+    }
+  ],
+  "VariableDamageStatuses": [
+    628,
+    696,
+    1181,
+    1298,
+    1821,
+    1822,
+    1878,
+    1882,
+    1883,
+    2092,
+    2105,
+    2911,
+    2964,
+    3001
+  ]
+}

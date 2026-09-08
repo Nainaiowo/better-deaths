@@ -31,6 +31,8 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParsingModule.cs" Link="DamageParsing/DamageParsingModule.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusCapturePolicy.cs" Link="DamageParsing/DamageStatusCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusIdentityPolicy.cs" Link="DamageParsing/DamageStatusIdentityPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusTiming.cs" Link="DamageParsing/DamageStatusTiming.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusSlotTracker.cs" Link="DamageParsing/DamageStatusSlotTracker.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/EffectiveDamageResolver.cs" Link="DamageParsing/EffectiveDamageResolver.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/GroundDamageStatusPolicy.cs" Link="DamageParsing/GroundDamageStatusPolicy.cs" />
@@ -39,6 +41,8 @@
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDirectHitCompatibility.cs" Link="DamageParsing/PeriodicDirectHitCompatibility.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicCalibrationPolicy.cs" Link="DamageParsing/PeriodicCalibrationPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicCalibrationPotencyPolicy.cs" Link="DamageParsing/PeriodicCalibrationPotencyPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/PeriodicCalibrationCatalog.cs" Link="DamageParsing/PeriodicCalibrationCatalog.cs" />
+    <EmbeddedResource Include="../../BetterDeaths/DamageParsing/PeriodicCalibrationCatalog.json" LogicalName="BetterDeaths.DamageParsing.PeriodicCalibrationCatalog.json" />
     <Compile Include="../../BetterDeaths/DamageParsing/PeriodicDamageRefreshPolicy.cs" Link="DamageParsing/PeriodicDamageRefreshPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/PersonalDamageModifierPolicy.cs" Link="DamageParsing/PersonalDamageModifierPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffPolicy.cs" Link="DamageParsing/RaidBuffPolicy.cs" />
@@ -90,6 +94,7 @@
     <None Update="Fixtures/CapturedStatusOwnership.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/HealingCalibrationGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/CalibrationPotencyGolden.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/CalibrationAdmissionGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/DamageWorkflowGolden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

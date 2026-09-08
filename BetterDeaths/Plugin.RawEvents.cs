@@ -121,7 +121,10 @@ public sealed partial class Plugin
         uint StatusId,
         uint SourceId,
         ushort StackCount,
-        float RemainingTime) : IDamageStatusIdentity;
+        float RemainingTime) : IDamageStatusIdentity
+    {
+        public byte? StatusSlot { get; init; }
+    }
 
     private sealed record RawActionEffectSlot(
         int EffectIndex,
@@ -167,6 +170,8 @@ public sealed partial class Plugin
         public long DamageCaptureOrder { get; init; }
 
         public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
+
+        public RawCombatSnapshot? TargetSnapshot { get; init; }
     }
 
     private sealed record RawEffectResultStatus(
@@ -174,7 +179,10 @@ public sealed partial class Plugin
         ushort EffectId,
         ushort StackCount,
         float Duration,
-        uint SourceActorId);
+        uint SourceActorId)
+    {
+        public RawCombatSnapshot? SourceSnapshot { get; init; }
+    }
 
     private sealed record RawActorControlPacket(
         long Sequence,
@@ -433,6 +441,20 @@ public sealed partial class Plugin
         var packet = (EffectResultPacket*)actionIntegrityData;
         var effectCount = Math.Min(packet->EffectCount, (byte)MaxEffectResultEntries);
         var statuses = new List<RawEffectResultStatus>(effectCount);
+        var snapshots = captureForDamageParsing && effectCount > 0
+            ? new Dictionary<uint, RawCombatSnapshot?>() : null;
+        RawCombatSnapshot? CaptureStatusSnapshot(uint actorId)
+        {
+            actorId = NormalizeActorEntityId(actorId);
+            if (snapshots is null || actorId == 0)
+                return null;
+            if (!snapshots.TryGetValue(actorId, out var snapshot))
+            {
+                snapshot = CaptureRawCombatSnapshot(actorId, relevantDamageStatusesOnly: true);
+                snapshots[actorId] = snapshot;
+            }
+            return snapshot;
+        }
         var effects = (EffectResultStatusEntry*)packet->Effects;
         for (var i = 0; i < effectCount; i++)
         {
@@ -447,7 +469,10 @@ public sealed partial class Plugin
                 effect.EffectId,
                 effect.StackCount,
                 effect.Duration,
-                effect.SourceActorId));
+                effect.SourceActorId)
+            {
+                SourceSnapshot = CaptureStatusSnapshot(effect.SourceActorId),
+            });
         }
 
         var rawPacket = new RawEffectResultPacket(
@@ -467,6 +492,8 @@ public sealed partial class Plugin
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
+            TargetSnapshot = statuses.Count > 0
+                ? CaptureStatusSnapshot(targetId != 0 ? targetId : packet->ActorId) : null,
         };
         EnqueueRawEffectResultPacket(rawPacket);
     }

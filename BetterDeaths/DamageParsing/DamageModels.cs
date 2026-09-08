@@ -73,7 +73,17 @@ internal sealed record DamageStatusSnapshot(
     uint StatusId,
     DamageActorIdentity Source,
     ushort Parameter,
-    float RemainingTime);
+    float RemainingTime)
+{
+    public bool? HasParameter { get; init; }
+
+    // Action-effect strength and status-list stacks are different wire fields.
+    public byte? AppliedParameter { get; init; }
+
+    public byte? StatusSlot { get; init; }
+
+    public uint? ApplicationSequence { get; init; }
+}
 
 internal sealed record DamageHpSnapshot(
     uint CurrentHp,
@@ -184,6 +194,14 @@ internal sealed record DamageActionPacket(
     public bool HasSourceStatusSnapshot { get; init; }
 }
 
+internal enum DamageStatusObservationKind
+{
+    Unspecified,
+    Observation,
+    Announcement,
+    Landing,
+}
+
 internal sealed record DamageStatusApplication(
     DamageActorIdentity Target,
     DamageActorIdentity Source,
@@ -198,6 +216,17 @@ internal sealed record DamageStatusApplication(
     bool IsReactiveDamage,
     bool IsRemoval)
 {
+    public DamageStatusObservationKind ObservationKind { get; init; }
+
+    public uint? ApplicationSequence { get; init; }
+
+    // Null supports older captures whose zero parameter meant "not supplied".
+    public bool? HasParameter { get; init; }
+
+    public byte? AppliedParameter { get; init; }
+
+    public byte? StatusSlot { get; init; }
+
     // Pet applications can be owner-attributed while retaining the pet's captured buffs.
     public uint? SourceStatusActorId { get; init; }
 

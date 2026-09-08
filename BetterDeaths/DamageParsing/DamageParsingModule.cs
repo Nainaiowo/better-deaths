@@ -83,6 +83,7 @@ internal sealed class DamageParsingModule
             usesExplicitCombatLifecycle |= !allowAutomaticEncounterStart;
             FlushPendingPeriodicTicksCore(packet.SeenAtUtc, force: false);
             PrunePreEncounterState(packet.SeenAtUtc);
+            raidBuffTracker.ObserveSnapshots(packet);
             var decoded = parser.Parse(packet);
             var unseen = FilterNewDirectEvents(decoded);
             if (decoded.Count > 0 && unseen.Count == 0)
@@ -768,6 +769,8 @@ internal sealed class DamageParsingModule
     private void ObserveStatusCore(DamageStatusApplication application, bool observeSnapshots = true)
     {
         var capturedApplication = application;
+        if (observeSnapshots)
+            raidBuffTracker.ObserveSnapshots(capturedApplication);
         application = raidBuffTracker.ApplyFallback(application);
         periodicDamageTracker.Observe(application, capturedApplication, observeSnapshots);
         raidBuffTracker.Observe(application);
@@ -833,9 +836,9 @@ internal sealed class DamageParsingModule
 
         pendingPeriodicTicks.RemoveAll(entry => entry.Tick.SeenAtUtc < cutoff);
         stagedDamageBatches.Clear();
-        periodicDamageTracker.Clear(preserveCalibration: true);
+        // Staged damage has a short lifetime; landed buffs retain their own expiry.
+        periodicDamageTracker.Clear(preserveCalibration: true, preserveConfirmedBuffs: true);
         effectiveDamageResolver.Clear();
-        raidBuffTracker.Clear();
         latestPreEncounterActivityAtUtc = null;
     }
 
