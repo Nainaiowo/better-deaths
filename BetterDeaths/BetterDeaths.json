@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Updated damage-over-time calibration and ground-effect attribution. Improved buff-strength tracking across refreshes, replacements, and delayed confirmations while preserving captured effects for review. Expanded automated coverage for damage calculations, status tracking, and live and saved meter totals.",
+  "Changelog": "Improved buff-expiry tracking used by damage-over-time estimates. Added ordered status-update capture and timing diagnostics. Expanded automated coverage for status refreshes, replacements, and removals.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

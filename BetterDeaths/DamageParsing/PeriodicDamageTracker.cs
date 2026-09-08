@@ -32,8 +32,13 @@ internal sealed class PeriodicDamageTracker
     private readonly HashSet<uint> observedGroundDamageStatusIds = [];
     private readonly PeriodicDirectHitCompatibility directHitCompatibility = new();
     private readonly RaidBuffTracker confirmedBuffs = new(confirmedOnly: true);
+    private readonly DamageStatusTimingLedger statusTiming = new();
     private readonly DamageStatusSlotTracker slots = new();
     private long nextApplicationGeneration;
+
+    public bool ObserveStatusTiming(DamageStatusTimingUpdate update) => statusTiming.Observe(update);
+
+    public void ResetStatusTiming() => statusTiming.Clear();
 
     public void Observe(DamageStatusApplication application, DamageStatusApplication? capturedApplication = null, bool observeSnapshots = true)
     {
@@ -144,6 +149,7 @@ internal sealed class PeriodicDamageTracker
 
     public void Refresh(uint targetEntityId, uint statusId, DateTime seenAtUtc)
     {
+        statusTiming.MarkRefresh(targetEntityId, statusId);
         confirmedBuffs.Refresh(targetEntityId, statusId, seenAtUtc);
         foreach (var status in statuses.Values.Where(status =>
                      status.Application.Target.EntityId == targetEntityId &&
@@ -298,7 +304,8 @@ internal sealed class PeriodicDamageTracker
         {
             if (observeSnapshots && !damageEvent.IsPeriodic)
                 confirmedBuffs.ObserveSnapshots(damageEvent);
-            directHitCompatibility.Observe(damageEvent);
+            directHitCompatibility.Observe(damageEvent,
+                statusTiming.Resolve(damageEvent.Source.EntityId, damageEvent.SourceStatuses, damageEvent.SeenAtUtc));
             if (!damageEvent.IsPeriodic && damageEvent.Outcome == DamageEventOutcome.Damage &&
                 (damageEvent.Source.IsPlayer || damageEvent.Source.IsPartyMember || damageEvent.Source.IsPet) &&
                 !damageEvent.Source.IsLimitBreak && damageEvent.ActionCategoryId != 9)
@@ -547,6 +554,8 @@ internal sealed class PeriodicDamageTracker
 
     public void Clear(bool preserveCalibration = false, bool preserveConfirmedBuffs = false)
     {
+        if (!preserveCalibration)
+            statusTiming.Clear();
         if (!preserveConfirmedBuffs)
             confirmedBuffs.Clear();
         statuses.Clear();
@@ -1075,7 +1084,7 @@ internal sealed class PeriodicDamageTracker
                     SeenAtUtc = confirmation.SeenAtUtc,
                 })
                 : status.Application;
-            status.CompatibilityDirectHit = directHitCompatibility.Capture(status.CompatibilityApplication,
+            status.CompatibilityDirectHit = directHitCompatibility.Capture(statusTiming.Resolve(status.CompatibilityApplication),
                 status.CompatibilityApplication.SeenAtUtc);
             status.CompatibilityCalibration = GetCompatibilityCalibration(status.Application.Source);
         }

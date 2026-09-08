@@ -11,7 +11,7 @@ internal sealed class PeriodicDirectHitCompatibility
 
     public static bool IsRelevantStatus(uint statusId) => statusId == 0x84D;
 
-    public void Observe(ParsedDamageEvent damageEvent)
+    public void Observe(ParsedDamageEvent damageEvent, IReadOnlyList<DamageStatusSnapshot>? timedBuffs = null)
     {
         var source = damageEvent.Source;
         if (damageEvent.IsPeriodic || damageEvent.Outcome != DamageEventOutcome.Damage ||
@@ -23,7 +23,7 @@ internal sealed class PeriodicDirectHitCompatibility
 
         var samples = GetSamples(source, damageEvent.SourceBaseRates);
         if (RaidBuffPolicy.IsGuaranteedDirectHit(damageEvent) ||
-            BuffRate(source, damageEvent.SourceStatuses, 0) > 0)
+            BuffRate(source, timedBuffs ?? damageEvent.SourceStatuses, 0) > 0)
         {
             return;
         }

@@ -328,7 +328,16 @@ public sealed partial class Plugin
         ulong targetId,
         byte param9)
     {
-        actorControlHook?.Original(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8, targetId, param9);
+        var previousMissingInformation = statusTimingMissingInformation;
+        statusTimingMissingInformation = category == ActorControlUpdateEffectCategory;
+        try
+        {
+            actorControlHook?.Original(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8, targetId, param9);
+        }
+        finally
+        {
+            statusTimingMissingInformation = previousMissingInformation;
+        }
 
         try
         {
@@ -893,12 +902,21 @@ public sealed partial class Plugin
         List<RawActionEffectPacket> actionPackets;
         List<RawEffectResultPacket> effectResultPackets;
         List<RawActorControlPacket> actorControlPackets;
+        List<RawStatusTimingUpdate> statusTimingUpdates;
         // Take one receive snapshot so no later status can overtake an undrained action.
         lock (rawCombatQueueLock)
         {
             actionPackets = DrainRawActionEffectPackets(now);
             effectResultPackets = DrainRawEffectResultPackets(now);
             actorControlPackets = DrainRawActorControlPackets(now);
+            statusTimingUpdates = [.. rawStatusTimingUpdates];
+            rawStatusTimingUpdates.Clear();
+            if (droppedStatusTimingUpdates > 0)
+            {
+                Log.Warning("Better Deaths status timing capture lost {Count} updates before queue processing.", droppedStatusTimingUpdates);
+                QueueDebugCaptureRecord("DamageMeterStatusTimingLoss", new { Count = droppedStatusTimingUpdates });
+                droppedStatusTimingUpdates = 0;
+            }
         }
         // Only the damage parser changes ordering; review keeps its existing resolution passes.
         var damagePackets = new List<(long CaptureOrder, object Packet)>();
@@ -908,6 +926,7 @@ public sealed partial class Plugin
             .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         damagePackets.AddRange(actorControlPackets.Where(packet => packet.CaptureForDamageParsing)
             .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
+        damagePackets.AddRange(statusTimingUpdates.Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         foreach (var entry in damagePackets.OrderBy(entry => entry.CaptureOrder))
         {
             switch (entry.Packet)
@@ -920,6 +939,9 @@ public sealed partial class Plugin
                     break;
                 case RawActorControlPacket control:
                     ParseDamageActorControl(control);
+                    break;
+                case RawStatusTimingUpdate status:
+                    ObserveStatusTiming(status);
                     break;
             }
         }

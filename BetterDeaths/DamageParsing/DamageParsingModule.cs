@@ -141,6 +141,23 @@ internal sealed class DamageParsingModule
         }
     }
 
+    public bool ObserveStatusTiming(DamageStatusTimingUpdate update)
+    {
+        lock (syncRoot)
+        {
+            FlushPendingPeriodicTicksCore(update.SeenAtUtc, force: false);
+            return periodicDamageTracker.ObserveStatusTiming(update);
+        }
+    }
+
+    public void ResetStatusTiming()
+    {
+        lock (syncRoot)
+        {
+            periodicDamageTracker.ResetStatusTiming();
+        }
+    }
+
     public void RefreshStatus(uint targetEntityId, uint statusId, DateTime seenAtUtc)
     {
         lock (syncRoot)

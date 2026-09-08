@@ -637,6 +637,7 @@ public sealed partial class Plugin : IDalamudPlugin
             OnReceiveActionEffect);
         actionEffectHook.Enable();
         TryInitializeServerFrameTiming();
+        TryInitializeStatusTiming();
 
         try
         {
@@ -746,6 +747,8 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyStarted;
         mapEffectHook?.Dispose();
+        statusTimingSetHook?.Dispose();
+        statusTimingRemoveHook?.Dispose();
         serverFrameHook?.Dispose();
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();

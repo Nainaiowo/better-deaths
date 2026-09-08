@@ -63,6 +63,12 @@ public sealed partial class Plugin
         {
             ArchiveCurrentPullForReview("Left territory", suppressResetStateDeaths: false);
             damageParsingModule.ResetCalibration();
+            damageParsingModule.ResetStatusTiming();
+            lock (rawCombatQueueLock)
+            {
+                rawStatusTimingUpdates.Clear();
+                capturedTimingSlots.Clear();
+            }
             currentTerritoryId = territoryId;
             currentTerritoryName = GetTerritoryName(territoryId);
             ClearCurrentDutyInstancePullGroup();

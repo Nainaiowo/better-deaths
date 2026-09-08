@@ -32,6 +32,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusCapturePolicy.cs" Link="DamageParsing/DamageStatusCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusIdentityPolicy.cs" Link="DamageParsing/DamageStatusIdentityPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusTiming.cs" Link="DamageParsing/DamageStatusTiming.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusTimingLedger.cs" Link="DamageParsing/DamageStatusTimingLedger.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusSlotTracker.cs" Link="DamageParsing/DamageStatusSlotTracker.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/EffectiveDamageResolver.cs" Link="DamageParsing/EffectiveDamageResolver.cs" />
