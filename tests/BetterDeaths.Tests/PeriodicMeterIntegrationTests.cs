@@ -121,17 +121,80 @@ public sealed class PeriodicMeterIntegrationTests
     }
 
     [Fact]
-    public void MissingCalibrationAndSourceSpecificTicksKeepObservedAmounts()
+    public void StartupEstimateRemainsSnapshottedUntilTheNextApplication()
     {
         var tracker = new PeriodicDamageTracker();
         tracker.Observe(Application(Player));
         var cold = Assert.Single(tracker.Process(new(1, Start.AddSeconds(3), Enemy, 0, "", 0, 600, null)));
-        Assert.False(cold.PeriodicMeterUsesEstimate);
-        Assert.Equal(600, cold.RawMeterAmount);
-        tracker.ObserveDirectDamage(new DirectDamageParser().Parse(Packet(Player)));
+        Assert.True(cold.PeriodicMeterUsesEstimate);
+        Assert.True(cold.PeriodicCompatibilityEstimate!.UsedUnitCalibration);
+        Assert.Equal(600u, cold.Amount);
+        Assert.Equal(20.25, cold.RawMeterAmount, 6);
+        tracker.ObserveDirectDamage(new DirectDamageParser().Parse(Packet(Player) with { SeenAtUtc = Start.AddSeconds(5) }));
+        var later = Assert.Single(tracker.Process(new(2, Start.AddSeconds(6), Enemy, 0, "", 0, 700, null)));
+        Assert.Equal(cold.PeriodicCompatibilityEstimate, later.PeriodicCompatibilityEstimate);
+        Assert.Equal(20.25, later.RawMeterAmount, 6);
+        tracker.Observe(Application(Player) with { SeenAtUtc = Start.AddSeconds(7) });
+        var refreshed = Assert.Single(tracker.Process(new(3, Start.AddSeconds(9), Enemy, 0, "", 0, 800, null)));
+        Assert.False(refreshed.PeriodicCompatibilityEstimate!.UsedUnitCalibration);
+        Assert.Equal(202.5, refreshed.RawMeterAmount, 6);
+    }
+
+    [Fact]
+    public void MissingEstimatesAndSourceSpecificTicksKeepObservedAmounts()
+    {
+        var tracker = new PeriodicDamageTracker();
+        var unknown = Assert.Single(tracker.Process(new(1, Start.AddSeconds(3), Enemy, 0, "", 0, 600, null)));
+        Assert.Null(unknown.PeriodicCompatibilityEstimate);
+        Assert.False(unknown.PeriodicMeterUsesEstimate);
+        Assert.Equal(600, unknown.RawMeterAmount);
+        tracker.Observe(Application(Player));
         var ground = Assert.Single(tracker.Process(new(2, Start.AddSeconds(6), Enemy, 0x74A, "Ground tick", 0, 700, Player)));
         Assert.False(ground.PeriodicMeterUsesEstimate);
         Assert.Equal(700, ground.RawMeterAmount);
+    }
+
+    [Fact]
+    public async Task CapturedStartupEstimateReachesLiveFinalSavedAndAbilityTotals()
+    {
+        var module = new DamageParsingModule();
+        var scholar = Player with { ClassJobId = 28 };
+        module.ObserveStatus(Application(scholar) with
+        {
+            StatusId = 1895, StatusName = "Biolysis", PeriodicPotency = 85,
+            BaseDamageLowByte = 131, CriticalRateLowByte = 253,
+        });
+        const double expectedTick = 99.1921089375;
+        for (var i = 0; i < 10; i++)
+        {
+            var at = Start.AddSeconds(3 + i * 3);
+            module.ProcessPeriodicTick(new(i + 1, at, Enemy, 0, "", 0, 10000, null));
+            var tick = Assert.Single(module.FlushPendingPeriodicTicks(at, true));
+            Assert.Equal(10000u, tick.Amount);
+            Assert.True(tick.PeriodicMeterUsesEstimate);
+            Assert.True(tick.PeriodicCompatibilityEstimate!.UsedUnitCalibration);
+            Assert.Equal(expectedTick, tick.RawMeterAmount, 6);
+        }
+
+        module.GetLiveEncounter();
+        module.RefreshLiveEncounter(Start.AddSeconds(31));
+        await module.PendingLiveSnapshot!;
+        module.RefreshLiveEncounter(Start.AddSeconds(31));
+        Check(module.GetLiveEncounter()!);
+        var final = module.EndEncounter(Start.AddSeconds(32), "Duty reset")!;
+        Check(final);
+        Check(JsonSerializer.Deserialize<DamageEncounterSnapshot>(JsonSerializer.Serialize(final))!);
+        Assert.Equal(100000, final.Diagnostics.PeriodicAllocations.Sum(item => item.AllocatedDamage));
+
+        static void Check(DamageEncounterSnapshot snapshot)
+        {
+            Assert.Equal(100000ul, snapshot.TotalDamage);
+            Assert.Equal(expectedTick * 10, snapshot.ObservedMeterDamage, 6);
+            Assert.Equal(snapshot.ObservedMeterDamage / snapshot.DurationSeconds, snapshot.DamagePerSecond, 6);
+            var source = Assert.Single(snapshot.Sources);
+            Assert.Equal(snapshot.ObservedMeterDamage, source.ObservedMeterDamage);
+            Assert.Equal(source.ObservedMeterDamage, Assert.Single(source.Actions).ObservedMeterDamage);
+        }
     }
 
     [Theory]
@@ -168,19 +231,22 @@ public sealed class PeriodicMeterIntegrationTests
         Assert.False(restored.PeriodicMeterUsesEstimate);
     }
 
-    [Fact]
-    public void ZeroRawShareCannotDiscardACalibratedTick()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ZeroRawShareCannotDiscardAnEstimatedTick(bool calibrated)
     {
         var module = new DamageParsingModule();
-        module.Process(Packet(Player));
+        if (calibrated) module.Process(Packet(Player));
         module.ObserveStatus(Application(Player));
         module.ObserveStatus(Application(Player) with { StatusId = 0x4B0 });
         module.ProcessPeriodicTick(new(2, Start.AddSeconds(3), Enemy, 0, "", 0, 1, null));
         var ticks = module.FlushPendingPeriodicTicks(Start.AddSeconds(3), true);
         Assert.Equal(2, ticks.Count);
-        Assert.Contains(ticks, tick => tick.Amount == 0 && tick.RawMeterAmount == 202.5);
+        var expectedTick = calibrated ? 202.5 : 20.25;
+        Assert.Contains(ticks, tick => tick.Amount == 0 && tick.RawMeterAmount == expectedTick);
         Assert.Equal(1.0, ticks.Sum(tick => (double)tick.Amount));
-        Assert.Equal(1405, module.GetCurrentEncounter()!.ObservedMeterDamage);
+        Assert.Equal((calibrated ? 1000 : 0) + 2 * expectedTick, module.GetCurrentEncounter()!.ObservedMeterDamage);
         Assert.Equal(2, module.GetCurrentEncounter()!.Diagnostics.PeriodicAllocations.Count);
     }
 

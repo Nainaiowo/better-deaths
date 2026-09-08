@@ -268,7 +268,8 @@ public sealed class PeriodicPotencyCompatibilityTests
         var diagnostic = Assert.Single(Assert.Single(restored.Diagnostics.PeriodicAllocations).IndependentEstimates);
         Assert.Equal(1, diagnostic.CompatibilityFallbackTickCount);
         Assert.Equal(1, diagnostic.CompatibilityTickCount);
-        Assert.Equal(600.0, restored.EffectiveMeterDamage);
+        Assert.Equal(600ul, restored.TotalDamage);
+        Assert.Equal(86.0625, restored.EffectiveMeterDamage, 6);
     }
 
     private static void Hit(PeriodicDamageTracker tracker, uint amount, uint status = 0, bool canCalibrate = true,

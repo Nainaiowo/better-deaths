@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Fixed shared status ownership so one caster's effect expiring cannot remove or refresh another caster's matching effect. Tightened combined damage-over-time eligibility at exact removal boundaries and added diagnostics for remaining tick and calibration differences. Added captured multi-caster regression coverage while preserving direct damage, encounter timing, and existing content restrictions.",
+  "Changelog": "Fixed damage-over-time startup estimates being replaced with inconsistent amounts before caster calibration is available. The shared correction applies across supported effects and preserves application snapshots, original diagnostic data, and previously saved encounters. Expanded regression coverage for live and saved totals, refreshes, and startup estimates.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

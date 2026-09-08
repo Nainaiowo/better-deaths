@@ -1039,7 +1039,8 @@ internal sealed class PeriodicDamageTracker
 
     private static bool CanUseMeterEstimate(DamageActorIdentity source, PeriodicCompatibilityEstimate? estimate) =>
         (source.IsPlayer || source.IsPartyMember) &&
-        estimate is { UsedUnitCalibration: false, Inputs.CalibrationSampleCount: > 0 } &&
+        // The application snapshot includes the startup estimate before calibration is available.
+        estimate is not null &&
         double.IsFinite(estimate.EstimatedDamage) && estimate.EstimatedDamage >= 0;
 
     private double? EstimateTickWeight(TrackedStatus status)
