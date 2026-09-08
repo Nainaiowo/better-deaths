@@ -1,4 +1,5 @@
 using BetterDeaths.Windows;
+using BetterDeaths.DamageParsing;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Command;
@@ -120,7 +121,7 @@ public sealed partial class Plugin
         uint StatusId,
         uint SourceId,
         ushort StackCount,
-        float RemainingTime);
+        float RemainingTime) : IDamageStatusIdentity;
 
     private sealed record RawActionEffectSlot(
         int EffectIndex,
@@ -380,8 +381,9 @@ public sealed partial class Plugin
         {
             ActorControlHotCategory or ActorControlDotCategory => NormalizeActorEntityId(param3),
             ActorControlGainEffectCategory or ActorControlLoseEffectCategory => NormalizeActorEntityId(param3),
-            ActorControlUpdateEffectCategory => NormalizeActorEntityId(
-                targetSnapshot?.Statuses.FirstOrDefault(status => status.StatusId == param2)?.SourceId ?? 0),
+            ActorControlUpdateEffectCategory => DamageStatusIdentityPolicy.TryResolve(
+                targetSnapshot?.Statuses, param2, 0, false, out var updateSource, out _)
+                    ? updateSource : 0,
             _ => 0u,
         };
         var sourceSnapshot = captureForReview &&

@@ -337,10 +337,9 @@ public sealed partial class Plugin
 
         if (packet.Category == ActorControlUpdateEffectCategory)
         {
-            if (packet.Param2 is > 0 and <= ushort.MaxValue &&
-                !TryObserveDamageActorControlStatus(packet, packet.Param2, isRemoval: false))
+            if (packet.Param2 is > 0 and <= ushort.MaxValue)
             {
-                damageParsingModule.RefreshStatus(packet.EntityId, packet.Param2, damageSeenAtUtc);
+                TryObserveDamageActorControlStatus(packet, packet.Param2, isRemoval: false);
             }
 
             return;
@@ -363,15 +362,10 @@ public sealed partial class Plugin
         uint statusId,
         bool isRemoval)
     {
-        var rawStatus = packet.TargetSnapshot?.Statuses
-            .Where(status => status.StatusId == statusId)
-            .OrderByDescending(status => status.RemainingTime)
-            .FirstOrDefault();
-        var rawSourceId = rawStatus?.SourceId ??
-            (packet.Category is ActorControlGainEffectCategory or ActorControlLoseEffectCategory
-                ? packet.Param3
-                : 0);
-        if (!isRemoval && packet.Category == ActorControlUpdateEffectCategory && rawStatus is null)
+        var packetSourceId = packet.Category is ActorControlGainEffectCategory or ActorControlLoseEffectCategory
+            ? packet.Param3 : 0;
+        if (!DamageStatusIdentityPolicy.TryResolve(packet.TargetSnapshot?.Statuses, statusId,
+                packetSourceId, isRemoval, out var rawSourceId, out var rawStatus))
         {
             return false;
         }
@@ -386,7 +380,7 @@ public sealed partial class Plugin
             0,
             string.Empty,
             packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc,
-            rawStatus?.RemainingTime ?? 0.0f,
+            isRemoval ? 0.0f : rawStatus?.RemainingTime ?? 0.0f,
             isRemoval) with
         {
             Parameter = rawStatus?.StackCount ?? (ushort)Math.Min(packet.Param2, ushort.MaxValue),
@@ -398,7 +392,7 @@ public sealed partial class Plugin
             HasTargetStatusSnapshot = packet.TargetSnapshot is not null,
         };
         damageParsingModule.ObserveStatus(application);
-        QueueDamageMeterStatusDebug("ActorControl", application);
+        QueueDamageMeterStatusDebug("ActorControl", application, packetSourceId);
         return true;
     }
 
@@ -709,10 +703,12 @@ public sealed partial class Plugin
             tick.CapturedAtUtc,
             SourceEntityId = tick.Source?.EntityId ?? 0,
             SourceName = tick.Source?.Name ?? string.Empty,
+            HasTargetStatusSnapshot = packet.TargetSnapshot is not null,
+            TargetStatuses = packet.TargetSnapshot?.Statuses,
         });
     }
 
-    private void QueueDamageMeterStatusDebug(string stage, DamageStatusApplication application)
+    private void QueueDamageMeterStatusDebug(string stage, DamageStatusApplication application, uint? packetSourceEntityId = null)
     {
         if (!ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.StatusChanges))
         {
@@ -722,6 +718,7 @@ public sealed partial class Plugin
         QueueDebugCaptureRecord("DamageMeterStatus", new
         {
             Stage = stage,
+            PacketSourceEntityId = packetSourceEntityId,
             application.SeenAtUtc,
             TargetEntityId = application.Target.EntityId,
             TargetName = application.Target.Name,

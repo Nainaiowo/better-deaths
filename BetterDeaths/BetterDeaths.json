@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved damage-over-time calibration by retaining pre-pull healing observations when supported duties start. Healing does not count as damage or start the encounter timer. Added coverage for calibration lifecycle, duplicate observations, and job and level changes while preserving death-review behavior and existing content restrictions.",
+  "Changelog": "Fixed shared status ownership so one caster's effect expiring cannot remove or refresh another caster's matching effect. Tightened combined damage-over-time eligibility at exact removal boundaries and added diagnostics for remaining tick and calibration differences. Added captured multi-caster regression coverage while preserving direct damage, encounter timing, and existing content restrictions.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

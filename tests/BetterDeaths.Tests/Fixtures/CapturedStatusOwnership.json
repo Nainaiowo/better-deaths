@@ -1,0 +1,616 @@
+{
+  "Schema": 1,
+  "Description": "Anonymized overlapping same-status lifecycle capture. Source-qualified packet removals are paired with the saved decoded status rows. Tests cover ownership and tick counts, not calibration math.",
+  "Rows": [
+    {
+      "Time": "2026-09-08T02:31:49.4186684Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4097,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:31:50.1242046Z",
+      "Kind": "Tick",
+      "Amount": 9570
+    },
+    {
+      "Time": "2026-09-08T02:31:51.0692801Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:31:53.2320925Z",
+      "Kind": "Tick",
+      "Amount": 18366
+    },
+    {
+      "Time": "2026-09-08T02:31:56.1450164Z",
+      "Kind": "Tick",
+      "Amount": 18315
+    },
+    {
+      "Time": "2026-09-08T02:31:59.1844301Z",
+      "Kind": "Tick",
+      "Amount": 22876
+    },
+    {
+      "Time": "2026-09-08T02:32:02.1914286Z",
+      "Kind": "Tick",
+      "Amount": 23493
+    },
+    {
+      "Time": "2026-09-08T02:32:05.1507187Z",
+      "Kind": "Tick",
+      "Amount": 29649
+    },
+    {
+      "Time": "2026-09-08T02:32:08.1797362Z",
+      "Kind": "Tick",
+      "Amount": 27726
+    },
+    {
+      "Time": "2026-09-08T02:32:11.2281984Z",
+      "Kind": "Tick",
+      "Amount": 24596
+    },
+    {
+      "Time": "2026-09-08T02:32:14.2022079Z",
+      "Kind": "Tick",
+      "Amount": 28314
+    },
+    {
+      "Time": "2026-09-08T02:32:17.1386617Z",
+      "Kind": "Tick",
+      "Amount": 30115
+    },
+    {
+      "Time": "2026-09-08T02:32:19.4371586Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 1.5564592
+    },
+    {
+      "Time": "2026-09-08T02:32:20.1940487Z",
+      "Kind": "Tick",
+      "Amount": 24616
+    },
+    {
+      "Time": "2026-09-08T02:32:21.0612105Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 0
+    },
+    {
+      "Time": "2026-09-08T02:32:21.1817366Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:32:23.2222343Z",
+      "Kind": "Tick",
+      "Amount": 18426
+    },
+    {
+      "Time": "2026-09-08T02:32:26.2281363Z",
+      "Kind": "Tick",
+      "Amount": 13420
+    },
+    {
+      "Time": "2026-09-08T02:32:29.1990459Z",
+      "Kind": "Tick",
+      "Amount": 19288
+    },
+    {
+      "Time": "2026-09-08T02:32:32.2253045Z",
+      "Kind": "Tick",
+      "Amount": 19792
+    },
+    {
+      "Time": "2026-09-08T02:32:35.1507794Z",
+      "Kind": "Tick",
+      "Amount": 13170
+    },
+    {
+      "Time": "2026-09-08T02:32:38.1431213Z",
+      "Kind": "Tick",
+      "Amount": 16287
+    },
+    {
+      "Time": "2026-09-08T02:32:41.2044196Z",
+      "Kind": "Tick",
+      "Amount": 13918
+    },
+    {
+      "Time": "2026-09-08T02:32:44.2468357Z",
+      "Kind": "Tick",
+      "Amount": 13438
+    },
+    {
+      "Time": "2026-09-08T02:32:47.1344561Z",
+      "Kind": "Tick",
+      "Amount": 16117
+    },
+    {
+      "Time": "2026-09-08T02:32:50.2104446Z",
+      "Kind": "Tick",
+      "Amount": 15417
+    },
+    {
+      "Time": "2026-09-08T02:32:50.3372263Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:32:53.1594071Z",
+      "Kind": "Tick",
+      "Amount": 14320
+    },
+    {
+      "Time": "2026-09-08T02:32:56.1501764Z",
+      "Kind": "Tick",
+      "Amount": 13974
+    },
+    {
+      "Time": "2026-09-08T02:32:59.2132364Z",
+      "Kind": "Tick",
+      "Amount": 9444
+    },
+    {
+      "Time": "2026-09-08T02:33:02.2190512Z",
+      "Kind": "Tick",
+      "Amount": 14891
+    },
+    {
+      "Time": "2026-09-08T02:33:02.3475412Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4097,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:33:05.1728753Z",
+      "Kind": "Tick",
+      "Amount": 24265
+    },
+    {
+      "Time": "2026-09-08T02:33:08.2400437Z",
+      "Kind": "Tick",
+      "Amount": 32886
+    },
+    {
+      "Time": "2026-09-08T02:33:11.1725874Z",
+      "Kind": "Tick",
+      "Amount": 22255
+    },
+    {
+      "Time": "2026-09-08T02:33:14.2225834Z",
+      "Kind": "Tick",
+      "Amount": 28069
+    },
+    {
+      "Time": "2026-09-08T02:33:17.2190666Z",
+      "Kind": "Tick",
+      "Amount": 22847
+    },
+    {
+      "Time": "2026-09-08T02:33:19.5880684Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:33:20.1594844Z",
+      "Kind": "Tick",
+      "Amount": 25187
+    },
+    {
+      "Time": "2026-09-08T02:33:23.2013645Z",
+      "Kind": "Tick",
+      "Amount": 21646
+    },
+    {
+      "Time": "2026-09-08T02:33:26.1874827Z",
+      "Kind": "Tick",
+      "Amount": 31331
+    },
+    {
+      "Time": "2026-09-08T02:33:29.1535687Z",
+      "Kind": "Tick",
+      "Amount": 23894
+    },
+    {
+      "Time": "2026-09-08T02:33:32.2709119Z",
+      "Kind": "Tick",
+      "Amount": 33654
+    },
+    {
+      "Time": "2026-09-08T02:33:32.2712264Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 17.356915
+    },
+    {
+      "Time": "2026-09-08T02:33:35.1445606Z",
+      "Kind": "Tick",
+      "Amount": 14524
+    },
+    {
+      "Time": "2026-09-08T02:33:38.1931067Z",
+      "Kind": "Tick",
+      "Amount": 15118
+    },
+    {
+      "Time": "2026-09-08T02:33:41.1792577Z",
+      "Kind": "Tick",
+      "Amount": 13305
+    },
+    {
+      "Time": "2026-09-08T02:33:44.1929516Z",
+      "Kind": "Tick",
+      "Amount": 14272
+    },
+    {
+      "Time": "2026-09-08T02:33:47.1668922Z",
+      "Kind": "Tick",
+      "Amount": 13534
+    },
+    {
+      "Time": "2026-09-08T02:33:49.6422298Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 0
+    },
+    {
+      "Time": "2026-09-08T02:33:50.1289863Z",
+      "Kind": "Tick",
+      "Amount": 4085
+    },
+    {
+      "Time": "2026-09-08T02:33:51.2906631Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:33:53.2532986Z",
+      "Kind": "Tick",
+      "Amount": 16761
+    },
+    {
+      "Time": "2026-09-08T02:33:56.1478618Z",
+      "Kind": "Tick",
+      "Amount": 13445
+    },
+    {
+      "Time": "2026-09-08T02:33:59.1174546Z",
+      "Kind": "Tick",
+      "Amount": 19421
+    },
+    {
+      "Time": "2026-09-08T02:34:02.2348911Z",
+      "Kind": "Tick",
+      "Amount": 18588
+    },
+    {
+      "Time": "2026-09-08T02:34:05.2489417Z",
+      "Kind": "Tick",
+      "Amount": 13596
+    },
+    {
+      "Time": "2026-09-08T02:34:08.2410602Z",
+      "Kind": "Tick",
+      "Amount": 14583
+    },
+    {
+      "Time": "2026-09-08T02:34:11.1933621Z",
+      "Kind": "Tick",
+      "Amount": 9309
+    },
+    {
+      "Time": "2026-09-08T02:34:14.1324453Z",
+      "Kind": "Tick",
+      "Amount": 9172
+    },
+    {
+      "Time": "2026-09-08T02:34:17.1214301Z",
+      "Kind": "Tick",
+      "Amount": 9149
+    },
+    {
+      "Time": "2026-09-08T02:34:20.2128064Z",
+      "Kind": "Tick",
+      "Amount": 9044
+    },
+    {
+      "Time": "2026-09-08T02:34:21.2933408Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 0
+    },
+    {
+      "Time": "2026-09-08T02:34:21.4801674Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:34:23.1782243Z",
+      "Kind": "Tick",
+      "Amount": 17783
+    },
+    {
+      "Time": "2026-09-08T02:34:26.2236276Z",
+      "Kind": "Tick",
+      "Amount": 14476
+    },
+    {
+      "Time": "2026-09-08T02:34:27.5965358Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4097,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:34:29.1515837Z",
+      "Kind": "Tick",
+      "Amount": 24988
+    },
+    {
+      "Time": "2026-09-08T02:34:32.1980257Z",
+      "Kind": "Tick",
+      "Amount": 24171
+    },
+    {
+      "Time": "2026-09-08T02:34:35.16623Z",
+      "Kind": "Tick",
+      "Amount": 23945
+    },
+    {
+      "Time": "2026-09-08T02:34:38.2251432Z",
+      "Kind": "Tick",
+      "Amount": 28610
+    },
+    {
+      "Time": "2026-09-08T02:34:41.1709993Z",
+      "Kind": "Tick",
+      "Amount": 33967
+    },
+    {
+      "Time": "2026-09-08T02:34:44.1403926Z",
+      "Kind": "Tick",
+      "Amount": 31637
+    },
+    {
+      "Time": "2026-09-08T02:34:47.1691023Z",
+      "Kind": "Tick",
+      "Amount": 30067
+    },
+    {
+      "Time": "2026-09-08T02:34:50.1788161Z",
+      "Kind": "Tick",
+      "Amount": 24051
+    },
+    {
+      "Time": "2026-09-08T02:34:51.0786978Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:34:53.144075Z",
+      "Kind": "Tick",
+      "Amount": 25255
+    },
+    {
+      "Time": "2026-09-08T02:34:56.1553214Z",
+      "Kind": "Tick",
+      "Amount": 29449
+    },
+    {
+      "Time": "2026-09-08T02:34:57.6470583Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4098,
+      "Removed": true,
+      "Duration": 23.339697
+    },
+    {
+      "Time": "2026-09-08T02:34:59.177835Z",
+      "Kind": "Tick",
+      "Amount": 14358
+    },
+    {
+      "Time": "2026-09-08T02:35:02.1513665Z",
+      "Kind": "Tick",
+      "Amount": 13116
+    },
+    {
+      "Time": "2026-09-08T02:35:05.2525718Z",
+      "Kind": "Tick",
+      "Amount": 13795
+    },
+    {
+      "Time": "2026-09-08T02:35:08.1859538Z",
+      "Kind": "Tick",
+      "Amount": 13503
+    },
+    {
+      "Time": "2026-09-08T02:35:11.1807859Z",
+      "Kind": "Tick",
+      "Amount": 22124
+    },
+    {
+      "Time": "2026-09-08T02:35:14.1369052Z",
+      "Kind": "Tick",
+      "Amount": 13799
+    },
+    {
+      "Time": "2026-09-08T02:35:17.1405802Z",
+      "Kind": "Tick",
+      "Amount": 13119
+    },
+    {
+      "Time": "2026-09-08T02:35:19.9701961Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:35:20.2181754Z",
+      "Kind": "Tick",
+      "Amount": 18208
+    },
+    {
+      "Time": "2026-09-08T02:35:22.144766Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4097,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:35:23.1761319Z",
+      "Kind": "Tick",
+      "Amount": 20659
+    },
+    {
+      "Time": "2026-09-08T02:35:26.1391176Z",
+      "Kind": "Tick",
+      "Amount": 17800
+    },
+    {
+      "Time": "2026-09-08T02:35:29.1547354Z",
+      "Kind": "Tick",
+      "Amount": 19056
+    },
+    {
+      "Time": "2026-09-08T02:35:32.1574466Z",
+      "Kind": "Tick",
+      "Amount": 17904
+    },
+    {
+      "Time": "2026-09-08T02:35:35.2194689Z",
+      "Kind": "Tick",
+      "Amount": 21436
+    },
+    {
+      "Time": "2026-09-08T02:35:38.2354858Z",
+      "Kind": "Tick",
+      "Amount": 22920
+    },
+    {
+      "Time": "2026-09-08T02:35:41.1527185Z",
+      "Kind": "Tick",
+      "Amount": 24263
+    },
+    {
+      "Time": "2026-09-08T02:35:44.1688531Z",
+      "Kind": "Tick",
+      "Amount": 23691
+    },
+    {
+      "Time": "2026-09-08T02:35:47.2573837Z",
+      "Kind": "Tick",
+      "Amount": 23902
+    },
+    {
+      "Time": "2026-09-08T02:35:49.4376949Z",
+      "Kind": "Status",
+      "Source": 4097,
+      "OldSource": 4097,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:35:49.7719302Z",
+      "Kind": "Status",
+      "Source": 4098,
+      "OldSource": 4098,
+      "Removed": false,
+      "Duration": 30
+    },
+    {
+      "Time": "2026-09-08T02:35:50.1508899Z",
+      "Kind": "Tick",
+      "Amount": 18838
+    },
+    {
+      "Time": "2026-09-08T02:35:53.1994781Z",
+      "Kind": "Tick",
+      "Amount": 22330
+    },
+    {
+      "Time": "2026-09-08T02:35:56.571724Z",
+      "Kind": "Tick",
+      "Amount": 22430
+    },
+    {
+      "Time": "2026-09-08T02:35:59.2042305Z",
+      "Kind": "Tick",
+      "Amount": 23898
+    },
+    {
+      "Time": "2026-09-08T02:36:02.1706273Z",
+      "Kind": "Tick",
+      "Amount": 37262
+    },
+    {
+      "Time": "2026-09-08T02:36:05.2788603Z",
+      "Kind": "Tick",
+      "Amount": 22961
+    },
+    {
+      "Time": "2026-09-08T02:36:08.1574678Z",
+      "Kind": "Tick",
+      "Amount": 27205
+    },
+    {
+      "Time": "2026-09-08T02:36:11.1610429Z",
+      "Kind": "Tick",
+      "Amount": 24781
+    },
+    {
+      "Time": "2026-09-08T02:36:14.1534172Z",
+      "Kind": "Tick",
+      "Amount": 25245
+    },
+    {
+      "Time": "2026-09-08T02:36:17.1603007Z",
+      "Kind": "Tick",
+      "Amount": 34514
+    }
+  ]
+}

@@ -630,6 +630,9 @@ internal sealed class PeriodicDamageTracker
         if (!status.Application.IsPeriodicDamage ||
             IsGroundDamageStatus(status.Application.StatusId) ||
             status.Application.Target.EntityId != tick.Target.EntityId ||
+            // Combined ticks resolve after same-frame removals. The retired
+            // caster must not receive a share at the removal boundary.
+            status.RemovedAtUtc is { } removedAtUtc && tick.SeenAtUtc >= removedAtUtc ||
             status.ActivatedAtUtc is not { } activatedAtUtc ||
             tick.SeenAtUtc < activatedAtUtc ||
             !IsActiveAt(

@@ -30,6 +30,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParityComparer.cs" Link="DamageParsing/DamageParityComparer.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageParsingModule.cs" Link="DamageParsing/DamageParsingModule.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusCapturePolicy.cs" Link="DamageParsing/DamageStatusCapturePolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/DamageStatusIdentityPolicy.cs" Link="DamageParsing/DamageStatusIdentityPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DirectDamageParser.cs" Link="DamageParsing/DirectDamageParser.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/EffectiveDamageResolver.cs" Link="DamageParsing/EffectiveDamageResolver.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/GroundDamageStatusPolicy.cs" Link="DamageParsing/GroundDamageStatusPolicy.cs" />
@@ -86,6 +87,7 @@
     <Using Include="Xunit" />
     <None Update="Fixtures/ActionPotencies.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/PeriodicApplicationGolden.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/CapturedStatusOwnership.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/HealingCalibrationGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/CalibrationPotencyGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/DamageWorkflowGolden.json" CopyToOutputDirectory="PreserveNewest" />
