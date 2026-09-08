@@ -3,6 +3,33 @@ namespace BetterDeaths.Tests;
 public sealed class ContentCapturePolicyTests
 {
     [Theory]
+    [InlineData(4, 3, true)]
+    [InlineData(4, 10, true)]
+    [InlineData(5, 8, true)]
+    [InlineData(5, 17, true)]
+    [InlineData(28, 17, true)]
+    [InlineData(30, 4, true)]
+    [InlineData(30, 57, true)]
+    [InlineData(30, 58, true)]
+    [InlineData(37, 36, true)]
+    [InlineData(0, 4, true)]
+    [InlineData(0, 57, true)]
+    [InlineData(0, 58, true)]
+    [InlineData(2, 3, false)]
+    [InlineData(21, 31, false)]
+    [InlineData(0, 3, false)]
+    [InlineData(0, 31, false)]
+    [InlineData(6, 0, false)]
+    [InlineData(0, 0, false)]
+    [InlineData(0, 1, false)]
+    [InlineData(0, 2, false)]
+    [InlineData(999, 999, false)]
+    public void PreDutyCalibrationOnlyAcceptsRecognizedSupportedContent(uint category, uint intendedUse, bool expected)
+    {
+        Assert.Equal(expected, ContentCapturePolicy.SupportsPreDutyCalibration(category, intendedUse));
+    }
+
+    [Theory]
     [InlineData(2, 3)]
     [InlineData(21, 31)]
     [InlineData(0, 3)]

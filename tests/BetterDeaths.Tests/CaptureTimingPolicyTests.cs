@@ -52,6 +52,23 @@ public sealed class CaptureTimingPolicyTests
     }
 
     [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(false, false, true, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, true, true, false)]
+    public void PreDutyCalibrationDoesNotRelaxReviewCapture(bool dutyStarted, bool pvp, bool supported, bool expected)
+    {
+        Assert.Equal(expected, CaptureTimingPolicy.ShouldAcceptDamageParserPackets(dutyStarted, pvp, supported));
+        Assert.False(CaptureTimingPolicy.ShouldAcceptRawCombatCapture(dutyStarted, pvp, true,
+            false, null, CombatAtUtc, Grace));
+        Assert.False(CaptureTimingPolicy.IsLiveCombatCapture(dutyStarted, pvp, false, null, CombatAtUtc, Grace));
+    }
+
+    [Theory]
     [InlineData(0.0, true)]
     [InlineData(2.999, true)]
     [InlineData(3.0, true)]

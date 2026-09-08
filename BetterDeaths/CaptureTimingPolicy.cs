@@ -48,9 +48,10 @@ internal static class CaptureTimingPolicy
 
     public static bool ShouldAcceptDamageParserPackets(
         bool isDutyCaptureActive,
-        bool isPvPCaptureBlocked)
+        bool isPvPCaptureBlocked,
+        bool supportsPreDutyCalibration = false)
     {
-        return isDutyCaptureActive && !isPvPCaptureBlocked;
+        return (isDutyCaptureActive || supportsPreDutyCalibration) && !isPvPCaptureBlocked;
     }
 
     public static bool ShouldClosePull(

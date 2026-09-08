@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved damage-over-time calibration for repeated-target hits and uniform cone and line attacks. Improved confirmed buff snapshots and pet-source tracking, and expanded diagnostic snapshots for investigating remaining estimate differences. Added regression coverage while preserving captured direct damage and existing content restrictions.",
+  "Changelog": "Improved damage-over-time calibration by retaining pre-pull healing observations when supported duties start. Healing does not count as damage or start the encounter timer. Added coverage for calibration lifecycle, duplicate observations, and job and level changes while preserving death-review behavior and existing content restrictions.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

@@ -786,6 +786,7 @@ public sealed partial class Plugin : IDalamudPlugin
         try
         {
             var now = DateTime.UtcNow;
+            RefreshTerritoryCaptureState();
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);
             PrunePendingDeathRecapLinks(now);
@@ -796,7 +797,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
             ObserveDamageMeterOffensiveCasts(now);
             UpdateCombatTimerState(now);
-            damageParsingModule.SetCombatActive(ShouldAcceptDamageParserCapture(now) && IsEffectiveInCombat(), now);
+            damageParsingModule.SetCombatActive(IsDutyCaptureActive() && !IsPvPCaptureBlocked() && IsEffectiveInCombat(), now);
             damageParsingModule.FlushPendingPeriodicTicks(now);
             RefreshPartyState();
             damageParsingModule.RefreshLiveEncounter(now);

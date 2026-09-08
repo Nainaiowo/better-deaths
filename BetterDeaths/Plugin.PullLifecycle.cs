@@ -45,26 +45,28 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
-    private sealed record ContentCaptureState(uint TerritoryId, bool IsDungeon);
+    private sealed record ContentCaptureState(uint TerritoryId, bool IsDungeon, bool SupportsPreDutyCalibration);
     private ContentCaptureState? contentCaptureState;
 
-    public bool IsDungeonCaptureBlocked
-    {
-        get
-        {
-            var territoryId = (uint)ClientState.TerritoryType;
-            var cached = contentCaptureState;
-            if (cached?.TerritoryId == territoryId)
-            {
-                return cached.IsDungeon;
-            }
+    public bool IsDungeonCaptureBlocked => GetContentCaptureState().IsDungeon;
 
-            var territory = DataManager.GetExcelSheet<TerritoryType>()?.GetRowOrDefault(territoryId);
-            var blocked = territory is { } row && ContentCapturePolicy.IsDungeon(
-                row.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0, row.TerritoryIntendedUse.RowId);
-            contentCaptureState = new ContentCaptureState(territoryId, blocked);
-            return blocked;
+    private ContentCaptureState GetContentCaptureState()
+    {
+        var territoryId = (uint)ClientState.TerritoryType;
+        var cached = contentCaptureState;
+        if (cached?.TerritoryId == territoryId)
+        {
+            return cached;
         }
+
+        var territory = DataManager.GetExcelSheet<TerritoryType>()?.GetRowOrDefault(territoryId);
+        var contentType = territory?.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0;
+        var intendedUse = territory?.TerritoryIntendedUse.RowId ?? 0;
+        var state = new ContentCaptureState(territoryId,
+            ContentCapturePolicy.IsDungeon(contentType, intendedUse),
+            ContentCapturePolicy.SupportsPreDutyCalibration(contentType, intendedUse));
+        contentCaptureState = state;
+        return state;
     }
 
     private void OnDutyReset(IDutyStateEventArgs args)
@@ -90,9 +92,10 @@ public sealed partial class Plugin
 
     private void OnDutyStarted(IDutyStateEventArgs args)
     {
+        RefreshTerritoryCaptureState();
         ClearDebugDataForDutyEnter();
         OnDutyReset(args);
-        damageParsingModule.ResetCalibration();
+        // Territory entry resets calibration; duty start must retain pre-pull observations.
         EnsureCurrentDutyInstancePullGroup();
         deathRecapPopupWindow.RefreshVisibility();
     }
@@ -308,7 +311,8 @@ public sealed partial class Plugin
     {
         return CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
             IsDutyCaptureActive(),
-            IsPvPCaptureBlocked());
+            IsPvPCaptureBlocked(),
+            currentTerritoryId == ClientState.TerritoryType && GetContentCaptureState().SupportsPreDutyCalibration);
     }
 
     private bool IsEffectiveInCombat()

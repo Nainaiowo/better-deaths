@@ -56,7 +56,7 @@ public sealed partial class Plugin
         DateTime FirstSeenAtUtc,
         PartyMemberSnapshot Snapshot);
 
-    private void RefreshPartyState()
+    private void RefreshTerritoryCaptureState()
     {
         var territoryId = ClientState.TerritoryType;
         if (territoryId != currentTerritoryId)
@@ -67,7 +67,10 @@ public sealed partial class Plugin
             currentTerritoryName = GetTerritoryName(territoryId);
             ClearCurrentDutyInstancePullGroup();
         }
+    }
 
+    private void RefreshPartyState()
+    {
         if (IsPvPCaptureBlocked())
         {
             ResetCurrentPull(suppressResetStateDeaths: false);
