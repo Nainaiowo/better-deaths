@@ -440,7 +440,8 @@ internal sealed class DamageParsingModule
                 .ToList()
             : [];
         var sourceSnapshots = input.Sources.ToList();
-        var (raidAdjustments, meterRaidAdjustments) = RaidDamageCalculator.CalculateBoth(events, sourceSnapshots);
+        var (raidAdjustments, meterRaidAdjustments, raidDiagnostics) =
+            RaidDamageCalculator.CalculateBoth(events, sourceSnapshots, includeDiagnostics);
         sourceSnapshots = sourceSnapshots
             .Select(source => ApplyRaidAdjustment(source, raidAdjustments, meterRaidAdjustments))
             .ToList();
@@ -474,7 +475,7 @@ internal sealed class DamageParsingModule
                 total + source.TotalDamage - source.EstimatedDamage - source.UnattributedDamage),
             RaidAdjustedDamage = sourceSnapshots.Sum(source => source.RaidAdjustedDamage),
             MeterRaidAdjustedDamage = sourceSnapshots.Sum(source => source.EffectiveMeterRaidAdjustedDamage),
-            Diagnostics = includeDiagnostics ? BuildDiagnostics(events) : DamageEncounterDiagnostics.Empty,
+            Diagnostics = includeDiagnostics ? BuildDiagnostics(events) with { RaidDamage = raidDiagnostics } : DamageEncounterDiagnostics.Empty,
         };
     }
 

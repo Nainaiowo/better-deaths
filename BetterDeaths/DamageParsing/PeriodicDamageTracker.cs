@@ -254,7 +254,8 @@ internal sealed class PeriodicDamageTracker
         GetSourceSamples(source, source.IsPet ? null : packet.SourceBaseRates);
         var sourceKey = GetActorKey(source);
         var critical = (effect.Param1 & 0x20) != 0;
-        ObserveCompatibilityCritical(sourceKey, critical, packet.ActionId, packet.SourceStatuses, target.TargetStatuses);
+        ObserveCompatibilityCritical(sourceKey, critical, packet.ActionId, packet.SourceStatuses, target.TargetStatuses,
+            statusTiming.Resolve(source.EntityId, packet.SourceStatuses, packet.SeenAtUtc));
 
         // Reflections, lifesteal and extra triggered heals still provide crit
         // observations, but are not measurements of the primary heal's potency.
@@ -284,14 +285,15 @@ internal sealed class PeriodicDamageTracker
     }
 
     private void ObserveCompatibilityCritical(string sourceKey, bool critical, uint actionId,
-        IReadOnlyList<DamageStatusSnapshot> sourceStatuses, IReadOnlyList<DamageStatusSnapshot> targetStatuses)
+        IReadOnlyList<DamageStatusSnapshot> sourceStatuses, IReadOnlyList<DamageStatusSnapshot> targetStatuses,
+        IReadOnlyList<DamageStatusSnapshot> timedSourceStatuses)
     {
         if (!compatibilityCriticalSamples.TryGetValue(sourceKey, out var samples))
         {
             samples = new CompatibilityCriticalSamples();
             compatibilityCriticalSamples[sourceKey] = samples;
         }
-        if (!PeriodicCalibrationPolicy.ExcludesCriticalSample(actionId, sourceStatuses, targetStatuses))
+        if (!PeriodicCalibrationPolicy.ExcludesCriticalSample(actionId, sourceStatuses, targetStatuses, timedSourceStatuses))
         {
             samples.Rate = (samples.Rate * samples.Count + (critical ? 1.0 : 0.0)) / (samples.Count + 1);
             samples.Count++;
@@ -304,15 +306,15 @@ internal sealed class PeriodicDamageTracker
         {
             if (observeSnapshots && !damageEvent.IsPeriodic)
                 confirmedBuffs.ObserveSnapshots(damageEvent);
-            directHitCompatibility.Observe(damageEvent,
-                statusTiming.Resolve(damageEvent.Source.EntityId, damageEvent.SourceStatuses, damageEvent.SeenAtUtc));
+            var timedSourceStatuses = statusTiming.Resolve(damageEvent.Source.EntityId, damageEvent.SourceStatuses, damageEvent.SeenAtUtc);
+            directHitCompatibility.Observe(damageEvent, timedSourceStatuses);
             if (!damageEvent.IsPeriodic && damageEvent.Outcome == DamageEventOutcome.Damage &&
                 (damageEvent.Source.IsPlayer || damageEvent.Source.IsPartyMember || damageEvent.Source.IsPet) &&
                 !damageEvent.Source.IsLimitBreak && damageEvent.ActionCategoryId != 9)
             {
                 GetSourceSamples(damageEvent.Source, damageEvent.Source.IsPet ? null : damageEvent.SourceBaseRates);
                 ObserveCompatibilityCritical(GetActorKey(damageEvent.Source), damageEvent.Critical, damageEvent.ActionId,
-                    damageEvent.SourceStatuses, damageEvent.TargetStatuses);
+                    damageEvent.SourceStatuses, damageEvent.TargetStatuses, timedSourceStatuses);
             }
             if (damageEvent.IsPeriodic || damageEvent.MeterEligibility != DamageMeterEligibility.Eligible ||
                 damageEvent.Outcome != DamageEventOutcome.Damage || damageEvent.Amount == 0)

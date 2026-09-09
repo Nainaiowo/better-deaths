@@ -69,7 +69,8 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             startsApplication = true;
         }
         if (!application.IsRemoval && application.ObservationKind == DamageStatusObservationKind.Landing &&
-            application.AppliedParameter is null && FindAssociatedApplication(application) is { } associated)
+            application.AppliedParameter is null && !HasParameter(application) &&
+            FindAssociatedApplication(application) is { } associated)
         {
             application = application with
             {
@@ -84,10 +85,68 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
 
     private void ObserveCore(DamageStatusApplication application, bool startsApplication = false)
     {
+        if (!application.IsRemoval && application.ObservationKind == DamageStatusObservationKind.Observation &&
+            application.Target.IsPet && application.Target.OwnerEntityId != 0 && application.Source.EntityId != 0 &&
+            RaidBuffPolicy.UsesApplicationParameter(application.StatusId) && HasDuration(application))
+            application = AssociateObservedPetBuff(application, ref startsApplication);
         var replaced = slots.Observe(application);
         ObserveState(application, startsApplication);
         if (replaced is not null)
             ObserveState(replaced);
+    }
+
+    private DamageStatusApplication AssociateObservedPetBuff(DamageStatusApplication application, ref bool startsApplication)
+    {
+        var previous = FindActive(application.Target.EntityId);
+        if (previous is not null && application.ApplicationSequence is > 0 &&
+            application.ApplicationSequence != previous.ApplicationSequence)
+            previous = null;
+
+        // Keep the pet's specific application, not whichever buff the owner has on later hits.
+        // Explicit pet strength (including zero) takes precedence over inherited metadata.
+        startsApplication = true;
+        if (application.AppliedParameter is not null || HasParameter(application))
+            return application with
+            {
+                ApplicationSequence = application.ApplicationSequence is > 0 ? application.ApplicationSequence : previous?.ApplicationSequence,
+                StatusSlot = application.StatusSlot ?? previous?.StatusSlot,
+            };
+
+        var origin = previous;
+        if (origin is null || origin.AppliedParameter is null && !HasParameter(origin) && origin.ApplicationSequence is > 0)
+        {
+            var owner = FindActive(application.Target.OwnerEntityId);
+            if (origin is null || owner?.ApplicationSequence == origin.ApplicationSequence)
+                origin = owner ?? origin;
+        }
+        if (origin is null || application.ApplicationSequence is > 0 &&
+            application.ApplicationSequence != origin.ApplicationSequence)
+            return application;
+        return application with
+        {
+            Source = ChooseMoreCompleteSource(application.Source, origin.Source),
+            AppliedParameter = origin.AppliedParameter,
+            Parameter = origin.AppliedParameter is null && HasParameter(origin) ? origin.Parameter : application.Parameter,
+            HasParameter = origin.AppliedParameter is null && HasParameter(origin) ? true : application.HasParameter,
+            ApplicationSequence = application.ApplicationSequence is > 0 ? application.ApplicationSequence : origin.ApplicationSequence,
+            StatusSlot = application.StatusSlot ?? previous?.StatusSlot,
+        };
+
+        DamageStatusApplication? FindActive(uint targetEntityId)
+        {
+            var key = new StatusKey(targetEntityId, application.StatusId, application.Source.EntityId);
+            if (statuses.TryGetValue(key, out var current) && current.Application.SeenAtUtc <= application.SeenAtUtc)
+                return IsActive(current) ? current.Application : null;
+            return history.Where(status => status.Application.Target.EntityId == targetEntityId &&
+                    status.Application.StatusId == application.StatusId &&
+                    status.Application.Source.EntityId == application.Source.EntityId && IsActive(status))
+                .OrderByDescending(status => status.Application.SeenAtUtc)
+                .Select(status => status.Application).FirstOrDefault();
+        }
+
+        bool IsActive(TrackedStatus status) => status.Application.SeenAtUtc <= application.SeenAtUtc &&
+            status.ExpiresAtUtc > application.SeenAtUtc &&
+            (status.RemovedAtUtc is null || status.RemovedAtUtc > application.SeenAtUtc);
     }
 
     private PendingApplication? FindAssociatedApplication(DamageStatusApplication application)

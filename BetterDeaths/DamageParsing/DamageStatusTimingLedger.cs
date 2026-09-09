@@ -27,7 +27,8 @@ internal sealed class DamageStatusTimingLedger
         slot.LastSeenAtUtc = update.SeenAtUtc;
 
         var incoming = update.Status with { StatusSlot = update.Slot };
-        var duration = incoming.RemainingTime == 0 ? 9999 : Math.Min(9999, incoming.RemainingTime);
+        var remaining = DamageStatusTiming.DecodeRemaining(incoming.RemainingTime);
+        var duration = remaining == 0 ? 9999 : Math.Min(9999, remaining);
         var expiry = update.SeenAtUtc.AddSeconds(duration);
         var previous = slot.Current;
         if (update.MissingInformation && previous?.Status.StatusId is null or 0)

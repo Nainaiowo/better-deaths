@@ -627,6 +627,8 @@ internal sealed record DamageEncounterDiagnostics(
     IReadOnlyList<PeriodicAllocationDiagnostic> PeriodicAllocations,
     IReadOnlyList<PeriodicTickDiagnostic> PeriodicTicks)
 {
+    public RaidDamageDiagnostics RaidDamage { get; init; } = RaidDamageDiagnostics.Empty;
+
     public IReadOnlyList<DamageTargetDiagnostic> Targets { get; init; } = [];
 
     public static DamageEncounterDiagnostics Empty { get; } = new(

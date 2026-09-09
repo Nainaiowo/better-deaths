@@ -34,7 +34,8 @@ internal static class PeriodicCalibrationPolicy
     };
 
     public static bool ExcludesCriticalSample(uint actionId,
-        IReadOnlyList<DamageStatusSnapshot> source, IReadOnlyList<DamageStatusSnapshot> target)
+        IReadOnlyList<DamageStatusSnapshot> source, IReadOnlyList<DamageStatusSnapshot> target,
+        IReadOnlyList<DamageStatusSnapshot>? timedSource = null)
     {
         if (actionId is 16465 or 16463 or 25673 or 53 or 25767 or 2246 or 16486 or 25781 or 25782 or 36982 ||
             target.Any(status => status.StatusId == 0x4C5) ||
@@ -43,7 +44,8 @@ internal static class PeriodicCalibrationPolicy
         {
             return true;
         }
-        return source.Any(status => status.RemainingTime >= 1 && (status.StatusId switch
+        // A consumed guarantee belongs to the hit above; chance buffs use accepted expiry.
+        return (timedSource ?? source).Any(status => status.RemainingTime >= 1 && (status.StatusId switch
         {
             2216 or 2125 or 1825 or 786 or 851 or 86 => true,
             1177 => actionId is 3549 or 3550,

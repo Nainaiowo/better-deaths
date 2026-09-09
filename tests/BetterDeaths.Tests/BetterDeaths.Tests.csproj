@@ -49,6 +49,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffPolicy.cs" Link="DamageParsing/RaidBuffPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidBuffTracker.cs" Link="DamageParsing/RaidBuffTracker.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/RaidDamageCalculator.cs" Link="DamageParsing/RaidDamageCalculator.cs" />
+    <Compile Include="../../BetterDeaths/DamageParsing/RaidDamageDiagnostics.cs" Link="DamageParsing/RaidDamageDiagnostics.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ReactiveDamageStatusPolicy.cs" Link="DamageParsing/ReactiveDamageStatusPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/ServerFrameTimestampPolicy.cs" Link="DamageParsing/ServerFrameTimestampPolicy.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamagePacketTimingHandoff.cs" Link="DamageParsing/DamagePacketTimingHandoff.cs" />

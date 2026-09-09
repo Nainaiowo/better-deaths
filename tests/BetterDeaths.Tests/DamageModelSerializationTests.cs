@@ -31,6 +31,8 @@ public sealed class DamageModelSerializationTests
         Assert.Equal(200.0, snapshot.DamagePerSecond);
         Assert.Equal(900.0, snapshot.EffectiveMeterRaidAdjustedDamage);
         Assert.Equal(5.0, snapshot.DurationSeconds);
+        Assert.Empty(snapshot.Diagnostics.RaidDamage.Rates);
+        Assert.Empty(snapshot.Diagnostics.RaidDamage.RawCredits);
     }
 
     [Fact]

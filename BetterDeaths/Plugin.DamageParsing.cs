@@ -877,6 +877,7 @@ public sealed partial class Plugin
                 RaidAdjustedDamage = ended?.RaidAdjustedDamage ?? 0.0,
                 MeterRaidAdjustedDamage = ended?.EffectiveMeterRaidAdjustedDamage ?? 0.0,
                 DurationSeconds = ended?.DurationSeconds ?? 0.0,
+                RaidDamage = ended?.Diagnostics.RaidDamage,
                 PacketCount = ended?.PacketCount ?? 0,
                 Sources = ended?.Sources.Select(source => new
                 {

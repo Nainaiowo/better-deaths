@@ -138,11 +138,25 @@ public sealed class DamageStatusTimingLedgerTests
     [InlineData(0f, 9999f)]
     [InlineData(10000f, 9999f)]
     [InlineData(30f, 30f)]
+    [InlineData(-15f, 15f)]
+    [InlineData(-10000f, 9999f)]
     public void ZeroAndLargeDurationsUseTheAcceptedDurationPolicy(float input, float expected)
     {
         var ledger = new DamageStatusTimingLedger();
         ledger.Observe(Update(0, input));
         Assert.Equal(expected, Assert.Single(ledger.Resolve(Player.EntityId, [], Start)).RemainingTime);
+    }
+
+    [Fact]
+    public void SignedNetworkRefreshDoesNotTurnALiveBuffIntoAnExpiredOne()
+    {
+        var ledger = new DamageStatusTimingLedger();
+        ledger.Observe(Update(0, 15, 1177));
+        Assert.False(ledger.Observe(Update(.715, -15, 1177)));
+        Assert.Equal(14.285f, Assert.Single(ledger.Resolve(Player.EntityId, [], At(.715))).RemainingTime, 3);
+        Assert.Equal(-1, Assert.Single(ledger.Resolve(Player.EntityId, [], At(16))).RemainingTime);
+        ledger.Observe(Update(17, 0, 0));
+        Assert.Empty(ledger.Resolve(Player.EntityId, [], At(18)));
     }
 
     [Theory]
