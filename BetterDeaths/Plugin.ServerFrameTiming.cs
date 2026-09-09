@@ -21,6 +21,7 @@ public sealed partial class Plugin
     private Hook<ExtractZonePacketDelegate>? serverFrameHook;
     private Hook<PacketDispatcher.Delegates.OnReceivePacket>? packetTimingDispatchHook;
     private readonly DamagePacketTimingHandoff packetTimingHandoff = new();
+    private readonly DamagePacketTimingDiagnostics packetTimingDiagnostics = new();
     private long timingExtractionCalls, timingInvalidPackets, timingDispatchCalls, timingCaptureErrors;
     private long timingActionCallbacks, timingActionsWithoutTimestamp, timingStatusCallbacks, timingStatusesWithoutTimestamp;
     private DateTime nextTimingHealthAtUtc;
@@ -88,19 +89,38 @@ public sealed partial class Plugin
             var buffer = *(byte**)(result + 0x38);
             var length = *(ulong*)(result + 0x30);
             var frame = state != null ? *(byte**)(state + 16) : null;
+            var source = *(uint*)(result + 0x20);
+            var destination = *(uint*)(result + 0x24);
+            var receivedAtUtc = DateTime.UtcNow;
+            ReadOnlySpan<byte> frameHeader = frame != null ? new(frame, 40) : [];
+            ReadOnlySpan<byte> elementHeader = packetInfo != null ? new(packetInfo + 8, 16) : [];
             DateTime? timestamp = null;
-            if (frame != null && packetInfo != null && buffer != null &&
-                DamagePacketTimingReader.TryRead(new(frame, 40), new(packetInfo + 8, 16), length,
-                    *(uint*)(result + 0x20), *(uint*)(result + 0x24), DateTime.UtcNow, out var time))
+            DamagePacketTimingRejection rejection;
+            if (state == null)
+                rejection = DamagePacketTimingRejection.MissingState;
+            else if (frame == null)
+                rejection = DamagePacketTimingRejection.MissingFrame;
+            else if (packetInfo == null)
+                rejection = DamagePacketTimingRejection.MissingElementHeader;
+            else if (buffer == null)
+                rejection = DamagePacketTimingRejection.MissingIpcBuffer;
+            else if (DamagePacketTimingReader.TryRead(frameHeader, elementHeader, length,
+                source, destination, receivedAtUtc, out var time, out rejection))
                 timestamp = time;
-            else
+            if (!timestamp.HasValue)
                 Interlocked.Increment(ref timingInvalidPackets);
             packetTimingHandoff.Publish((nint)buffer, timestamp.HasValue ? *(ulong*)buffer : 0,
                 timestamp.HasValue ? *(ulong*)(buffer + 8) : 0, timestamp);
+            packetTimingDiagnostics.Record(rejection,
+                ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.StatusChanges) &&
+                    Volatile.Read(ref contentCaptureState) is { IsDungeon: false },
+                frameHeader, elementHeader, length, source, destination, receivedAtUtc, state != null, buffer != null);
         }
         catch (Exception)
         {
             Interlocked.Increment(ref timingCaptureErrors);
+            packetTimingDiagnostics.Record(DamagePacketTimingRejection.CaptureException, false,
+                [], [], 0, 0, 0, DateTime.UtcNow, false, false);
         }
         return result;
     }
@@ -154,6 +174,7 @@ public sealed partial class Plugin
             StatusCallbacks = Interlocked.Read(ref timingStatusCallbacks),
             StatusCallbacksWithoutTimestamp = Interlocked.Read(ref timingStatusesWithoutTimestamp),
             Handoff = packetTimingHandoff.Snapshot(),
+            Validation = packetTimingDiagnostics.Snapshot(),
         });
     }
 }

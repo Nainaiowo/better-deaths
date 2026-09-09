@@ -2,6 +2,13 @@ namespace BetterDeaths.DamageParsing;
 
 using System;
 
+internal enum ServerFrameTimestampRejection
+{
+    None,
+    InvalidUnixMilliseconds,
+    OutsideReceiptWindow,
+}
+
 internal static class ServerFrameTimestampPolicy
 {
     private const ulong MaximumUnixMilliseconds = 253402300799999;
@@ -11,8 +18,16 @@ internal static class ServerFrameTimestampPolicy
         ulong unixMilliseconds,
         DateTime receivedAtUtc,
         out DateTime serverSeenAtUtc)
+        => TryConvert(unixMilliseconds, receivedAtUtc, out serverSeenAtUtc, out _);
+
+    public static bool TryConvert(
+        ulong unixMilliseconds,
+        DateTime receivedAtUtc,
+        out DateTime serverSeenAtUtc,
+        out ServerFrameTimestampRejection rejection)
     {
         serverSeenAtUtc = default;
+        rejection = ServerFrameTimestampRejection.InvalidUnixMilliseconds;
         if (unixMilliseconds == 0 || unixMilliseconds > MaximumUnixMilliseconds)
         {
             return false;
@@ -26,10 +41,12 @@ internal static class ServerFrameTimestampPolicy
             : receivedAtUtc.ToUniversalTime();
         if ((converted - received).Duration() > MaximumClockDifference)
         {
+            rejection = ServerFrameTimestampRejection.OutsideReceiptWindow;
             return false;
         }
 
         serverSeenAtUtc = converted;
+        rejection = ServerFrameTimestampRejection.None;
         return true;
     }
 }
