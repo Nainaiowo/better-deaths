@@ -2,6 +2,7 @@ namespace BetterDeaths;
 
 using BetterDeaths.DamageParsing;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Network;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -14,105 +15,119 @@ public sealed partial class Plugin
 
     [ThreadStatic]
     private static ServerFrameTimestampCapture? currentServerFrameTiming;
-
-    private Hook<ProcessZoneDownDelegate>? serverFrameHook;
-
     private static ServerFrameTimestampCapture? CurrentServerFrameTiming => currentServerFrameTiming;
+    private sealed record ServerFrameTimestampCapture(DateTime SeenAtUtc);
 
-    private sealed class ServerFrameTimestampCapture
-    {
-        public DateTime? SeenAtUtc { get; set; }
-    }
+    private Hook<ExtractZonePacketDelegate>? serverFrameHook;
+    private Hook<PacketDispatcher.Delegates.OnReceivePacket>? packetTimingDispatchHook;
+    private readonly DamagePacketTimingHandoff packetTimingHandoff = new();
+    private long timingExtractionCalls, timingInvalidPackets, timingDispatchCalls, timingCaptureErrors;
+    private long timingActionCallbacks, timingActionsWithoutTimestamp, timingStatusCallbacks, timingStatusesWithoutTimestamp;
+    private DateTime nextTimingHealthAtUtc;
 
-    private unsafe delegate nuint ProcessZoneDownDelegate(
-        byte* data,
-        byte* unknown,
-        nuint value3,
-        nuint value4,
-        nuint value5);
+    private unsafe delegate nint ExtractZonePacketDelegate(byte* state, nint allocator, byte* packetInfo,
+        nint decompressionBuffer, nuint decompressionSize, nint context, nint callback, nint codec);
 
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    private unsafe struct ServerFrameHeader
-    {
-        public fixed byte Prefix[16];
-        public ulong TimeValue;
-        public uint TotalSize;
-        public ushort Protocol;
-        public ushort Count;
-        public byte Version;
-        public byte Compression;
-        public ushort Unknown;
-        public uint DecompressedLength;
-    }
+    [DllImport("kernel32.dll", ExactSpelling = true)]
+    private static extern nint RtlLookupFunctionEntry(ulong controlPc, out ulong imageBase, nint historyTable);
 
     private unsafe void TryInitializeServerFrameTiming()
     {
         try
         {
-            var matches = SigScanner
-                .ScanAllText(GenericZoneDownSignature, CancellationToken.None)
-                .Take(ZoneDownMatchIndex + 1)
-                .ToArray();
+            var matches = SigScanner.ScanAllText(GenericZoneDownSignature, CancellationToken.None)
+                .Take(ZoneDownMatchIndex + 1).ToArray();
             if (matches.Length <= ZoneDownMatchIndex)
-            {
-                throw new InvalidOperationException(
-                    $"Expected at least {ZoneDownMatchIndex + 1} server receive matches, found {matches.Length}.");
-            }
+                throw new InvalidOperationException("The zone packet extraction call site is unavailable.");
 
-            var address = ResolveCallTarget(matches[ZoneDownMatchIndex]);
+            // The call target only decompresses. Its containing function extracts one IPC
+            // into the game's owned buffer; callbacks run later, after that function returns.
+            var callSite = matches[ZoneDownMatchIndex];
+            var function = RtlLookupFunctionEntry((ulong)callSite, out var imageBase, 0);
+            if (function == 0)
+                throw new InvalidOperationException("Zone packet extraction unwind metadata is unavailable.");
+            var address = (nint)(imageBase + (uint)Marshal.ReadInt32(function));
+            var end = (nint)(imageBase + (uint)Marshal.ReadInt32(function, 4));
             var textStart = SigScanner.Module.BaseAddress + (int)SigScanner.TextSectionOffset;
             var textEnd = textStart + SigScanner.TextSectionSize;
-            if (address < textStart || address >= textEnd)
-            {
-                throw new InvalidOperationException("The server receive hook resolved outside the game text section.");
-            }
+            if (address < textStart || end > textEnd || callSite < address || callSite >= end)
+                throw new InvalidOperationException("Invalid zone packet extraction function bounds.");
+            var dispatch = PacketDispatcher.StaticVirtualTablePointer;
+            if (dispatch == null || dispatch->OnReceivePacket == null)
+                throw new InvalidOperationException("The zone packet dispatcher is unavailable.");
 
-            serverFrameHook = GameInteropProvider.HookFromAddress<ProcessZoneDownDelegate>(
-                address,
-                OnProcessZoneDown);
+            serverFrameHook = GameInteropProvider.HookFromAddress<ExtractZonePacketDelegate>(address, OnExtractZonePacket);
+            packetTimingDispatchHook = GameInteropProvider.HookFromAddress<PacketDispatcher.Delegates.OnReceivePacket>(
+                (nint)dispatch->OnReceivePacket, OnDispatchTimedPacket);
+            packetTimingDispatchHook.Enable();
             serverFrameHook.Enable();
-            Log.Information("Better Deaths damage meter server-frame timing enabled.");
+            Log.Information("Better Deaths packet timing handoff enabled.");
         }
         catch (Exception ex)
         {
             serverFrameHook?.Dispose();
+            packetTimingDispatchHook?.Dispose();
             serverFrameHook = null;
-            Log.Warning(ex, "Better Deaths server-frame timing could not be enabled; the damage meter will use local receipt time.");
+            packetTimingDispatchHook = null;
+            Log.Warning(ex, "Better Deaths packet timing handoff is unavailable; the damage meter will use local receipt time.");
         }
     }
 
-    private static IntPtr ResolveCallTarget(IntPtr address)
+    private unsafe nint OnExtractZonePacket(byte* state, nint allocator, byte* packetInfo,
+        nint decompressionBuffer, nuint decompressionSize, nint context, nint callback, nint codec)
     {
-        return Marshal.ReadByte(address) == 0xE8
-            ? address + 5 + Marshal.ReadInt32(address, 1)
-            : address;
-    }
-
-    private unsafe nuint OnProcessZoneDown(
-        byte* data,
-        byte* unknown,
-        nuint value3,
-        nuint value4,
-        nuint value5)
-    {
-        var previous = currentServerFrameTiming;
-        var capture = new ServerFrameTimestampCapture();
-        currentServerFrameTiming = capture;
-
+        var result = serverFrameHook!.Original(state, allocator, packetInfo, decompressionBuffer,
+            decompressionSize, context, callback, codec);
+        Interlocked.Increment(ref timingExtractionCalls);
+        if (result == 0)
+            return result;
         try
         {
-            // Raw packet callbacks run inside this call. Holding the queue lock keeps the
-            // framework thread from consuming their shared timing token before it is filled.
-            lock (rawCombatQueueLock)
-            {
-                var result = serverFrameHook!.Original(data, unknown, value3, value4, value5);
-                if (TryReadServerFrameTimestamp(data, out var serverSeenAtUtc))
-                {
-                    capture.SeenAtUtc = serverSeenAtUtc;
-                }
+            // Native extraction copies the IPC into message+0x38 and publishes its length
+            // at +0x30. packetInfo+8 is the accompanying 16-byte element header.
+            var buffer = *(byte**)(result + 0x38);
+            var length = *(ulong*)(result + 0x30);
+            var frame = state != null ? *(byte**)(state + 16) : null;
+            DateTime? timestamp = null;
+            if (frame != null && packetInfo != null && buffer != null &&
+                DamagePacketTimingReader.TryRead(new(frame, 40), new(packetInfo + 8, 16), length,
+                    *(uint*)(result + 0x20), *(uint*)(result + 0x24), DateTime.UtcNow, out var time))
+                timestamp = time;
+            else
+                Interlocked.Increment(ref timingInvalidPackets);
+            packetTimingHandoff.Publish((nint)buffer, timestamp.HasValue ? *(ulong*)buffer : 0,
+                timestamp.HasValue ? *(ulong*)(buffer + 8) : 0, timestamp);
+        }
+        catch (Exception)
+        {
+            Interlocked.Increment(ref timingCaptureErrors);
+        }
+        return result;
+    }
 
-                return result;
+    private unsafe void OnDispatchTimedPacket(PacketDispatcher* dispatcher, uint targetId, nint packet)
+    {
+        Interlocked.Increment(ref timingDispatchCalls);
+        var previous = currentServerFrameTiming;
+        currentServerFrameTiming = null;
+        try
+        {
+            if (packet != 0)
+            {
+                var timestamp = packetTimingHandoff.Take(packet, *(ulong*)packet, *(ulong*)(packet + 8));
+                if (timestamp is { } time)
+                    currentServerFrameTiming = new(time);
             }
+        }
+        catch (Exception)
+        {
+            Interlocked.Increment(ref timingCaptureErrors);
+        }
+        try
+        {
+            // Keep one packet's nested status/action callbacks in a single queue snapshot.
+            lock (rawCombatQueueLock)
+                packetTimingDispatchHook!.Original(dispatcher, targetId, packet);
         }
         finally
         {
@@ -120,34 +135,25 @@ public sealed partial class Plugin
         }
     }
 
-    private static unsafe bool TryReadServerFrameTimestamp(byte* data, out DateTime serverSeenAtUtc)
+    private void RecordTimingHealth(DateTime now)
     {
-        serverSeenAtUtc = default;
-        if (data is null)
+        if (now < nextTimingHealthAtUtc || !ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.StatusChanges))
+            return;
+        nextTimingHealthAtUtc = now.AddSeconds(10);
+        QueueDebugCaptureRecord("DamageMeterTimingHealth", new
         {
-            return false;
-        }
-
-        var packetOffset = *(uint*)(data + 28);
-        if (packetOffset != 0)
-        {
-            return false;
-        }
-
-        var frame = *(ServerFrameHeader**)(data + 16);
-        if (frame is null ||
-            frame->TotalSize < sizeof(ServerFrameHeader) ||
-            frame->TotalSize > 16 * 1024 * 1024 ||
-            frame->Protocol != 1 ||
-            frame->Count == 0 ||
-            frame->Compression > 2)
-        {
-            return false;
-        }
-
-        return ServerFrameTimestampPolicy.TryConvert(
-            frame->TimeValue,
-            DateTime.UtcNow,
-            out serverSeenAtUtc);
+            ExtractionHookEnabled = serverFrameHook?.IsEnabled == true,
+            DispatchHookEnabled = packetTimingDispatchHook?.IsEnabled == true,
+            StatusHookEnabled = statusTimingSetHook?.IsEnabled == true && statusTimingRemoveHook?.IsEnabled == true,
+            ExtractionCalls = Interlocked.Read(ref timingExtractionCalls),
+            InvalidPackets = Interlocked.Read(ref timingInvalidPackets),
+            DispatchCalls = Interlocked.Read(ref timingDispatchCalls),
+            CaptureErrors = Interlocked.Read(ref timingCaptureErrors),
+            ActionCallbacks = Interlocked.Read(ref timingActionCallbacks),
+            ActionsWithoutTimestamp = Interlocked.Read(ref timingActionsWithoutTimestamp),
+            StatusCallbacks = Interlocked.Read(ref timingStatusCallbacks),
+            StatusCallbacksWithoutTimestamp = Interlocked.Read(ref timingStatusesWithoutTimestamp),
+            Handoff = packetTimingHandoff.Snapshot(),
+        });
     }
 }

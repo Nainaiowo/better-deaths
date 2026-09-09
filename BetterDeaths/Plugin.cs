@@ -750,6 +750,7 @@ public sealed partial class Plugin : IDalamudPlugin
         statusTimingSetHook?.Dispose();
         statusTimingRemoveHook?.Dispose();
         serverFrameHook?.Dispose();
+        packetTimingDispatchHook?.Dispose();
         effectResultHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();

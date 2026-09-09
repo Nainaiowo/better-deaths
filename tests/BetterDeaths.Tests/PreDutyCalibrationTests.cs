@@ -28,12 +28,12 @@ public sealed class PreDutyCalibrationTests
 
         // Re-delivery across the boundary must not count seven heals twice.
         Assert.Empty(module.Process(heal, allowAutomaticEncounterStart: false));
-        Assert.Null(module.GetCurrentEncounter());
+        Assert.Null(module.GetCurrentEncounter(Start.AddSeconds(31)));
         var firstDamage = Damage(2, 40, critical: true);
         Assert.Single(module.Process(firstDamage, allowAutomaticEncounterStart: false));
-        Assert.Null(module.GetCurrentEncounter());
+        Assert.Null(module.GetCurrentEncounter(Start.AddSeconds(40)));
         module.SetCombatActive(true, Start.AddSeconds(40));
-        var encounter = module.GetCurrentEncounter()!;
+        var encounter = module.GetCurrentEncounter(Start.AddSeconds(40))!;
         Assert.Equal(firstDamage.SeenAtUtc, encounter.MeterStartedAtUtc);
         Assert.Equal(1500, encounter.RawMeterDamage);
         Assert.Equal(1, Assert.Single(encounter.Sources).Hits);

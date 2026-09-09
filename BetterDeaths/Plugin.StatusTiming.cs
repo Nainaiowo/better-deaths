@@ -2,6 +2,7 @@ namespace BetterDeaths;
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using BetterDeaths.DamageParsing;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -77,6 +78,9 @@ public sealed partial class Plugin
         uint sourceId, ushort parameter, float duration)
     {
         // Local countdown/expiry calls are not server status updates.
+        Interlocked.Increment(ref timingStatusCallbacks);
+        if (CurrentServerFrameTiming is null)
+            Interlocked.Increment(ref timingStatusesWithoutTimestamp);
         if (CurrentServerFrameTiming is not { } timing || manager is null || manager->Owner is null ||
             index is < 0 or >= 60)
             return;
@@ -115,7 +119,7 @@ public sealed partial class Plugin
 
     private void ObserveStatusTiming(RawStatusTimingUpdate packet)
     {
-        var seenAtUtc = packet.Timing.SeenAtUtc ?? packet.SeenAtUtc;
+        var seenAtUtc = packet.Timing.SeenAtUtc;
         var update = new DamageStatusTimingUpdate(NormalizeActorEntityId(packet.TargetId), packet.Slot,
             new(packet.StatusId, CaptureDamageActorIdentity(packet.SourceId, string.Empty), packet.Parameter,
                 packet.Duration)

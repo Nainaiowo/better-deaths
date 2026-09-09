@@ -675,6 +675,12 @@ public sealed partial class Plugin
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
         };
+        if (captureForDamageParsing)
+        {
+            Interlocked.Increment(ref timingActionCallbacks);
+            if (packet.ServerFrameTiming is null)
+                Interlocked.Increment(ref timingActionsWithoutTimestamp);
+        }
         EnqueueRawActionEffectPacket(packet);
     }
 
@@ -892,6 +898,7 @@ public sealed partial class Plugin
 
     private void ResolveRawCombatQueues(DateTime now)
     {
+        RecordTimingHealth(now);
         var mapEffectPackets = DrainRawMapEffectPackets(now);
         mapEffectPackets.Sort(static (left, right) => left.Sequence.CompareTo(right.Sequence));
         foreach (var packet in mapEffectPackets)

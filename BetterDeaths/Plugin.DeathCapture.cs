@@ -64,6 +64,7 @@ public sealed partial class Plugin
             ArchiveCurrentPullForReview("Left territory", suppressResetStateDeaths: false);
             damageParsingModule.ResetCalibration();
             damageParsingModule.ResetStatusTiming();
+            packetTimingHandoff.Clear();
             lock (rawCombatQueueLock)
             {
                 rawStatusTimingUpdates.Clear();
