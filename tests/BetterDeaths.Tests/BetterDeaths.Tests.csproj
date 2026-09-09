@@ -100,5 +100,6 @@
     <None Update="Fixtures/CalibrationPotencyGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/CalibrationAdmissionGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/DamageWorkflowGolden.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/CapturedPacketTimingHeaders.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

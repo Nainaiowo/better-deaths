@@ -1,0 +1,36 @@
+{
+  "CaptureVersion": "1.0.0.36",
+  "Description": "Unmodified frame and element headers captured on 2026-09-09. No IPC bodies or player names are included.",
+  "Examples": [
+    {
+      "Name": "ipc-48",
+      "ReceivedAtUtc": "2026-09-09T12:19:52.9853868Z",
+      "ExpectedServerTimeUtc": "2026-09-09T12:19:52.875Z",
+      "IpcLength": 48,
+      "MessageSource": 268640133,
+      "MessageDestination": 268640133,
+      "FrameHeaderHex": "5252A041FF5D46E27F2A644D7B99C475AB3D1C86A001000068000000000001000100000040000000",
+      "ElementHeaderHex": "40000000851F0310851F031003000000"
+    },
+    {
+      "Name": "ipc-984",
+      "ReceivedAtUtc": "2026-09-09T12:19:55.5726764Z",
+      "ExpectedServerTimeUtc": "2026-09-09T12:19:55.511Z",
+      "IpcLength": 984,
+      "MessageSource": 268640133,
+      "MessageDestination": 268640133,
+      "FrameHeaderHex": "5252A041FF5D46E27F2A644D7B99C475F7471C86A0010000100400000000010001000000E8030000",
+      "ElementHeaderHex": "E8030000851F0310851F031003000000"
+    },
+    {
+      "Name": "ipc-24",
+      "ReceivedAtUtc": "2026-09-09T12:20:00.0915636Z",
+      "ExpectedServerTimeUtc": "2026-09-09T12:20:00.023Z",
+      "IpcLength": 24,
+      "MessageSource": 268640133,
+      "MessageDestination": 268640133,
+      "FrameHeaderHex": "5252A041FF5D46E27F2A644D7B99C47597591C86A001000050000000000001000100000028000000",
+      "ElementHeaderHex": "28000000851F0310851F031003000000"
+    }
+  ]
+}

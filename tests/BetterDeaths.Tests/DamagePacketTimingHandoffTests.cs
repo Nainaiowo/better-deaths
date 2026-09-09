@@ -146,7 +146,7 @@ public sealed class DamagePacketTimingHandoffTests
     [InlineData(3)] // Wrong source.
     [InlineData(4)] // Wrong destination.
     [InlineData(5)] // Non-IPC message.
-    [InlineData(6)] // Not a zone frame.
+    [InlineData(6)] // Frame too small for this IPC.
     [InlineData(7)] // Still compressed.
     [InlineData(8)] // No frame packets.
     [InlineData(9)] // Impossible frame size.
@@ -165,7 +165,7 @@ public sealed class DamagePacketTimingHandoffTests
             case 3: element[4]++; break;
             case 4: element[8]++; break;
             case 5: element[12] = 7; break;
-            case 6: frame[28] = 2; break;
+            case 6: BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(24), 87); break;
             case 7: frame[33] = 2; break;
             case 8: frame[30] = 0; break;
             case 9: BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(24), uint.MaxValue); break;

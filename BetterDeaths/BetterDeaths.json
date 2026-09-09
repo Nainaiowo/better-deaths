@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Added detailed timing rejection reasons and limited packet-header examples to damage meter debug captures. Expanded automated coverage for diagnostic limits and replayable timing checks. This diagnostic update does not change damage calculations or resolve the timing issue yet.",
+  "Changelog": "Fixed an overly restrictive packet-header check that rejected valid server timestamps. Added regression tests using captured headers while retaining the remaining validation checks. Damage calculations are unchanged.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

@@ -14,7 +14,6 @@ public sealed class DamagePacketTimingDiagnosticsTests
     [InlineData((int)DamagePacketTimingRejection.IpcLengthOutOfRange)]
     [InlineData((int)DamagePacketTimingRejection.FrameLengthOutOfRange)]
     [InlineData((int)DamagePacketTimingRejection.FrameTooShortForPacket)]
-    [InlineData((int)DamagePacketTimingRejection.UnexpectedFrameProtocol)]
     [InlineData((int)DamagePacketTimingRejection.EmptyFrame)]
     [InlineData((int)DamagePacketTimingRejection.CompressedFrame)]
     [InlineData((int)DamagePacketTimingRejection.UnexpectedElementType)]
@@ -35,7 +34,6 @@ public sealed class DamagePacketTimingDiagnosticsTests
             case DamagePacketTimingRejection.IpcLengthOutOfRange: ipcLength = ulong.MaxValue; break;
             case DamagePacketTimingRejection.FrameLengthOutOfRange: Write32(frame, 24, 39); break;
             case DamagePacketTimingRejection.FrameTooShortForPacket: Write32(frame, 24, 87); break;
-            case DamagePacketTimingRejection.UnexpectedFrameProtocol: frame[28] = 0; break;
             case DamagePacketTimingRejection.EmptyFrame: frame[30] = 0; break;
             case DamagePacketTimingRejection.CompressedFrame: frame[33] = 2; break;
             case DamagePacketTimingRejection.UnexpectedElementType: element[12] = 7; break;
@@ -59,13 +57,15 @@ public sealed class DamagePacketTimingDiagnosticsTests
         var (frame, element) = Headers();
         frame[28] = 2;
         frame[33] = 2;
+        element[12] = 7;
         Assert.False(DamagePacketTimingReader.TryRead(frame, element, 32, 10, 20, At, out _, out var reason));
-        Assert.Equal(DamagePacketTimingRejection.UnexpectedFrameProtocol, reason);
+        Assert.Equal(DamagePacketTimingRejection.CompressedFrame, reason);
         var diagnostics = new DamagePacketTimingDiagnostics();
         diagnostics.Record(reason, true, frame, element, 32, 10, 20, At, true, true);
         var example = Assert.Single(Assert.Single(diagnostics.Snapshot()).Examples);
         Assert.Equal(2, example.Frame!.Protocol);
         Assert.Equal(2, example.Frame.Compression);
+        Assert.Equal(7, example.Element!.Type);
     }
 
     [Theory]
@@ -217,6 +217,7 @@ public sealed class DamagePacketTimingDiagnosticsTests
         var diagnostics = new DamagePacketTimingDiagnostics();
         var (frame, element) = Headers();
         frame[28] = 0;
+        frame[33] = 2;
         Assert.False(DamagePacketTimingReader.TryRead(frame, element, 32, 10, 20, At, out _, out var reason));
         diagnostics.Record(reason, true, frame, element, 32, 10, 20, At, true, true);
         var json = JsonSerializer.Serialize(diagnostics.Snapshot());
@@ -230,7 +231,7 @@ public sealed class DamagePacketTimingDiagnosticsTests
     }
 
     private static void Record(DamagePacketTimingDiagnostics diagnostics, bool capture, byte[] frame, byte[] element)
-        => diagnostics.Record(DamagePacketTimingRejection.UnexpectedFrameProtocol, capture,
+        => diagnostics.Record(DamagePacketTimingRejection.None, capture,
             frame, element, 32, 10, 20, At, true, true);
 
     // Constructed headers test diagnostics, not the unverified live native layout.

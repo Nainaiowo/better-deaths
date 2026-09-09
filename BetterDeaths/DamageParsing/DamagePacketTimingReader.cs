@@ -15,7 +15,7 @@ internal enum DamagePacketTimingRejection
     IpcLengthOutOfRange,
     FrameLengthOutOfRange,
     FrameTooShortForPacket,
-    UnexpectedFrameProtocol,
+    UnexpectedFrameProtocol, // Historical diagnostic identifier; no longer emitted.
     EmptyFrame,
     CompressedFrame,
     UnexpectedElementType,
@@ -37,6 +37,8 @@ internal static class DamagePacketTimingReader
         ulong ipcLength, uint source, uint destination, DateTime receivedAtUtc, out DateTime time,
         out DamagePacketTimingRejection rejection)
     {
+        // The caller is the zone receive hook. The frame protocol field is not a
+        // connection discriminator here: captured zone frames legitimately contain zero.
         time = default;
         if (frameHeader.Length < 40)
             rejection = DamagePacketTimingRejection.IncompleteFrameHeader;
@@ -48,8 +50,6 @@ internal static class DamagePacketTimingReader
             rejection = DamagePacketTimingRejection.FrameLengthOutOfRange;
         else if (BinaryPrimitives.ReadUInt32LittleEndian(frameHeader[24..]) < 40 + 16 + ipcLength)
             rejection = DamagePacketTimingRejection.FrameTooShortForPacket;
-        else if (BinaryPrimitives.ReadUInt16LittleEndian(frameHeader[28..]) != 1)
-            rejection = DamagePacketTimingRejection.UnexpectedFrameProtocol;
         else if (BinaryPrimitives.ReadUInt16LittleEndian(frameHeader[30..]) == 0)
             rejection = DamagePacketTimingRejection.EmptyFrame;
         else if (frameHeader[33] != 0)
