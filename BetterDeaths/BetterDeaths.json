@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Improved buff-timing accuracy for damage calibration. Fixed inherited pet-buff strengths for raid contribution calculations. Added encounter diagnostics for buff credit and hit-rate estimates.",
+  "Changelog": "Fixed damage-over-time calibration near source-buff expiry. Added regression coverage for buff timing, removal, replacement, and refresh. Recorded direct damage, displayed buff timers, and rDPS behavior are unchanged.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

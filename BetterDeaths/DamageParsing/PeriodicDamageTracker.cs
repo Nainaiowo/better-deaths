@@ -354,7 +354,7 @@ internal sealed class PeriodicDamageTracker
             }
 
             var calibrationPotency = JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent);
-            ObserveCompatibilityPotency(damageEvent, sourceKey, effects,
+            ObserveCompatibilityPotency(damageEvent, sourceKey,
                 JobDamageCalibrationPolicy.GetCalibrationPotency(damageEvent, meterProfile: true));
             if (damageEvent.Source.IsPet ||
                 HasAttributeChange(damageEvent.SourceStatuses) ||
@@ -1121,8 +1121,7 @@ internal sealed class PeriodicDamageTracker
             : null;
     }
 
-    private void ObserveCompatibilityPotency(ParsedDamageEvent damageEvent, string sourceKey,
-        IReadOnlyList<RaidBuffEffect> effects, double? potency)
+    private void ObserveCompatibilityPotency(ParsedDamageEvent damageEvent, string sourceKey, double? potency)
     {
         if (damageEvent.Source.IsPet || damageEvent.IsSourceEntry)
         {
@@ -1134,11 +1133,17 @@ internal sealed class PeriodicDamageTracker
             compatibilityPotencySamples[sourceKey] = samples;
         }
 
-        var multiplier = GetCompatibilityDamageMultiplier(effects, damageEvent.SourceStatuses);
+        // Calibration uses accepted attack-time source buffs; captured hit context and the physical model stay unchanged.
+        var timedSourceStatuses = statusTiming.ResolveSourceModifiers(damageEvent.Source.EntityId,
+            damageEvent.SourceStatuses, damageEvent.SeenAtUtc);
+        var effects = GetApplicableEffects(timedSourceStatuses, damageEvent.TargetStatuses,
+            damageEvent.AttributedSource ?? damageEvent.Source, damageEvent.ActionCategoryId,
+            damageEvent.DamageType, damageEvent.ElementType);
+        var multiplier = GetCompatibilityDamageMultiplier(effects, timedSourceStatuses);
         var sample = 0.0;
         if (potency is > 0 && multiplier > 0 && !damageEvent.Blocked && !damageEvent.Parried &&
-            !HasUnknownDamageModifier(damageEvent.SourceStatuses) &&
-            !(samples.HistoryIndex > 10 && HasAttributeChange(damageEvent.SourceStatuses)))
+            !HasUnknownDamageModifier(timedSourceStatuses) &&
+            !(samples.HistoryIndex > 10 && HasAttributeChange(timedSourceStatuses)))
         {
             sample = damageEvent.Amount;
             if (damageEvent.DirectHit)

@@ -84,7 +84,17 @@ internal sealed class DamageStatusTimingLedger
     }
 
     public IReadOnlyList<DamageStatusSnapshot> Resolve(uint actorId,
-        IReadOnlyList<DamageStatusSnapshot> captured, DateTime seenAtUtc)
+        IReadOnlyList<DamageStatusSnapshot> captured, DateTime seenAtUtc) =>
+        Resolve(actorId, captured, seenAtUtc, sourceModifierWindow: false);
+
+    // Only source-modifier calibration admits the inclusive one-second expiry window.
+    // Unknown timing retains captured evidence; removals and replacements still own slot identity.
+    public IReadOnlyList<DamageStatusSnapshot> ResolveSourceModifiers(uint actorId,
+        IReadOnlyList<DamageStatusSnapshot> captured, DateTime seenAtUtc) =>
+        Resolve(actorId, captured, seenAtUtc, sourceModifierWindow: true);
+
+    private IReadOnlyList<DamageStatusSnapshot> Resolve(uint actorId,
+        IReadOnlyList<DamageStatusSnapshot> captured, DateTime seenAtUtc, bool sourceModifierWindow)
     {
         if (!actors.TryGetValue(actorId, out var slots))
             return captured;
@@ -111,15 +121,22 @@ internal sealed class DamageStatusTimingLedger
             if (state.Status.StatusId == snapshot.StatusId &&
                 state.Status.Source.EntityId == snapshot.Source.EntityId)
             {
-                resolved.Add(snapshot with { RemainingTime = (float)(state.EmittedExpiresAtUtc - seenAtUtc).TotalSeconds });
+                resolved.Add(snapshot with { RemainingTime = Remaining(state, seenAtUtc, sourceModifierWindow) });
                 used.Add(index);
             }
         }
         foreach (var (index, slot) in slots)
             if (!used.Contains(index) && At(slot, seenAtUtc) is { Status.StatusId: > 0 } state &&
                 DamageStatusCapturePolicy.IsRelevant(state.Status.StatusId))
-                resolved.Add(state.Status with { RemainingTime = (float)(state.EmittedExpiresAtUtc - seenAtUtc).TotalSeconds });
+                resolved.Add(state.Status with { RemainingTime = Remaining(state, seenAtUtc, sourceModifierWindow) });
         return resolved;
+    }
+
+    private static float Remaining(Version state, DateTime seenAtUtc, bool sourceModifierWindow)
+    {
+        var remaining = (state.EmittedExpiresAtUtc - seenAtUtc).TotalSeconds + (sourceModifierWindow ? 1 : 0);
+        // Modifier consumers test > 0, while the source window includes its exact end.
+        return sourceModifierWindow && remaining == 0 ? float.Epsilon : (float)remaining;
     }
 
     public DamageStatusApplication Resolve(DamageStatusApplication application) => application with
