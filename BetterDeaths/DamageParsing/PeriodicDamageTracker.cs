@@ -901,6 +901,7 @@ internal sealed class PeriodicDamageTracker
                 CompatibilityCalibration = existing.CompatibilityCalibration,
                 CompatibilityEstimate = existing.CompatibilityEstimate,
                 CompatibilityApplication = existing.CompatibilityApplication,
+                CompatibilitySourceDamageStatuses = existing.CompatibilitySourceDamageStatuses,
             });
             var existingApplication = existing.Application;
             if (application.IsPeriodicDamage)
@@ -1088,6 +1089,10 @@ internal sealed class PeriodicDamageTracker
                 : status.Application;
             status.CompatibilityDirectHit = directHitCompatibility.Capture(statusTiming.Resolve(status.CompatibilityApplication),
                 status.CompatibilityApplication.SeenAtUtc);
+            // Freeze source damage modifiers at application; crit/DH keep their own timing rules.
+            status.CompatibilitySourceDamageStatuses = statusTiming.ResolveSourceModifiers(
+                status.CompatibilityApplication.SourceStatusActorId ?? status.CompatibilityApplication.Source.EntityId,
+                status.CompatibilityApplication.SourceStatuses, status.CompatibilityApplication.SeenAtUtc);
             status.CompatibilityCalibration = GetCompatibilityCalibration(status.Application.Source);
         }
 
@@ -1101,7 +1106,7 @@ internal sealed class PeriodicDamageTracker
             CriticalRateLowByte = status.Application.CriticalRateLowByte,
         };
         var compatibilityInputs = GetEstimateInputs(status.CompatibilityApplication, status.CompatibilityCalibration,
-            compatibility: true);
+            compatibility: true, sourceDamageStatuses: status.CompatibilitySourceDamageStatuses);
         status.CompatibilityEstimate = compatibilityInputs is { } inputs && status.CompatibilityDirectHit is { } directHit
             ? new PeriodicCompatibilityEstimate(directHit,
                 inputs.BaseDamage * (1 + (inputs.CriticalMultiplier - 1) * inputs.CriticalRate) *
@@ -1112,7 +1117,7 @@ internal sealed class PeriodicDamageTracker
                 CapturedPotency = status.Application.PeriodicPotency,
                 UsedUnitCalibration = inputs.CalibrationSampleCount == 0,
                 UsedHealingCalibration = status.CompatibilityCalibration.UsedHealingCalibration,
-                Limitation = status.CompatibilityApplication.SourceStatuses.Any(snapshot =>
+                Limitation = status.CompatibilitySourceDamageStatuses.Any(snapshot =>
                     PeriodicCalibrationCatalog.SupportsVariableDamageStatus(snapshot.StatusId) &&
                     RaidBuffPolicy.HasUnknownStrength(snapshot))
                     ? "Unknown application-time buff strength"
@@ -1198,10 +1203,11 @@ internal sealed class PeriodicDamageTracker
         GetEstimateInputs(status.Application, GetCalibration(status.Application.Source));
 
     private static PeriodicDamageEstimateInputs? GetEstimateInputs(DamageStatusApplication application, CalibrationSnapshot calibration,
-        bool compatibility = false)
+        bool compatibility = false, IReadOnlyList<DamageStatusSnapshot>? sourceDamageStatuses = null)
     {
+        var damageStatuses = sourceDamageStatuses ?? application.SourceStatuses;
         if (application.PeriodicPotency is not > 0.0 || !compatibility && HasAttributeChange(application.SourceStatuses) ||
-            HasUnknownDamageModifier(application.SourceStatuses))
+            HasUnknownDamageModifier(damageStatuses))
         {
             return null;
         }
@@ -1219,7 +1225,9 @@ internal sealed class PeriodicDamageTracker
             application.DamageType,
             application.ElementType);
         var damageMultiplier = compatibility
-            ? GetCompatibilityDamageMultiplier(effects, application.SourceStatuses)
+            ? GetCompatibilityDamageMultiplier(sourceDamageStatuses is null ? effects : GetApplicableEffects(
+                damageStatuses, application.TargetStatuses, application.Source,
+                application.ActionCategoryId, application.DamageType, application.ElementType), damageStatuses)
             : GetDamageMultiplier(effects);
         // Keep the diagnostic profile separate from current game-data potency.
         var potency = compatibility
@@ -1565,6 +1573,8 @@ internal sealed class PeriodicDamageTracker
         public PeriodicCompatibilityEstimate? CompatibilityEstimate { get; set; }
 
         public DamageStatusApplication CompatibilityApplication { get; set; } = application;
+
+        public IReadOnlyList<DamageStatusSnapshot> CompatibilitySourceDamageStatuses { get; set; } = application.SourceStatuses;
     }
 
     private sealed record CalibrationSnapshot(double? DamagePerPotency, BaseRates BaseRates,
