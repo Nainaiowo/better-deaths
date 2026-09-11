@@ -27,17 +27,23 @@ internal static class DamageMeterColumnPolicy
 {
     private static readonly DamageMeterColumn[] DefaultColumns =
     [
-        DamageMeterColumn.JobIcon,
         DamageMeterColumn.PlayerName,
         DamageMeterColumn.TotalDamage,
         DamageMeterColumn.DamagePerSecond,
-        DamageMeterColumn.RaidDamagePerSecond,
         DamageMeterColumn.DamagePercent,
     ];
 
     public static List<DamageMeterColumn> CreateDefault()
     {
         return [.. DefaultColumns];
+    }
+
+    public static bool IsEnabled(DamageMeterColumn column)
+    {
+        return Enum.IsDefined(column) && column is not (
+            DamageMeterColumn.JobIcon or DamageMeterColumn.EncounterDamagePerSecond or
+            DamageMeterColumn.RaidDamagePerSecond or DamageMeterColumn.NeutralDamagePerSecond or
+            DamageMeterColumn.AdjustedDamagePerSecond);
     }
 
     public static List<DamageMeterColumn> Normalize(IEnumerable<DamageMeterColumn>? columns)
@@ -51,10 +57,13 @@ internal static class DamageMeterColumnPolicy
         var seen = new HashSet<DamageMeterColumn>();
         foreach (var column in columns)
         {
-            var canonical = column == DamageMeterColumn.EncounterDamagePerSecond
-                ? DamageMeterColumn.DamagePerSecond
-                : column;
-            if (Enum.IsDefined(canonical) && seen.Add(canonical))
+            var canonical = column switch
+            {
+                DamageMeterColumn.JobIcon => DamageMeterColumn.PlayerName,
+                DamageMeterColumn.EncounterDamagePerSecond => DamageMeterColumn.DamagePerSecond,
+                _ => column,
+            };
+            if (IsEnabled(canonical) && seen.Add(canonical))
             {
                 normalized.Add(canonical);
             }
@@ -65,6 +74,11 @@ internal static class DamageMeterColumnPolicy
 
     public static bool Move(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn target)
     {
+        if (!IsEnabled(source) || !IsEnabled(target))
+        {
+            return false;
+        }
+
         var sourceIndex = columns.IndexOf(source);
         var targetIndex = columns.IndexOf(target);
         if (sourceIndex < 0 || targetIndex < 0 || sourceIndex == targetIndex)
@@ -79,6 +93,11 @@ internal static class DamageMeterColumnPolicy
 
     public static bool PlaceBefore(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn target)
     {
+        if (!IsEnabled(source) || !IsEnabled(target))
+        {
+            return false;
+        }
+
         var targetIndex = columns.IndexOf(target);
         if (targetIndex < 0)
         {

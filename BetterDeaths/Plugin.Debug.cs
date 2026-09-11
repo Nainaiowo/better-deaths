@@ -619,18 +619,21 @@ public sealed partial class Plugin
                 currentTerritoryName,
                 kind,
                 data);
-            lock (debugCaptureFileLock)
-            {
-                debugCaptureFileRecords.Enqueue(record);
-                while (debugCaptureFileRecords.Count > MaxQueuedDebugCaptureFileLines)
-                {
-                    debugCaptureFileRecords.Dequeue();
-                }
-            }
+            QueueDebugCaptureRecord(record);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not queue Better Deaths debug capture row.");
+        }
+    }
+
+    private void QueueDebugCaptureRecord(DebugCaptureFileRecord record)
+    {
+        lock (debugCaptureFileLock)
+        {
+            debugCaptureFileRecords.Enqueue(record);
+            while (debugCaptureFileRecords.Count > MaxQueuedDebugCaptureFileLines)
+                debugCaptureFileRecords.Dequeue();
         }
     }
 

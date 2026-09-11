@@ -9,6 +9,7 @@ using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 public sealed partial class Plugin
 {
@@ -853,59 +854,106 @@ public sealed partial class Plugin
             Configuration.DebugDamageMeterTraceCategories.HasFlag(category);
     }
 
-    private DamageEncounterSnapshot? EndDamageEncounter(DateTime endedAtUtc, string reason)
+    private void EndDamageEncounter(DateTime endedAtUtc, string reason)
     {
-        var ended = damageParsingModule.EndEncounter(endedAtUtc, reason);
-        if (ended is not null)
+        var context = new DamageEncounterCompletionContext(
+            endedAtUtc, reason, CurrentPullElapsedSeconds,
+            currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId,
+            currentPullTerritoryId == 0 ? currentTerritoryName : currentPullTerritoryName,
+            damageEncounterHistoryGeneration, damageEncounterDiagnosticGeneration,
+            Configuration.DebugLogEnabled && Configuration.DebugSaveToFileEnabled &&
+                Configuration.DebugDamageMeterTraceEnabled && Configuration.DebugDamageMeterEncounterExportEnabled,
+            ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary) && !IsDungeonCaptureBlocked,
+            RecordedDamageEncounterPath, DamageMeterDiagnosticEncounterPath);
+        var detached = damageParsingModule.DetachEncounter(endedAtUtc, reason);
+        if (detached is null)
         {
-            RecordCompletedDamageEncounter(ended);
+            QueueDamageEncounterEndSummary(null, context);
+            return;
         }
 
-        if (ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary))
+        var summary = context.TraceSummary
+            ? new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously)
+            : null;
+        if (summary is not null)
         {
-            QueueDebugCaptureRecord("DamageMeterEncounterEnd", new
+            // The end marker must stay before any next-pull events in saved capture order.
+            QueueDebugCaptureRecord(new DebugCaptureFileRecord(
+                context.EndedAtUtc, context.PullElapsedSeconds, context.TerritoryId, context.TerritoryName,
+                "DamageMeterEncounterEnd", null)
+            { DeferredData = summary.Task });
+        }
+
+        damageEncounterWork.Enqueue(() =>
+        {
+            try
             {
-                EndedAtUtc = endedAtUtc,
-                Reason = reason,
-                HasEncounter = ended is not null,
-                TotalDamage = ended?.TotalDamage ?? 0,
-                RawMeterDamage = ended?.ObservedMeterDamage ?? 0.0,
-                MeterDamage = ended?.EffectiveMeterDamage ?? 0.0,
-                ExactDamage = ended?.ExactDamage ?? 0,
-                EstimatedDamage = ended?.EstimatedDamage ?? 0,
-                UnattributedDamage = ended?.UnattributedDamage ?? 0,
-                RaidAdjustedDamage = ended?.RaidAdjustedDamage ?? 0.0,
-                MeterRaidAdjustedDamage = ended?.EffectiveMeterRaidAdjustedDamage ?? 0.0,
-                DurationSeconds = ended?.DurationSeconds ?? 0.0,
-                RaidDamage = ended?.Diagnostics.RaidDamage,
-                PacketCount = ended?.PacketCount ?? 0,
-                Sources = ended?.Sources.Select(source => new
-                {
-                    SourceEntityId = source.Source.EntityId,
-                    SourceName = source.Source.Name,
-                    source.TotalDamage,
-                    RawMeterDamage = source.ObservedMeterDamage,
-                    MeterDamage = source.EffectiveMeterDamage,
-                    source.Swings,
-                    source.Hits,
-                    source.Misses,
-                    source.Resists,
-                    source.InvulnerableHits,
-                    source.CriticalHits,
-                    source.DirectHits,
-                    source.CriticalDirectHits,
-                    source.PeriodicHits,
-                    source.ActiveStartedAtUtc,
-                    source.ActiveEndedAtUtc,
-                    source.ActiveDurationSeconds,
-                    source.RaidAdjustedDamage,
-                    source.ExternalBuffDamageReceived,
-                    source.RaidBuffDamageGiven,
-                    source.SingleTargetBuffDamageReceived,
-                }).ToArray(),
-            });
-        }
+                var ended = DamageParsingModule.CompleteDetachedEncounter(detached);
+                summary?.SetResult(BuildDamageEncounterEndSummary(ended, context));
+                var saved = context.ExportDiagnostic && ended.TotalDamage > 0 &&
+                    SaveDamageMeterDiagnosticEncounter(ended, context);
+                completedDamageEncounters.Enqueue(new CompletedDamageEncounter(detached, ended, context, saved));
+            }
+            catch (Exception error)
+            {
+                summary?.TrySetException(error);
+                throw;
+            }
+        });
+    }
 
-        return ended;
+    private void QueueDamageEncounterEndSummary(DamageEncounterSnapshot? ended, DamageEncounterCompletionContext context)
+    {
+        if (context.TraceSummary)
+        {
+            QueueDebugCaptureRecord(new DebugCaptureFileRecord(
+                context.EndedAtUtc, context.PullElapsedSeconds, context.TerritoryId, context.TerritoryName,
+                "DamageMeterEncounterEnd", BuildDamageEncounterEndSummary(ended, context)));
+        }
+    }
+
+    private static object BuildDamageEncounterEndSummary(DamageEncounterSnapshot? ended, DamageEncounterCompletionContext context)
+    {
+        return new
+        {
+            context.EndedAtUtc,
+            context.Reason,
+            HasEncounter = ended is not null,
+            TotalDamage = ended?.TotalDamage ?? 0,
+            RawMeterDamage = ended?.ObservedMeterDamage ?? 0.0,
+            MeterDamage = ended?.EffectiveMeterDamage ?? 0.0,
+            ExactDamage = ended?.ExactDamage ?? 0,
+            EstimatedDamage = ended?.EstimatedDamage ?? 0,
+            UnattributedDamage = ended?.UnattributedDamage ?? 0,
+            RaidAdjustedDamage = ended?.RaidAdjustedDamage ?? 0.0,
+            MeterRaidAdjustedDamage = ended?.EffectiveMeterRaidAdjustedDamage ?? 0.0,
+            DurationSeconds = ended?.DurationSeconds ?? 0.0,
+            RaidDamage = ended?.Diagnostics.RaidDamage,
+            PacketCount = ended?.PacketCount ?? 0,
+            Sources = ended?.Sources.Select(source => new
+            {
+                SourceEntityId = source.Source.EntityId,
+                SourceName = source.Source.Name,
+                source.TotalDamage,
+                RawMeterDamage = source.ObservedMeterDamage,
+                MeterDamage = source.EffectiveMeterDamage,
+                source.Swings,
+                source.Hits,
+                source.Misses,
+                source.Resists,
+                source.InvulnerableHits,
+                source.CriticalHits,
+                source.DirectHits,
+                source.CriticalDirectHits,
+                source.PeriodicHits,
+                source.ActiveStartedAtUtc,
+                source.ActiveEndedAtUtc,
+                source.ActiveDurationSeconds,
+                source.RaidAdjustedDamage,
+                source.ExternalBuffDamageReceived,
+                source.RaidBuffDamageGiven,
+                source.SingleTargetBuffDamageReceived,
+            }).ToArray(),
+        };
     }
 }

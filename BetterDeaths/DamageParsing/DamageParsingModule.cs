@@ -37,6 +37,7 @@ internal sealed class DamageParsingModule
     private int packetCount;
     private int duplicateEventCount;
     private DamageEncounterSnapshot? lastEncounter;
+    private long lastCompletedGeneration = -1;
     private DamageEncounterSnapshot? cachedCurrentEncounter;
     private long mutationRevision;
     private long cachedCurrentEncounterRevision = -1;
@@ -381,8 +382,42 @@ internal sealed class DamageParsingModule
 
             var effectiveEnd = latestEventAtUtc.Value;
             lastEncounter = BuildSnapshot(effectiveEnd, effectiveEnd, reason, includeEvents: true);
+            lastCompletedGeneration = encounterGeneration;
             ClearCurrentEncounter();
             return lastEncounter;
+        }
+    }
+
+    internal sealed record DetachedEncounter(long Generation, DamageEncounterSnapshot Input);
+
+    internal DetachedEncounter? DetachEncounter(DateTime endedAtUtc, string reason)
+    {
+        lock (syncRoot)
+        {
+            // Flush while callbacks and game-state capture still belong to this pull.
+            FlushPendingPeriodicTicksCore(endedAtUtc, force: true);
+            var detached = startedAtUtc is not null && latestEventAtUtc is { } effectiveEnd
+                ? new DetachedEncounter(encounterGeneration, CaptureSnapshotInput(effectiveEnd, effectiveEnd, reason))
+                : null;
+            ClearCurrentEncounter();
+            return detached;
+        }
+    }
+
+    internal static DamageEncounterSnapshot CompleteDetachedEncounter(DetachedEncounter detached)
+    {
+        return CompleteSnapshot(detached.Input, includeEvents: true, includeDiagnostics: true);
+    }
+
+    internal void PublishCompletedEncounter(DetachedEncounter detached, DamageEncounterSnapshot completed)
+    {
+        lock (syncRoot)
+        {
+            if (detached.Generation > lastCompletedGeneration)
+            {
+                lastEncounter = completed;
+                lastCompletedGeneration = detached.Generation;
+            }
         }
     }
 

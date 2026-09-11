@@ -20,6 +20,8 @@
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRetention.cs" Link="DebugCaptureFileRetention.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRecord.cs" Link="DebugCaptureFileRecord.cs" />
+    <Compile Include="../../BetterDeaths/OrderedBackgroundWorkQueue.cs" Link="OrderedBackgroundWorkQueue.cs" />
+    <Compile Include="../../BetterDeaths/DamageEncounterFileWriter.cs" Link="DamageEncounterFileWriter.cs" />
     <Compile Include="../../BetterDeaths/DebugStatusCapture.cs" Link="DebugStatusCapture.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageModels.cs" Link="DamageParsing/DamageModels.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamageBaseRatePolicy.cs" Link="DamageParsing/DamageBaseRatePolicy.cs" />
@@ -56,6 +58,7 @@
     <Compile Include="../../BetterDeaths/DamageParsing/DamagePacketTimingReader.cs" Link="DamageParsing/DamagePacketTimingReader.cs" />
     <Compile Include="../../BetterDeaths/DamageParsing/DamagePacketTimingDiagnostics.cs" Link="DamageParsing/DamagePacketTimingDiagnostics.cs" />
     <Compile Include="../../BetterDeaths/DamageMeterColumnPolicy.cs" Link="DamageMeterColumnPolicy.cs" />
+    <Compile Include="../../BetterDeaths/DamageMeterDisplayPolicy.cs" Link="DamageMeterDisplayPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathDetectionPolicy.cs" Link="DeathDetectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathChatRecapHeaderParser.cs" Link="DeathChatRecapHeaderParser.cs" />
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />

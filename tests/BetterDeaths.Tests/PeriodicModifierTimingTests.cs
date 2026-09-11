@@ -1,6 +1,7 @@
 namespace BetterDeaths.Tests;
 
 using BetterDeaths.DamageParsing;
+using System.Text.Json;
 
 public sealed class PeriodicModifierTimingTests
 {
@@ -191,6 +192,43 @@ public sealed class PeriodicModifierTimingTests
         module.ObserveStatus(Confirm(refreshed, 23.6));
         Assert.Equal(1.0, Assert.Single(Tick(module, 25)).PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 8);
         Assert.Equal(1.06, first.PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 8);
+    }
+
+    [Fact]
+    public async Task ConfirmedModifiersReachLiveFinalSavedAndAbilityTotals()
+    {
+        var module = Create(Player);
+        Gain(module, Player, 1878, 20);
+        var pending = Dot(Player, 1201, 25, 20.292) with { SourceStatuses = [Buff(1878, .2f)] };
+        module.ObserveStatus(pending);
+        module.ObserveStatus(Confirm(pending, 20.914) with { SourceStatuses = [Buff(1878, 0)] });
+        Remove(module, Player, 20.96);
+        var tick = Assert.Single(Tick(module, 22));
+        Assert.Equal(1.06, tick.PeriodicCompatibilityEstimate!.Inputs!.DamageMultiplier, 8);
+        var expectedPeriodic = tick.PeriodicCompatibilityEstimate.EstimatedDamage;
+        Assert.Equal(expectedPeriodic, tick.RawMeterAmount);
+        Assert.NotEqual((double)tick.Amount, expectedPeriodic);
+
+        module.GetLiveEncounter();
+        module.RefreshLiveEncounter(At(23));
+        await module.PendingLiveSnapshot!;
+        module.RefreshLiveEncounter(At(23));
+        Check(module.GetLiveEncounter()!);
+        var final = module.EndEncounter(At(24), "Duty complete")!;
+        Check(final);
+        Check(JsonSerializer.Deserialize<DamageEncounterSnapshot>(JsonSerializer.Serialize(final with { Events = [] }))!);
+
+        void Check(DamageEncounterSnapshot snapshot)
+        {
+            var expectedTotal = 20 * 9829 + expectedPeriodic;
+            Assert.Equal(expectedTotal, snapshot.ObservedMeterDamage, 6);
+            Assert.Equal(expectedTotal / snapshot.DurationSeconds, snapshot.DamagePerSecond, 6);
+            var source = Assert.Single(snapshot.Sources, source => source.Source.EntityId == Player.EntityId);
+            Assert.Equal(expectedTotal, source.ObservedMeterDamage, 6);
+            Assert.Equal(expectedTotal, snapshot.Sources.Sum(item => item.ObservedMeterDamage), 6);
+            Assert.Equal(expectedTotal, source.Actions.Sum(action => action.ObservedMeterDamage), 6);
+            Assert.Equal(expectedPeriodic, Assert.Single(source.Actions, action => action.ActionId == 1201).ObservedMeterDamage, 6);
+        }
     }
 
     private static DamageParsingModule Create(DamageActorIdentity player)

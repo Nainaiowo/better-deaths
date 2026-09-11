@@ -43,7 +43,6 @@ public sealed class DamageMeterColumnPolicyTests
 
         Assert.Equal(
         [
-            DamageMeterColumn.JobIcon,
             DamageMeterColumn.PlayerName,
             DamageMeterColumn.DamagePerSecond,
         ], normalized);
@@ -92,14 +91,14 @@ public sealed class DamageMeterColumnPolicyTests
     {
         List<DamageMeterColumn> columns =
         [
-            DamageMeterColumn.JobIcon,
+            DamageMeterColumn.DamagePerSecond,
             DamageMeterColumn.PlayerName,
             DamageMeterColumn.TotalDamage,
         ];
 
         var changed = DamageMeterColumnPolicy.Move(
             columns,
-            DamageMeterColumn.JobIcon,
+            DamageMeterColumn.DamagePerSecond,
             DamageMeterColumn.TotalDamage);
 
         Assert.True(changed);
@@ -107,7 +106,7 @@ public sealed class DamageMeterColumnPolicyTests
         [
             DamageMeterColumn.PlayerName,
             DamageMeterColumn.TotalDamage,
-            DamageMeterColumn.JobIcon,
+            DamageMeterColumn.DamagePerSecond,
         ], columns);
     }
 
@@ -132,5 +131,78 @@ public sealed class DamageMeterColumnPolicyTests
             DamageMeterColumn.CriticalHitPercent,
             DamageMeterColumn.TotalDamage,
         ], columns);
+    }
+
+    [Fact]
+    public void DefaultsUseOneNameColumnAndNormalDamageOnly()
+    {
+        Assert.Equal(
+            [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage,
+             DamageMeterColumn.DamagePerSecond, DamageMeterColumn.DamagePercent],
+            DamageMeterColumnPolicy.CreateDefault());
+    }
+
+    [Fact]
+    public void LegacyIconAndNameMergeAtTheirFirstPositionWithoutReorderingOtherColumns()
+    {
+        Assert.Equal(
+            [DamageMeterColumn.TotalDamage, DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond],
+            DamageMeterColumnPolicy.Normalize(
+                [DamageMeterColumn.TotalDamage, DamageMeterColumn.JobIcon,
+                 DamageMeterColumn.DamagePerSecond, DamageMeterColumn.PlayerName]));
+        Assert.Equal(
+            [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage, DamageMeterColumn.DamagePerSecond],
+            DamageMeterColumnPolicy.Normalize(
+                [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage,
+                 DamageMeterColumn.JobIcon, DamageMeterColumn.DamagePerSecond]));
+        Assert.Equal([DamageMeterColumn.PlayerName],
+            DamageMeterColumnPolicy.Normalize([DamageMeterColumn.JobIcon]));
+    }
+
+    [Theory]
+    [InlineData(DamageMeterColumn.RaidDamagePerSecond)]
+    [InlineData(DamageMeterColumn.NeutralDamagePerSecond)]
+    [InlineData(DamageMeterColumn.AdjustedDamagePerSecond)]
+    public void DisabledMetricsLeaveActiveColumnsAndCannotBeDraggedBack(DamageMeterColumn column)
+    {
+        Assert.False(DamageMeterColumnPolicy.IsEnabled(column));
+        Assert.Equal([DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond],
+            DamageMeterColumnPolicy.Normalize([DamageMeterColumn.PlayerName, column, DamageMeterColumn.DamagePerSecond]));
+        Assert.Equal(DamageMeterColumnPolicy.CreateDefault(), DamageMeterColumnPolicy.Normalize([column]));
+
+        List<DamageMeterColumn> columns = [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage];
+        Assert.False(DamageMeterColumnPolicy.PlaceBefore(columns, column, DamageMeterColumn.PlayerName));
+        Assert.Equal([DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage], columns);
+
+        columns.Insert(1, column);
+        var original = columns.ToArray();
+        Assert.False(DamageMeterColumnPolicy.Move(columns, column, DamageMeterColumn.PlayerName));
+        Assert.False(DamageMeterColumnPolicy.Move(columns, DamageMeterColumn.PlayerName, column));
+        Assert.False(DamageMeterColumnPolicy.PlaceBefore(columns, DamageMeterColumn.HitCount, column));
+        Assert.Equal(original, columns);
+    }
+
+    [Theory]
+    [InlineData(DamageMeterColumn.JobIcon)]
+    [InlineData(DamageMeterColumn.EncounterDamagePerSecond)]
+    [InlineData((DamageMeterColumn)0)]
+    [InlineData((DamageMeterColumn)999)]
+    public void LegacyAndUnknownPayloadsCannotBeAdded(DamageMeterColumn column)
+    {
+        List<DamageMeterColumn> columns = [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage];
+        Assert.False(DamageMeterColumnPolicy.IsEnabled(column));
+        Assert.False(DamageMeterColumnPolicy.PlaceBefore(columns, column, DamageMeterColumn.PlayerName));
+        Assert.Equal([DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage], columns);
+    }
+
+    [Fact]
+    public void NormalizationAlwaysReturnsEnabledUniqueColumnsAndIsIdempotent()
+    {
+        var normalized = DamageMeterColumnPolicy.Normalize(Enum.GetValues<DamageMeterColumn>());
+        Assert.All(normalized, column => Assert.True(DamageMeterColumnPolicy.IsEnabled(column)));
+        Assert.Equal(normalized.Count, normalized.Distinct().Count());
+        Assert.Equal(normalized, DamageMeterColumnPolicy.Normalize(normalized));
+        Assert.Equal(DamageMeterColumnPolicy.CreateDefault(), DamageMeterColumnPolicy.Normalize(null));
+        Assert.Equal(DamageMeterColumnPolicy.CreateDefault(), DamageMeterColumnPolicy.Normalize([]));
     }
 }

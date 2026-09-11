@@ -706,6 +706,9 @@ public sealed partial class Plugin : IDalamudPlugin
         disposing = true;
         CaptureCurrentPullSnapshot("Plugin unloaded");
         EndDamageEncounter(DateTime.UtcNow, "Plugin unloaded");
+        damageEncounterWork.Drain();
+        PublishCompletedDamageEncounters();
+        damageEncounterWork.Dispose();
         SaveRecordedPullHistory();
         _ = WaitForRecordedPullSave(TimeSpan.FromSeconds(10));
         recordedPullDetailLoadCts.Cancel();
@@ -787,9 +790,13 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework)
     {
+        if (disposing)
+            return;
+
         try
         {
             var now = DateTime.UtcNow;
+            PublishCompletedDamageEncounters();
             RefreshTerritoryCaptureState();
             MaybeCheckForPluginUpdateNotice(now);
             FlushQueuedChatMessages(now);

@@ -1,5 +1,6 @@
 using BetterDeaths.DamageParsing;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -41,17 +42,32 @@ public sealed partial class Plugin
         WriteIndented = false,
     };
     private DamageMeterDiagnosticEncounter? loadedDamageMeterDiagnosticEncounter;
+    private DamageMeterDiagnosticEncounter? latestCompletedDamageMeterDiagnosticEncounter;
     private bool attemptedDamageMeterDiagnosticEncounterLoad;
+    private long damageEncounterHistoryGeneration;
+    private long damageEncounterDiagnosticGeneration;
+    private readonly OrderedBackgroundWorkQueue damageEncounterWork = new(
+        error => Log.Warning(error, "Could not complete Better Deaths damage encounter background work."));
+    private readonly ConcurrentQueue<CompletedDamageEncounter> completedDamageEncounters = new();
+
+    private sealed record DamageEncounterCompletionContext(
+        DateTime EndedAtUtc, string Reason, float PullElapsedSeconds,
+        uint TerritoryId, string TerritoryName,
+        long HistoryGeneration, long DiagnosticGeneration,
+        bool ExportDiagnostic, bool TraceSummary,
+        string HistoryPath, string DiagnosticPath);
+
+    private sealed record CompletedDamageEncounter(
+        DamageParsingModule.DetachedEncounter Detached,
+        DamageEncounterSnapshot Snapshot,
+        DamageEncounterCompletionContext Context,
+        bool DiagnosticSaved);
 
     private static string RecordedDamageEncounterPath =>
         Path.Combine(PluginInterface.ConfigDirectory.FullName, RecordedDamageEncounterFileName);
 
-    private static string RecordedDamageEncounterTempPath => RecordedDamageEncounterPath + ".tmp";
-
     private static string DamageMeterDiagnosticEncounterPath =>
         Path.Combine(PluginInterface.ConfigDirectory.FullName, DamageMeterDiagnosticEncounterFileName);
-
-    private static string DamageMeterDiagnosticEncounterTempPath => DamageMeterDiagnosticEncounterPath + ".tmp";
 
     internal string DamageMeterDiagnosticEncounterFilePath => DamageMeterDiagnosticEncounterPath;
 
@@ -74,47 +90,39 @@ public sealed partial class Plugin
 
     internal void ClearRecordedDamageEncounters()
     {
+        damageEncounterHistoryGeneration++;
         lock (recordedDamageEncounterLock)
         {
             recordedDamageEncounters = [];
             nextRecordedDamageEncounterNumber = 1;
         }
 
-        try
+        var path = RecordedDamageEncounterPath;
+        damageEncounterWork.Enqueue(() =>
         {
-            File.Delete(RecordedDamageEncounterPath);
-            File.Delete(RecordedDamageEncounterTempPath);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Could not clear Better Deaths damage encounter history.");
-        }
+            File.Delete(path);
+            File.Delete(path + ".tmp");
+        });
     }
 
     internal void ClearDamageMeterDiagnosticEncounter()
     {
+        damageEncounterDiagnosticGeneration++;
         loadedDamageMeterDiagnosticEncounter = null;
         attemptedDamageMeterDiagnosticEncounterLoad = true;
-        try
+        var path = DamageMeterDiagnosticEncounterPath;
+        damageEncounterWork.Enqueue(() =>
         {
-            File.Delete(DamageMeterDiagnosticEncounterPath);
-            File.Delete(DamageMeterDiagnosticEncounterTempPath);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Could not clear the Better Deaths damage-meter diagnostic encounter.");
-        }
+            File.Delete(path);
+            File.Delete(path + ".tmp");
+        });
     }
 
     internal DamageMeterDiagnosticEncounter? GetLatestDamageMeterDiagnosticEncounter()
     {
-        if (damageParsingModule.LastEncounter is { } latest)
+        if (latestCompletedDamageMeterDiagnosticEncounter is { } latest)
         {
-            return new DamageMeterDiagnosticEncounter(
-                latest.EndedAtUtc ?? latest.SnapshotAtUtc,
-                currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId,
-                currentPullTerritoryId == 0 ? currentTerritoryName : currentPullTerritoryName,
-                latest);
+            return latest;
         }
 
         if (attemptedDamageMeterDiagnosticEncounterLoad)
@@ -186,19 +194,32 @@ public sealed partial class Plugin
         }
     }
 
-    private void RecordCompletedDamageEncounter(DamageEncounterSnapshot encounter)
+    private void PublishCompletedDamageEncounters()
+    {
+        while (completedDamageEncounters.TryDequeue(out var completed))
+        {
+            var encounter = completed.Snapshot;
+            var context = completed.Context;
+            damageParsingModule.PublishCompletedEncounter(completed.Detached, encounter);
+            latestCompletedDamageMeterDiagnosticEncounter = new DamageMeterDiagnosticEncounter(
+                encounter.EndedAtUtc ?? encounter.SnapshotAtUtc,
+                context.TerritoryId, context.TerritoryName, encounter);
+            if (completed.DiagnosticSaved && context.DiagnosticGeneration == damageEncounterDiagnosticGeneration)
+            {
+                loadedDamageMeterDiagnosticEncounter = latestCompletedDamageMeterDiagnosticEncounter;
+                attemptedDamageMeterDiagnosticEncounterLoad = true;
+            }
+
+            if (context.HistoryGeneration == damageEncounterHistoryGeneration)
+                RecordCompletedDamageEncounter(encounter, context);
+        }
+    }
+
+    private void RecordCompletedDamageEncounter(DamageEncounterSnapshot encounter, DamageEncounterCompletionContext context)
     {
         if (encounter.TotalDamage == 0)
         {
             return;
-        }
-
-        if (Configuration.DebugLogEnabled &&
-            Configuration.DebugSaveToFileEnabled &&
-            Configuration.DebugDamageMeterTraceEnabled &&
-            Configuration.DebugDamageMeterEncounterExportEnabled)
-        {
-            SaveDamageMeterDiagnosticEncounter(encounter);
         }
 
         // Keep compact source, target, and attribution aggregates for later comparison without
@@ -215,8 +236,8 @@ public sealed partial class Plugin
             updated.Add(new RecordedDamageEncounter(
                 nextRecordedDamageEncounterNumber++,
                 encounter.EndedAtUtc ?? encounter.SnapshotAtUtc,
-                currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId,
-                currentPullTerritoryId == 0 ? currentTerritoryName : currentPullTerritoryName,
+                context.TerritoryId,
+                context.TerritoryName,
                 storedSnapshot));
             if (updated.Count > MaxRecordedDamageEncounters)
             {
@@ -227,47 +248,39 @@ public sealed partial class Plugin
             snapshot = updated;
         }
 
-        SaveRecordedDamageEncounters(snapshot);
+        damageEncounterWork.Enqueue(() => SaveRecordedDamageEncounters(snapshot, context.HistoryPath));
     }
 
-    private void SaveDamageMeterDiagnosticEncounter(DamageEncounterSnapshot encounter)
+    private static bool SaveDamageMeterDiagnosticEncounter(DamageEncounterSnapshot encounter, DamageEncounterCompletionContext context)
     {
         try
         {
-            Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
             var diagnostic = new DamageMeterDiagnosticEncounter(
                 encounter.EndedAtUtc ?? encounter.SnapshotAtUtc,
-                currentPullTerritoryId == 0 ? currentTerritoryId : currentPullTerritoryId,
-                currentPullTerritoryId == 0 ? currentTerritoryName : currentPullTerritoryName,
+                context.TerritoryId,
+                context.TerritoryName,
                 encounter);
             var file = new DamageMeterDiagnosticEncounterFile(
                 DamageMeterDiagnosticEncounterSchemaVersion,
                 diagnostic);
-            File.WriteAllText(
-                DamageMeterDiagnosticEncounterTempPath,
-                JsonSerializer.Serialize(file, RecordedDamageEncounterJsonOptions));
-            File.Move(DamageMeterDiagnosticEncounterTempPath, DamageMeterDiagnosticEncounterPath, true);
-            loadedDamageMeterDiagnosticEncounter = diagnostic;
-            attemptedDamageMeterDiagnosticEncounterLoad = true;
+            DamageEncounterFileWriter.Write(context.DiagnosticPath, file, RecordedDamageEncounterJsonOptions);
+            return true;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Could not save the Better Deaths damage-meter diagnostic encounter.");
+            return false;
         }
     }
 
-    private static void SaveRecordedDamageEncounters(IReadOnlyList<RecordedDamageEncounter> encounters)
+    private static void SaveRecordedDamageEncounters(IReadOnlyList<RecordedDamageEncounter> encounters, string path)
     {
         try
         {
-            Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
             var file = new RecordedDamageEncounterFile(
                 RecordedDamageEncounterSchemaVersion,
                 encounters.ToList());
-            File.WriteAllText(
-                RecordedDamageEncounterTempPath,
-                JsonSerializer.Serialize(file, RecordedDamageEncounterJsonOptions));
-            File.Move(RecordedDamageEncounterTempPath, RecordedDamageEncounterPath, true);
+            DamageEncounterFileWriter.Write(path, file, RecordedDamageEncounterJsonOptions);
         }
         catch (Exception ex)
         {
