@@ -48,8 +48,8 @@ public sealed partial class Plugin : IDalamudPlugin
 {
     private const string MainCommandName = "/betterdeaths";
     private const string ShortCommandName = "/bd";
-    private const string WidgetCommandName = "/betterdeathswidget";
-    private const string ShortWidgetCommandName = "/bdwidget";
+    private const string WidgetCommandName = "/bdw";
+    private const string DamageMeterWidgetCommandName = "/bdm";
     private const string DamageMeterResetCommandName = "/bdr";
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
@@ -631,9 +631,9 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             HelpMessage = "Toggle the Better Deaths death widget.",
         });
-        CommandManager.AddHandler(ShortWidgetCommandName, new CommandInfo(OnWidgetCommand)
+        CommandManager.AddHandler(DamageMeterWidgetCommandName, new CommandInfo(OnDamageMeterWidgetCommand)
         {
-            HelpMessage = "Toggle the Better Deaths death widget.",
+            HelpMessage = "Toggle the Better Deaths DPS meter widget.",
         });
         CommandManager.AddHandler(DamageMeterResetCommandName, new CommandInfo(OnDamageMeterResetCommand)
         {
@@ -767,7 +767,7 @@ public sealed partial class Plugin : IDalamudPlugin
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
         CommandManager.RemoveHandler(DamageMeterResetCommandName);
-        CommandManager.RemoveHandler(ShortWidgetCommandName);
+        CommandManager.RemoveHandler(DamageMeterWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);
         CommandManager.RemoveHandler(ShortCommandName);
         CommandManager.RemoveHandler(MainCommandName);
@@ -790,6 +790,11 @@ public sealed partial class Plugin : IDalamudPlugin
     private void OnWidgetCommand(string command, string args)
     {
         SetShowCurrentPullWidget(!Configuration.ShowCurrentPullWidget);
+    }
+
+    private void OnDamageMeterWidgetCommand(string command, string args)
+    {
+        SetShowDamageMeterWidget(!Configuration.ShowDamageMeterWidget);
     }
 
     private void OpenMainUi()

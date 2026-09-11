@@ -71,10 +71,12 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 ```text
 /betterdeaths
 /bd
-/betterdeathswidget
-/bdwidget
+/bdw
+/bdm
 /bdr
 ```
+
+`/bdw` toggles the Death Widget. `/bdm` toggles the DPS Meter widget without stopping capture or resetting the encounter.
 
 `/bdr` resets the active DPS meter encounter in the overworld, saving the result before starting fresh on the next damage. It is unavailable inside duties and does not delete saved encounters.
 
