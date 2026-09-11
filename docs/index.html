@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Better Deaths - FFXIV Raid Death Review Plugin</title>
-  <meta name="description" content="Better Deaths is a FFXIV Dalamud plugin for fatal event review, mitigation context, What-if checks, saved pull history, Death Replay, and supported Dancing Mad mechanic analysis.">
+  <title>Better Deaths - FFXIV Death Review and DPS Meter</title>
+  <meta name="description" content="Better Deaths brings death review, a customizable DPS meter, saved encounters, mitigation checks, Death Replay, and supported Dancing Mad mechanic analysis into one FFXIV Dalamud plugin.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Better Deaths - FFXIV Raid Death Review Plugin">
-  <meta property="og:description" content="Review fatal events and mitigation context, replay captured pulls, and analyze supported Dancing Mad mechanics.">
+  <meta property="og:title" content="Better Deaths - FFXIV Death Review and DPS Meter">
+  <meta property="og:description" content="Review deaths, track damage with a customizable DPS meter, revisit saved encounters, and replay captured pulls.">
   <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
   <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Better Deaths - FFXIV Raid Death Review Plugin">
-  <meta name="twitter:description" content="Death review, mitigation context, pull replay, and supported mechanic analysis in one Dalamud plugin.">
+  <meta name="twitter:title" content="Better Deaths - FFXIV Death Review and DPS Meter">
+  <meta name="twitter:description" content="Death review, a customizable DPS meter, saved encounters, pull replay, and supported mechanic analysis in one Dalamud plugin.">
   <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <script type="application/ld+json">
   {
@@ -24,7 +24,7 @@
     "name": "Better Deaths",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows",
-    "description": "Better Deaths is a FFXIV Dalamud plugin for fatal event review, mitigation context, What-if checks, saved pull history, Death Replay, and supported Dancing Mad mechanic analysis.",
+    "description": "Better Deaths brings death review, a customizable DPS meter, saved encounters, mitigation checks, Death Replay, and supported Dancing Mad mechanic analysis into one FFXIV Dalamud plugin.",
     "softwareRequirements": "Dalamud",
     "url": "https://nainaiowo.github.io/better-deaths/",
     "codeRepository": "https://github.com/Nainaiowo/better-deaths",
@@ -388,7 +388,7 @@
           <p class="eyebrow">FFXIV Dalamud plugin</p>
         </div>
         <h1>Better Deaths</h1>
-        <p class="lead">Review fatal events and mitigation context, trace the lead-up to each KO, replay captured pulls, and analyze supported Dancing Mad mechanics without leaving the game.</p>
+        <p class="lead">Review deaths and mitigation, track damage with a customizable DPS meter, revisit saved encounters, and replay captured pulls without leaving the game.</p>
         <div class="actions">
           <a class="button primary" href="#install">Install with Dalamud</a>
           <a class="button" href="help/">Help Center</a>
@@ -407,8 +407,12 @@
   <main>
     <section class="wrap" id="features">
       <h2>One place for the pull you just played</h2>
-      <p class="muted">Better Deaths connects death review, mitigation context, replay, and supported mechanic analysis so the useful parts of a pull stay together.</p>
+      <p class="muted">Better Deaths connects death review, damage tracking, mitigation context, replay, and supported mechanic analysis so the useful parts of a pull stay together.</p>
       <div class="feature-grid">
+        <article class="feature">
+          <h3><a href="help/meter.html#meter">DPS Meter</a></h3>
+          <p>Track live damage and DPS, expand player abilities, choose and reorder columns, and inspect saved encounters without replacing the live widget.</p>
+        </article>
         <article class="feature">
           <h3><a href="help/review.html">Death Review</a></h3>
           <p>See the fatal event, HP plus shields, mitigation context, expired effects, enemy HP, and up to one minute of lead-up data for each KO.</p>
@@ -446,7 +450,7 @@
         </article>
         <article class="feature">
           <h3>What Gets Saved</h3>
-          <p>Saved review pulls can include names, jobs, duty details, death timing, HP, shields, events, actions, statuses, and mitigation context.</p>
+          <p>Saved review pulls can include names, jobs, duty details, death timing, HP, shields, events, actions, statuses, and mitigation context. Damage encounters also retain player and ability totals for later review.</p>
         </article>
         <article class="feature">
           <h3>Name Redaction</h3>
@@ -493,13 +497,14 @@
         <code class="repo-url">https://puni.sh/api/repository/nainai</code>
         <a class="button primary" href="https://puni.sh/api/repository/nainai">Open Repo JSON</a>
       </div>
-      <p class="note">Better Deaths only functions in duties. It does not capture overworld combat or PvP recaps.</p>
+      <p class="note">Death recap capture works inside duties. The DPS Meter also records overworld combat. PvP capture is not supported.</p>
     </section>
 
     <section class="wrap" id="commands">
       <h2>Commands</h2>
-      <p><code>/betterdeaths</code> <code>/bd</code> <code>/betterdeathswidget</code> <code>/bdwidget</code></p>
-      <p class="muted">Use these commands to open the main death recap window or toggle the death widget.</p>
+      <p><code>/betterdeaths</code> <code>/bd</code> <code>/betterdeathswidget</code> <code>/bdwidget</code> <code>/bdr</code></p>
+      <p class="muted"><code>/betterdeaths</code> and <code>/bd</code> open the main death recap window. <code>/betterdeathswidget</code> and <code>/bdwidget</code> toggle the Death Widget.</p>
+      <p class="muted"><code>/bdr</code> saves and resets the active DPS meter encounter in the overworld. Manual resets are unavailable inside duties; saved encounters are kept.</p>
     </section>
 
     <section class="wrap" id="links">

@@ -4,6 +4,16 @@ using System;
 
 internal static class CaptureTimingPolicy
 {
+    public static bool IsOverworldDamageMeterCapture(
+        bool isLoggedIn, bool isDutyCaptureActive, bool isBoundByDuty,
+        bool isPvPCaptureBlocked, bool supportsCurrentTerritory) =>
+        isLoggedIn && !isDutyCaptureActive && !isBoundByDuty &&
+        !isPvPCaptureBlocked && supportsCurrentTerritory;
+
+    public static bool CanFinishOverworldOnCaptureExit(
+        bool isLoggedIn, bool isDutyCaptureActive, bool isBoundByDuty, bool isOverworldTerritory) =>
+        !isDutyCaptureActive && !isBoundByDuty && (!isLoggedIn || isOverworldTerritory);
+
     public static bool IsEffectiveInCombat(bool reportedInCombat, bool awaitingCombatClearAfterReset)
     {
         return reportedInCombat && !awaitingCombatClearAfterReset;

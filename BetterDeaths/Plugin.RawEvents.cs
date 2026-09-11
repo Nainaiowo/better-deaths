@@ -74,6 +74,8 @@ public sealed partial class Plugin
 
         public uint AnimationTargetEntityId { get; init; }
 
+        public bool AllowAutomaticDamageEncounterStart { get; init; }
+
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
@@ -202,6 +204,8 @@ public sealed partial class Plugin
         RawCombatSnapshot? TargetSnapshot,
         RawCombatSnapshot? SourceSnapshot)
     {
+        public bool AllowAutomaticDamageEncounterStart { get; init; }
+
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
@@ -366,10 +370,11 @@ public sealed partial class Plugin
         var now = DateTime.UtcNow;
         var captureForReview = ShouldAcceptRawCombatCapture(now);
         var captureForDamageParsing = ShouldAcceptDamageParserCapture(now) &&
-            category is ActorControlGainEffectCategory or
+            (category is ActorControlGainEffectCategory or
                 ActorControlLoseEffectCategory or
                 ActorControlUpdateEffectCategory or
-                ActorControlDotCategory;
+                ActorControlDotCategory ||
+             category == ActorControlDeathCategory && IsOverworldDamageCaptureEnabled());
         if (!captureForReview && !captureForDamageParsing)
         {
             return;
@@ -429,6 +434,7 @@ public sealed partial class Plugin
             targetSnapshot,
             sourceSnapshot)
         {
+            AllowAutomaticDamageEncounterStart = IsOverworldDamageCaptureEnabled(),
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
@@ -671,6 +677,7 @@ public sealed partial class Plugin
             SpellId = header->SpellId,
             AnimationVariation = header->AnimationVariation,
             AnimationTargetEntityId = GetEntityId(header->AnimationTargetId),
+            AllowAutomaticDamageEncounterStart = IsOverworldDamageCaptureEnabled(),
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,

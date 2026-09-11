@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DPS Meter | Better Deaths Help</title>
+  <meta name="description" content="Use the Better Deaths DPS Meter, customize its columns, compare saved combat encounters, and choose Normal or Concise display.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/meter.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DPS Meter | Better Deaths Help">
+  <meta property="og:description" content="Live damage, configurable columns, and saved encounters in Better Deaths.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/meter.html">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span><strong>Better Deaths</strong><small>Help Center</small></span>
+    </a>
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Death Widget</a>
+        <a href="meter.html#meter">DPS Meter</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the encounter number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="meter" class="guide-section searchable" data-search-title="DPS Meter" data-search-keywords="dps meter damage live widget personal nearby players party alliance duties show">
+        <div class="section-heading">
+          <p class="eyebrow">DPS Meter</p>
+          <h1 class="page-title">DPS Meter</h1>
+          <p>Follow damage in duties and the overworld, expand each player's abilities, and return to saved combat encounters without replacing the live view.</p>
+        </div>
+        <p>Open <strong>Widgets &gt; DPS Meter</strong> and enable <strong>Show DPS meter widget</strong>. The separate window follows the current encounter and keeps the last result visible when combat ends. Drag its title bar to move it, or a lower corner to resize it.</p>
+
+        <h3 class="subheading">The default columns</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Name</strong><span>The job icon and player name share one column. Name Redaction applies to the displayed name.</span></div>
+          <div class="setting-row"><strong>Damage</strong><span>The player's recorded damage total for the encounter.</span></div>
+          <div class="setting-row"><strong>DPS</strong><span>Recorded damage divided by the captured encounter duration. Players are ordered by damage contribution over that shared duration.</span></div>
+          <div class="setting-row"><strong>Damage %</strong><span>The player's percentage of the total damage shown in the meter.</span></div>
+        </div>
+        <p>The arrow beside a player expands an ability breakdown. The meter includes nearby capturable players, not just your party, including players from other alliance parties. It cannot display events the game has not made available to your client.</p>
+      </section>
+
+      <section id="meter-columns" class="guide-section searchable" data-search-title="DPS Meter columns and display" data-search-keywords="columns reorder drag drop add remove plus x reset name damage dps percent critical direct max hit deaths hits concise normal initials">
+        <div class="section-heading">
+          <p class="eyebrow">Customization</p>
+          <h2>Choose what the widget shows</h2>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Add</strong><span>Click an available column's <strong>+</strong> or drag its tile into Widget columns.</span></div>
+          <div class="setting-row"><strong>Reorder</strong><span>Drag an active column tile to change its position.</span></div>
+          <div class="setting-row"><strong>Remove</strong><span>Select the tile's <strong>X</strong>. At least one column remains active.</span></div>
+          <div class="setting-row"><strong>Restore defaults</strong><span>The <strong>Reset</strong> button in the column settings restores the default columns. It does not reset damage or delete encounters.</span></div>
+        </div>
+        <h3 class="subheading">Additional columns</h3>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Critical hit %</strong><span>The recorded critical-hit percentage.</span></div>
+          <div class="setting-row"><strong>Direct hit %</strong><span>The recorded direct-hit percentage.</span></div>
+          <div class="setting-row"><strong>Critical + direct %</strong><span>The percentage of eligible hits recorded as both critical and direct.</span></div>
+          <div class="setting-row"><strong>Max hit</strong><span>The largest recorded hit amount.</span></div>
+          <div class="setting-row"><strong>Max hit name</strong><span>The ability associated with that largest hit.</span></div>
+          <div class="setting-row"><strong>Deaths</strong><span>Deaths recorded for the player during the encounter.</span></div>
+          <div class="setting-row"><strong>Hits</strong><span>The recorded hit count.</span></div>
+        </div>
+        <div class="topic-grid">
+          <article><h3>Normal</h3><p>Uses full player names and full damage and DPS values, subject to your name-redaction setting.</p></article>
+          <article><h3>Concise</h3><p>Uses initials and short damage and DPS values with decimal precision, such as <strong>184.8k</strong> or <strong>2.4m</strong>. Damage share remains a percentage.</p></article>
+        </div>
+        <p>Column widths share the available window space and adjust when you resize it. The same column order and display mode apply to the widget and its preview.</p>
+      </section>
+
+      <section id="meter-encounters" class="guide-section searchable" data-search-title="DPS Meter encounters and preview" data-search-keywords="encounters history saved selected preview example live last current collapse expand local forty">
+        <div class="section-heading">
+          <p class="eyebrow">Encounter history</p>
+          <h2>Review a result without changing the live meter</h2>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Floating widget</strong><span>Shows the live encounter, or the most recent result when there is no current fight.</span></div>
+          <div class="setting-row"><strong>Encounters list</strong><span>Stores the latest 40 recorded combat encounters locally. Select an encounter to inspect it in the preview. The side-panel arrow expands or collapses the list.</span></div>
+          <div class="setting-row"><strong>Preview</strong><span>Uses the selected encounter and your current widget settings. Selecting history does not replace the floating widget's live data.</span></div>
+          <div class="setting-row"><strong>Before your first encounter</strong><span>The preview shows redacted example data so you can adjust the layout outside combat. The example is not added to your encounter history.</span></div>
+        </div>
+        <p>Combat encounters are separate from the death pulls listed in Review. An encounter can contain useful damage information even when nobody dies. Display redaction does not remove original names from locally saved records.</p>
+      </section>
+
+      <section id="meter-resets" class="guide-section searchable" data-search-title="DPS Meter resets and overworld combat" data-search-keywords="overworld reset bdr new encounter automatic three seconds combat end duty wipe restart">
+        <div class="section-heading">
+          <p class="eyebrow">Combat boundaries</p>
+          <h2>Automatic saving and manual resets</h2>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Overworld combat</strong><span>The meter starts when eligible damage is captured. It saves the encounter after three seconds without combat or new damage from captured players. That wait does not extend the DPS timer.</span></div>
+          <div class="setting-row"><strong>Manual reset</strong><span>In the overworld, use <code>/bdr</code> or the curved-arrow button beside the widget's encounter heading. Its tooltip reads <strong>New encounter</strong>. It saves the current result and starts fresh on the next damage without deleting history or forgetting active effects.</span></div>
+          <div class="setting-row"><strong>Inside duties</strong><span>The manual reset button is hidden and <code>/bdr</code> cannot reset the meter. Existing wipe, restart, and combat-end handling controls encounter boundaries.</span></div>
+          <div class="setting-row"><strong>After combat</strong><span>The last result remains visible until another encounter begins. Your own death does not end an overworld encounter while other captured players are still fighting.</span></div>
+        </div>
+      </section>
+
+      <section id="meter-values" class="guide-section searchable" data-search-title="Understanding DPS Meter values" data-search-keywords="personal dps duration damage timing rounding dots estimates rdps adps ndps unavailable comparison">
+        <div class="section-heading">
+          <p class="eyebrow">Reading the numbers</p>
+          <h2>Compare the same encounter and duration</h2>
+        </div>
+        <p>DPS depends on both the damage total and the duration. A longer measured encounter can show lower DPS even when the damage total is identical. Compare the same fight, player, metric, and time window before treating a difference as missing damage.</p>
+        <div class="caution-note" role="note">
+          <strong>Personal DPS, not raid-buff-adjusted DPS</strong>
+          <p>The visible DPS column reports personal damage over the encounter duration. <strong>rDPS</strong>, <strong>aDPS</strong>, and <strong>nDPS</strong> are currently unavailable widget columns.</p>
+        </div>
+        <p>Displayed numbers are rounded. Some damage-over-time values require estimation, and incomplete captured information can affect totals. Concise display changes how numbers are presented, not the underlying encounter data.</p>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="widget.html#current-pull"><small>Previous</small><strong>Death Widget</strong></a>
+        <a class="page-nav-link next" href="settings.html#options"><small>Next</small><strong>Settings</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div><img src="../assets/icon.png" alt=""><span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span></div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>
+    </main>
+  </div>
+  <script src="help.js"></script>
+</body>
+</html>

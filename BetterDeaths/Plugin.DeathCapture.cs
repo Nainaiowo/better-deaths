@@ -62,6 +62,8 @@ public sealed partial class Plugin
         if (territoryId != currentTerritoryId)
         {
             ArchiveCurrentPullForReview("Left territory", suppressResetStateDeaths: false);
+            overworldDamageCaptureWasEnabled = false;
+            overworldDamageEncounterState.Reset();
             damageParsingModule.ResetCalibration();
             damageParsingModule.ResetStatusTiming();
             packetTimingHandoff.Clear();

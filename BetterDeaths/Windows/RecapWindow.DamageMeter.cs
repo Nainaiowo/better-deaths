@@ -84,6 +84,17 @@ public sealed partial class RecapWindow
         ImGui.Separator();
         ImGui.Dummy(new Vector2(1.0f, 8.0f));
 
+        ImGui.TextColored(LeadUpGoldColor, "Disclaimer");
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernMutedTextColor);
+        ImGui.TextWrapped(
+            "Better Deaths calculates DPS through the last captured damage event; the delay before saving an encounter does not extend its DPS timer. " +
+            "ACT may use a different encounter end time. If both meters record the same total damage, comparing the same duration will align their DPS values.");
+        ImGui.Spacing();
+        ImGui.TextWrapped(
+            "ACT rounds displayed values, and Better Deaths does as well, so a small difference of dps is expected in values of the hundreds, NOT thousands, or anything bigger than that.");
+        ImGui.PopStyleColor();
+        ImGui.Dummy(new Vector2(1.0f, 10.0f));
+
         DrawDamageMeterWidgetSettings();
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
         DrawDamageMeterColumnSettings();
@@ -96,7 +107,7 @@ public sealed partial class RecapWindow
     {
         ImGui.TextColored(ModernAccentColor, "Widget");
         var showWidget = configuration.ShowDamageMeterWidget;
-        if (DrawThemedSwitch("Show DPS meter widget", "DamageMeterWidgetVisible", ref showWidget))
+        if (DrawThemedCheckbox("Show DPS meter widget##DamageMeterWidgetVisible", ref showWidget))
         {
             plugin.SetShowDamageMeterWidget(showWidget);
         }
@@ -541,7 +552,6 @@ public sealed partial class RecapWindow
     {
         var (snapshot, label, isExample) = GetSelectedDamageMeterPreview();
         ImGui.TextColored(ModernAccentColor, "Preview");
-        ImGui.TextColored(ModernMutedTextColor, label);
         if (isExample)
         {
             ImGui.SameLine();
@@ -630,7 +640,7 @@ public sealed partial class RecapWindow
         {
             using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
             {
-                DrawModernWidgetTitle("Waiting for combat");
+                DrawDamageMeterHeading("Waiting for combat", showControls: true);
                 ImGui.Spacing();
                 ImGui.TextDisabled("No damage recorded yet.");
             }
@@ -641,13 +651,14 @@ public sealed partial class RecapWindow
         DrawDamageMeterWidgetSnapshot(
             snapshot,
             ReferenceEquals(snapshot, current) ? "Live" : "Last encounter",
-            "LiveWidget");
+            "LiveWidget", showControls: true);
     }
 
     private void DrawDamageMeterWidgetSnapshot(
         DamageEncounterSnapshot snapshot,
         string state,
-        string idSuffix)
+        string idSuffix,
+        bool showControls = false)
     {
         var sources = GetVisibleDamageMeterSources(snapshot);
         var visibleTotal = sources.Sum(source => source.ObservedMeterDamage);
@@ -657,7 +668,7 @@ public sealed partial class RecapWindow
             var title = configuration.DamageMeterWidgetDisplayMode == WidgetDisplayMode.Concise
                 ? $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | {FormatDamageMeterValue(visibleDps)} DPS"
                 : $"{state} | {FormatDamageMeterDuration(snapshot.DurationSeconds)} | DPS {FormatDamageMeterNumber(visibleDps)}";
-            DrawModernWidgetTitle(title);
+            DrawDamageMeterHeading(title, showControls);
             ImGui.Spacing();
         }
 
@@ -668,6 +679,31 @@ public sealed partial class RecapWindow
         }
 
         ImGui.EndChild();
+    }
+
+    private void DrawDamageMeterHeading(string title, bool showControls)
+    {
+        if (!showControls || !plugin.IsDamageMeterManualResetAvailable)
+        {
+            DrawModernWidgetTitle(title);
+            return;
+        }
+
+        var start = ImGui.GetCursorPos();
+        var buttonWidth = ImGui.GetFrameHeight();
+        var buttonX = start.X + ImGui.GetContentRegionAvail().X - buttonWidth;
+        ImGui.SetCursorPosX(buttonX);
+        ImGui.BeginDisabled(!plugin.CanStartNewDamageEncounter);
+        if (DrawTransparentIconButton("NewDamageEncounter", FontAwesomeIcon.Undo))
+            plugin.RequestNewDamageEncounter();
+        ImGui.EndDisabled();
+        SetThemedTooltip("New encounter: save the current result and start fresh on the next damage. Saved encounters are kept.");
+        var buttonBottom = ImGui.GetCursorPosY();
+        ImGui.SetCursorPos(start);
+        ImGui.PushTextWrapPos(buttonX - ImGui.GetStyle().ItemSpacing.X);
+        DrawModernWidgetTitle(title);
+        ImGui.PopTextWrapPos();
+        ImGui.SetCursorPosY(Math.Max(ImGui.GetCursorPosY(), buttonBottom));
     }
 
     private List<DamageSourceSummary> GetVisibleDamageMeterSources(DamageEncounterSnapshot snapshot)

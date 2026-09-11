@@ -13,22 +13,32 @@ using System.Threading.Tasks;
 
 public sealed partial class Plugin
 {
-    private void ObserveDamageMeterOffensiveCasts(DateTime observedAtUtc)
+    private bool? ObserveDamageMeterPlayers(DateTime observedAtUtc)
     {
         if (!ShouldAcceptDamageParserCapture(observedAtUtc) ||
             observedAtUtc - lastDamageMeterCastPollAtUtc < DamageMeterCastPollInterval)
         {
-            return;
+            return null;
         }
 
         lastDamageMeterCastPollAtUtc = observedAtUtc;
         try
         {
+            var overworld = IsOverworldDamageCaptureEnabled();
+            var participantInCombat = false;
             DateTime? earliestCastStartedAtUtc = null;
             foreach (var gameObject in ObjectTable)
             {
-                if (gameObject is not IPlayerCharacter player ||
-                    !player.IsCasting ||
+                if (gameObject is not IPlayerCharacter player)
+                    continue;
+
+                if (overworld && (player.StatusFlags & StatusFlags.InCombat) != 0 &&
+                    damageParsingModule.IsEncounterPlayer(player.EntityId))
+                {
+                    participantInCombat = true;
+                }
+
+                if (!player.IsCasting ||
                     player.CastActionId == 0 ||
                     !IsOffensiveDamageMeterCast(player.CastActionId))
                 {
@@ -46,10 +56,12 @@ public sealed partial class Plugin
             }
 
             damageParsingModule.ObserveOffensiveCast(earliestCastStartedAtUtc, observedAtUtc);
+            return participantInCombat;
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not observe damage-meter cast starts.");
+            return null;
         }
     }
 
@@ -152,7 +164,8 @@ public sealed partial class Plugin
                 SourceStatuses = sourceStatuses,
                 HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
             };
-            var parsed = damageParsingModule.Process(damagePacket, allowAutomaticEncounterStart: false);
+            var parsed = damageParsingModule.Process(damagePacket,
+                allowAutomaticEncounterStart: packet.AllowAutomaticDamageEncounterStart);
             QueueDamageMeterActionDebug(packet, damagePacket);
             QueueDamageMeterParsedDebug("Action", parsed);
         }
@@ -321,6 +334,14 @@ public sealed partial class Plugin
     private void ParseDamageActorControl(RawActorControlPacket packet)
     {
         var damageSeenAtUtc = packet.ServerFrameTiming?.SeenAtUtc ?? packet.SeenAtUtc;
+        if (packet.Category == ActorControlDeathCategory && packet.AllowAutomaticDamageEncounterStart)
+        {
+            var actor = CaptureDamageActorIdentity(packet.EntityId, string.Empty);
+            if (actor.IsPlayer || damageParsingModule.IsEncounterPlayer(actor.EntityId))
+                damageParsingModule.RecordDeath(actor);
+            return;
+        }
+
         if (packet.Category == ActorControlDotCategory && packet.Param2 > 0)
         {
             var target = CaptureDamageActorIdentity(packet.EntityId, string.Empty);
@@ -353,7 +374,8 @@ public sealed partial class Plugin
                         packet.TargetSnapshot.MaxHp),
             };
             QueueDamageMeterPeriodicDebug(packet, tick);
-            damageParsingModule.ProcessPeriodicTick(tick, allowAutomaticEncounterStart: false);
+            damageParsingModule.ProcessPeriodicTick(tick,
+                allowAutomaticEncounterStart: packet.AllowAutomaticDamageEncounterStart);
             return;
         }
 
@@ -854,7 +876,7 @@ public sealed partial class Plugin
             Configuration.DebugDamageMeterTraceCategories.HasFlag(category);
     }
 
-    private void EndDamageEncounter(DateTime endedAtUtc, string reason)
+    private void EndDamageEncounter(DateTime endedAtUtc, string reason, bool preserveActiveEffects = false)
     {
         var context = new DamageEncounterCompletionContext(
             endedAtUtc, reason, CurrentPullElapsedSeconds,
@@ -865,7 +887,7 @@ public sealed partial class Plugin
                 Configuration.DebugDamageMeterTraceEnabled && Configuration.DebugDamageMeterEncounterExportEnabled,
             ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary),
             RecordedDamageEncounterPath, DamageMeterDiagnosticEncounterPath);
-        var detached = damageParsingModule.DetachEncounter(endedAtUtc, reason);
+        var detached = damageParsingModule.DetachEncounter(endedAtUtc, reason, preserveActiveEffects);
         if (detached is null)
         {
             QueueDamageEncounterEndSummary(null, context);

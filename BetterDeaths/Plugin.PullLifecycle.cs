@@ -45,7 +45,7 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
-    private sealed record ContentCaptureState(uint TerritoryId, bool SupportsPreDutyCalibration);
+    private sealed record ContentCaptureState(uint TerritoryId, bool SupportsPreDutyCalibration, bool SupportsOverworldMeter);
     private ContentCaptureState? contentCaptureState;
 
     private ContentCaptureState GetContentCaptureState()
@@ -61,7 +61,9 @@ public sealed partial class Plugin
         var contentType = territory?.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0;
         var intendedUse = territory?.TerritoryIntendedUse.RowId ?? 0;
         var state = new ContentCaptureState(territoryId,
-            ContentCapturePolicy.SupportsPreDutyCalibration(contentType, intendedUse));
+            ContentCapturePolicy.SupportsPreDutyCalibration(contentType, intendedUse),
+            ContentCapturePolicy.SupportsOverworldMeter(territoryId != 0 && territory is not null,
+                (territory?.ContentFinderCondition.RowId ?? 0) != 0, contentType, intendedUse));
         contentCaptureState = state;
         return state;
     }
@@ -306,7 +308,7 @@ public sealed partial class Plugin
 
     private bool ShouldAcceptDamageParserCapture(DateTime now)
     {
-        return CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+        return IsOverworldDamageCaptureEnabled() || CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
             IsDutyCaptureActive(),
             IsPvPCaptureBlocked(),
             currentTerritoryId == ClientState.TerritoryType && GetContentCaptureState().SupportsPreDutyCalibration);

@@ -3,6 +3,29 @@ namespace BetterDeaths.Tests;
 public sealed class ContentCapturePolicyTests
 {
     [Theory]
+    [InlineData(true, false, 0, 0, true)]
+    [InlineData(true, false, 0, 1, true)]
+    [InlineData(true, false, 0, 2, true)]
+    [InlineData(false, false, 0, 0, false)]
+    [InlineData(true, true, 0, 0, false)]
+    [InlineData(true, true, 2, 3, false)]
+    [InlineData(true, true, 4, 10, false)]
+    [InlineData(true, true, 5, 17, false)]
+    [InlineData(true, true, 28, 17, false)]
+    [InlineData(true, true, 6, 0, false)]
+    [InlineData(true, false, 0, 3, false)]
+    [InlineData(true, false, 0, 4, false)]
+    [InlineData(true, false, 0, 31, false)]
+    [InlineData(true, false, 0, 57, false)]
+    [InlineData(true, false, 0, 58, false)]
+    [InlineData(true, false, 999, 0, false)]
+    public void OverworldCaptureDoesNotReclassifyDuties(bool hasTerritory, bool hasDuty,
+        uint category, uint intendedUse, bool expected)
+    {
+        Assert.Equal(expected, ContentCapturePolicy.SupportsOverworldMeter(hasTerritory, hasDuty, category, intendedUse));
+    }
+
+    [Theory]
     [InlineData(4, 3, true)]
     [InlineData(4, 10, true)]
     [InlineData(5, 8, true)]

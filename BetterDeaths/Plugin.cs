@@ -50,6 +50,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string ShortCommandName = "/bd";
     private const string WidgetCommandName = "/betterdeathswidget";
     private const string ShortWidgetCommandName = "/bdwidget";
+    private const string DamageMeterResetCommandName = "/bdr";
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
@@ -396,7 +397,10 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Queue<RawEffectResultPacket> rawEffectResultPackets = [];
     private readonly Queue<RawActorControlPacket> rawActorControlPackets = [];
     private readonly Queue<RawMapEffectPacket> rawMapEffectPackets = [];
-    private readonly DamageParsing.DamageParsingModule damageParsingModule = new();
+    private readonly DamageParsing.DamageParsingModule damageParsingModule = new()
+    {
+        RequireKnownPlayerForAutomaticStart = true,
+    };
     private readonly object recordedDamageEncounterLock = new();
     private IReadOnlyList<RecordedDamageEncounter> recordedDamageEncounters = [];
     private long nextRecordedDamageEncounterNumber = 1;
@@ -631,6 +635,10 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             HelpMessage = "Toggle the Better Deaths death widget.",
         });
+        CommandManager.AddHandler(DamageMeterResetCommandName, new CommandInfo(OnDamageMeterResetCommand)
+        {
+            HelpMessage = "Reset the DPS meter in the overworld, saving the current encounter. Unavailable inside duties.",
+        });
 
         actionEffectHook = GameInteropProvider.HookFromAddress<ActionEffectHandler.Delegates.Receive>(
             ActionEffectHandler.MemberFunctionPointers.Receive,
@@ -758,6 +766,7 @@ public sealed partial class Plugin : IDalamudPlugin
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
+        CommandManager.RemoveHandler(DamageMeterResetCommandName);
         CommandManager.RemoveHandler(ShortWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);
         CommandManager.RemoveHandler(ShortCommandName);
@@ -806,10 +815,12 @@ public sealed partial class Plugin : IDalamudPlugin
                 ResolveRawCombatQueues(now);
             }
 
-            ObserveDamageMeterOffensiveCasts(now);
+            var participantInCombat = ObserveDamageMeterPlayers(now);
             UpdateCombatTimerState(now);
-            damageParsingModule.SetCombatActive(IsDutyCaptureActive() && !IsPvPCaptureBlocked() && IsEffectiveInCombat(), now);
+            UpdateDamageEncounterLifecycle(now);
             damageParsingModule.FlushPendingPeriodicTicks(now);
+            if (participantInCombat is { } observedCombat)
+                UpdateOverworldDamageEncounter(now, observedCombat);
             RefreshPartyState();
             damageParsingModule.RefreshLiveEncounter(now);
             FlushDebugCaptureFile(now);

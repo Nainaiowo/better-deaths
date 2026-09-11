@@ -20,6 +20,7 @@ internal sealed class DamageParsingModule
     private readonly HashSet<string> eventIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> eventIndices = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, DamageActorIdentity> knownActors = [];
+    private readonly HashSet<uint> encounterPlayers = [];
     private readonly Dictionary<string, MutableDamageSource> sources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutableActivityDuration> sourceActivities = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MutableDamageTarget> targets = new(StringComparer.Ordinal);
@@ -30,9 +31,11 @@ internal sealed class DamageParsingModule
     private DateTime? meterStartedAtUtc;
     private DateTime? latestMeterDamageAtUtc;
     private DateTime? pendingOffensiveCastStartedAtUtc;
+    private DateTime? encounterBoundaryAtUtc;
     private DateTime? latestPreEncounterActivityAtUtc;
     private bool combatActive;
     private bool usesExplicitCombatLifecycle;
+    private bool preserveCombatContext;
     private int activitySegmentId;
     private int packetCount;
     private int duplicateEventCount;
@@ -54,6 +57,23 @@ internal sealed class DamageParsingModule
     public Action<Exception>? LiveSnapshotFailed { get; set; }
 
     public Action<IReadOnlyList<ParsedDamageEvent>>? PeriodicEventsResolved { get; set; }
+    public bool RequireKnownPlayerForAutomaticStart { get; init; }
+
+    public (bool HasEncounter, DateTime? LatestDamageAtUtc) GetEncounterActivity()
+    {
+        lock (syncRoot)
+        {
+            return (startedAtUtc is not null, latestMeterDamageAtUtc);
+        }
+    }
+
+    public bool IsEncounterPlayer(uint entityId)
+    {
+        lock (syncRoot)
+        {
+            return encounterPlayers.Contains(entityId);
+        }
+    }
 
     public void ResetCalibration()
     {
@@ -237,7 +257,8 @@ internal sealed class DamageParsingModule
                 return;
             }
 
-            pendingOffensiveCastStartedAtUtc = castStartedAtUtc.Value;
+            pendingOffensiveCastStartedAtUtc = encounterBoundaryAtUtc is { } boundary && castStartedAtUtc < boundary
+                ? boundary : castStartedAtUtc.Value;
         }
     }
 
@@ -390,7 +411,7 @@ internal sealed class DamageParsingModule
 
     internal sealed record DetachedEncounter(long Generation, DamageEncounterSnapshot Input);
 
-    internal DetachedEncounter? DetachEncounter(DateTime endedAtUtc, string reason)
+    internal DetachedEncounter? DetachEncounter(DateTime endedAtUtc, string reason, bool preserveActiveEffects = false)
     {
         lock (syncRoot)
         {
@@ -399,7 +420,8 @@ internal sealed class DamageParsingModule
             var detached = startedAtUtc is not null && latestEventAtUtc is { } effectiveEnd
                 ? new DetachedEncounter(encounterGeneration, CaptureSnapshotInput(effectiveEnd, effectiveEnd, reason))
                 : null;
-            ClearCurrentEncounter();
+            ClearCurrentEncounter(preserveActiveEffects);
+            encounterBoundaryAtUtc = preserveActiveEffects ? endedAtUtc : null;
             return detached;
         }
     }
@@ -723,25 +745,32 @@ internal sealed class DamageParsingModule
         };
     }
 
-    private void ClearCurrentEncounter()
+    private void ClearCurrentEncounter(bool preserveActiveEffects = false)
     {
         events.Clear();
         eventIds.Clear();
         eventIndices.Clear();
-        knownActors.Clear();
+        preserveCombatContext = preserveActiveEffects;
+        encounterPlayers.Clear();
+        // Splitting the meter does not remove effects from actors still in combat.
+        if (!preserveActiveEffects)
+        {
+            knownActors.Clear();
+            periodicDamageTracker.Clear(preserveCalibration: true);
+            raidBuffTracker.Clear();
+        }
         sources.Clear();
         sourceActivities.Clear();
         targets.Clear();
         pendingPeriodicTicks.Clear();
         stagedDamageBatches.Clear();
-        periodicDamageTracker.Clear(preserveCalibration: true);
         effectiveDamageResolver.Clear();
-        raidBuffTracker.Clear();
         startedAtUtc = null;
         latestEventAtUtc = null;
         meterStartedAtUtc = null;
         latestMeterDamageAtUtc = null;
         pendingOffensiveCastStartedAtUtc = null;
+        encounterBoundaryAtUtc = null;
         latestPreEncounterActivityAtUtc = null;
         combatActive = false;
         activitySegmentId = 0;
@@ -890,7 +919,8 @@ internal sealed class DamageParsingModule
         pendingPeriodicTicks.RemoveAll(entry => entry.Tick.SeenAtUtc < cutoff);
         stagedDamageBatches.Clear();
         // Staged damage has a short lifetime; landed buffs retain their own expiry.
-        periodicDamageTracker.Clear(preserveCalibration: true, preserveConfirmedBuffs: true);
+        if (!preserveCombatContext)
+            periodicDamageTracker.Clear(preserveCalibration: true, preserveConfirmedBuffs: true);
         effectiveDamageResolver.Clear();
         latestPreEncounterActivityAtUtc = null;
     }
@@ -917,7 +947,7 @@ internal sealed class DamageParsingModule
                 : latestPreEncounterActivityAtUtc;
     }
 
-    private static bool IsEncounterStartingDamage(ParsedDamageEvent damageEvent)
+    private bool IsEncounterStartingDamage(ParsedDamageEvent damageEvent)
     {
         if (damageEvent.Outcome != DamageEventOutcome.Damage ||
             damageEvent.Amount == 0 && damageEvent.RawMeterAmount <= 0)
@@ -926,6 +956,13 @@ internal sealed class DamageParsingModule
         }
 
         var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
+        if (RequireKnownPlayerForAutomaticStart)
+        {
+            return attributedSource.IsPlayer && attributedSource.EntityId != 0 ||
+                attributedSource.IsLimitBreak ||
+                damageEvent.Target.IsPlayer && damageEvent.Target.EntityId != 0;
+        }
+
         return attributedSource.IsPartyMember ||
             attributedSource.IsPlayer ||
             attributedSource.IsLimitBreak ||
@@ -972,6 +1009,13 @@ internal sealed class DamageParsingModule
             events.Add(damageEvent);
 
             var attributedSource = damageEvent.AttributedSource ?? damageEvent.Source;
+            if (damageEvent.Outcome == DamageEventOutcome.Damage)
+            {
+                if (attributedSource.IsPlayer)
+                    encounterPlayers.Add(attributedSource.EntityId);
+                if (damageEvent.Target.IsPlayer)
+                    encounterPlayers.Add(damageEvent.Target.EntityId);
+            }
             if (IsMeterDamage(damageEvent, attributedSource))
             {
                 var meterEventAtUtc = damageEvent.SeenAtUtc;

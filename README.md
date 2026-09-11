@@ -73,7 +73,10 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 /bd
 /betterdeathswidget
 /bdwidget
+/bdr
 ```
+
+`/bdr` resets the active DPS meter encounter in the overworld, saving the result before starting fresh on the next damage. It is unavailable inside duties and does not delete saved encounters.
 
 ## Dalamud Repository
 
@@ -87,6 +90,6 @@ Then install `Better Deaths` from Dalamud's plugin installer.
 
 ## Notes
 
-Better Deaths only functions in duties, not overworld combat or PvP.
+Death recap capture works inside duties. The DPS Meter also records overworld combat. PvP capture is not supported.
 
 This is a work in progress raid review tool, so feedback and issue reports are welcome.

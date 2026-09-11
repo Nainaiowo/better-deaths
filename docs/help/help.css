@@ -779,6 +779,7 @@ p { margin: 0 0 16px; }
 }
 
 .command-list span { color: var(--muted); }
+.command-list .single-command > span { grid-column: 2 / -1; }
 
 .glossary {
   display: grid;
@@ -883,6 +884,7 @@ p { margin: 0 0 16px; }
   .topic-grid, .source-compare, .glossary { grid-template-columns: 1fr; }
   .topic-grid article { min-height: 0; }
   .command-list > div { grid-template-columns: 1fr; gap: 7px; }
+  .command-list .single-command > span { grid-column: 1; }
   .command-list code { width: max-content; }
   .image-action { opacity: 1; transform: none; }
   .page-nav { gap: 18px; }

@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.43";
+    private const string CurrentChangelogVersion = "1.0.0.44";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19885,6 +19885,19 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.44");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added overworld damage recording.");
+        DrawWrappedBullet("Overworld encounters automatically save after three seconds without combat or new damage. This delay does not affect DPS.");
+        DrawWrappedBullet("Added an overworld-only reset button and /bdr command. Resetting preserves saved encounters and active DoT/buff tracking.");
+        DrawWrappedBullet("Manual resets are blocked inside duties. Existing wipe, restart, and combat-end handling remains unchanged.");
+        DrawWrappedBullet("Changed Show DPS meter widget to a left-aligned checkbox.");
+        DrawWrappedBullet("Removed the duplicate encounter number and area above the preview.");
+        DrawWrappedBullet("Added a disclaimer explaining encounter timing and rounded values.");
+        DrawWrappedBullet("Fixed the Widgets Help button opening a missing page.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.43");
         ImGui.TextDisabled("Stable update.");
         DrawHighlightedChangelogBullet("Added an optional live DPS Meter with damage totals, DPS, damage share, and expandable ability breakdowns.");
