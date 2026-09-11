@@ -697,7 +697,11 @@ public sealed partial class RecapWindow
         if (DrawTransparentIconButton("NewDamageEncounter", FontAwesomeIcon.Undo))
             plugin.RequestNewDamageEncounter();
         ImGui.EndDisabled();
-        SetThemedTooltip("New encounter: save the current result and start fresh on the next damage. Saved encounters are kept.");
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+        {
+            SetThemedTooltip("New encounter: save the current result and start fresh on the next damage. Saved encounters are kept.");
+        }
+
         var buttonBottom = ImGui.GetCursorPosY();
         ImGui.SetCursorPos(start);
         ImGui.PushTextWrapPos(buttonX - ImGui.GetStyle().ItemSpacing.X);

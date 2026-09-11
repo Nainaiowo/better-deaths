@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "DPS Meter\n- Added overworld damage recording.\n- Overworld encounters automatically save after three seconds without combat or new damage. This delay does not affect DPS.\n- Added an overworld-only reset button and /bdr command. Resetting preserves saved encounters and active DoT/buff tracking.\n- Manual resets are blocked inside duties. Existing wipe, restart, and combat-end handling remains unchanged.\n\nInterface and Help\n- Changed Show DPS meter widget to a left-aligned checkbox.\n- Removed the duplicate encounter number and area above the preview.\n- Added a disclaimer explaining encounter timing and rounded values.\n- Fixed the Widgets Help button opening a missing page.",
+  "Changelog": "DPS Meter\n- Fixed the New encounter tooltip remaining visible when not hovering over the reset button.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
