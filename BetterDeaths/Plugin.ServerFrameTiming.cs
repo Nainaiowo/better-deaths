@@ -113,7 +113,7 @@ public sealed partial class Plugin
                 timestamp.HasValue ? *(ulong*)(buffer + 8) : 0, timestamp);
             packetTimingDiagnostics.Record(rejection,
                 ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.StatusChanges) &&
-                    Volatile.Read(ref contentCaptureState) is { IsDungeon: false },
+                    Volatile.Read(ref contentCaptureState) is not null,
                 frameHeader, elementHeader, length, source, destination, receivedAtUtc, state != null, buffer != null);
         }
         catch (Exception)

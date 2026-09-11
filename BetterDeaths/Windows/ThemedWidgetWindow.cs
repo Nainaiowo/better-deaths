@@ -32,8 +32,6 @@ public abstract class ThemedWidgetWindow : Window, IDisposable
     {
     }
 
-    public override bool DrawConditions() => !Plugin.IsDungeonCaptureBlocked;
-
     public override void PreDraw()
     {
         ApplyScrollbarWindowFlag();

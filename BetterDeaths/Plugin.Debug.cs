@@ -533,7 +533,7 @@ public sealed partial class Plugin
 
     private void TrackDebugStatusSnapshots(IEnumerable<PartyMemberSnapshot> members, DateTime now)
     {
-        if (!Configuration.DebugLogEnabled || debugCaptureFrozen || IsDungeonCaptureBlocked)
+        if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
         {
             return;
         }
@@ -588,7 +588,7 @@ public sealed partial class Plugin
 
     private void AddDebugLog(string message)
     {
-        if (!Configuration.DebugLogEnabled || IsDungeonCaptureBlocked)
+        if (!Configuration.DebugLogEnabled)
         {
             return;
         }
@@ -605,7 +605,7 @@ public sealed partial class Plugin
 
     private void QueueDebugCaptureRecord<T>(string kind, T data)
     {
-        if (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled || IsDungeonCaptureBlocked)
+        if (!Configuration.DebugLogEnabled || !Configuration.DebugSaveToFileEnabled)
         {
             return;
         }

@@ -994,7 +994,7 @@ public sealed partial class RecapWindow
             return column switch
             {
                 DamageMeterColumn.PlayerName => "Name",
-                DamageMeterColumn.DamagePercent => "Share",
+                DamageMeterColumn.DamagePercent => "D%",
                 DamageMeterColumn.CriticalHitPercent => "Crit",
                 DamageMeterColumn.DirectHitPercent => "DH",
                 DamageMeterColumn.CriticalDirectHitPercent => "CDH",

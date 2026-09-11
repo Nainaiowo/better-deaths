@@ -123,7 +123,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.14";
+    private const string CurrentChangelogVersion = "1.0.0.43";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19885,6 +19885,25 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.43");
+        ImGui.TextDisabled("Stable update.");
+        DrawHighlightedChangelogBullet("Added an optional live DPS Meter with damage totals, DPS, damage share, and expandable ability breakdowns.");
+        DrawWrappedBullet("Includes captured nearby players, including alliance members, with pet damage credited to its owner and estimated damage-over-time contributions.");
+        DrawWrappedBullet("Saved combat encounters are available in a collapsible browser. Selecting one displays it in the preview; the floating widget stays on live combat or the last encounter.");
+        DrawWrappedBullet("Redacted example data is available in the preview before any encounters are recorded.");
+        DrawWrappedBullet("Customize columns with drag-and-drop, click + to add, or X to remove. Choose damage, DPS, damage share, hit counts, deaths, critical/direct-hit percentages, and highest-hit details.");
+        DrawWrappedBullet("Columns share the available widget width. Job icons and player names are combined in a centered Name column.");
+        DrawWrappedBullet("Normal and Concise display modes support full or abbreviated numbers, including decimals for millions.");
+        DrawHighlightedChangelogBullet("Added a Widgets tab for the DPS Meter and Death Widget. Renamed Current Pull Widget to Death Widget and moved Customize into Options.");
+        DrawWrappedBullet("Moved encounter finalization and saving to background work and reduced temporary memory allocations to help reduce combat-end hitches.");
+        DrawWrappedBullet("Added optional damage diagnostics and increased local debug capture capacity to 250 MB.");
+        DrawWrappedBullet("Unconfirmed death checks are now cancelled when a player disappears or becomes unobservable. Already-confirmed deaths remain recorded.");
+        DrawWrappedBullet("Fight resets now require a fresh check that the same character is still present and marked dead before confirming a pending death.");
+        DrawWrappedBullet("This should now stop random death detections from happening from pulling mobs in dungeons.");
+        DrawWrappedBullet("rDPS, aDPS, and nDPS columns remain disabled.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.14");
         ImGui.TextDisabled("Testing update.");
         DrawHighlightedChangelogBullet("Improved DPS Meter timing and raid-contributing DPS accuracy.");

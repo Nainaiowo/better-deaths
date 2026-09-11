@@ -15,11 +15,13 @@ public sealed class ContentCapturePolicyTests
     [InlineData(0, 4, true)]
     [InlineData(0, 57, true)]
     [InlineData(0, 58, true)]
-    [InlineData(2, 3, false)]
-    [InlineData(21, 31, false)]
-    [InlineData(0, 3, false)]
-    [InlineData(0, 31, false)]
+    [InlineData(2, 3, true)]
+    [InlineData(21, 31, true)]
+    [InlineData(0, 3, true)]
+    [InlineData(0, 31, true)]
     [InlineData(6, 0, false)]
+    [InlineData(6, 3, false)]
+    [InlineData(6, 31, false)]
     [InlineData(0, 0, false)]
     [InlineData(0, 1, false)]
     [InlineData(0, 2, false)]
@@ -34,9 +36,14 @@ public sealed class ContentCapturePolicyTests
     [InlineData(21, 31)]
     [InlineData(0, 3)]
     [InlineData(0, 31)]
-    public void BlocksRegularAndDeepDungeonsIncludingUnlistedFloors(uint category, uint intendedUse)
+    public void DungeonMeterCaptureAcceptsPreDutyAndActiveDutyPackets(uint category, uint intendedUse)
     {
-        Assert.True(ContentCapturePolicy.IsDungeon(category, intendedUse));
+        var supportsPreDutyCalibration = ContentCapturePolicy.SupportsPreDutyCalibration(category, intendedUse);
+
+        Assert.True(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: false, isPvPCaptureBlocked: false, supportsPreDutyCalibration));
+        Assert.True(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: true, isPvPCaptureBlocked: false, supportsPreDutyCalibration));
     }
 
     [Theory]
@@ -53,11 +60,18 @@ public sealed class ContentCapturePolicyTests
     [InlineData(5, 17)] // Raids, including Savage.
     [InlineData(28, 17)] // Ultimate, including DMU.
     [InlineData(37, 36)] // Chaotic alliance raid.
-    [InlineData(0, 0)] // No territory data / outside a duty.
-    [InlineData(0, 1)]
-    [InlineData(0, 2)]
-    public void PreservesAllowedContent(uint category, uint intendedUse)
+    [InlineData(2, 3)]
+    [InlineData(21, 31)]
+    [InlineData(0, 3)]
+    [InlineData(0, 31)]
+    public void SupportedContentStillHonorsPvpCaptureBlock(uint category, uint intendedUse)
     {
-        Assert.False(ContentCapturePolicy.IsDungeon(category, intendedUse));
+        var supportsPreDutyCalibration = ContentCapturePolicy.SupportsPreDutyCalibration(category, intendedUse);
+
+        Assert.True(supportsPreDutyCalibration);
+        Assert.False(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: false, isPvPCaptureBlocked: true, supportsPreDutyCalibration));
+        Assert.False(CaptureTimingPolicy.ShouldAcceptDamageParserPackets(
+            isDutyCaptureActive: true, isPvPCaptureBlocked: true, supportsPreDutyCalibration));
     }
 }

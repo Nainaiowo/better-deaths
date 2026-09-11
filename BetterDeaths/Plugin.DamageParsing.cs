@@ -863,7 +863,7 @@ public sealed partial class Plugin
             damageEncounterHistoryGeneration, damageEncounterDiagnosticGeneration,
             Configuration.DebugLogEnabled && Configuration.DebugSaveToFileEnabled &&
                 Configuration.DebugDamageMeterTraceEnabled && Configuration.DebugDamageMeterEncounterExportEnabled,
-            ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary) && !IsDungeonCaptureBlocked,
+            ShouldSaveDamageMeterDebug(DamageMeterDebugTraceCategory.EncounterSummary),
             RecordedDamageEncounterPath, DamageMeterDiagnosticEncounterPath);
         var detached = damageParsingModule.DetachEncounter(endedAtUtc, reason);
         if (detached is null)

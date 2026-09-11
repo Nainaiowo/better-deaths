@@ -109,7 +109,7 @@ public sealed partial class Plugin
         var now = DateTime.UtcNow;
         RememberTrackedMembers(currentMembers, now);
         PruneLastKnownMembers(now);
-        PrunePendingDeathCandidates(now);
+        PrunePendingDeathCandidates(now, currentMembers);
         TrackDebugStatusSnapshots(currentMembers, now);
         UpdatePostResetDeathSuppression();
         if (ShouldAcceptRawCombatCapture(now) || ShouldAcceptDamageParserCapture(now))
@@ -215,23 +215,45 @@ public sealed partial class Plugin
         }
     }
 
-    private void PrunePendingDeathCandidates(DateTime now)
+    private void PrunePendingDeathCandidates(DateTime now, IReadOnlyList<PartyMemberSnapshot> observedMembers)
     {
-        foreach (var memberKey in pendingDeathCandidatesByMember
-                     .Where(entry => DeathDetectionPolicy.IsPendingCandidateExpired(
-                         entry.Value.FirstSeenAtUtc,
-                         now,
-                         PendingDeathCandidateRetention))
-                     .Select(entry => entry.Key)
-                     .ToList())
+        if (pendingDeathCandidatesByMember.Count == 0)
         {
+            return;
+        }
+
+        foreach (var (memberKey, candidate) in pendingDeathCandidatesByMember.ToList())
+        {
+            var member = observedMembers.FirstOrDefault(observed => observed.MemberKey == memberKey);
+            var observation = member is null
+                ? PlayerDeathObservation.Unknown
+                : DeathDetectionPolicy.ClassifyPolledState(
+                    member.HasWorldObject, member.WorldObjectIsDead, member.CurrentHp, member.MaxHp);
+            if (DeathDetectionPolicy.ShouldRetainPendingWorldObjectDeath(
+                    knownAliveMemberKeys.Contains(memberKey),
+                    member is not null && member.EntityId == candidate.Snapshot.EntityId,
+                    observation,
+                    candidate.FirstSeenAtUtc,
+                    now,
+                    PendingDeathCandidateRetention))
+            {
+                continue;
+            }
+
             pendingDeathCandidatesByMember.Remove(memberKey);
+            AddDebugLog($"Discarded pending world-object death for {candidate.Snapshot.MemberName}: " +
+                $"observation={observation}, sameActor={member is not null && member.EntityId == candidate.Snapshot.EntityId}.");
         }
     }
 
     private void FinalizePendingDeathsForDutyReset(DateTime now)
     {
-        PrunePendingDeathCandidates(now);
+        if (pendingDeathCandidatesByMember.Count > 0)
+        {
+            // A reset is not death evidence; cached candidates need a fresh, matching dead actor.
+            PrunePendingDeathCandidates(now, BuildTrackedCharacterSnapshots());
+        }
+
         if (ShouldAcceptRawCombatCapture(now) || ShouldAcceptDamageParserCapture(now))
         {
             ResolveRawCombatQueues(now);

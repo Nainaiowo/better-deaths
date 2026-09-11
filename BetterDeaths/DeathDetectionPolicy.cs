@@ -64,6 +64,20 @@ internal static class DeathDetectionPolicy
             now - firstSeenAtUtc >= confirmationDelay;
     }
 
+    public static bool ShouldRetainPendingWorldObjectDeath(
+        bool wasKnownAlive,
+        bool isSameActor,
+        PlayerDeathObservation observation,
+        DateTime firstSeenAtUtc,
+        DateTime now,
+        TimeSpan retention)
+    {
+        return wasKnownAlive &&
+            isSameActor &&
+            observation == PlayerDeathObservation.WorldObjectDead &&
+            !IsPendingCandidateExpired(firstSeenAtUtc, now, retention);
+    }
+
     public static bool IsPendingCandidateExpired(
         DateTime firstSeenAtUtc,
         DateTime now,
