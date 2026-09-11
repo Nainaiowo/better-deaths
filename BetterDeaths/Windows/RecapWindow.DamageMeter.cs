@@ -692,10 +692,10 @@ public sealed partial class RecapWindow
         }
 
         var columns = DamageMeterColumnPolicy.Normalize(configuration.DamageMeterColumns);
-        const ImGuiTableFlags flags = ImGuiTableFlags.SizingFixedFit |
+        const ImGuiTableFlags flags = ImGuiTableFlags.SizingStretchProp |
             ImGuiTableFlags.RowBg |
             ImGuiTableFlags.BordersInnerV |
-            ImGuiTableFlags.ScrollX;
+            ImGuiTableFlags.NoSavedSettings;
         if (!ImGui.BeginTable($"##DamageMeterWidgetRows{idSuffix}", columns.Count + 1, flags))
         {
             return;
@@ -707,8 +707,8 @@ public sealed partial class RecapWindow
         {
             ImGui.TableSetupColumn(
                 $"{GetDamageMeterColumnHeader(column)}##DamageMeterWidget{idSuffix}{column}",
-                ImGuiTableColumnFlags.WidthFixed,
-                GetDamageMeterColumnWidth(column, snapshot, sources, visibleTotal, idSuffix));
+                ImGuiTableColumnFlags.WidthStretch,
+                GetDamageMeterColumnWeight(column, snapshot, sources, visibleTotal, idSuffix));
         }
 
         DrawCenteredTableHeader(["", .. columns.Select(GetDamageMeterColumnHeader)]);
@@ -1015,7 +1015,7 @@ public sealed partial class RecapWindow
         };
     }
 
-    private float GetDamageMeterColumnWidth(DamageMeterColumn column, DamageEncounterSnapshot snapshot,
+    private float GetDamageMeterColumnWeight(DamageMeterColumn column, DamageEncounterSnapshot snapshot,
         IReadOnlyList<DamageSourceSummary> sources, double visibleTotal, string idSuffix)
     {
         var concise = configuration.DamageMeterWidgetDisplayMode == WidgetDisplayMode.Concise;
@@ -1041,6 +1041,7 @@ public sealed partial class RecapWindow
             contentWidth += 20.0f + ImGui.GetStyle().ItemSpacing.X;
         }
 
+        // Preferred content widths are relative weights; the table divides the available space.
         return DamageMeterDisplayPolicy.GetColumnWidth(column, ImGui.CalcTextSize(GetDamageMeterColumnHeader(column)).X,
             contentWidth, concise, ImGui.GetFontSize() / 17.0f);
     }

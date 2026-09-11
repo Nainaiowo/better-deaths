@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Moved encounter finalization and saving into ordered background work to reduce combat-end hitches, and reduced temporary memory allocations while saving. Recorded damage values and capture order are preserved. Updated the DPS widget with a combined, centered Name column, automatically sized columns, plain damage-share percentages, and concise damage/DPS values with a decimal. The rDPS, aDPS, and nDPS column options are temporarily disabled.",
+  "Changelog": "Fixed DPS meter columns to share the available width and expand or shrink together when resizing the widget. The same layout applies to the preview, while the expand-arrow column stays fixed.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
