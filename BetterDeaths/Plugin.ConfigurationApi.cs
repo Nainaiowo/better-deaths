@@ -68,6 +68,19 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    public void SetDamageMeterWidgetBackgroundOpacity(float opacity)
+    {
+        Configuration.DamageMeterWidgetBackgroundOpacity = DamageMeterDisplayPolicy.GetWidgetBackgroundOpacity(
+            opacity, Configuration.CurrentPullWidgetBackgroundOpacity);
+        SaveConfiguration();
+    }
+
+    public void SetDamageMeterWidgetIconSize(float size)
+    {
+        Configuration.DamageMeterWidgetIconSize = DamageMeterDisplayPolicy.GetWidgetIconSize(size);
+        SaveConfiguration();
+    }
+
     public void SetMainWindowBackgroundOpacity(float opacity)
     {
         Configuration.MainWindowBackgroundOpacity = Math.Clamp(
@@ -536,6 +549,21 @@ public sealed partial class Plugin
         if (MathF.Abs(Configuration.CurrentPullWidgetBackgroundOpacity - widgetBackgroundOpacity) > 0.01f)
         {
             Configuration.CurrentPullWidgetBackgroundOpacity = widgetBackgroundOpacity;
+            changed = true;
+        }
+
+        var meterOpacity = DamageMeterDisplayPolicy.GetWidgetBackgroundOpacity(
+            Configuration.DamageMeterWidgetBackgroundOpacity, widgetBackgroundOpacity);
+        if (Configuration.DamageMeterWidgetBackgroundOpacity != meterOpacity)
+        {
+            Configuration.DamageMeterWidgetBackgroundOpacity = meterOpacity;
+            changed = true;
+        }
+
+        var meterIconSize = DamageMeterDisplayPolicy.GetWidgetIconSize(Configuration.DamageMeterWidgetIconSize);
+        if (Configuration.DamageMeterWidgetIconSize != meterIconSize)
+        {
+            Configuration.DamageMeterWidgetIconSize = meterIconSize;
             changed = true;
         }
 

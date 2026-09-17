@@ -43,6 +43,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private int debugActorControlCategoryFilterIndex;
     private int? pendingMaxRecordedPulls;
     private bool showLightThemePicker;
+    private bool showStyleThemePicker;
     private float currentMainWindowBackgroundOpacity = Plugin.DefaultMainWindowBackgroundOpacity;
     private DataPageSnapshot dataPageSnapshot = DataPageSnapshot.Empty;
     private DateTime dataPageSnapshotRefreshedAtUtc = DateTime.MinValue;
@@ -123,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.46";
+    private const string CurrentChangelogVersion = "1.0.0.47";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -302,6 +303,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         BetterDeathsTheme.Fanta,
         BetterDeathsTheme.GingerAle,
         BetterDeathsTheme.Pepsi,
+        BetterDeathsTheme.Sakura,
+        BetterDeathsTheme.Confection,
     ];
     private static readonly Vector4[] BasePullGroupPalette =
     [
@@ -701,11 +704,17 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private readonly struct ModernWidgetScope : IDisposable
     {
-        public ModernWidgetScope()
+        public ModernWidgetScope(float backgroundOpacity)
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
-            ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, ModernPanelAltColor);
-            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, GetTableRowAltColor());
+            var header = GetWidgetTableHeaderBackground();
+            if (WidgetSurfacePolicy.IsExpressive(activeTheme.WidgetSurface))
+            {
+                header.W *= backgroundOpacity;
+            }
+            ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, header);
+            ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt,
+                WidgetSurfacePolicy.IsExpressive(activeTheme.WidgetSurface) ? Vector4.Zero : GetTableRowAltColor());
             ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
             ImGui.PushStyleColor(ImGuiCol.Text, ModernTextColor);
             ImGui.PushStyleColor(ImGuiCol.TextDisabled, ModernMutedTextColor);
@@ -743,10 +752,12 @@ public sealed partial class RecapWindow : Window, IDisposable
     public RecapWindow(Plugin plugin) : base("Better Deaths###BetterDeaths")
     {
         this.plugin = plugin;
+        AllowBackgroundBlur = false;
         configuration = plugin.Configuration;
         activeTheme = BetterDeathsThemeCatalog.GetTheme(configuration);
         showDebugTab = configuration.ShowDebugTab;
         showLightThemePicker = IsLightPanelTheme(BetterDeathsThemeCatalog.GetTheme(configuration.Theme));
+        showStyleThemePicker = activeTheme.Decoration != ThemeDecoration.None;
 
         Size = DefaultWindowSize;
         SizeCondition = ImGuiCond.FirstUseEver;
@@ -891,6 +902,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
         if (ImGui.BeginChild("##BetterDeathsModernShell", Vector2.Zero, false, OptionalScrollbarFlags))
         {
+            DrawStyleThemeBackdrop(currentMainWindowBackgroundOpacity);
             ImGui.Dummy(new Vector2(1.0f, ModernShellTopPadding));
             var navigationItems = BuildMainNavigationItems();
             var available = ImGui.GetContentRegionAvail();
@@ -5192,10 +5204,18 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawCurrentPullWidgetContent(IReadOnlyList<PartyDeathRecord> deaths, string title, string idSuffix)
     {
-        using var widgetStyle = new ModernWidgetScope();
+        using var widgetStyle = new ModernWidgetScope(GetCurrentPullWidgetBackgroundOpacity());
+        DrawStyleThemeBackdrop(GetCurrentPullWidgetBackgroundOpacity(), widget: true);
         using (new ImGuiIndentScope(ReviewPaneHorizontalPadding))
         {
-            DrawModernWidgetTitle(title);
+            if (WidgetSurfacePolicy.IsExpressive(activeTheme.WidgetSurface))
+            {
+                DrawStyledWidgetTitle(title);
+            }
+            else
+            {
+                DrawModernWidgetTitle(title);
+            }
             ImGui.Spacing();
 
             if (deaths.Count == 0)
@@ -5215,16 +5235,20 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    private static void DrawModernWidgetTitle(string title)
+    private static void DrawModernWidgetTitle(string title, Vector4? color = null)
     {
-        ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, color ?? LeadUpGoldColor);
         ImGui.TextWrapped(title);
         ImGui.PopStyleColor();
     }
 
     private void DrawCurrentPullWidgetDeathTable(IReadOnlyList<PartyDeathRecord> deaths, string idSuffix)
     {
-        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV))
+        var flags = ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV;
+        if (WidgetSurfacePolicy.IsExpressive(activeTheme.WidgetSurface))
+            flags &= ~ImGuiTableFlags.BordersInnerV;
+        var tableWidth = MathF.Max(1, ImGui.GetContentRegionAvail().X - GetStyleWidgetGutter());
+        if (!ImGui.BeginTable($"##CurrentPullWidgetDeaths{idSuffix}", 5, flags, new Vector2(tableWidth, 0)))
         {
             return;
         }
@@ -5235,7 +5259,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.TableSetupColumn("Event", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 0.75f : 0.95f);
         ImGui.TableSetupColumn("Overkill", ImGuiTableColumnFlags.WidthStretch, 0.8f);
         ImGui.TableSetupColumn("Mits/Debuffs", ImGuiTableColumnFlags.WidthStretch, conciseMode ? 1.85f : 2.35f);
-        DrawCenteredTableHeader("Time", "Player", "Event", "Overkill", "Mits/Debuffs");
+        DrawWidgetTableHeader("Time", "Player", "Event", "Overkill", "Mits/Debuffs");
 
         var orderedDeaths = GetDeathsInTimelineOrder(deaths);
         for (var i = 0; i < orderedDeaths.Count; i++)
@@ -5244,6 +5268,13 @@ public sealed partial class RecapWindow : Window, IDisposable
             var selection = DeathDisplaySelector.Select(death);
             var causeEvents = GetTimelineCauseEvents(selection);
             ImGui.TableNextRow();
+            if (WidgetSurfacePolicy.IsExpressive(activeTheme.WidgetSurface))
+            {
+                var overlay = GetStyledRowOverlay();
+                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0,
+                    ImGui.GetColorU32(overlay with { W = overlay.W * GetCurrentPullWidgetBackgroundOpacity() }));
+                ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg1, 0);
+            }
             ImGui.TableNextColumn();
             DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
             ImGui.TableNextColumn();
@@ -17386,18 +17417,29 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawSelectedThemePreview(
             BetterDeathsThemeCatalog.GetTheme(configuration),
             customThemeEnabled ? $"{selectedBaseTheme.Label} + custom colors" : selectedBaseTheme.Label);
+        DrawStyleThemeEffectsSettings();
         ImGui.Spacing();
 
         var darkThemes = BetterDeathsThemeCatalog.All
-            .Where(theme => !IsLightPanelTheme(theme))
+            .Where(theme => theme.Decoration == ThemeDecoration.None && !IsLightPanelTheme(theme))
             .ToList();
         var lightThemes = BetterDeathsThemeCatalog.All
-            .Where(IsLightPanelTheme)
+            .Where(theme => theme.Decoration == ThemeDecoration.None && IsLightPanelTheme(theme))
+            .ToList();
+        var styleThemes = BetterDeathsThemeCatalog.All
+            .Where(theme => theme.Decoration != ThemeDecoration.None)
             .ToList();
 
         DrawThemeFilter();
         ImGui.Spacing();
-        DrawThemeGroup(showLightThemePicker ? "Light" : "Dark", showLightThemePicker ? lightThemes : darkThemes);
+        if (showStyleThemePicker)
+        {
+            DrawThemeGroup("Style", styleThemes);
+        }
+        else
+        {
+            DrawThemeGroup(showLightThemePicker ? "Light" : "Dark", showLightThemePicker ? lightThemes : darkThemes);
+        }
         ImGui.Spacing();
         DrawSubtleSeparator();
         ImGui.Spacing();
@@ -17406,16 +17448,24 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawThemeFilter()
     {
-        var filterWidth = GetResponsiveSegmentWidth(2, 82.0f);
-        if (DrawSegmentedButton("Dark", "CustomizeThemeFilterDark", !showLightThemePicker, filterWidth))
+        var filterWidth = GetResponsiveSegmentWidth(3, 82.0f);
+        if (DrawSegmentedButton("Dark", "CustomizeThemeFilterDark", !showStyleThemePicker && !showLightThemePicker, filterWidth))
         {
             showLightThemePicker = false;
+            showStyleThemePicker = false;
         }
 
         ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X);
-        if (DrawSegmentedButton("Light", "CustomizeThemeFilterLight", showLightThemePicker, filterWidth))
+        if (DrawSegmentedButton("Light", "CustomizeThemeFilterLight", !showStyleThemePicker && showLightThemePicker, filterWidth))
         {
             showLightThemePicker = true;
+            showStyleThemePicker = false;
+        }
+
+        ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X);
+        if (DrawSegmentedButton("Style", "CustomizeThemeFilterStyle", showStyleThemePicker, filterWidth))
+        {
+            showStyleThemePicker = true;
         }
     }
 
@@ -17892,6 +17942,9 @@ public sealed partial class RecapWindow : Window, IDisposable
             new Vector2(end.X - innerPadding, end.Y - innerPadding),
             ImGui.GetColorU32(theme.ModernAccentColor),
             3.0f);
+        ThemeDecorationRenderer.DrawSwatch(
+            theme, position + new Vector2(innerPadding),
+            new Vector2(swatchSize - innerPadding * 2.0f, swatchSize - innerPadding * 2.0f - accentHeight));
         drawList.AddRect(
             position,
             end,
@@ -19885,6 +19938,17 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.47");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Added themed meter layouts across the existing palettes, plus Sakura and Confection styles.");
+        DrawWrappedBullet("Added optional animated header backgrounds and effect-strength controls.");
+        DrawWrappedBullet("Improved theme performance with cached custom palettes, lighter picker previews, and skipped off-screen effects.");
+        DrawWrappedBullet("Fixed DPS Meter name redaction for all captured players.");
+        DrawWrappedBullet("Added independent DPS Meter background-opacity and icon-size controls.");
+        DrawWrappedBullet("Disabled the native background-blur option on Better Deaths windows.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.46");
         ImGui.TextDisabled("Stable update.");
         DrawWrappedBullet("Replaced /bdwidget and /betterdeathswidget with /bdw to toggle the Death Widget.");

@@ -18,6 +18,7 @@ public abstract class ThemedWidgetWindow : Window, IDisposable
         : base(windowName)
     {
         Plugin = plugin;
+        AllowBackgroundBlur = false;
         Size = defaultSize;
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
@@ -32,13 +33,15 @@ public abstract class ThemedWidgetWindow : Window, IDisposable
     {
     }
 
+    protected virtual float BackgroundOpacity => Plugin.Configuration.CurrentPullWidgetBackgroundOpacity;
+
     public override void PreDraw()
     {
         ApplyScrollbarWindowFlag();
         var opacity = Math.Clamp(
-            Plugin.Configuration.CurrentPullWidgetBackgroundOpacity <= 0.0f
+            BackgroundOpacity <= 0.0f
                 ? Plugin.CurrentPullWidgetMaxBackgroundOpacity
-                : Plugin.Configuration.CurrentPullWidgetBackgroundOpacity,
+                : BackgroundOpacity,
             Plugin.CurrentPullWidgetMinBackgroundOpacity,
             Plugin.CurrentPullWidgetMaxBackgroundOpacity);
         ImGui.SetNextWindowBgAlpha(opacity);

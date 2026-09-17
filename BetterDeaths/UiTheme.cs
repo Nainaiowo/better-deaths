@@ -10,6 +10,10 @@ internal sealed class BetterDeathsUiTheme
 
     public required string Label { get; init; }
 
+    public ThemeDecoration Decoration { get; init; }
+
+    public WidgetSurfaceStyle WidgetSurface { get; init; }
+
     public required Vector4 DamageColor { get; init; }
 
     public required Vector4 HealColor { get; init; }
@@ -145,8 +149,9 @@ internal sealed class BetterDeathsUiTheme
     public required Vector4 WidgetResizeGripActiveColor { get; init; }
 }
 
-internal static class BetterDeathsThemeCatalog
+internal static partial class BetterDeathsThemeCatalog
 {
+    private static BetterDeathsUiTheme? cachedCustomTheme;
     private static readonly Vector4 LightThemeDamageColor = new(0.74f, 0.04f, 0.04f, 1.0f);
     private static readonly Vector4 LightThemeHealColor = new(0.02f, 0.46f, 0.20f, 1.0f);
 
@@ -930,6 +935,45 @@ internal static class BetterDeathsThemeCatalog
         barBackground: new Vector4(0.80f, 0.66f, 0.52f, 1.0f),
         barBorder: new Vector4(0.42f, 0.24f, 0.14f, 1.0f));
 
+    private static readonly BetterDeathsUiTheme SakuraTheme = CreateTheme(
+        BetterDeathsTheme.Sakura,
+        "Sakura",
+        shell: new Vector4(0.065f, 0.100f, 0.095f, 0.88f),
+        panel: new Vector4(0.105f, 0.145f, 0.135f, 0.92f),
+        panelAlt: new Vector4(0.190f, 0.130f, 0.155f, 0.94f),
+        border: new Vector4(0.40f, 0.26f, 0.33f, 1.0f),
+        accent: new Vector4(1.0f, 0.64f, 0.77f, 1.0f),
+        accentSoft: new Vector4(0.36f, 0.15f, 0.25f, 0.95f),
+        highlight: new Vector4(0.66f, 0.90f, 0.79f, 1.0f),
+        muted: new Vector4(0.80f, 0.73f, 0.77f, 1.0f),
+        decoration: ThemeDecoration.Sakura, widgetSurface: WidgetSurfaceStyle.Minimal);
+
+
+
+
+
+
+    private static readonly BetterDeathsUiTheme ConfectionTheme = CreateTheme(
+        BetterDeathsTheme.Confection, "Confection",
+        shell: new Vector4(0.98f, 0.91f, 0.95f, 0.96f),
+        panel: new Vector4(0.93f, 0.98f, 0.97f, 0.98f),
+        panelAlt: new Vector4(0.86f, 0.91f, 0.98f, 0.98f),
+        border: new Vector4(0.63f, 0.43f, 0.55f, 1),
+        accent: new Vector4(0.63f, 0.18f, 0.39f, 1),
+        accentSoft: new Vector4(0.95f, 0.73f, 0.84f, 1),
+        highlight: new Vector4(0.09f, 0.42f, 0.43f, 1),
+        muted: new Vector4(0.40f, 0.31f, 0.37f, 1), text: new Vector4(0.25f, 0.14f, 0.22f, 1),
+        damage: LightThemeDamageColor, heal: LightThemeHealColor, frameBorderSize: 1,
+        decoration: ThemeDecoration.Sweets, widgetSurface: WidgetSurfaceStyle.Confection);
+
+
+
+
+
+
+
+
+
     private static readonly BetterDeathsUiTheme[] Themes =
     [
         ClassicTheme,
@@ -964,6 +1008,8 @@ internal static class BetterDeathsThemeCatalog
         BananaTheme,
         HamtaroTheme,
         LemonadeTheme,
+        SakuraTheme,
+        ConfectionTheme,
     ];
 
     public static IReadOnlyList<BetterDeathsUiTheme> All => Themes;
@@ -981,10 +1027,10 @@ internal static class BetterDeathsThemeCatalog
         return ClassicTheme;
     }
 
-    public static BetterDeathsUiTheme GetTheme(Configuration configuration)
+    public static BetterDeathsUiTheme GetTheme(BetterDeathsTheme theme, CustomThemeConfiguration? customTheme)
     {
-        var baseTheme = GetTheme(configuration.Theme);
-        return configuration.CustomTheme is { Enabled: true, Initialized: true } customTheme
+        var baseTheme = GetTheme(theme);
+        return customTheme is { Enabled: true, Initialized: true }
             ? ApplyCustomTheme(baseTheme, customTheme)
             : baseTheme;
     }
@@ -1132,10 +1178,85 @@ internal static class BetterDeathsThemeCatalog
         var noticeButton = ToVector4(customTheme.NoticeButton, baseTheme.NoticeButtonColor);
         var noticeButtonHover = ToVector4(customTheme.NoticeButtonHover, baseTheme.NoticeButtonHoveredColor);
 
-        return new BetterDeathsUiTheme
+        // Match values, not mutable configuration references, so live edits invalidate immediately.
+        var cached = System.Threading.Volatile.Read(ref cachedCustomTheme);
+        if (cached is not null && cached.Id == baseTheme.Id &&
+            cached.DamageColor.Equals(damage) &&
+            cached.HealColor.Equals(heal) &&
+            cached.WarningColor.Equals(warning) &&
+            cached.LeadUpGoldColor.Equals(gold) &&
+            cached.SpamWarningColor.Equals(spamWarning) &&
+            cached.DisabledColor.Equals(disabled) &&
+            cached.UpdateBannerBgColor.Equals(updateBannerBg) &&
+            cached.UpdateBannerTextColor.Equals(updateBannerText) &&
+            cached.NoticeBorderColor.Equals(noticeBorder) &&
+            cached.NoticeTextColor.Equals(noticeText) &&
+            cached.NoticeButtonColor.Equals(noticeButton) &&
+            cached.NoticeButtonHoveredColor.Equals(noticeButtonHover) &&
+            cached.HpBarColor.Equals(hpBar) &&
+            cached.ShieldBarColor.Equals(shieldBar) &&
+            cached.BarBackgroundColor.Equals(barBackground) &&
+            cached.BarBorderColor.Equals(barBorder) &&
+            cached.OverkillColor.Equals(overkill) &&
+            cached.ModernShellColor.Equals(shell) &&
+            cached.ModernPanelColor.Equals(panel) &&
+            cached.ModernPanelAltColor.Equals(panelAlt) &&
+            cached.ModernPanelBorderColor.Equals(border) &&
+            cached.ModernAccentColor.Equals(accent) &&
+            cached.ModernAccentSoftColor.Equals(accentSoft) &&
+            cached.ModernMutedTextColor.Equals(muted) &&
+            cached.ModernTextColor.Equals(text) &&
+            cached.ModernDividerColor.Equals(divider) &&
+            cached.ModernFrameColor.Equals(frame) &&
+            cached.ModernFrameHoveredColor.Equals(frameHovered) &&
+            cached.ModernButtonHoveredColor.Equals(buttonHover) &&
+            cached.ModernNavButtonColor.Equals(button) &&
+            cached.ModernNavButtonHoveredColor.Equals(buttonHover) &&
+            cached.ModernNavButtonSelectedColor.Equals(selectedButton) &&
+            cached.ModernNavButtonSelectedHoveredColor.Equals(selectedButtonHover) &&
+            cached.ModernNavButtonActiveColor.Equals(buttonActive) &&
+            cached.ModernButtonTextColor.Equals(buttonText) &&
+            cached.ModernSelectedButtonTextColor.Equals(selectedButtonText) &&
+            cached.ModernPopupBgColor.Equals(popup) &&
+            cached.ModernCheckMarkColor.Equals(checkboxCheckMark) &&
+            cached.CheckboxFrameColor.Equals(checkboxFrame) &&
+            cached.CheckboxFrameHoveredColor.Equals(checkboxFrameHovered) &&
+            cached.CheckboxFrameActiveColor.Equals(checkboxFrameActive) &&
+            cached.CheckboxBorderColor.Equals(checkboxBorder) &&
+            cached.ModernSliderGrabColor.Equals(sliderGrab) &&
+            cached.ModernSliderGrabActiveColor.Equals(sliderGrabActive) &&
+            cached.ModernHeaderColor.Equals(header) &&
+            cached.ModernHeaderHoveredColor.Equals(headerHover) &&
+            cached.ModernHeaderActiveColor.Equals(headerActive) &&
+            cached.TableRowAltColor.Equals(tableRowAlt) &&
+            cached.FocusedRowColor.Equals(focusedRow) &&
+            cached.FocusedRowAccentColor.Equals(focusedRowAccent) &&
+            cached.TimelineSelectedRowColor.Equals(timelineSelected) &&
+            cached.TimelinePressedRowColor.Equals(timelinePressed) &&
+            cached.ScrollbarBackgroundColor.Equals(scrollbarBackground) &&
+            cached.ScrollbarGrabColor.Equals(scrollbarGrab) &&
+            cached.ScrollbarGrabHoveredColor.Equals(scrollbarGrabHover) &&
+            cached.ScrollbarGrabActiveColor.Equals(scrollbarGrabActive) &&
+            cached.ChangelogTabColor.Equals(changelogTab) &&
+            cached.ChangelogTabHoveredColor.Equals(changelogTabHover) &&
+            cached.ChangelogTabActiveColor.Equals(changelogTabActive) &&
+            cached.WidgetWindowBackgroundColor.Equals(widgetWindow) &&
+            cached.WidgetTitleBackgroundColor.Equals(widgetTitle) &&
+            cached.WidgetTitleActiveBackgroundColor.Equals(widgetTitleActive) &&
+            cached.WidgetBorderColor.Equals(widgetBorder) &&
+            cached.WidgetResizeGripColor.Equals(widgetResizeGrip) &&
+            cached.WidgetResizeGripHoveredColor.Equals(widgetResizeGripHover) &&
+            cached.WidgetResizeGripActiveColor.Equals(widgetResizeGripActive))
+        {
+            return cached;
+        }
+
+        var resolved = new BetterDeathsUiTheme
         {
             Id = baseTheme.Id,
             Label = $"{baseTheme.Label} Custom",
+            Decoration = baseTheme.Decoration,
+            WidgetSurface = baseTheme.WidgetSurface,
             DamageColor = damage,
             HealColor = heal,
             WarningColor = warning,
@@ -1204,6 +1325,8 @@ internal static class BetterDeathsThemeCatalog
             WidgetResizeGripHoveredColor = widgetResizeGripHover,
             WidgetResizeGripActiveColor = widgetResizeGripActive,
         };
+        System.Threading.Volatile.Write(ref cachedCustomTheme, resolved);
+        return resolved;
     }
 
     private static ThemeColorValue ToThemeColorValue(Vector4 color)
@@ -1354,8 +1477,16 @@ internal static class BetterDeathsThemeCatalog
         float frameBorderSize = 0.0f,
         Vector4? divider = null,
         Vector4? barBackground = null,
-        Vector4? barBorder = null)
+        Vector4? barBorder = null,
+        ThemeDecoration decoration = ThemeDecoration.None,
+        WidgetSurfaceStyle widgetSurface = WidgetSurfaceStyle.Standard)
     {
+        if (decoration != ThemeDecoration.None)
+        {
+            shell = WidgetSurfacePolicy.GetQuietSurface(shell);
+            panel = WidgetSurfacePolicy.GetQuietSurface(panel);
+            panelAlt = WidgetSurfacePolicy.GetQuietSurface(panelAlt);
+        }
         var dangerColor = danger ?? new Vector4(1.0f, 0.25f, 0.20f, 1.0f);
         var textColor = text ?? new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
         var frameColor = frame ?? panelAlt;
@@ -1448,6 +1579,8 @@ internal static class BetterDeathsThemeCatalog
         {
             Id = id,
             Label = label,
+            Decoration = decoration,
+            WidgetSurface = widgetSurface,
             DamageColor = damageColor,
             HealColor = healColor,
             WarningColor = warningColor,
@@ -1509,9 +1642,9 @@ internal static class BetterDeathsThemeCatalog
             ChangelogTabHoveredColor = border with { W = 1.0f },
             ChangelogTabActiveColor = accentSoft with { W = 1.0f },
             WidgetWindowBackgroundColor = shell with { W = 1.0f },
-            WidgetTitleBackgroundColor = panel with { W = 1.0f },
-            WidgetTitleActiveBackgroundColor = panelAlt with { W = 1.0f },
-            WidgetBorderColor = border,
+            WidgetTitleBackgroundColor = (decoration == ThemeDecoration.None ? panel : BlendColors(shell, panelAlt, 0.35f)) with { W = 1.0f },
+            WidgetTitleActiveBackgroundColor = (decoration == ThemeDecoration.None ? panelAlt : BlendColors(shell, panelAlt, 0.5f)) with { W = 1.0f },
+            WidgetBorderColor = decoration == ThemeDecoration.None ? border : border with { W = 0.40f },
             WidgetResizeGripColor = accent with { W = 0.30f },
             WidgetResizeGripHoveredColor = accent with { W = 0.55f },
             WidgetResizeGripActiveColor = accent with { W = 0.75f },

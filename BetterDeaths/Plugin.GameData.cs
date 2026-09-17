@@ -353,6 +353,34 @@ public sealed partial class Plugin
         return isDebuff;
     }
 
+    private readonly Dictionary<uint, byte> classJobDisplayRoleCache = [];
+
+    internal byte GetClassJobDisplayRole(uint classJobId)
+    {
+        if (classJobId == 0)
+        {
+            return 0;
+        }
+
+        if (classJobDisplayRoleCache.TryGetValue(classJobId, out var cachedRole))
+        {
+            return cachedRole;
+        }
+
+        byte role = 0;
+        try
+        {
+            role = DataManager.GetExcelSheet<ClassJob>()?.GetRowOrDefault(classJobId)?.Role ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not load display role for {ClassJobId}.", classJobId);
+        }
+
+        classJobDisplayRoleCache[classJobId] = role;
+        return role;
+    }
+
     private string GetClassJobName(uint classJobId)
     {
         if (classJobNameCache.TryGetValue(classJobId, out var cachedName))

@@ -1,11 +1,51 @@
 namespace BetterDeaths;
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using BetterDeaths.DamageParsing;
 
 internal static class DamageMeterDisplayPolicy
 {
     private static readonly string[] Suffixes = ["", "k", "m", "b", "t"];
+
+    public static string FormatPlayerName(DamageActorIdentity actor, IReadOnlyList<DamageSourceSummary> sources,
+        bool redact)
+    {
+        if (!redact || !IsPlayerRow(actor))
+        {
+            return actor.Name;
+        }
+
+        // Number by captured identity, not damage rank or the separate death-review roster.
+        var number = 1;
+        foreach (var source in sources)
+        {
+            var other = source.Source;
+            if (IsPlayerRow(other) && (other.EntityId < actor.EntityId ||
+                (other.EntityId == actor.EntityId &&
+                    string.Compare(other.Name, actor.Name, StringComparison.OrdinalIgnoreCase) < 0)))
+            {
+                number++;
+            }
+        }
+
+        return $"Player {number}";
+    }
+
+    private static bool IsPlayerRow(DamageActorIdentity actor) =>
+        !actor.IsLimitBreak && (actor.IsPlayer || actor.IsPartyMember);
+
+    public static float GetWidgetBackgroundOpacity(float? opacity, float legacyOpacity)
+    {
+        var value = opacity ?? legacyOpacity;
+        return Math.Clamp(float.IsFinite(value) && value > 0.0f ? value : 1.0f, 0.35f, 1.0f);
+    }
+
+    public static float GetWidgetIconSize(float size)
+    {
+        return Math.Clamp(float.IsFinite(size) && size > 0.0f ? size : 20.0f, 12.0f, 32.0f);
+    }
 
     public static string FormatNumber(double value, bool concise, IFormatProvider? provider = null)
     {

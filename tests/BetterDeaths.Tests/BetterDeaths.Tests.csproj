@@ -83,6 +83,17 @@
     <Compile Include="../../BetterDeaths/ReplaySampleSelection.cs" Link="ReplaySampleSelection.cs" />
     <Compile Include="../../BetterDeaths/ReplayStatusPanelPolicy.cs" Link="ReplayStatusPanelPolicy.cs" />
     <Compile Include="../../BetterDeaths/ThemeIdentityPolicy.cs" Link="ThemeIdentityPolicy.cs" />
+    <Compile Include="../../BetterDeaths/BetterDeathsTheme.cs" Link="BetterDeathsTheme.cs" />
+    <Compile Include="../../BetterDeaths/CustomThemeConfiguration.cs" Link="CustomThemeConfiguration.cs" />
+    <Compile Include="../../BetterDeaths/UiTheme.cs" Link="UiTheme.cs" />
+    <Compile Include="../../BetterDeaths/ThemeDecoration.cs" Link="ThemeDecoration.cs" />
+    <Compile Include="../../BetterDeaths/ThemeOrnamentLibrary.cs" Link="ThemeOrnamentLibrary.cs" />
+    <Compile Include="../../BetterDeaths/ThemeMotionPolicy.cs" Link="ThemeMotionPolicy.cs" />
+    <Compile Include="../../BetterDeaths/WidgetSurfacePolicy.cs" Link="WidgetSurfacePolicy.cs" />
+    <Compile Include="../../BetterDeaths/ConfectionWidgetStyle.cs" Link="ConfectionWidgetStyle.cs" />
+    <Compile Include="../../BetterDeaths/SakuraWidgetStyle.cs" Link="SakuraWidgetStyle.cs" />
+    <Compile Include="../../BetterDeaths/MeterThemeStyle.cs" Link="MeterThemeStyle.cs" />
+    <Compile Include="../../BetterDeaths/MeterHeaderMotionPolicy.cs" Link="MeterHeaderMotionPolicy.cs" />
     <Compile Include="../../BetterDeaths/WhatIfMitigationRules.cs" Link="WhatIfMitigationRules.cs" />
     <Compile Include="../../BetterDeaths/WtfDig/FflogsModels.cs" Link="WtfDig/FflogsModels.cs" />
     <Compile Include="../../BetterDeaths/WtfDig/FflogsClient.cs" Link="WtfDig/FflogsClient.cs" />

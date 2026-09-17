@@ -16,6 +16,9 @@ public sealed class DamageMeterWidgetWindow : ThemedWidgetWindow
         this.recapWindow = recapWindow;
     }
 
+    protected override float BackgroundOpacity => DamageMeterDisplayPolicy.GetWidgetBackgroundOpacity(
+        Plugin.Configuration.DamageMeterWidgetBackgroundOpacity, Plugin.Configuration.CurrentPullWidgetBackgroundOpacity);
+
     public override void Draw()
     {
         recapWindow.DrawDamageMeterWidgetContent();

@@ -36,6 +36,7 @@ public sealed class DeathRecapPopupWindow : Window, IDisposable
     {
         this.plugin = plugin;
         this.recapWindow = recapWindow;
+        AllowBackgroundBlur = false;
 
         Size = DefaultSize;
         SizeCondition = ImGuiCond.FirstUseEver;
