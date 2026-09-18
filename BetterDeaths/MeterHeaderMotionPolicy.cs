@@ -7,6 +7,7 @@ internal enum MeterBackgroundKind
 {
     Satin, Petals, Leaves, Heat, Ribbons, Liquid, Moonlight, Daylight,
     Marble, Clouds, Fabric, Depth, Brushed, Fizz, Citrus, Weave, Candy,
+    Bubblegum, Wisteria, Hearts, Spice, Mint, Peach, Grapes, Cotton, Banana,
 }
 
 internal readonly record struct MeterBackgroundParticle(Vector2 Center, float Radius, float Rotation, float Opacity);
@@ -34,6 +35,38 @@ internal static class MeterHeaderMotionPolicy
 
     private static float Fraction(float value) => value - MathF.Floor(value);
 
+    public static int MotifCount(Vector2 size, float scale, bool thumbnail) =>
+        !ValidSize(size) ? 0 : thumbnail || size.X < 360 * NormalizeScale(scale) ? 1 : 3;
+
+    public static MeterBackgroundParticle Motif(BetterDeathsTheme theme, int index, Vector2 size, float phase, float scale)
+    {
+        if (!ValidSize(size))
+            return default;
+        phase = float.IsFinite(phase) ? Fraction(phase) : 0;
+        scale = NormalizeScale(scale);
+        index = Math.Clamp(index, 0, 2);
+        var angle = (phase + index * .27f + (int)theme * .031f) * MathF.Tau;
+        var radius = MathF.Min(30 * scale, MathF.Min(size.Y * .29f, size.X * .095f));
+        var narrow = size.X < 360 * scale;
+        var x = narrow ? .55f : .46f + index * .16f;
+        return new(new Vector2(size.X * x + MathF.Sin(angle) * radius * .16f,
+                size.Y * (.48f + (index % 2) * .15f) + MathF.Cos(angle) * radius * .12f),
+            radius, MathF.Sin(angle) * .16f + (index - 1) * .23f, narrow ? .55f : 1);
+    }
+
+    public static float DetailVisibility(Vector2 center, Vector2 size, bool thumbnail)
+    {
+        if (!ValidSize(size) || !float.IsFinite(center.X) || !float.IsFinite(center.Y))
+            return 0;
+        if (thumbnail || size.X < size.Y * 2)
+            return 1;
+        // Keep the heading and both metric columns quiet without drawing boxes behind text.
+        var x = center.X / size.X;
+        var left = Math.Clamp((x - .22f) / .15f, 0, 1);
+        var right = Math.Clamp((.94f - x) / .10f, 0, 1);
+        return .18f + .82f * left * right;
+    }
+
     // Analytic, periodic paths: no particle state, random generator, or per-frame collections.
     public static MeterBackgroundParticle Particle(BetterDeathsTheme theme, int index, Vector2 size, float phase, float scale)
     {
@@ -48,7 +81,7 @@ internal static class MeterHeaderMotionPolicy
         var angle = (phase + seed) * MathF.Tau;
         x = Math.Clamp(x + MathF.Sin(angle) * .035f, .015f, .985f);
         var kind = MeterThemeStyle.Profile(theme).Background;
-        var rising = kind is MeterBackgroundKind.Fizz or MeterBackgroundKind.Citrus or MeterBackgroundKind.Heat;
+        var rising = kind is MeterBackgroundKind.Fizz or MeterBackgroundKind.Citrus or MeterBackgroundKind.Heat or MeterBackgroundKind.Spice or MeterBackgroundKind.Liquid or MeterBackgroundKind.Bubblegum;
         var y = rising ? 1 - progress : progress;
         var edge = MathF.Abs(x - .5f) * 2;
         var fade = MathF.Min(1, MathF.Min(progress, 1 - progress) * 10);

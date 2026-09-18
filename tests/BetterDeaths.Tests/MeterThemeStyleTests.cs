@@ -157,8 +157,62 @@ public sealed class MeterThemeStyleTests
             Assert.Equal(0, MeterHeaderMotionPolicy.Phase(value, true, false));
             Assert.False(MeterHeaderMotionPolicy.ValidSize(new Vector2(value, 110)));
             Assert.Equal(default, MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sakura, 0, new Vector2(value, 110), 0, 1));
+            Assert.Equal(default, MeterHeaderMotionPolicy.Motif(BetterDeathsTheme.Sakura, 0, new Vector2(value, 110), 0, 1));
+            Assert.Equal(0, MeterHeaderMotionPolicy.MotifCount(new Vector2(value, 110), 1, false));
+            Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(Vector2.Zero, new Vector2(value, 110), false));
             Assert.True(float.IsFinite(MeterThemeStyle.Layout(value, value, value, value).TextWidth));
         }
+    }
+
+    [Theory]
+    [InlineData(BetterDeathsTheme.Sakura, (int)MeterBackgroundKind.Petals)]
+    [InlineData(BetterDeathsTheme.Soda, (int)MeterBackgroundKind.Fizz)]
+    [InlineData(BetterDeathsTheme.Pepsi, (int)MeterBackgroundKind.Fizz)]
+    [InlineData(BetterDeathsTheme.Confection, (int)MeterBackgroundKind.Candy)]
+    [InlineData(BetterDeathsTheme.Fanta, (int)MeterBackgroundKind.Citrus)]
+    [InlineData(BetterDeathsTheme.Wisteria, (int)MeterBackgroundKind.Wisteria)]
+    [InlineData(BetterDeathsTheme.Lavender, (int)MeterBackgroundKind.Liquid)]
+    [InlineData(BetterDeathsTheme.Mint, (int)MeterBackgroundKind.Mint)]
+    [InlineData(BetterDeathsTheme.Peach, (int)MeterBackgroundKind.Peach)]
+    [InlineData(BetterDeathsTheme.Grape, (int)MeterBackgroundKind.Grapes)]
+    [InlineData(BetterDeathsTheme.Cloud, (int)MeterBackgroundKind.Fabric)]
+    [InlineData(BetterDeathsTheme.Sky, (int)MeterBackgroundKind.Clouds)]
+    public void ThemeScenesReflectTheirSubject(BetterDeathsTheme theme, int kind) =>
+        Assert.Equal((MeterBackgroundKind)kind, MeterThemeStyle.Profile(theme).Background);
+
+    [Theory]
+    [MemberData(nameof(Themes))]
+    public void MotifsRemainBoundedPeriodicAndResponsive(BetterDeathsTheme theme)
+    {
+        foreach (var size in new[] { new Vector2(32, 24), new Vector2(240, 210), new Vector2(780, 110), new Vector2(3840, 220) })
+        foreach (var scale in new[] { .5f, 1, 3 })
+        for (var i = 0; i < 3; i++)
+        {
+            var p = MeterHeaderMotionPolicy.Motif(theme, i, size, .25f, scale);
+            Assert.Equal(p, MeterHeaderMotionPolicy.Motif(theme, i, size, 1.25f, scale));
+            Assert.InRange(p.Center.X, p.Radius, size.X - p.Radius);
+            Assert.InRange(p.Center.Y, p.Radius, size.Y - p.Radius);
+            Assert.InRange(p.Radius, 0, 30 * scale);
+            Assert.InRange(p.Opacity, 0, 1);
+            Assert.InRange(MeterHeaderMotionPolicy.DetailVisibility(p.Center, size, false), .18f, 1);
+            Assert.Equal(1, MeterHeaderMotionPolicy.MotifCount(size, scale, true));
+            Assert.InRange(MeterHeaderMotionPolicy.MotifCount(size, scale, false), 1, 3);
+            var before = MeterHeaderMotionPolicy.Motif(theme, i, size, .99999f, scale);
+            var after = MeterHeaderMotionPolicy.Motif(theme, i, size, 0, scale);
+            Assert.True(Vector2.Distance(before.Center, after.Center) < .01f);
+        }
+        Assert.Equal(1, MeterHeaderMotionPolicy.MotifCount(new(300, 110), 1, false));
+        Assert.Equal(3, MeterHeaderMotionPolicy.MotifCount(new(780, 110), 1, false));
+    }
+
+    [Fact]
+    public void HeadingAndTimerHaveLessBackgroundDetail()
+    {
+        var size = new Vector2(780, 110);
+        var middle = MeterHeaderMotionPolicy.DetailVisibility(new(450, 55), size, false);
+        Assert.True(MeterHeaderMotionPolicy.DetailVisibility(new(50, 55), size, false) < middle);
+        Assert.True(MeterHeaderMotionPolicy.DetailVisibility(new(750, 55), size, false) < middle);
+        Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(new(float.NaN), size, false));
     }
 
     [Fact]
@@ -173,6 +227,11 @@ public sealed class MeterThemeStyleTests
                 _ = MeterThemeStyle.Profile(theme);
                 _ = MeterThemeStyle.Row(theme, Vector4.One, Vector4.Zero, 3, i, false);
                 var phase = MeterHeaderMotionPolicy.Phase(12, true, false);
+                for (var index = 0; index < MeterHeaderMotionPolicy.MotifCount(new(780, 110), 1, false); index++)
+                {
+                    var motif = MeterHeaderMotionPolicy.Motif(theme, index, new(780, 110), phase, 1);
+                    _ = MeterHeaderMotionPolicy.DetailVisibility(motif.Center, new(780, 110), false);
+                }
                 for (var index = 0; index < MeterHeaderMotionPolicy.ParticleCount; index++)
                     _ = MeterHeaderMotionPolicy.Particle(theme, index, new Vector2(780, 110), phase, 1);
                 for (var index = 0; index <= MeterHeaderMotionPolicy.Segments; index++)

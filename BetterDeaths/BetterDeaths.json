@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "Themes and Widget Customization (Testing)\n- Added themed meter layouts across the existing palettes, plus Sakura and Confection styles.\n- Added optional animated header backgrounds and effect-strength controls.\n- Improved theme performance with cached custom palettes, lighter picker previews, and skipped off-screen effects.\n- Fixed DPS Meter name redaction for all captured players.\n- Added independent DPS Meter background-opacity and icon-size controls.\n- Disabled the native background-blur option on Better Deaths windows.",
+  "Changelog": "Distinct Theme Backgrounds (Testing)\n- Reworked DPS Meter headers with theme-specific details, including drifting Sakura petals, soda cans and fizz, floating sweets, clouds, and citrus slices.\n- Preserved existing colors, data rows, animation controls, and reduced-motion support.\n- Adjusted decoration placement for narrow meter windows.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",
