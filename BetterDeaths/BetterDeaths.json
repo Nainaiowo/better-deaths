@@ -5,7 +5,7 @@
   "DownloadCount": 7470,
   "Punchline": "A clearer party death review.",
   "Description": "Records party deaths with pull grouping, fatal events, active statuses, and recent action timelines.",
-  "Changelog": "DPS Meter Role Colors and Death Diagnostics (Testing)\n- Color-coded DPS Meter player rows by role with alternating shades and quieter ability rows.\n- Refined themed meter header motion and kept the timer readable.\n- Added a per-death diagnostic code in Review and tightened player identity checks for death detection.\n- Improved Black Hole tether analysis when a blast does not hit a player.",
+  "Changelog": "Themed Widgets and Review Improvements\n- Added themed DPS Meter layouts and optional animated backgrounds with adjustable effect visibility and density.\n- Made the meter header more compact and color-coded player rows by role.\n- Improved name redaction for all captured players and added separate DPS Meter opacity and icon-size controls.\n- Added per-death diagnostic codes and strengthened player identity checks to reduce false deaths.\n- Improved Black Hole tether analysis when a blast does not hit a player.",
   "RepoUrl": "https://github.com/Nainaiowo/better-deaths",
   "IconUrl": "https://raw.githubusercontent.com/Nainaiowo/better-deaths/main/assets/icon.png",
   "ApplicableVersion": "any",

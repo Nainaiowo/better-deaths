@@ -103,6 +103,18 @@ public sealed class ThemeMotionPolicyTests
     }
 
     [Fact]
+    public void StyleThemeDensityRisesWithStrengthWithoutExceedingItsBudget()
+    {
+        var size = new Vector2(20_000);
+        Assert.Equal(1, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, .1f, false));
+        Assert.Equal(4, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, .55f, false));
+        Assert.Equal(6, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, 1, false));
+        Assert.Equal(1, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, .1f, true));
+        Assert.Equal(2, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, .55f, true));
+        Assert.Equal(3, ThemeMotionPolicy.GetCount(ThemeDecoration.Lanterns, size, 1, true));
+    }
+
+    [Fact]
     public void MotionAndGeometryLookupsAllocateNothingPerFrame()
     {
         var size = new Vector2(700, 400);

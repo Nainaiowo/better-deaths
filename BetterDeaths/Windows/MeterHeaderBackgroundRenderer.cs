@@ -36,35 +36,37 @@ internal static partial class MeterHeaderBackgroundRenderer
             case MeterBackgroundKind.Fabric:
             case MeterBackgroundKind.Bubblegum:
             case MeterBackgroundKind.Candy:
-                DrawBands(draw, theme, position, size, accent, secondary, phase, alpha, thumbnail);
+                DrawBands(draw, theme, position, size, accent, secondary, phase, alpha, strength, thumbnail);
                 break;
             case MeterBackgroundKind.Marble:
             case MeterBackgroundKind.Brushed:
-                DrawMineral(draw, position, size, accent, secondary, phase, alpha, kind, thumbnail);
+                DrawMineral(draw, position, size, accent, secondary, phase, alpha, strength, kind, thumbnail);
                 break;
             case MeterBackgroundKind.Daylight:
-                DrawDaylight(draw, position, size, accent, phase, alpha, thumbnail);
+                DrawDaylight(draw, position, size, accent, phase, alpha, strength, thumbnail);
                 break;
         }
 
-        DrawParticles(draw, theme, kind, position, size, accent, secondary, phase, alpha, scale, thumbnail);
+        DrawParticles(draw, theme, kind, position, size, accent, secondary, phase, alpha, strength, scale, thumbnail);
         draw.PopClipRect();
     }
 
     private static void DrawParticles(ImDrawListPtr draw, BetterDeathsTheme theme, MeterBackgroundKind kind,
-        Vector2 position, Vector2 size, Vector4 accent, Vector4 secondary, float phase, float alpha, float scale, bool thumbnail)
+        Vector2 position, Vector2 size, Vector4 accent, Vector4 secondary, float phase, float alpha, float strength, float scale, bool thumbnail)
     {
         if (kind is MeterBackgroundKind.Satin or MeterBackgroundKind.Ribbons or MeterBackgroundKind.Brushed or
             MeterBackgroundKind.Marble or MeterBackgroundKind.Fabric or MeterBackgroundKind.Daylight)
             return;
-        var count = thumbnail ? 2 : size.X < 7 * size.Y ? 3 : MeterHeaderMotionPolicy.ParticleCount;
+        var maximum = thumbnail ? 2 : size.X < 7 * size.Y ? 3 : MeterHeaderMotionPolicy.ParticleCount;
+        var count = MeterHeaderMotionPolicy.DensityCount(maximum, strength);
         for (var index = 0; index < count; index++)
         {
             var particle = MeterHeaderMotionPolicy.Particle(theme, thumbnail ? index * 3 : index, size, phase, scale);
             var visibility = MeterHeaderMotionPolicy.DetailVisibility(particle.Center, size, thumbnail);
             var ink = new TextureInk(draw, position + particle.Center, particle.Radius, particle.Rotation,
                 index % 3 == 0 ? secondary : accent, accent,
-                MathF.Min(1, alpha * particle.Opacity * visibility * 1.4f), thumbnail);
+                MathF.Min(1, alpha * particle.Opacity * visibility * 1.4f) *
+                    MeterHeaderMotionPolicy.DensityWeight(index, maximum, strength), thumbnail);
             switch (kind)
             {
                 case MeterBackgroundKind.Petals:
@@ -130,35 +132,39 @@ internal static partial class MeterHeaderBackgroundRenderer
     }
 
     private static void DrawDaylight(ImDrawListPtr draw, Vector2 position, Vector2 size,
-        Vector4 accent, float phase, float alpha, bool thumbnail)
+        Vector4 accent, float phase, float alpha, float strength, bool thumbnail)
     {
-        var count = thumbnail ? 2 : 5;
+        var maximum = thumbnail ? 2 : 5;
+        var count = MeterHeaderMotionPolicy.DensityCount(maximum, strength);
         var startX = size.X < 7 * size.Y ? .76f : .3f;
         var span = size.X < 7 * size.Y ? .17f : .48f;
         for (var i = 0; i < count; i++)
         {
-            var x = position.X + size.X * (startX + span * i / count);
+            var x = position.X + size.X * (startX + span * i / maximum);
             var shimmer = .5f + .5f * MathF.Sin((phase * (1 + i % 3) + i * .27f) * MathF.Tau);
             draw.AddLine(new Vector2(x, position.Y + size.Y * .78f),
                 new Vector2(x + size.Y * .09f, position.Y + size.Y),
-                ImGui.GetColorU32(accent with { W = alpha * (.08f + shimmer * .1f) }), 1);
+                ImGui.GetColorU32(accent with { W = alpha * (.08f + shimmer * .1f) *
+                    MeterHeaderMotionPolicy.DensityWeight(i, maximum, strength) }), 1);
         }
     }
 
     private static void DrawBands(ImDrawListPtr draw, BetterDeathsTheme theme, Vector2 position, Vector2 size,
-        Vector4 accent, Vector4 secondary, float phase, float alpha, bool thumbnail)
+        Vector4 accent, Vector4 secondary, float phase, float alpha, float strength, bool thumbnail)
     {
         var kind = MeterThemeStyle.Profile(theme).Background;
         var fabric = kind is MeterBackgroundKind.Satin or MeterBackgroundKind.Ribbons or MeterBackgroundKind.Fabric or MeterBackgroundKind.Candy;
         var segments = thumbnail ? 5 : 24;
-        var lanes = thumbnail ? 1 : fabric ? 2 : 3;
+        var maximum = thumbnail ? 1 : fabric ? 2 : 3;
+        var lanes = MeterHeaderMotionPolicy.DensityCount(maximum, strength);
         var narrow = size.X < 7 * size.Y;
         var startX = size.X * (narrow ? .72f : .28f);
         var bandSize = new Vector2(size.X * (narrow ? .24f : .54f), size.Y);
         for (var lane = 0; lane < lanes; lane++)
         {
             var color = lane % 2 == 0 ? accent : secondary;
-            var line = ImGui.GetColorU32(color with { W = alpha * (fabric ? .32f : .26f) });
+            var line = ImGui.GetColorU32(color with { W = alpha * (fabric ? .32f : .26f) *
+                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength) });
             var previous = position + new Vector2(startX, 0) + MeterHeaderMotionPolicy.Contour(theme, bandSize, lane, 0, phase, segments);
             for (var segment = 1; segment <= segments; segment++)
             {
@@ -170,17 +176,19 @@ internal static partial class MeterHeaderBackgroundRenderer
     }
 
     private static void DrawMineral(ImDrawListPtr draw, Vector2 position, Vector2 size, Vector4 accent,
-        Vector4 secondary, float phase, float alpha, MeterBackgroundKind kind, bool thumbnail)
+        Vector4 secondary, float phase, float alpha, float strength, MeterBackgroundKind kind, bool thumbnail)
     {
         var narrow = size.X < 7 * size.Y;
         draw.PushClipRect(position + new Vector2(size.X * (narrow ? .7f : .25f), 0),
             position + new Vector2(size.X * (narrow ? .98f : .86f), size.Y), true);
-        var count = thumbnail ? 2 : 6;
+        var maximum = thumbnail ? 2 : 6;
+        var count = MeterHeaderMotionPolicy.DensityCount(maximum, strength);
         for (var lane = 0; lane < count; lane++)
         {
             var x = size.X * (.3f + lane * .13f);
             var previous = position + new Vector2(x, 0);
-            var color = ImGui.GetColorU32((lane % 2 == 0 ? accent : secondary) with { W = alpha * .24f });
+            var color = ImGui.GetColorU32((lane % 2 == 0 ? accent : secondary) with { W = alpha * .24f *
+                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength) });
             var steps = thumbnail ? 4 : 12;
             for (var step = 1; step <= steps; step++)
             {

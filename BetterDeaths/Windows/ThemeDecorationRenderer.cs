@@ -14,9 +14,9 @@ internal static class ThemeDecorationRenderer
         // Main-window accents stay at the edges; the meter has its own clipped header background.
         var lane = new Vector2(MathF.Min(30, size.X * .05f), size.Y);
         MeterHeaderBackgroundRenderer.Draw(theme.Id, position, lane, theme.ModernAccentColor, theme.LeadUpGoldColor,
-            animated, strength * .2f, opacity);
+            animated, strength, opacity * .2f);
         MeterHeaderBackgroundRenderer.Draw(theme.Id, position + new Vector2(size.X - lane.X, 0), lane,
-            theme.ModernAccentColor, theme.LeadUpGoldColor, animated, strength * .2f, opacity);
+            theme.ModernAccentColor, theme.LeadUpGoldColor, animated, strength, opacity * .2f);
     }
 
     public static void DrawSwatch(BetterDeathsUiTheme theme, Vector2 position, Vector2 size) =>

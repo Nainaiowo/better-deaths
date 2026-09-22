@@ -55,7 +55,7 @@ public sealed partial class RecapWindow
             configuration.StyleThemeEffectStrength = strength;
         if (ImGui.IsItemDeactivatedAfterEdit())
             plugin.SaveConfiguration();
-        DrawSettingsTooltip("Controls the header background details. Zero hides the effects.");
+        DrawSettingsTooltip("Controls the visibility and density of theme details. Zero hides the effects.");
 
         var size = new Vector2(MathF.Max(1, ImGui.GetContentRegionAvail().X), 72);
         var position = ImGui.GetCursorScreenPos();

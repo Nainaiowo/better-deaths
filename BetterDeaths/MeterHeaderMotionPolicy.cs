@@ -33,6 +33,19 @@ internal static class MeterHeaderMotionPolicy
 
     public static float NormalizeScale(float scale) => float.IsFinite(scale) ? Math.Clamp(scale, .5f, 3) : 1;
 
+    public static int DensityCount(int maximum, float strength)
+    {
+        maximum = Math.Clamp(maximum, 0, ParticleCount);
+        return (int)MathF.Ceiling(maximum * ThemeMotionPolicy.NormalizeStrength(strength));
+    }
+
+    public static float DensityWeight(int index, int maximum, float strength)
+    {
+        maximum = Math.Clamp(maximum, 0, ParticleCount);
+        return index < 0 || index >= maximum ? 0 :
+            Math.Clamp(maximum * ThemeMotionPolicy.NormalizeStrength(strength) - index, 0, 1);
+    }
+
     private static float Fraction(float value) => value - MathF.Floor(value);
 
     public static float DetailVisibility(Vector2 center, Vector2 size, bool thumbnail)

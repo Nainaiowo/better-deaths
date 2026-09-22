@@ -29,7 +29,8 @@ internal static class ThemeMotionPolicy
             !float.IsFinite(size.X) || !float.IsFinite(size.Y) || size.X < 32 || size.Y < 24)
             return 0;
         var area = Math.Min((double)size.X * size.Y, 1_000_000);
-        return Math.Clamp((int)(area / 120_000) + 2, 2, compact ? 3 : MaxParticles);
+        var maximum = Math.Clamp((int)(area / 120_000) + 2, 2, compact ? 3 : MaxParticles);
+        return (int)MathF.Ceiling(maximum * NormalizeStrength(strength));
     }
 
     public static ThemeParticlePose Sample(ThemeDecoration decoration, int index, Vector2 size, double seconds, bool animated, float uiScale = 1)

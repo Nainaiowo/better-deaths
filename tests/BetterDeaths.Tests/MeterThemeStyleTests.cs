@@ -132,6 +132,33 @@ public sealed class MeterThemeStyleTests
     }
 
     [Fact]
+    public void EffectStrengthIncreasesDetailDensityWithinExistingCaps()
+    {
+        foreach (var maximum in new[] { 1, 2, 3, 5, 6, MeterHeaderMotionPolicy.ParticleCount })
+        {
+            Assert.Equal(0, MeterHeaderMotionPolicy.DensityCount(maximum, 0));
+            Assert.Equal(maximum, MeterHeaderMotionPolicy.DensityCount(maximum, 1));
+            var previous = 0;
+            for (var step = 1; step <= 20; step++)
+            {
+                var count = MeterHeaderMotionPolicy.DensityCount(maximum, step / 20f);
+                Assert.InRange(count, previous, maximum);
+                previous = count;
+            }
+        }
+
+        Assert.Equal(1, MeterHeaderMotionPolicy.DensityCount(8, .1f));
+        Assert.Equal(5, MeterHeaderMotionPolicy.DensityCount(8, .55f));
+        Assert.Equal(8, MeterHeaderMotionPolicy.DensityCount(100, 1));
+        Assert.Equal(0, MeterHeaderMotionPolicy.DensityCount(-1, 1));
+        Assert.Equal(1, MeterHeaderMotionPolicy.DensityWeight(0, 8, .55f));
+        Assert.InRange(MeterHeaderMotionPolicy.DensityWeight(4, 8, .55f), .39f, .41f);
+        Assert.Equal(0, MeterHeaderMotionPolicy.DensityWeight(5, 8, .55f));
+        Assert.Equal(0, MeterHeaderMotionPolicy.DensityWeight(-1, 8, 1));
+        Assert.Equal(0, MeterHeaderMotionPolicy.DensityWeight(8, 8, 1));
+    }
+
+    [Fact]
     public void BubblesRiseOnDifferentCurvedPathsAndPetalsFall()
     {
         var size = new Vector2(780, 60);
