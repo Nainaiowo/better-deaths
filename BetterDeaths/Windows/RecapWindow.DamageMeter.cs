@@ -722,7 +722,6 @@ public sealed partial class RecapWindow
         {
             var visibleDps = snapshot.DurationSeconds > 0 ? visibleTotal / snapshot.DurationSeconds : 0;
             DrawStyledDamageMeterHeader(state, snapshot.DurationSeconds, visibleDps, showControls);
-            ImGui.Spacing();
         }
 
         if (ImGui.BeginChild($"##DamageMeterWidgetScroll{idSuffix}", Vector2.Zero, false, OptionalScrollbarFlags))

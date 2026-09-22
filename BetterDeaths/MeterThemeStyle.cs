@@ -4,15 +4,14 @@ using System.Numerics;
 namespace BetterDeaths;
 
 internal readonly record struct MeterThemeProfile(Vector4 Summary, Vector4 Strip, MeterBackgroundKind Background, bool TimerFirst);
-internal readonly record struct MeterSummaryLayout(float TextWidth, bool StackMetrics);
+internal readonly record struct MeterSummaryLayout(float TextWidth, float MetricsWidth, bool InlineHeading, bool StackMetrics);
 
 internal static class MeterThemeStyle
 {
     public const int ThemeCount = 34;
 
     public static bool IsSupported(BetterDeathsTheme theme) => (int)theme is >= 0 and <= 32 || theme == BetterDeathsTheme.Confection;
-    public const float PrimaryScale = 1.75f;
-    public const float SecondaryScale = 1.35f;
+    public const float ValueScale = 1.05f;
 
     public static MeterThemeProfile Profile(BetterDeathsTheme theme) => theme switch
     {
@@ -101,12 +100,17 @@ internal static class MeterThemeStyle
         return new(background, WidgetSurfacePolicy.ReadableText(text, background), WidgetSurfacePolicy.ReadableText(accent, background));
     }
 
-    public static MeterSummaryLayout Layout(float width, float scale, float firstWidth, float secondWidth)
+    public static MeterSummaryLayout Layout(float width, float scale, float headingWidth, float firstWidth, float secondWidth, float controlsWidth = 0)
     {
         width = float.IsFinite(width) ? MathF.Max(1, width) : 1;
         scale = float.IsFinite(scale) ? Math.Clamp(scale, .5f, 3) : 1;
+        headingWidth = float.IsFinite(headingWidth) ? MathF.Max(0, headingWidth) : 0;
         firstWidth = float.IsFinite(firstWidth) ? MathF.Max(0, firstWidth) : 0;
         secondWidth = float.IsFinite(secondWidth) ? MathF.Max(0, secondWidth) : 0;
-        return new(width, width < firstWidth + secondWidth + 40 * scale);
+        controlsWidth = float.IsFinite(controlsWidth) ? MathF.Max(0, controlsWidth) : 0;
+        var metricsWidth = firstWidth + secondWidth + 12 * scale;
+        var stackMetrics = width < metricsWidth;
+        return new(width, MathF.Min(width, metricsWidth),
+            !stackMetrics && width >= headingWidth + controlsWidth + metricsWidth + 24 * scale, stackMetrics);
     }
 }

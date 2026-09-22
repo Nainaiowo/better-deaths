@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.48";
+    private const string CurrentChangelogVersion = "1.0.0.49";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19938,6 +19938,13 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.49");
+        ImGui.TextDisabled("Testing update.");
+        DrawWrappedBullet("Kept the encounter, duration, and total DPS in a compact header that wraps in narrow windows.");
+        DrawWrappedBullet("Removed the redundant metric labels and empty gap before the column headings.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.48");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Reworked DPS Meter headers with theme-specific details, including drifting Sakura petals, soda cans and fizz, floating sweets, clouds, and citrus slices.");

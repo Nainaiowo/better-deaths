@@ -67,16 +67,25 @@ public sealed class MeterThemeStyleTests
     }
 
     [Theory]
-    [InlineData(780, 1, 170, 70, false)]
-    [InlineData(480, 1, 170, 70, false)]
-    [InlineData(240, 1, 170, 70, true)]
-    [InlineData(780, 2, 340, 140, false)]
-    [InlineData(500, 1, 400, 100, true)]
-    public void HeaderUsesFullWidthAndStacksMeasuredMetrics(float width, float scale, float first, float second, bool stack)
+    [InlineData(780, 1, 180, 50, 90, 0, true, false)]
+    [InlineData(300, 1, 180, 50, 90, 0, false, false)]
+    [InlineData(240, 1, 180, 170, 70, 0, false, true)]
+    [InlineData(780, 2, 360, 100, 180, 0, true, false)]
+    [InlineData(500, 1, 180, 400, 100, 0, false, true)]
+    [InlineData(356, 1, 180, 50, 90, 0, true, false)]
+    [InlineData(355, 1, 180, 50, 90, 0, false, false)]
+    [InlineData(380, 1, 180, 50, 90, 30, false, false)]
+    [InlineData(386, 1, 180, 50, 90, 30, true, false)]
+    public void CompactHeaderOnlyWrapsWhenMeasuredContentNeedsIt(float width, float scale, float heading,
+        float first, float second, float controls, bool inline, bool stack)
     {
-        var layout = MeterThemeStyle.Layout(width, scale, first, second);
+        var layout = MeterThemeStyle.Layout(width, scale, heading, first, second, controls);
         Assert.Equal(width, layout.TextWidth);
+        Assert.Equal(inline, layout.InlineHeading);
         Assert.Equal(stack, layout.StackMetrics);
+        Assert.InRange(layout.MetricsWidth, 0, width);
+        if (inline)
+            Assert.True(heading + controls + layout.MetricsWidth + 24 * scale <= width);
     }
 
     [Theory]
@@ -160,7 +169,9 @@ public sealed class MeterThemeStyleTests
             Assert.Equal(default, MeterHeaderMotionPolicy.Motif(BetterDeathsTheme.Sakura, 0, new Vector2(value, 110), 0, 1));
             Assert.Equal(0, MeterHeaderMotionPolicy.MotifCount(new Vector2(value, 110), 1, false));
             Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(Vector2.Zero, new Vector2(value, 110), false));
-            Assert.True(float.IsFinite(MeterThemeStyle.Layout(value, value, value, value).TextWidth));
+            var layout = MeterThemeStyle.Layout(value, value, value, value, value, value);
+            Assert.True(float.IsFinite(layout.TextWidth));
+            Assert.True(float.IsFinite(layout.MetricsWidth));
         }
     }
 
