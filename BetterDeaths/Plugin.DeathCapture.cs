@@ -54,7 +54,8 @@ public sealed partial class Plugin
 
     private sealed record PendingDeathCandidate(
         DateTime FirstSeenAtUtc,
-        PartyMemberSnapshot Snapshot);
+        PartyMemberSnapshot Snapshot,
+        string DetectionCode);
 
     private void RefreshTerritoryCaptureState()
     {
@@ -178,16 +179,24 @@ public sealed partial class Plugin
 
     private void MarkMemberAlive(PartyMemberSnapshot member)
     {
-        knownAliveMemberKeys.Add(member.MemberKey);
+        knownAliveMembersByKey[member.MemberKey] = member;
         pendingDeathCandidatesByMember.Remove(member.MemberKey);
         deadMemberKeys.Remove(member.MemberKey);
         postResetSuppressedDeadMemberKeys.Remove(member.MemberKey);
     }
 
+    private bool WasMemberKnownAlive(PartyMemberSnapshot member)
+    {
+        return knownAliveMembersByKey.TryGetValue(member.MemberKey, out var alive) &&
+            DeathDetectionPolicy.MatchesCapturedPlayerIdentity(
+                member.MemberName, member.ContentId, member.EntityId,
+                alive.MemberName, alive.ContentId, alive.EntityId);
+    }
+
     private void ObservePendingWorldObjectDeath(PartyMemberSnapshot member, DateTime now)
     {
         if (deadMemberKeys.Contains(member.MemberKey) ||
-            !knownAliveMemberKeys.Contains(member.MemberKey))
+            !WasMemberKnownAlive(member))
         {
             return;
         }
@@ -201,7 +210,12 @@ public sealed partial class Plugin
                     CurrentHp = 0,
                     ShieldHp = 0,
                     IsDead = true,
-                });
+                },
+                DeathDetectionPolicy.BuildDiagnosticCode(
+                    "WO",
+                    member.IsPartyMember ? "PO" : "OO",
+                    member.CurrentHp,
+                    member.MaxHp));
             pendingDeathCandidatesByMember[member.MemberKey] = candidate;
             AddDebugLog($"Pending world-object death for {member.MemberName}.");
         }
@@ -213,7 +227,8 @@ public sealed partial class Plugin
                 now,
                 PendingDeathConfirmationDelay))
         {
-            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Framework confirmed");
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Framework confirmed",
+                diagnosticCode: candidate.DetectionCode);
         }
     }
 
@@ -232,8 +247,10 @@ public sealed partial class Plugin
                 : DeathDetectionPolicy.ClassifyPolledState(
                     member.HasWorldObject, member.WorldObjectIsDead, member.CurrentHp, member.MaxHp);
             if (DeathDetectionPolicy.ShouldRetainPendingWorldObjectDeath(
-                    knownAliveMemberKeys.Contains(memberKey),
-                    member is not null && member.EntityId == candidate.Snapshot.EntityId,
+                    WasMemberKnownAlive(candidate.Snapshot),
+                    member is not null && DeathDetectionPolicy.MatchesCapturedPlayerIdentity(
+                        member.MemberName, member.ContentId, member.EntityId,
+                        candidate.Snapshot.MemberName, candidate.Snapshot.ContentId, candidate.Snapshot.EntityId),
                     observation,
                     candidate.FirstSeenAtUtc,
                     now,
@@ -263,7 +280,8 @@ public sealed partial class Plugin
 
         foreach (var candidate in pendingDeathCandidatesByMember.Values.ToList())
         {
-            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Duty reset confirmation");
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Duty reset confirmation",
+                diagnosticCode: candidate.DetectionCode.Replace("-WO-", "-DR-", StringComparison.Ordinal));
         }
     }
 
@@ -299,7 +317,12 @@ public sealed partial class Plugin
                     ? $"entity:{member.EntityId:X8}"
                     : $"{memberName}:{partyIndex}";
             var classJobId = member.ClassJob.RowId;
-            var gameObject = member.GameObject;
+            var candidateObject = member.GameObject;
+            var gameObject = candidateObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
+                DeathDetectionPolicy.IsMatchingPlayerWorldObject(
+                    member.EntityId, memberName, true, player.EntityId, player.Name.TextValue)
+                    ? player
+                    : null;
             var worldObjectIsDead = gameObject?.IsDead == true;
             var isDead = worldObjectIsDead ||
                 (member.MaxHP > 0 && member.CurrentHP == 0);
@@ -932,7 +955,7 @@ public sealed partial class Plugin
 
     private bool TryCaptureMatchedLethalDamage(PartyMemberSnapshot member, CombatEventRecord combatEvent)
     {
-        var wasKnownAlive = knownAliveMemberKeys.Contains(member.MemberKey) ||
+        var wasKnownAlive = WasMemberKnownAlive(member) ||
             combatEvent.MaxHp > 0 && (combatEvent.CurrentHp > 0 || combatEvent.ShieldHp > 0);
         var hasMatchedDamage = combatEvent.Kind == DeathEventKind.Damage &&
             combatEvent.Amount > 0 &&
@@ -961,7 +984,8 @@ public sealed partial class Plugin
                 Statuses = statuses,
             },
             resultSeenAtUtc,
-            "EffectResult");
+            "EffectResult",
+            diagnosticCode: DeathDetectionPolicy.BuildDiagnosticCode("ER", "MD", 0, combatEvent.ResultMaxHp));
     }
 
     private void ResolveRawActorControlPacket(RawActorControlPacket packet)
@@ -984,7 +1008,15 @@ public sealed partial class Plugin
             CaptureActorControlSourceMitigationStatusChange(packet);
         }
 
-        if (packet.Category == ActorControlDeathCategory && member is not null)
+        if (packet.Category == ActorControlDeathCategory && member is not null &&
+            packet.DeathTargetIdentity is { } identity &&
+            DeathDetectionPolicy.MatchesCapturedPlayerIdentity(
+                member.MemberName,
+                member.ContentId,
+                member.EntityId,
+                identity.MemberName,
+                identity.ContentId,
+                identity.EntityId))
         {
             var bestKnownStatuses = GetBestKnownStatuses(member, packet.SeenAtUtc);
             var deathContext = CreateActorControlDeathContext(packet, member);
@@ -998,7 +1030,10 @@ public sealed partial class Plugin
                 },
                 packet.SeenAtUtc,
                 "ActorControl",
-                deathContext);
+                deathContext,
+                DeathDetectionPolicy.BuildDiagnosticCode(
+                    "AC", identity.Basis, identity.CurrentHp, identity.MaxHp,
+                    deathContext.EnvironmentSourceDeath));
         }
 
         if (!Configuration.DebugLogEnabled || debugCaptureFrozen)
@@ -1083,11 +1118,11 @@ public sealed partial class Plugin
     private PartyMemberSnapshot? FindCurrentMemberByEffectResultPacket(RawEffectResultPacket packet)
     {
         return currentMembers.FirstOrDefault(member =>
-                   member.EntityId != 0 &&
-                   (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId)) ??
+                   DeathDetectionPolicy.EffectResultTargetsMember(
+                       packet.TargetId, packet.ActorId, member.EntityId)) ??
             lastKnownMembersByKey.Values.FirstOrDefault(member =>
-                member.EntityId != 0 &&
-                (member.EntityId == packet.TargetId || member.EntityId == packet.ActorId));
+                DeathDetectionPolicy.EffectResultTargetsMember(
+                    packet.TargetId, packet.ActorId, member.EntityId));
     }
 
     private void CaptureActorControlTargetIcon(RawActorControlPacket packet, PartyMemberSnapshot? member)
@@ -1772,7 +1807,8 @@ public sealed partial class Plugin
         PartyMemberSnapshot member,
         DateTime deathSeenAtUtc,
         string signalSource,
-        DeathCaptureContext? deathContext = null)
+        DeathCaptureContext? deathContext = null,
+        string? diagnosticCode = null)
     {
         if (awaitingCombatClearAfterReset)
         {
@@ -1792,6 +1828,9 @@ public sealed partial class Plugin
         }
 
         if (pendingDeathCandidatesByMember.Remove(member.MemberKey, out var candidate) &&
+            DeathDetectionPolicy.MatchesCapturedPlayerIdentity(
+                member.MemberName, member.ContentId, member.EntityId,
+                candidate.Snapshot.MemberName, candidate.Snapshot.ContentId, candidate.Snapshot.EntityId) &&
             candidate.FirstSeenAtUtc <= deathSeenAtUtc &&
             !DeathDetectionPolicy.IsPendingCandidateExpired(
                 candidate.FirstSeenAtUtc,
@@ -1800,6 +1839,10 @@ public sealed partial class Plugin
         {
             deathSeenAtUtc = candidate.FirstSeenAtUtc;
             member = candidate.Snapshot;
+            if (!string.IsNullOrWhiteSpace(diagnosticCode) && !diagnosticCode.EndsWith("-P", StringComparison.Ordinal))
+            {
+                diagnosticCode += "-P";
+            }
         }
 
         if (!deadMemberKeys.Add(member.MemberKey))
@@ -1812,9 +1855,11 @@ public sealed partial class Plugin
             return false;
         }
 
-        knownAliveMemberKeys.Remove(member.MemberKey);
+        knownAliveMembersByKey.Remove(member.MemberKey);
         EnsurePullStarted(deathSeenAtUtc);
-        var death = CreateDeathRecord(member, deathSeenAtUtc, deathContext);
+        var death = CreateDeathRecord(member, deathSeenAtUtc, deathContext,
+            diagnosticCode ?? DeathDetectionPolicy.BuildDiagnosticCode(
+                "WO", member.IsPartyMember ? "PO" : "OO", member.CurrentHp, member.MaxHp));
         currentDeaths.Add(death);
         RecordDamageMeterDeath(member);
         if (Configuration.ShowDeathRecapPopup && IsLocalPlayer(member))
@@ -1859,6 +1904,7 @@ public sealed partial class Plugin
         {
             var death = deaths[index];
             if (!string.Equals(death.MemberKey, member.MemberKey, StringComparison.Ordinal) ||
+                !string.Equals(death.MemberName, member.MemberName, StringComparison.OrdinalIgnoreCase) ||
                 Duration(death.SeenAtUtc, deathSeenAtUtc) > DeathActorControlLateMatchWindow ||
                 death.EnvironmentalAssessment is { EnvironmentSourceDeath: true })
             {
@@ -1868,6 +1914,7 @@ public sealed partial class Plugin
             var updatedDeath = death with
             {
                 LikelyCause = null,
+                DetectionCode = DeathDetectionPolicy.AddEnvironmentEvidence(death.DetectionCode),
                 EnvironmentalAssessment = CreateEnvironmentalDeathAssessment(
                     member,
                     death.SeenAtUtc,
@@ -1895,7 +1942,8 @@ public sealed partial class Plugin
     private PartyDeathRecord CreateDeathRecord(
         PartyMemberSnapshot member,
         DateTime deathSeenAtUtc,
-        DeathCaptureContext? deathContext)
+        DeathCaptureContext? deathContext,
+        string diagnosticCode)
     {
         var events = GetRecentEvents(member.MemberKey, deathSeenAtUtc, Math.Max(Configuration.RecentEventSeconds, LeadUpTimingPolicy.CaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, deathSeenAtUtc, LeadUpTimingPolicy.CaptureSeconds);
@@ -1958,6 +2006,7 @@ public sealed partial class Plugin
             hpHistory,
             GetRelevantDeathStatuses(member.Statuses))
         {
+            DetectionCode = diagnosticCode,
             FatalSequence = fatalSequence,
             SourceMitigationHistory = sourceMitigationHistory,
             EnemyHpAtDeath = enemyHpAtDeath,

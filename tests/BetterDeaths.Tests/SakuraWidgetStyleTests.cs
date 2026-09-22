@@ -55,7 +55,7 @@ public sealed class SakuraWidgetStyleTests
     }
 
     [Fact]
-    public void RoleTintsRemainCloseAcrossLightAndDarkSurfaces()
+    public void RoleTintsStayDistinctAcrossLightAndDarkSurfaces()
     {
         foreach (var canvas in new[] { new Vector4(.08f, .10f, .09f, 1), Vector4.One })
         foreach (var detail in new[] { false, true })
@@ -65,7 +65,14 @@ public sealed class SakuraWidgetStyleTests
         {
             var a = SakuraWidgetStyle.Row(canvas, Vector4.One, first, index, detail).Background;
             var b = SakuraWidgetStyle.Row(canvas, Vector4.One, second, index, detail).Background;
-            Assert.InRange(Vector4.Distance(a, b), 0, .1f);
+            if (first == second)
+                Assert.Equal(a, b);
+            else
+            {
+                var distance = Vector4.Distance(a, b);
+                Assert.True(distance >= (detail ? .04f : .10f) && distance <= .35f,
+                    $"Roles {first}/{second}, light={canvas == Vector4.One}, detail={detail}: {distance}");
+            }
         }
     }
 

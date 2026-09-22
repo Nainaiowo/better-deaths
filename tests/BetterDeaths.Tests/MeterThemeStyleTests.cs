@@ -40,7 +40,7 @@ public sealed class MeterThemeStyleTests
 
     [Theory]
     [MemberData(nameof(Themes))]
-    public void MeleeAndRangedMatchAndRoleDifferencesStaySubtle(BetterDeathsTheme theme)
+    public void MeleeAndRangedMatchWhileRolesAndAdjacentShadesStayDistinct(BetterDeathsTheme theme)
     {
         foreach (var canvas in new[] { new Vector4(.08f, .10f, .09f, 1), Vector4.One })
         foreach (var detail in new[] { false, true })
@@ -50,7 +50,11 @@ public sealed class MeterThemeStyleTests
             Assert.Equal(melee, MeterThemeStyle.Row(theme, canvas, Vector4.One, 3, index, detail));
             foreach (byte role in new byte[] { 1, 4 })
                 Assert.InRange(Vector4.Distance(melee.Background,
-                    MeterThemeStyle.Row(theme, canvas, Vector4.One, role, index, detail).Background), 0, .11f);
+                    MeterThemeStyle.Row(theme, canvas, Vector4.One, role, index, detail).Background),
+                    detail ? .04f : .10f, .35f);
+            var nextShade = MeterThemeStyle.Row(theme, canvas, Vector4.One, 2, index + 1, detail);
+            Assert.True(Vector4.Distance(melee.Background, nextShade.Background) >= (detail ? .02f : .05f));
+            Assert.Equal(melee, MeterThemeStyle.Row(theme, canvas, Vector4.One, 2, index + 2, detail));
         }
     }
 
@@ -102,9 +106,12 @@ public sealed class MeterThemeStyleTests
             for (var index = 0; index < MeterHeaderMotionPolicy.ParticleCount; index++)
             {
                 var p = MeterHeaderMotionPolicy.Particle(theme, index, size, phase, 1);
+                var kind = MeterThemeStyle.Profile(theme).Background;
+                var bubbles = kind is MeterBackgroundKind.Fizz or MeterBackgroundKind.Citrus or MeterBackgroundKind.Liquid or
+                    MeterBackgroundKind.Bubblegum or MeterBackgroundKind.Depth;
                 Assert.InRange(p.Center.X, 0, size.X);
                 Assert.InRange(p.Center.Y, 0, size.Y);
-                Assert.InRange(p.Radius, 2, 6);
+                Assert.InRange(p.Radius, bubbles ? 5 : 2, bubbles ? 9 : 6);
                 Assert.InRange(p.Opacity, 0, 1);
             }
             for (var lane = 0; lane < 8; lane++)
@@ -121,6 +128,76 @@ public sealed class MeterThemeStyleTests
             var after = MeterHeaderMotionPolicy.Particle(theme, index, size, 0, 1);
             // A particle wrapping vertically must be invisible at that boundary.
             Assert.True(Vector2.Distance(before.Center, after.Center) < .1f || MathF.Max(before.Opacity, after.Opacity) < .001f);
+        }
+    }
+
+    [Fact]
+    public void BubblesRiseOnDifferentCurvedPathsAndPetalsFall()
+    {
+        var size = new Vector2(780, 60);
+        var bubbleStart = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Soda, 0, size, .1f, 1);
+        var bubbleEnd = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Soda, 0, size, .13f, 1);
+        var otherStart = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Soda, 1, size, .1f, 1);
+        var otherEnd = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Soda, 1, size, .13f, 1);
+        Assert.True(bubbleEnd.Center.Y < bubbleStart.Center.Y);
+        Assert.True(MathF.Abs(bubbleEnd.Center.X - bubbleStart.Center.X) > 1);
+        Assert.True(MathF.Abs((bubbleEnd.Center.Y - bubbleStart.Center.Y) -
+            (otherEnd.Center.Y - otherStart.Center.Y)) > 1);
+        Assert.InRange(bubbleStart.Radius, 5, 9);
+
+        var petalStart = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sakura, 0, size, .1f, 1);
+        var petalEnd = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sakura, 0, size, .13f, 1);
+        Assert.True(petalEnd.Center.Y > petalStart.Center.Y);
+        Assert.True(MathF.Abs(petalEnd.Center.X - petalStart.Center.X) > 0);
+    }
+
+    [Fact]
+    public void CloudsDriftHorizontallyAndRibbonLanesMoveIndependently()
+    {
+        var size = new Vector2(780, 60);
+        var cloudStart = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sky, 0, size, .1f, 1);
+        var cloudEnd = MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sky, 0, size, .2f, 1);
+        Assert.True(cloudEnd.Center.X > cloudStart.Center.X);
+        Assert.True(MathF.Abs(cloudEnd.Center.Y - cloudStart.Center.Y) < size.Y * .1f);
+
+        var first = MeterHeaderMotionPolicy.Contour(BetterDeathsTheme.Confection, size, 0, 10, .1f);
+        var firstLater = MeterHeaderMotionPolicy.Contour(BetterDeathsTheme.Confection, size, 0, 10, .2f);
+        var second = MeterHeaderMotionPolicy.Contour(BetterDeathsTheme.Confection, size, 1, 10, .1f);
+        var secondLater = MeterHeaderMotionPolicy.Contour(BetterDeathsTheme.Confection, size, 1, 10, .2f);
+        Assert.True(MathF.Abs((firstLater.Y - first.Y) - (secondLater.Y - second.Y)) > .1f);
+        Assert.Equal(first, MeterHeaderMotionPolicy.Contour(BetterDeathsTheme.Confection, size, 0, 10, 1.1f));
+    }
+
+    [Theory]
+    [MemberData(nameof(Themes))]
+    public void ParticleThemesDoNotShareOneTrajectory(BetterDeathsTheme theme)
+    {
+        var kind = MeterThemeStyle.Profile(theme).Background;
+        if (kind is MeterBackgroundKind.Satin or MeterBackgroundKind.Ribbons or MeterBackgroundKind.Fabric or
+            MeterBackgroundKind.Marble or MeterBackgroundKind.Brushed or MeterBackgroundKind.Daylight)
+            return;
+
+        var size = new Vector2(780, 60);
+        var movement = new List<Vector2>();
+        for (var index = 0; index < MeterHeaderMotionPolicy.ParticleCount; index++)
+        {
+            var before = MeterHeaderMotionPolicy.Particle(theme, index, size, .2f, 1);
+            var after = MeterHeaderMotionPolicy.Particle(theme, index, size, .205f, 1);
+            var delta = after.Center - before.Center;
+            if (delta.Length() < size.Y * .2f)
+                movement.Add(delta);
+        }
+
+        Assert.True(movement.Count >= 3);
+        Assert.True(movement.Max(p => p.X) - movement.Min(p => p.X) > .1f ||
+            movement.Max(p => p.Y) - movement.Min(p => p.Y) > .1f);
+        if (kind is MeterBackgroundKind.Clouds or MeterBackgroundKind.Cotton)
+            Assert.All(movement, p => Assert.True(p.X > 0));
+        else if (kind != MeterBackgroundKind.Moonlight)
+        {
+            var rising = kind is MeterBackgroundKind.Fizz or MeterBackgroundKind.Citrus or MeterBackgroundKind.Liquid or
+                MeterBackgroundKind.Bubblegum or MeterBackgroundKind.Depth or MeterBackgroundKind.Heat or MeterBackgroundKind.Spice;
+            Assert.All(movement, p => Assert.True(rising ? p.Y < 0 : p.Y > 0));
         }
     }
 
@@ -166,8 +243,6 @@ public sealed class MeterThemeStyleTests
             Assert.Equal(0, MeterHeaderMotionPolicy.Phase(value, true, false));
             Assert.False(MeterHeaderMotionPolicy.ValidSize(new Vector2(value, 110)));
             Assert.Equal(default, MeterHeaderMotionPolicy.Particle(BetterDeathsTheme.Sakura, 0, new Vector2(value, 110), 0, 1));
-            Assert.Equal(default, MeterHeaderMotionPolicy.Motif(BetterDeathsTheme.Sakura, 0, new Vector2(value, 110), 0, 1));
-            Assert.Equal(0, MeterHeaderMotionPolicy.MotifCount(new Vector2(value, 110), 1, false));
             Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(Vector2.Zero, new Vector2(value, 110), false));
             var layout = MeterThemeStyle.Layout(value, value, value, value, value, value);
             Assert.True(float.IsFinite(layout.TextWidth));
@@ -193,27 +268,19 @@ public sealed class MeterThemeStyleTests
 
     [Theory]
     [MemberData(nameof(Themes))]
-    public void MotifsRemainBoundedPeriodicAndResponsive(BetterDeathsTheme theme)
+    public void SmallDetailsStayAwayFromHeaderText(BetterDeathsTheme theme)
     {
-        foreach (var size in new[] { new Vector2(32, 24), new Vector2(240, 210), new Vector2(780, 110), new Vector2(3840, 220) })
+        foreach (var size in new[] { new Vector2(300, 60), new Vector2(780, 40), new Vector2(3840, 220) })
         foreach (var scale in new[] { .5f, 1, 3 })
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < MeterHeaderMotionPolicy.ParticleCount; i++)
         {
-            var p = MeterHeaderMotionPolicy.Motif(theme, i, size, .25f, scale);
-            Assert.Equal(p, MeterHeaderMotionPolicy.Motif(theme, i, size, 1.25f, scale));
-            Assert.InRange(p.Center.X, p.Radius, size.X - p.Radius);
-            Assert.InRange(p.Center.Y, p.Radius, size.Y - p.Radius);
-            Assert.InRange(p.Radius, 0, 30 * scale);
+            var p = MeterHeaderMotionPolicy.Particle(theme, i, size, .25f, scale);
+            Assert.Equal(p, MeterHeaderMotionPolicy.Particle(theme, i, size, 1.25f, scale));
+            Assert.InRange(p.Center.X / size.X, size.X < 7 * size.Y ? .72f : .26f,
+                size.X < 7 * size.Y ? .96f : .8f);
             Assert.InRange(p.Opacity, 0, 1);
-            Assert.InRange(MeterHeaderMotionPolicy.DetailVisibility(p.Center, size, false), .18f, 1);
-            Assert.Equal(1, MeterHeaderMotionPolicy.MotifCount(size, scale, true));
-            Assert.InRange(MeterHeaderMotionPolicy.MotifCount(size, scale, false), 1, 3);
-            var before = MeterHeaderMotionPolicy.Motif(theme, i, size, .99999f, scale);
-            var after = MeterHeaderMotionPolicy.Motif(theme, i, size, 0, scale);
-            Assert.True(Vector2.Distance(before.Center, after.Center) < .01f);
+            Assert.InRange(MeterHeaderMotionPolicy.DetailVisibility(p.Center, size, false), 0, 1);
         }
-        Assert.Equal(1, MeterHeaderMotionPolicy.MotifCount(new(300, 110), 1, false));
-        Assert.Equal(3, MeterHeaderMotionPolicy.MotifCount(new(780, 110), 1, false));
     }
 
     [Fact]
@@ -221,8 +288,11 @@ public sealed class MeterThemeStyleTests
     {
         var size = new Vector2(780, 110);
         var middle = MeterHeaderMotionPolicy.DetailVisibility(new(450, 55), size, false);
-        Assert.True(MeterHeaderMotionPolicy.DetailVisibility(new(50, 55), size, false) < middle);
-        Assert.True(MeterHeaderMotionPolicy.DetailVisibility(new(750, 55), size, false) < middle);
+        Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(new(50, 55), size, false));
+        Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(new(750, 55), size, false));
+        Assert.True(middle > 0);
+        Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(new(150, 30), new(300, 60), false));
+        Assert.True(MeterHeaderMotionPolicy.DetailVisibility(new(255, 30), new(300, 60), false) > 0);
         Assert.Equal(0, MeterHeaderMotionPolicy.DetailVisibility(new(float.NaN), size, false));
     }
 
@@ -238,13 +308,11 @@ public sealed class MeterThemeStyleTests
                 _ = MeterThemeStyle.Profile(theme);
                 _ = MeterThemeStyle.Row(theme, Vector4.One, Vector4.Zero, 3, i, false);
                 var phase = MeterHeaderMotionPolicy.Phase(12, true, false);
-                for (var index = 0; index < MeterHeaderMotionPolicy.MotifCount(new(780, 110), 1, false); index++)
-                {
-                    var motif = MeterHeaderMotionPolicy.Motif(theme, index, new(780, 110), phase, 1);
-                    _ = MeterHeaderMotionPolicy.DetailVisibility(motif.Center, new(780, 110), false);
-                }
                 for (var index = 0; index < MeterHeaderMotionPolicy.ParticleCount; index++)
-                    _ = MeterHeaderMotionPolicy.Particle(theme, index, new Vector2(780, 110), phase, 1);
+                {
+                    var particle = MeterHeaderMotionPolicy.Particle(theme, index, new Vector2(780, 110), phase, 1);
+                    _ = MeterHeaderMotionPolicy.DetailVisibility(particle.Center, new(780, 110), false);
+                }
                 for (var index = 0; index <= MeterHeaderMotionPolicy.Segments; index++)
                     _ = MeterHeaderMotionPolicy.Contour(theme, new Vector2(780, 110), 0, index, phase);
             }

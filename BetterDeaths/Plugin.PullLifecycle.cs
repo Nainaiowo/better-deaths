@@ -255,7 +255,7 @@ public sealed partial class Plugin
         pendingDeathCandidatesByMember.Clear();
         possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
-        knownAliveMemberKeys.Clear();
+        knownAliveMembersByKey.Clear();
         lastKnownMembersByKey.Clear();
         lastKnownMemberSeenAtUtc.Clear();
         lastReplayPlayerPositionSampleAtUtc = DateTime.MinValue;

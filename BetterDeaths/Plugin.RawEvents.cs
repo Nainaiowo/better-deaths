@@ -204,6 +204,8 @@ public sealed partial class Plugin
         RawCombatSnapshot? TargetSnapshot,
         RawCombatSnapshot? SourceSnapshot)
     {
+        public RawDeathTargetIdentity? DeathTargetIdentity { get; init; }
+
         public bool AllowAutomaticDamageEncounterStart { get; init; }
 
         public bool CaptureForReview { get; init; }
@@ -214,6 +216,14 @@ public sealed partial class Plugin
 
         public ServerFrameTimestampCapture? ServerFrameTiming { get; init; }
     }
+
+    private sealed record RawDeathTargetIdentity(
+        string MemberName,
+        ulong ContentId,
+        uint EntityId,
+        uint CurrentHp,
+        uint MaxHp,
+        string Basis);
 
     private sealed record RawMapEffectPacket(
         long Sequence,
@@ -332,6 +342,19 @@ public sealed partial class Plugin
         ulong targetId,
         byte param9)
     {
+        RawDeathTargetIdentity? deathTargetIdentity = null;
+        if (category == ActorControlDeathCategory)
+        {
+            try
+            {
+                deathTargetIdentity = CaptureRawDeathTargetIdentity(entityId);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not verify Better Deaths death-notice target.");
+            }
+        }
+
         var previousMissingInformation = statusTimingMissingInformation;
         statusTimingMissingInformation = category == ActorControlUpdateEffectCategory;
         try
@@ -345,7 +368,8 @@ public sealed partial class Plugin
 
         try
         {
-            EnqueueRawActorControl(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8, targetId, param9);
+            EnqueueRawActorControl(entityId, category, param1, param2, param3, param4, param5, param6, param7, param8,
+                targetId, param9, deathTargetIdentity);
         }
         catch (Exception ex)
         {
@@ -365,7 +389,8 @@ public sealed partial class Plugin
         uint param7,
         uint param8,
         ulong targetId,
-        byte param9)
+        byte param9,
+        RawDeathTargetIdentity? deathTargetIdentity)
     {
         var now = DateTime.UtcNow;
         var captureForReview = ShouldAcceptRawCombatCapture(now);
@@ -434,12 +459,82 @@ public sealed partial class Plugin
             targetSnapshot,
             sourceSnapshot)
         {
+            DeathTargetIdentity = captureForReview ? deathTargetIdentity : null,
             AllowAutomaticDamageEncounterStart = IsOverworldDamageCaptureEnabled(),
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,
         };
         EnqueueRawActorControlPacket(packet);
+    }
+
+    private RawDeathTargetIdentity? CaptureRawDeathTargetIdentity(uint entityId)
+    {
+        if (entityId == 0 || entityId == InvalidActorEntityId)
+        {
+            return null;
+        }
+
+        foreach (var partyMember in PartyList)
+        {
+            if (partyMember.EntityId != entityId)
+            {
+                continue;
+            }
+
+            if (!Configuration.CapturePartyDeaths)
+            {
+                return null;
+            }
+
+            var gameObject = partyMember.GameObject;
+            if (gameObject is not null &&
+                !DeathDetectionPolicy.IsMatchingPlayerWorldObject(
+                    entityId,
+                    partyMember.Name.TextValue,
+                    gameObject is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter,
+                    gameObject.EntityId,
+                    gameObject.Name.TextValue))
+            {
+                break;
+            }
+
+            var name = partyMember.Name.TextValue;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            return new RawDeathTargetIdentity(
+                name,
+                partyMember.ContentId,
+                entityId,
+                partyMember.CurrentHP,
+                partyMember.MaxHP,
+                gameObject is null ? "PL" : "PO");
+        }
+
+        var player = ObjectTable.SearchByEntityId(entityId) as Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter;
+        if (player is null || player.EntityId != entityId)
+        {
+            return null;
+        }
+
+        var isLocalPlayer = ObjectTable.LocalPlayer?.EntityId == entityId;
+        if ((!isLocalPlayer && !Configuration.CaptureOtherDeaths) ||
+            (isLocalPlayer && !Configuration.CapturePartyDeaths) ||
+            string.IsNullOrWhiteSpace(player.Name.TextValue))
+        {
+            return null;
+        }
+
+        return new RawDeathTargetIdentity(
+            player.Name.TextValue,
+            0,
+            entityId,
+            player.CurrentHp,
+            player.MaxHp,
+            isLocalPlayer ? "LO" : "OO");
     }
 
     private unsafe void EnqueueRawEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)

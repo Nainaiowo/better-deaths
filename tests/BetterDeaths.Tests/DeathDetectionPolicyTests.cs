@@ -6,6 +6,70 @@ public sealed class DeathDetectionPolicyTests
     private static readonly TimeSpan ConfirmationDelay = TimeSpan.FromMilliseconds(2500);
     private static readonly TimeSpan CandidateRetention = TimeSpan.FromSeconds(5);
 
+    [Theory]
+    [InlineData(42u, "Aiko Tachibana", true, 42u, "Aiko Tachibana", true)]
+    [InlineData(42u, "Aiko Tachibana", false, 42u, "Aiko Tachibana", false)]
+    [InlineData(42u, "Aiko Tachibana", true, 43u, "Aiko Tachibana", false)]
+    [InlineData(42u, "Aiko Tachibana", true, 42u, "Other Player", false)]
+    [InlineData(0u, "Aiko Tachibana", true, 0u, "Aiko Tachibana", false)]
+    public void WorldObjectMustBeTheSamePlayer(
+        uint memberEntityId, string memberName, bool isPlayerObject, uint objectEntityId, string objectName, bool expected)
+    {
+        Assert.Equal(expected, DeathDetectionPolicy.IsMatchingPlayerWorldObject(
+            memberEntityId, memberName, isPlayerObject, objectEntityId, objectName));
+    }
+
+    [Theory]
+    [InlineData("Aiko Tachibana", 101ul, 42u, "Aiko Tachibana", 101ul, 42u, true)]
+    [InlineData("Aiko Tachibana", 0ul, 42u, "Aiko Tachibana", 101ul, 42u, true)]
+    [InlineData("Aiko Tachibana", 101ul, 42u, "Aiko Tachibana", 0ul, 42u, true)]
+    [InlineData("Aiko Tachibana", 101ul, 42u, "Aiko Tachibana", 101ul, 43u, false)]
+    [InlineData("Aiko Tachibana", 101ul, 42u, "Other Player", 101ul, 42u, false)]
+    [InlineData("Aiko Tachibana", 101ul, 42u, "Aiko Tachibana", 102ul, 42u, false)]
+    [InlineData("Aiko Tachibana", 101ul, 0u, "Aiko Tachibana", 101ul, 0u, false)]
+    public void QueuedDeathNoticeRequiresStablePlayerIdentity(
+        string memberName, ulong memberContentId, uint memberEntityId,
+        string capturedName, ulong capturedContentId, uint capturedEntityId, bool expected)
+    {
+        Assert.Equal(expected, DeathDetectionPolicy.MatchesCapturedPlayerIdentity(
+            memberName, memberContentId, memberEntityId,
+            capturedName, capturedContentId, capturedEntityId));
+    }
+
+    [Theory]
+    [InlineData(42u, 43u, 42u, true)]
+    [InlineData(42u, 43u, 43u, false)]
+    [InlineData(0u, 43u, 43u, true)]
+    [InlineData(0xE0000000u, 43u, 43u, true)]
+    [InlineData(42u, 43u, 0u, false)]
+    public void EffectResultPrefersExplicitTargetOverActorId(
+        uint targetId, uint actorId, uint memberEntityId, bool expected)
+    {
+        Assert.Equal(expected, DeathDetectionPolicy.EffectResultTargetsMember(targetId, actorId, memberEntityId));
+    }
+
+    [Fact]
+    public void DiagnosticCodeKeepsEnvironmentAndPendingEvidenceDistinct()
+    {
+        var code = DeathDetectionPolicy.BuildDiagnosticCode(
+            "AC", "PL", 100, 200, environmentSource: true, pendingWorldObject: true);
+
+        Assert.Equal("D1-AC-PL-HP-E-P", code);
+        Assert.Contains("ActorControl death notice", DeathDetectionPolicy.DescribeDiagnosticCode(code));
+        Assert.Contains("party-list", DeathDetectionPolicy.DescribeDiagnosticCode(code));
+        Assert.Contains("Environment source", DeathDetectionPolicy.DescribeDiagnosticCode(code));
+        Assert.Contains("pending", DeathDetectionPolicy.DescribeDiagnosticCode(code));
+    }
+
+    [Fact]
+    public void EnvironmentMarkerDoesNotConfuseEffectResultSignalWithEnvironmentEvidence()
+    {
+        Assert.Equal("D1-ER-MD-H0-E", DeathDetectionPolicy.AddEnvironmentEvidence("D1-ER-MD-H0"));
+        Assert.Equal("D1-AC-PO-H0-E", DeathDetectionPolicy.AddEnvironmentEvidence("D1-AC-PO-H0-E"));
+        Assert.Equal("D0-LEGACY-E", DeathDetectionPolicy.AddEnvironmentEvidence(null));
+        Assert.Contains("Legacy pull", DeathDetectionPolicy.DescribeDiagnosticCode(null));
+    }
+
     [Fact]
     public void MissingWorldObjectAndZeroPartyHpIsUnknown()
     {

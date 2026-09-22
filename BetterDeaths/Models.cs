@@ -360,6 +360,8 @@ public sealed record PartyDeathRecord(
 
     public EnvironmentalDeathAssessment? EnvironmentalAssessment { get; init; }
 
+    public string DetectionCode { get; init; } = string.Empty;
+
     public IReadOnlyList<ReplayPositionSnapshot> ReplayPositions { get; init; } = [];
 
     public IReadOnlyList<ReplayMarkerSnapshot> ReplayMarkers { get; init; } = [];

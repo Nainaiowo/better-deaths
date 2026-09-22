@@ -11,17 +11,15 @@ internal static class ConfectionWidgetStyle
 
     public static WidgetRowColors Row(Vector4 canvas, Vector4 text, byte role, int index, bool detail)
     {
+        var light = canvas.X * .2126f + canvas.Y * .7152f + canvas.Z * .0722f >= .55f;
         var tint = role switch
         {
-            1 => new Vector4(.85f, .86f, .90f, 1),
-            2 or 3 => new Vector4(.93f, .83f, .87f, 1),
-            4 => new Vector4(.85f, .89f, .84f, 1),
-            _ => new Vector4(.88f, .86f, .90f, 1),
+            1 => light ? new Vector4(.78f, .86f, .96f, 1) : new Vector4(.28f, .39f, .52f, 1),
+            2 or 3 => light ? new Vector4(.97f, .76f, .83f, 1) : new Vector4(.51f, .28f, .37f, 1),
+            4 => light ? new Vector4(.80f, .93f, .79f, 1) : new Vector4(.31f, .47f, .33f, 1),
+            _ => light ? new Vector4(.91f, .84f, .94f, 1) : new Vector4(.41f, .32f, .47f, 1),
         };
-        var surface = Tint(canvas, tint, detail ? .18f : index % 2 == 0 ? .72f : .58f);
-        var accent = Vector4.Lerp(tint, new Vector4(.12f, .16f, .18f, 1), .70f);
-        return new WidgetRowColors(surface, WidgetSurfacePolicy.ReadableText(text, surface),
-            WidgetSurfacePolicy.ReadableText(accent, surface));
+        return MeterThemeStyle.TintedRow(canvas, text, tint, index, detail);
     }
 
     private static Vector4 Tint(Vector4 canvas, Vector4 tint, float amount)

@@ -97,11 +97,11 @@ public sealed partial class RecapWindow
     private static Vector4 GetStyledRowOverlay(bool detail = false) => WidgetSurfacePolicy.GetRowOverlay(
         activeTheme.WidgetWindowBackgroundColor, ImGui.TableGetRowIndex(), detail);
 
-    private WidgetRowColors DrawDamageMeterRowSurface(uint classJobId, bool detail = false)
+    private WidgetRowColors DrawDamageMeterRowSurface(uint classJobId, int playerIndex, bool detail = false)
     {
         var text = detail ? ModernMutedTextColor : ModernTextColor;
         var colors = MeterThemeStyle.Row(activeTheme.Id, activeTheme.WidgetWindowBackgroundColor, text,
-            plugin.GetClassJobDisplayRole(classJobId), ImGui.TableGetRowIndex(), detail);
+            plugin.GetClassJobDisplayRole(classJobId), playerIndex, detail);
         ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(colors.Background with { W = GetDamageMeterWidgetBackgroundOpacity() }));
         ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg1, 0);
         return colors;

@@ -45,7 +45,7 @@ public sealed class ConfectionWidgetStyleTests
     }
 
     [Fact]
-    public void RoleTintsRemainCloseAcrossLightAndDarkSurfaces()
+    public void RoleTintsStayDistinctAcrossLightAndDarkSurfaces()
     {
         foreach (var canvas in new[] { new Vector4(.08f, .10f, .09f, 1), Vector4.One })
         foreach (var detail in new[] { false, true })
@@ -55,7 +55,10 @@ public sealed class ConfectionWidgetStyleTests
         {
             var a = ConfectionWidgetStyle.Row(canvas, Vector4.Zero, first, index, detail).Background;
             var b = ConfectionWidgetStyle.Row(canvas, Vector4.Zero, second, index, detail).Background;
-            Assert.InRange(Vector4.Distance(a, b), 0, .1f);
+            if (first == second)
+                Assert.Equal(a, b);
+            else
+                Assert.InRange(Vector4.Distance(a, b), detail ? .04f : .10f, .35f);
         }
     }
 

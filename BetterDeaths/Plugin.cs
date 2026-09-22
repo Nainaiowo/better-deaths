@@ -359,7 +359,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
     private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
-    private readonly HashSet<string> knownAliveMemberKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PartyMemberSnapshot> knownAliveMembersByKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingDeathCandidate> pendingDeathCandidatesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PartyMemberSnapshot> lastKnownMembersByKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastKnownMemberSeenAtUtc = new(StringComparer.Ordinal);

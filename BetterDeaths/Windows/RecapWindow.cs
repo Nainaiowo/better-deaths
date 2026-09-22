@@ -3952,7 +3952,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             }
 
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatCombatTimer(death.PullElapsedSeconds));
+            DrawDeathTimelineTimeCell(death);
             ImGui.TableNextColumn();
             DrawCenteredText(FormatPlayerName(death, pull.Deaths));
             ImGui.TableNextColumn();
@@ -4095,10 +4095,10 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void SetupDeathTimelineColumns()
     {
         ImGui.TableSetupColumn("#", ImGuiTableColumnFlags.WidthStretch, 0.32f);
-        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.62f);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthStretch, 0.82f);
         ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthStretch, 1.15f);
         ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthStretch, 0.72f);
-        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+        ImGui.TableSetupColumn("Fatal event", ImGuiTableColumnFlags.WidthStretch, 2.2f);
     }
 
     private static bool DrawTimelineIndexCell(
@@ -5585,6 +5585,36 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         ImGui.TableNextColumn();
         DrawCenteredOrWrappedText(label);
+    }
+
+    private void DrawDeathTimelineTimeCell(PartyDeathRecord death)
+    {
+        var cellStart = ImGui.GetCursorScreenPos();
+        var cellWidth = ImGui.GetContentRegionAvail().X;
+        var time = FormatCombatTimer(death.PullElapsedSeconds);
+        var icon = FontAwesomeIcon.QuestionCircle.ToIconString();
+        Vector2 iconSize;
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            iconSize = ImGui.CalcTextSize(icon);
+        }
+
+        const float gap = 3.0f;
+        var contentWidth = ImGui.CalcTextSize(time).X + gap + iconSize.X;
+        ImGui.SetCursorScreenPos(new Vector2(cellStart.X + MathF.Max(0.0f, (cellWidth - contentWidth) * 0.5f), cellStart.Y));
+        ImGui.TextUnformatted(time);
+        ImGui.SameLine(0.0f, gap);
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            ImGui.TextColored(ModernMutedTextColor, icon);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            var code = string.IsNullOrWhiteSpace(death.DetectionCode) ? "D0-LEGACY" : death.DetectionCode;
+            SetThemedTooltip($"Diagnostic: {code}");
+        }
+
     }
 
     private static void DrawCenteredIconHeaderCell(FontAwesomeIcon icon)

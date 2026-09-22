@@ -853,7 +853,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
 
         private void AddMechanicDamage(ReplayMechanicSnapshot mechanic)
         {
-            if (string.Equals(mechanic.RawEventKind, "action-sheet-action", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(mechanic.RawEventKind, "action-sheet-action", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(mechanic.RawEventKind, "dmu-p3-nothingness", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -940,14 +941,6 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 },
                 FflogsEventDataType.DamageTaken,
                 FflogsHostilityType.Friendlies));
-
-            if (mechanic.RawEventId == BlackHoleAnalyzer.NothingnessId &&
-                pull.ReplayMechanics.Any(candidate =>
-                    string.Equals(candidate.RawEventKind, "black-hole-blast", StringComparison.OrdinalIgnoreCase) &&
-                    Math.Abs(candidate.PullElapsedSeconds - mechanic.PullElapsedSeconds) <= 0.25f))
-            {
-                return;
-            }
 
             foreach (var targetId in AffectedPlayers(mechanic, eventSeconds))
             {

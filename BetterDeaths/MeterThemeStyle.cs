@@ -89,15 +89,24 @@ internal static class MeterThemeStyle
         var light = Light(canvas);
         var tint = role switch
         {
-            1 => light ? Color(0xD9DCE6) : Color(0x4D525A),
-            2 or 3 => light ? Color(0xEBD4DE) : Color(0x5A4B53),
-            4 => light ? Color(0xD8E2D7) : Color(0x4A5B52),
-            _ => light ? Color(0xDFDBE4) : Color(0x535259),
+            1 => light ? Color(0xC5DDF0) : Color(0x385671),
+            2 or 3 => light ? Color(0xF1C7D8) : Color(0x704057),
+            4 => light ? Color(0xCAE8D5) : Color(0x38674F),
+            _ => light ? Color(0xDFD8E9) : Color(0x544B69),
         };
-        var shared = Surface(canvas, Profile(theme).Summary, .12f);
-        var background = Vector4.Lerp(shared, tint, detail ? .17f : index % 2 == 0 ? .74f : .66f) with { W = 1 };
-        var accent = Vector4.Lerp(tint, light ? new Vector4(.12f, .14f, .17f, 1) : Vector4.One, .7f);
-        return new(background, WidgetSurfacePolicy.ReadableText(text, background), WidgetSurfacePolicy.ReadableText(accent, background));
+        return TintedRow(Surface(canvas, Profile(theme).Summary, .14f), text, tint, index, detail);
+    }
+
+    internal static WidgetRowColors TintedRow(Vector4 canvas, Vector4 text, Vector4 tint, int index, bool detail)
+    {
+        var light = Light(canvas);
+        var roleSurface = Vector4.Lerp(canvas, tint, .78f);
+        var shadeTarget = light ? new Vector4(.12f, .14f, .16f, 1) : Vector4.One;
+        var shaded = Vector4.Lerp(roleSurface, shadeTarget, index % 2 == 0 ? .015f : .105f);
+        var background = (detail ? Vector4.Lerp(canvas, shaded, .38f) : shaded) with { W = 1 };
+        var accent = Vector4.Lerp(tint, shadeTarget, light ? .56f : .48f);
+        return new(background, WidgetSurfacePolicy.ReadableText(text, background),
+            WidgetSurfacePolicy.ReadableText(accent, background));
     }
 
     public static MeterSummaryLayout Layout(float width, float scale, float headingWidth, float firstWidth, float secondWidth, float controlsWidth = 0)

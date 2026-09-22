@@ -819,8 +819,9 @@ public sealed partial class RecapWindow
         DrawCenteredTableHeader(["", .. columns.Select(GetDamageMeterColumnHeader)]);
         ImGui.PopStyleColor(2);
 
-        foreach (var source in sources)
+        for (var sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
         {
+            var source = sources[sourceIndex];
             var sourceKey = GetDamageMeterSourceKey(source.Source);
             var expansionKey = $"{idSuffix}:{sourceKey}";
             var expanded = expandedDamageMeterSources.Contains(expansionKey);
@@ -830,7 +831,8 @@ public sealed partial class RecapWindow
                 visibleTotal,
                 expansionKey,
                 expanded,
-                columns);
+                columns,
+                sourceIndex);
             if (!expanded)
             {
                 continue;
@@ -838,7 +840,7 @@ public sealed partial class RecapWindow
 
             foreach (var action in source.Actions.OrderByDescending(action => action.ObservedMeterDamage))
             {
-                DrawDamageMeterWidgetActionRow(snapshot, source, action, source.ObservedMeterDamage, columns);
+                DrawDamageMeterWidgetActionRow(snapshot, source, action, source.ObservedMeterDamage, columns, sourceIndex);
             }
         }
 
@@ -851,12 +853,13 @@ public sealed partial class RecapWindow
         double visibleTotal,
         string expansionKey,
         bool expanded,
-        IReadOnlyList<DamageMeterColumn> columns)
+        IReadOnlyList<DamageMeterColumn> columns,
+        int playerIndex)
     {
         var iconSize = GetDamageMeterWidgetIconSize();
         ImGui.TableNextRow(ImGuiTableRowFlags.None, MathF.Max(iconSize, ImGui.GetTextLineHeight()) + 8.0f);
         ImGui.TableNextColumn();
-        var row = DrawDamageMeterRowSurface(source.Source.IsLimitBreak ? 0 : source.Source.ClassJobId);
+        var row = DrawDamageMeterRowSurface(source.Source.IsLimitBreak ? 0 : source.Source.ClassJobId, playerIndex);
         var expandIcon = expanded ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight;
         ImGui.PushStyleColor(ImGuiCol.Text, row.Accent);
         if (DrawTransparentIconButton($"DamageMeterWidgetExpand{expansionKey}", expandIcon))
@@ -880,12 +883,13 @@ public sealed partial class RecapWindow
         DamageSourceSummary source,
         DamageActionSummary action,
         double sourceTotal,
-        IReadOnlyList<DamageMeterColumn> columns)
+        IReadOnlyList<DamageMeterColumn> columns,
+        int playerIndex)
     {
         var iconSize = GetDamageMeterWidgetIconSize();
         ImGui.TableNextRow(ImGuiTableRowFlags.None, MathF.Max(iconSize, ImGui.GetTextLineHeight()) + 6.0f);
         ImGui.TableNextColumn();
-        var row = DrawDamageMeterRowSurface(source.Source.IsLimitBreak ? 0 : source.Source.ClassJobId, detail: true);
+        var row = DrawDamageMeterRowSurface(source.Source.IsLimitBreak ? 0 : source.Source.ClassJobId, playerIndex, detail: true);
 
         foreach (var column in columns)
         {

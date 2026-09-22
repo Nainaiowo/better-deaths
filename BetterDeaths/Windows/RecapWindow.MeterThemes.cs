@@ -37,7 +37,7 @@ public sealed partial class RecapWindow
             ? origin + new Vector2(width - layout.MetricsWidth, padding)
             : new Vector2(origin.X, headingBottom + 3 * scale);
         var timerHeight = DrawWidgetSummaryValue(metrics, layout.StackMetrics ? width : timerWidth, timer,
-            MeterThemeStyle.ValueScale, profile.TimerFirst ? accent : secondary);
+            MeterThemeStyle.ValueScale, Vector4.One, outline: true);
         var dpsPosition = layout.StackMetrics
             ? metrics + new Vector2(0, timerHeight + 3 * scale)
             : metrics + new Vector2(timerWidth + 12 * scale, 0);

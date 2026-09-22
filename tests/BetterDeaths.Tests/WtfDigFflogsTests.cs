@@ -533,6 +533,46 @@ public sealed class WtfDigFflogsTests
     }
 
     [Fact]
+    public async Task LocalPull_BlackHoleShowsFiredBeamsWithoutRecordedDamage()
+    {
+        var original = CreateLocalBlackHolePull();
+        var blasts = original.ReplayMechanics
+            .Where(mechanic => mechanic.RawEventKind == "black-hole-blast")
+            .ToArray();
+        var firings = blasts.Select((blast, index) => blast with
+        {
+            SourceKey = $"dmu-p3-nothingness:4000001{index + 1}:first",
+            RawEventKind = "dmu-p3-nothingness",
+            RawState = (uint)(0x40000011 + index),
+        }).ToArray();
+        var laterFirings = firings.Select(firing => firing with
+        {
+            SeenAtUtc = firing.SeenAtUtc.AddSeconds(5),
+            PullElapsedSeconds = firing.PullElapsedSeconds + 5,
+            SourceKey = firing.SourceKey.Replace(":first", ":second", StringComparison.Ordinal),
+        });
+        var pull = original with
+        {
+            ReplayMechanics = original.ReplayMechanics
+                .Where(mechanic => mechanic.RawEventKind != "black-hole-blast")
+                .Concat(firings)
+                .Concat(laterFirings)
+                .Append(blasts[0])
+                .ToArray(),
+        };
+        var source = LocalPullEventSource.Create(pull);
+
+        var analysis = await new BlackHoleAnalyzer(source)
+            .AnalyzeAsync(source.Report, source.Fight, CancellationToken.None);
+
+        Assert.Equal(2, analysis.Tethers.Count);
+        Assert.Equal(new[] { 2, 2 }, analysis.Tethers.Select(tether => tether.Beams.Count));
+        Assert.Equal(new[] { 1, 2 }, analysis.Tethers.Select(tether => tether.Tether));
+        Assert.Single(analysis.Tethers[0].Beams.SelectMany(beam => beam.Hits));
+        Assert.Empty(analysis.Tethers[1].Beams.SelectMany(beam => beam.Hits));
+    }
+
+    [Fact]
     public async Task LocalPull_FiltersCastsBySourceNameLikeWtfDig()
     {
         var source = LocalPullEventSource.Create(CreateLocalBlackHolePull());

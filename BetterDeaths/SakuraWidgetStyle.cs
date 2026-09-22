@@ -19,15 +19,12 @@ internal static class SakuraWidgetStyle
         var light = IsLight(canvas);
         var tint = role switch
         {
-            1 => light ? new Vector4(.85f, .86f, .89f, 1) : new Vector4(.30f, .32f, .34f, 1),
-            2 or 3 => light ? new Vector4(.91f, .83f, .86f, 1) : new Vector4(.35f, .29f, .32f, 1),
-            4 => light ? new Vector4(.84f, .89f, .86f, 1) : new Vector4(.29f, .35f, .32f, 1),
-            _ => light ? new Vector4(.88f, .86f, .89f, 1) : new Vector4(.31f, .32f, .33f, 1),
+            1 => light ? new Vector4(.76f, .82f, .96f, 1) : new Vector4(.25f, .33f, .47f, 1),
+            2 or 3 => light ? new Vector4(.96f, .77f, .85f, 1) : new Vector4(.48f, .27f, .35f, 1),
+            4 => light ? new Vector4(.77f, .94f, .81f, 1) : new Vector4(.25f, .47f, .32f, 1),
+            _ => light ? new Vector4(.88f, .84f, .91f, 1) : new Vector4(.38f, .32f, .42f, 1),
         };
-        var surface = Vector4.Lerp(canvas, tint, detail ? .22f : index % 2 == 0 ? .86f : .72f) with { W = 1 };
-        var accent = Vector4.Lerp(tint, light ? new Vector4(.12f, .18f, .16f, 1) : Vector4.One, .65f);
-        return new WidgetRowColors(surface, WidgetSurfacePolicy.ReadableText(text, surface),
-            WidgetSurfacePolicy.ReadableText(accent, surface));
+        return MeterThemeStyle.TintedRow(canvas, text, tint, index, detail);
     }
 
 }
