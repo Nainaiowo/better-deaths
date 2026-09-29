@@ -54,7 +54,7 @@ public sealed partial class RecapWindow
         var state = wtfDigAnalyzer.Snapshot();
         if (state.Source != WtfDigAnalyzerSource.LocalPull)
         {
-            DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent);
+            DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent, guideTarget: GuideTarget.AnalyzerResults);
             return;
         }
 
@@ -86,7 +86,7 @@ public sealed partial class RecapWindow
                     DrawVerticalReplayDivider("WtfDigPullBrowserDivider", available.Y);
                 }
 
-                DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent);
+                DrawReviewPanel("##WtfDigAnalyzer", Vector2.Zero, DrawWtfDigAnalyzerContent, guideTarget: GuideTarget.AnalyzerResults);
                 return;
             }
 
@@ -112,7 +112,7 @@ public sealed partial class RecapWindow
                     }
                 });
             ImGui.Dummy(new Vector2(1.0f, ReplayPaneGap));
-            DrawReviewPanel("##WtfDigAnalyzerStacked", Vector2.Zero, DrawWtfDigAnalyzerContent);
+            DrawReviewPanel("##WtfDigAnalyzerStacked", Vector2.Zero, DrawWtfDigAnalyzerContent, guideTarget: GuideTarget.AnalyzerResults);
         });
     }
 
@@ -132,7 +132,10 @@ public sealed partial class RecapWindow
         ImGui.TextColored(LeadUpGoldColor with { W = 0.88f }, "Powered by Mczub");
         ImGui.Dummy(new Vector2(1.0f, 5.0f));
 
+        var sourceMin = ImGui.GetCursorScreenPos();
         DrawWtfDigSourceSelector(state);
+        RegisterGuideTarget(GuideTarget.AnalyzerSource, sourceMin,
+            new Vector2(sourceMin.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
         state = wtfDigAnalyzer.Snapshot();
         ImGui.Dummy(new Vector2(1.0f, 5.0f));
         DrawWtfDigAnalyzerSelector(state);
@@ -252,7 +255,7 @@ public sealed partial class RecapWindow
 
     private void OpenWtfDigReplayAt(float pullElapsedSeconds)
     {
-        var summary = plugin.RecordedPulls.FirstOrDefault(candidate =>
+        var summary = GetWtfDigLocalPulls().FirstOrDefault(candidate =>
             candidate.PullNumber == selectedWtfDigLocalPullNumber &&
             candidate.CapturedAtUtc.Ticks == selectedWtfDigLocalPullCapturedAtTicks);
         if (summary is null)
@@ -422,11 +425,17 @@ public sealed partial class RecapWindow
 
     private RecordedPullSummary[] GetWtfDigLocalPulls()
     {
-        return plugin.RecordedPulls
+        var pulls = plugin.RecordedPulls
             .Where(summary => ReplayEncounterModules.IsDancingMadUltimate(summary.TerritoryId))
             .OrderByDescending(summary => summary.CapturedAtUtc)
             .ThenByDescending(summary => summary.PullNumber)
             .ToArray();
+        if (pulls.Length > 0 || plugin.RecordedPullHistoryLoading)
+            return pulls;
+
+        return TutorialSampleData.GetPullIfReady() is { } sample
+            ? [TutorialSampleData.CreatePullSummary(sample)]
+            : pulls;
     }
 
     private RecordedPullSummary? EnsureWtfDigLocalPullSelection(IReadOnlyList<RecordedPullSummary> localPulls)
@@ -481,7 +490,9 @@ public sealed partial class RecapWindow
             wtfDigAnalyzer.ClearLocalPull();
             ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
                 ? "Loading Better Deaths pulls..."
-                : "No recorded DMU pulls are available yet.");
+                : TutorialSampleData.PullLoadFailed
+                    ? "No recorded DMU pulls are available yet. Tutorial data could not be loaded."
+                    : "Loading tutorial pull...");
             return;
         }
 
@@ -494,7 +505,8 @@ public sealed partial class RecapWindow
             state = wtfDigAnalyzer.Snapshot();
         }
 
-        var detail = plugin.GetRecordedPullDetails(selected);
+        var tutorial = TutorialSampleData.IsTutorialSummary(selected);
+        var detail = tutorial ? TutorialSampleData.GetPullIfReady() : plugin.GetRecordedPullDetails(selected);
         if (detail is null)
         {
             ImGui.TextDisabled(plugin.IsRecordedPullDetailsLoading(selected)
@@ -520,7 +532,9 @@ public sealed partial class RecapWindow
     {
         return CreateReplayReviewPull(summary) with
         {
-            Subtitle = FormatRecordedPullCapturedTime(summary),
+            Subtitle = TutorialSampleData.IsTutorialSummary(summary)
+                ? "Practice analyzer mechanics"
+                : FormatRecordedPullCapturedTime(summary),
         };
     }
 
@@ -540,7 +554,9 @@ public sealed partial class RecapWindow
             {
                 ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
                     ? "Loading Better Deaths pulls..."
-                    : "No recorded DMU pulls are available yet.");
+                    : TutorialSampleData.PullLoadFailed
+                        ? "No DMU pulls; tutorial data could not be loaded."
+                        : "Loading tutorial pull...");
             }
 
             foreach (var pull in pulls)

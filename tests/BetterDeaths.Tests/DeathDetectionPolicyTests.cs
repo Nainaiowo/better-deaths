@@ -7,6 +7,49 @@ public sealed class DeathDetectionPolicyTests
     private static readonly TimeSpan CandidateRetention = TimeSpan.FromSeconds(5);
 
     [Theory]
+    [InlineData((int)DeathConfirmationSignal.Unknown, true, false)]
+    [InlineData((int)DeathConfirmationSignal.ActorControl, true, true)]
+    [InlineData((int)DeathConfirmationSignal.EffectResult, true, false)]
+    [InlineData((int)DeathConfirmationSignal.WorldObject, true, false)]
+    [InlineData((int)DeathConfirmationSignal.DutyReset, true, false)]
+    [InlineData((int)DeathConfirmationSignal.Unknown, false, false)]
+    [InlineData((int)DeathConfirmationSignal.ActorControl, false, true)]
+    [InlineData((int)DeathConfirmationSignal.EffectResult, false, true)]
+    [InlineData((int)DeathConfirmationSignal.WorldObject, false, true)]
+    [InlineData((int)DeathConfirmationSignal.DutyReset, false, true)]
+    [InlineData(999, false, false)]
+    public void ContentRuleRequiresTheAppropriateConfirmationSignal(
+        int signal, bool requiresExplicitDeathNotice, bool expected)
+    {
+        Assert.Equal(expected, DeathDetectionPolicy.CanCaptureDeath(
+            (DeathConfirmationSignal)signal, requiresExplicitDeathNotice));
+    }
+
+    [Fact]
+    public void RegularDutyDoesNotRecordZeroHpDamageResultWithoutDeathNotice()
+    {
+        Assert.True(DeathDetectionPolicy.IsConfirmedLethalDamageResult(
+            wasKnownAlive: true, hasMatchedDamage: true, resultCurrentHp: 0,
+            resultShieldHp: 0, resultMaxHp: 200_000));
+        Assert.False(DeathDetectionPolicy.CanCaptureDeath(
+            DeathConfirmationSignal.EffectResult, requiresExplicitDeathNotice: true));
+        Assert.True(DeathDetectionPolicy.CanCaptureDeath(
+            DeathConfirmationSignal.ActorControl, requiresExplicitDeathNotice: true));
+    }
+
+    [Fact]
+    public void RegularDutyDoesNotPromoteStaleDeadStateAtPackEndOrReset()
+    {
+        Assert.Equal(PlayerDeathObservation.WorldObjectDead,
+            DeathDetectionPolicy.ClassifyPolledState(
+                hasWorldObject: true, worldObjectIsDead: true, currentHp: 100_000, maxHp: 200_000));
+        Assert.False(DeathDetectionPolicy.CanCaptureDeath(
+            DeathConfirmationSignal.WorldObject, requiresExplicitDeathNotice: true));
+        Assert.False(DeathDetectionPolicy.CanCaptureDeath(
+            DeathConfirmationSignal.DutyReset, requiresExplicitDeathNotice: true));
+    }
+
+    [Theory]
     [InlineData(42u, "Aiko Tachibana", true, 42u, "Aiko Tachibana", true)]
     [InlineData(42u, "Aiko Tachibana", false, 42u, "Aiko Tachibana", false)]
     [InlineData(42u, "Aiko Tachibana", true, 43u, "Aiko Tachibana", false)]

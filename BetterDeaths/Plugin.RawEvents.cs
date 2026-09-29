@@ -76,6 +76,8 @@ public sealed partial class Plugin
 
         public bool AllowAutomaticDamageEncounterStart { get; init; }
 
+        public bool RequireMeterEligibleDamageForStart { get; init; }
+
         public bool CaptureForReview { get; init; }
 
         public bool CaptureForDamageParsing { get; init; }
@@ -772,7 +774,9 @@ public sealed partial class Plugin
             SpellId = header->SpellId,
             AnimationVariation = header->AnimationVariation,
             AnimationTargetEntityId = GetEntityId(header->AnimationTargetId),
-            AllowAutomaticDamageEncounterStart = IsOverworldDamageCaptureEnabled(),
+            AllowAutomaticDamageEncounterStart = CaptureTimingPolicy.ShouldStartDamageEncounterFromAction(
+                captureForDamageParsing, IsDutyCaptureActive(), IsOverworldDamageCaptureEnabled()),
+            RequireMeterEligibleDamageForStart = IsDutyCaptureActive(),
             CaptureForReview = captureForReview,
             CaptureForDamageParsing = captureForDamageParsing,
             ServerFrameTiming = captureForDamageParsing ? CurrentServerFrameTiming : null,

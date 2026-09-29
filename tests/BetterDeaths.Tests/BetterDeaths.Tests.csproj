@@ -71,6 +71,10 @@
     <Compile Include="../../BetterDeaths/LeadUpDisplayPolicy.cs" Link="LeadUpDisplayPolicy.cs" />
     <Compile Include="../../BetterDeaths/LeadUpHpTimelinePolicy.cs" Link="LeadUpHpTimelinePolicy.cs" />
     <Compile Include="../../BetterDeaths/LeadUpTimingPolicy.cs" Link="LeadUpTimingPolicy.cs" />
+    <Compile Include="../../BetterDeaths/OnboardingGuide.cs" Link="OnboardingGuide.cs" />
+    <Compile Include="../../BetterDeaths/TutorialSampleData.cs" Link="TutorialSampleData.cs" />
+    <EmbeddedResource Include="../../BetterDeaths/TutorialSamples/review-replay-pull.json.gz" LogicalName="BetterDeaths.TutorialSamples.review-replay-pull.json.gz" />
+    <EmbeddedResource Include="../../BetterDeaths/TutorialSamples/meter-encounter.json.gz" LogicalName="BetterDeaths.TutorialSamples.meter-encounter.json.gz" />
     <Compile Include="../../BetterDeaths/Models.cs" Link="Models.cs" />
     <Compile Include="../../BetterDeaths/RecordedPullLookup.cs" Link="RecordedPullLookup.cs" />
     <Compile Include="../../BetterDeaths/ReplayBoundsInference.cs" Link="ReplayBoundsInference.cs" />

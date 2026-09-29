@@ -195,7 +195,9 @@ public sealed partial class Plugin
 
     private void ObservePendingWorldObjectDeath(PartyMemberSnapshot member, DateTime now)
     {
-        if (deadMemberKeys.Contains(member.MemberKey) ||
+        if (!DeathDetectionPolicy.CanCaptureDeath(
+                DeathConfirmationSignal.WorldObject, GetContentCaptureState().RequiresExplicitDeathNotice) ||
+            deadMemberKeys.Contains(member.MemberKey) ||
             !WasMemberKnownAlive(member))
         {
             return;
@@ -227,7 +229,7 @@ public sealed partial class Plugin
                 now,
                 PendingDeathConfirmationDelay))
         {
-            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Framework confirmed",
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, DeathConfirmationSignal.WorldObject,
                 diagnosticCode: candidate.DetectionCode);
         }
     }
@@ -280,7 +282,7 @@ public sealed partial class Plugin
 
         foreach (var candidate in pendingDeathCandidatesByMember.Values.ToList())
         {
-            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, "Duty reset confirmation",
+            TryCaptureDeath(candidate.Snapshot, candidate.FirstSeenAtUtc, DeathConfirmationSignal.DutyReset,
                 diagnosticCode: candidate.DetectionCode.Replace("-WO-", "-DR-", StringComparison.Ordinal));
         }
     }
@@ -984,7 +986,7 @@ public sealed partial class Plugin
                 Statuses = statuses,
             },
             resultSeenAtUtc,
-            "EffectResult",
+            DeathConfirmationSignal.EffectResult,
             diagnosticCode: DeathDetectionPolicy.BuildDiagnosticCode("ER", "MD", 0, combatEvent.ResultMaxHp));
     }
 
@@ -1029,7 +1031,7 @@ public sealed partial class Plugin
                     Statuses = bestKnownStatuses,
                 },
                 packet.SeenAtUtc,
-                "ActorControl",
+                DeathConfirmationSignal.ActorControl,
                 deathContext,
                 DeathDetectionPolicy.BuildDiagnosticCode(
                     "AC", identity.Basis, identity.CurrentHp, identity.MaxHp,
@@ -1806,11 +1808,13 @@ public sealed partial class Plugin
     private bool TryCaptureDeath(
         PartyMemberSnapshot member,
         DateTime deathSeenAtUtc,
-        string signalSource,
+        DeathConfirmationSignal signal,
         DeathCaptureContext? deathContext = null,
         string? diagnosticCode = null)
     {
-        if (awaitingCombatClearAfterReset)
+        // In regular duties only a verified death notice can create a recorded death.
+        if (!DeathDetectionPolicy.CanCaptureDeath(signal, GetContentCaptureState().RequiresExplicitDeathNotice) ||
+            awaitingCombatClearAfterReset)
         {
             return false;
         }
@@ -1868,7 +1872,7 @@ public sealed partial class Plugin
         }
 
         QueueDeathRecapLink(death, DateTime.UtcNow);
-        AddDebugLog($"{member.MemberName} died to {FormatCause(DeathDisplaySelector.Select(death).Events)} via {signalSource}.");
+        AddDebugLog($"{member.MemberName} died to {FormatCause(DeathDisplaySelector.Select(death).Events)} via {signal}.");
         return true;
     }
 

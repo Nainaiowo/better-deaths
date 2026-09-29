@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.49";
+    private const string CurrentChangelogVersion = "1.0.0.52";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -815,7 +815,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawPluginUpdateBanner();
 
         ApplyPendingSelectionPage();
+        guideTargets.Clear();
         DrawModernShell();
+        DrawGuidePointer();
 
         if (clearPendingDeathSelection)
         {
@@ -930,6 +932,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
             DrawModernTopNavigation(navigationItems);
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+            DrawInGameGuide();
         }
 
         ImGui.SetCursorPosX(0.0f);
@@ -944,6 +947,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
             DrawModernHeaderUtilityControls("Compact");
             ImGui.Dummy(new Vector2(1.0f, ModernHeaderBottomGap));
+            DrawInGameGuide();
         }
 
         ImGui.SetCursorPosX(0.0f);
@@ -1050,6 +1054,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         var end = start + size;
+        if (selected)
+            RegisterGuideTarget(GuideTarget.Navigation, start, end);
         var drawList = ImGui.GetWindowDrawList();
         var fill = selected
             ? ModernNavButtonSelectedColor
@@ -1141,13 +1147,21 @@ public sealed partial class RecapWindow : Window, IDisposable
         var helpWidth = string.Equals(helpLabel, fullHelpLabel, StringComparison.Ordinal)
             ? fullHelpWidth
             : compactHelpWidth;
+        var guideWidth = GetThemedActionButtonWidth("Guide");
+        if (funControlsWidth + guideWidth + helpWidth + (spacing * 2.0f) > availableWidth)
+        {
+            helpLabel = helpIcon;
+            helpWidth = compactHelpWidth;
+        }
         var left = ImGui.GetCursorPosX();
         var right = ImGui.GetWindowContentRegionMax().X - ModernShellPadding;
-        var totalWidth = funControlsWidth + spacing + helpWidth;
+        var totalWidth = funControlsWidth + guideWidth + helpWidth + (spacing * 2.0f);
 
         if (totalWidth > availableWidth)
         {
-            ImGui.SetCursorPosX(MathF.Max(left, right - compactHelpWidth));
+            ImGui.SetCursorPosX(MathF.Max(left, right - guideWidth - compactHelpWidth - spacing));
+            DrawGuideButton(idSuffix, guideWidth);
+            ImGui.SameLine();
             DrawHelpCenterButton(idSuffix, helpIcon, compactHelpWidth);
             ImGui.SetCursorPosX(MathF.Max(left, right - funControlsWidth));
             DrawFunModeControls(idSuffix, funModeEnabled, ligmaWidth);
@@ -1156,6 +1170,8 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         ImGui.SetCursorPosX(MathF.Max(left, right - totalWidth));
         DrawFunModeControls(idSuffix, funModeEnabled, ligmaWidth);
+        ImGui.SameLine();
+        DrawGuideButton(idSuffix, guideWidth);
         ImGui.SameLine();
         DrawHelpCenterButton(idSuffix, helpLabel, helpWidth);
     }
@@ -1354,7 +1370,9 @@ public sealed partial class RecapWindow : Window, IDisposable
             : selectedItem.Label;
         var width = MathF.Min(260.0f, MathF.Max(140.0f, ImGui.GetContentRegionAvail().X));
         ImGui.SetNextItemWidth(width);
-        if (!ImGui.BeginCombo("##BetterDeathsMainNavigationCompact", selectedLabel))
+        var comboOpen = ImGui.BeginCombo("##BetterDeathsMainNavigationCompact", selectedLabel);
+        RegisterGuideTarget(GuideTarget.Navigation);
+        if (!comboOpen)
         {
             return;
         }
@@ -1401,11 +1419,11 @@ public sealed partial class RecapWindow : Window, IDisposable
                 DrawOptionsPage();
                 break;
             case MainPage.Data:
-                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
+                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage, guideTarget: GuideTarget.Data);
                 break;
             case MainPage.Feedback:
                 currentMainPage = MainPage.Data;
-                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage);
+                DrawReviewPanel("##DataModern", Vector2.Zero, DrawDataPage, guideTarget: GuideTarget.Data);
                 break;
             case MainPage.Updates:
                 plugin.MarkChangelogVersionSeen(CurrentChangelogVersion);
@@ -1430,18 +1448,20 @@ public sealed partial class RecapWindow : Window, IDisposable
             DrawReviewPanel(
                 "##OptionsSettings",
                 new Vector2(leftWidth, available.Y),
-                DrawOptionsTab);
+                DrawOptionsTab,
+                guideTarget: GuideTarget.OptionsSettings);
             ImGui.SameLine();
             DrawReviewPanel(
                 "##OptionsCustomize",
                 Vector2.Zero,
-                DrawCustomizeTab);
+                DrawCustomizeTab,
+                guideTarget: GuideTarget.OptionsCustomize);
             return;
         }
 
-        DrawReviewPanel("##OptionsSettingsStacked", new Vector2(0.0f, MathF.Min(360.0f, MathF.Max(240.0f, available.Y * 0.48f))), DrawOptionsTab);
+        DrawReviewPanel("##OptionsSettingsStacked", new Vector2(0.0f, MathF.Min(360.0f, MathF.Max(240.0f, available.Y * 0.48f))), DrawOptionsTab, guideTarget: GuideTarget.OptionsSettings);
         ImGui.Dummy(new Vector2(1.0f, WorkspacePaneGap));
-        DrawReviewPanel("##OptionsCustomizeStacked", Vector2.Zero, DrawCustomizeTab);
+        DrawReviewPanel("##OptionsCustomizeStacked", Vector2.Zero, DrawCustomizeTab, guideTarget: GuideTarget.OptionsCustomize);
     }
 
     private void DrawUpdatesPage()
@@ -1457,7 +1477,8 @@ public sealed partial class RecapWindow : Window, IDisposable
             DrawReviewPanel(
                 "##UpdatesNotes",
                 new Vector2(leftWidth, available.Y),
-                DrawNotesTab);
+                DrawNotesTab,
+                guideTarget: GuideTarget.Updates);
             ImGui.SameLine();
             DrawReviewPanel(
                 "##UpdatesChangelog",
@@ -1466,7 +1487,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawReviewPanel("##UpdatesChangelogStacked", new Vector2(0.0f, MathF.Min(420.0f, MathF.Max(260.0f, available.Y * 0.55f))), DrawChangelogTab);
+        DrawReviewPanel("##UpdatesChangelogStacked", new Vector2(0.0f, MathF.Min(420.0f, MathF.Max(260.0f, available.Y * 0.55f))), DrawChangelogTab, guideTarget: GuideTarget.Updates);
         DrawReviewPanel("##UpdatesNotesStacked", Vector2.Zero, DrawNotesTab);
     }
 
@@ -1567,6 +1588,13 @@ public sealed partial class RecapWindow : Window, IDisposable
         var visiblePulls = GetVisibleRecordedPulls()
             .Where(entry => entry.Summary.DeathCount > 0)
             .ToList();
+        var tutorialSelected = selectedReplayPullKey?.StartsWith("Recorded:0:", StringComparison.Ordinal) == true;
+        var hasRecordedDeathPulls = plugin.RecordedPulls.Any(summary => summary.DeathCount > 0);
+        if ((!hasRecordedDeathPulls || tutorialSelected) && !plugin.RecordedPullHistoryLoading &&
+            TutorialSampleData.GetPullIfReady() is { } sample)
+        {
+            visiblePulls.Add((TutorialSampleData.CreatePullSummary(sample), 0));
+        }
 
         DrawWorkspacePaddedContent("##ReplayPagePaddedContent", () =>
         {
@@ -1574,7 +1602,11 @@ public sealed partial class RecapWindow : Window, IDisposable
             {
                 ImGui.TextDisabled(plugin.RecordedPullHistoryLoading
                     ? "Loading saved pulls..."
-                    : "No saved death pulls have replay data yet.");
+                    : hasRecordedDeathPulls
+                        ? "No saved death pulls match the current filters."
+                    : TutorialSampleData.PullLoadFailed
+                        ? "Tutorial replay could not be loaded."
+                        : "Loading tutorial replay...");
                 DrawReviewPaneBottomPadding();
                 return;
             }
@@ -1587,7 +1619,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                 selectedEntry = visiblePulls[0];
             }
 
-            plugin.RetainLoadedRecordedPullDetails(selectedEntry.Summary);
+            if (!TutorialSampleData.IsTutorialSummary(selectedEntry.Summary))
+                plugin.RetainLoadedRecordedPullDetails(selectedEntry.Summary);
 
             var available = ImGui.GetContentRegionAvail();
             var replayPulls = visiblePulls
@@ -1608,14 +1641,16 @@ public sealed partial class RecapWindow : Window, IDisposable
                     DrawReplayPane(
                         "##ReplayPullBrowser",
                         new Vector2(browserWidth, available.Y),
-                        () => DrawReplayPullBrowser(replayPulls, "Replay"));
+                        () => DrawReplayPullBrowser(replayPulls, "Replay"),
+                        GuideTarget.ReplayPulls);
                     DrawVerticalReplayDivider("ReplayPullBrowserDivider", available.Y);
                 }
 
                 DrawReplayPane(
                     "##ReplayViewer",
                     new Vector2(0.0f, available.Y),
-                    () => DrawReplayViewer(selectedEntry.Summary));
+                    () => DrawReplayViewer(selectedEntry.Summary),
+                    GuideTarget.ReplayViewer);
                 return;
             }
 
@@ -1639,12 +1674,13 @@ public sealed partial class RecapWindow : Window, IDisposable
                             useVerticalDrawerControls: true,
                             useCells: true);
                     }
-                });
+                }, GuideTarget.ReplayPulls);
             ImGui.Dummy(new Vector2(1.0f, ReplayPaneGap));
             DrawReplayPane(
                 "##ReplayViewerStacked",
                 Vector2.Zero,
-                () => DrawReplayViewer(selectedEntry.Summary));
+                () => DrawReplayViewer(selectedEntry.Summary),
+                GuideTarget.ReplayViewer);
         });
     }
 
@@ -1756,7 +1792,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         return new ReviewPull(
             BuildRecordedPullKey(summary),
-            $"Pull {summary.PullNumber}",
+            TutorialSampleData.IsTutorialSummary(summary) ? "Tutorial sample" : $"Pull {summary.PullNumber}",
             string.Empty,
             summary.PullNumber,
             summary.TerritoryId,
@@ -1773,10 +1809,11 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawReplayViewer(RecordedPullSummary summary)
     {
-        var detail = plugin.GetRecordedPullDetails(summary);
+        var tutorial = TutorialSampleData.IsTutorialSummary(summary);
+        var detail = tutorial ? TutorialSampleData.GetPullIfReady() : plugin.GetRecordedPullDetails(summary);
         if (detail is null)
         {
-            DrawReplaySurfaceHeader($"Pull {summary.PullNumber} Replay", BuildReplayHeaderMeta(summary));
+            DrawReplaySurfaceHeader(tutorial ? "Tutorial replay" : $"Pull {summary.PullNumber} Replay", BuildReplayHeaderMeta(summary));
             ImGui.TextDisabled(plugin.RecordedPullHistoryLoading || plugin.IsRecordedPullDetailsLoading(summary)
                 ? "Loading replay..."
                 : "Replay details could not be loaded.");
@@ -1784,7 +1821,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             return;
         }
 
-        DrawReplaySurfaceHeader($"Pull {summary.PullNumber} Replay", BuildReplayHeaderMeta(summary));
+        DrawReplaySurfaceHeader(tutorial ? "Tutorial replay" : $"Pull {summary.PullNumber} Replay", BuildReplayHeaderMeta(summary));
 
         var focusDeath = GetReplayFocusDeath(detail, summary) ?? GetDeathsInTimelineOrder(detail.Deaths).FirstOrDefault();
         if (!HasFullPullReplayData(detail))
@@ -2320,17 +2357,20 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawExamplePullTab()
     {
+        var sample = TutorialSampleData.GetPullIfReady();
         var deaths = GetExampleDeaths();
+        var territory = sample?.TerritoryName ?? "Sigmascape V4.0";
+        var duration = sample?.PullElapsedSeconds ?? 293.0f;
         var pulls = new List<ReviewPull>
         {
             new(
                 "ExamplePull",
-                "Example pull",
-                "Sigmascape V4.0 - Timer 04:53",
+                sample is null ? "Example pull" : "Tutorial sample",
+                $"{territory} - Timer {FormatCombatTimer(duration)}",
                 null,
-                0,
-                "Sigmascape V4.0",
-                293.0f,
+                sample?.TerritoryId ?? 0,
+                territory,
+                duration,
                 deaths.Count,
                 string.Empty,
                 -1,
@@ -2560,7 +2600,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                     () => DrawPullBrowser(
                         pulls,
                         idPrefix,
-                        selection));
+                        selection),
+                    guideTarget: GuideTarget.ReviewPulls);
                 DrawVerticalReviewDivider($"{idPrefix}PullBrowserDivider", available.Y);
             }
         }
@@ -2573,13 +2614,15 @@ public sealed partial class RecapWindow : Window, IDisposable
                 idPrefix,
                 selection,
                 allowLeadUpScrollHandoff: true),
-            framed: false);
+            framed: false,
+            guideTarget: GuideTarget.ReviewTimeline);
         DrawResizableTimelineDivider($"{idPrefix}TimelineDivider", available.Y, reviewWidth, centerWidth);
         DrawReviewPane(
             $"##{idPrefix}DeathDetails",
             new Vector2(rightWidth, available.Y),
             () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix),
-            framed: false);
+            framed: false,
+            guideTarget: GuideTarget.ReviewDetails);
     }
 
     private void DrawStackedReviewWorkspace(
@@ -2599,7 +2642,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                 DrawReviewPane(
                     $"##{idPrefix}PullBrowserStackedCollapsed",
                     new Vector2(0.0f, stackedLayout.PullBrowserHeight),
-                    () => DrawCollapsedPullBrowser(idPrefix, pulls, selection));
+                    () => DrawCollapsedPullBrowser(idPrefix, pulls, selection),
+                    guideTarget: GuideTarget.ReviewPulls);
             }
             else
             {
@@ -2611,7 +2655,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                         idPrefix,
                         selection,
                         useVerticalDrawerControls: true,
-                        usePullCells: true));
+                        usePullCells: true),
+                    guideTarget: GuideTarget.ReviewPulls);
             }
 
             DrawResizableStackedReviewDivider(
@@ -2634,7 +2679,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                 idPrefix,
                 selection,
                 allowLeadUpScrollHandoff: true),
-            framed: false);
+            framed: false,
+            guideTarget: GuideTarget.ReviewTimeline);
         DrawResizableStackedReviewDivider(
             $"{idPrefix}TimelineStackedResize",
             innerAvailable.X,
@@ -2647,7 +2693,8 @@ public sealed partial class RecapWindow : Window, IDisposable
             $"##{idPrefix}DeathDetailsStacked",
             new Vector2(0.0f, stackedLayout.DeathDetailsHeight),
             () => DrawSelectedDeathPanel(selectedPull, selectedDeath, idPrefix),
-            framed: false);
+            framed: false,
+            guideTarget: GuideTarget.ReviewDetails);
     }
 
     private StackedReviewLayout GetStackedReviewLayout(float availableHeight, bool showPullBrowser, bool pullBrowserCollapsed)
@@ -2747,7 +2794,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         return Math.Clamp(height, minHeight, safeMaxHeight);
     }
 
-    private void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true)
+    private void DrawReviewPanel(string id, Vector2 size, Action draw, bool indentContent = true, GuideTarget? guideTarget = null)
     {
         var framed = indentContent;
         ImGui.PushStyleColor(ImGuiCol.ChildBg, framed ? WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity) : Vector4.Zero);
@@ -2770,6 +2817,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        if (guideTarget is { } panelTarget)
+            RegisterGuideTarget(panelTarget);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(4);
     }
@@ -2787,7 +2836,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    private void DrawReviewPane(string id, Vector2 size, Action draw, bool framed = true)
+    private void DrawReviewPane(string id, Vector2 size, Action draw, bool framed = true, GuideTarget? guideTarget = null)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, framed ? WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity) : Vector4.Zero);
         ImGui.PushStyleColor(ImGuiCol.Border, framed ? ModernPanelBorderColor : Vector4.Zero);
@@ -2805,11 +2854,13 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        if (guideTarget is { } paneTarget)
+            RegisterGuideTarget(paneTarget);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(4);
     }
 
-    private void DrawReplayPane(string id, Vector2 size, Action draw)
+    private void DrawReplayPane(string id, Vector2 size, Action draw, GuideTarget? guideTarget = null)
     {
         ImGui.PushStyleColor(ImGuiCol.ChildBg, WithBackgroundOpacity(ModernPanelColor, currentMainWindowBackgroundOpacity));
         ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
@@ -2823,6 +2874,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         ImGui.EndChild();
+        if (guideTarget is { } replayTarget)
+            RegisterGuideTarget(replayTarget);
         ImGui.PopStyleVar(2);
         ImGui.PopStyleColor(4);
     }
@@ -3566,6 +3619,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.PopStyleColor();
 
         var drawList = ImGui.GetWindowDrawList();
+        RegisterGuideTarget(GuideTarget.ReplayPulls, position, position + size);
         drawList.AddLine(
             new Vector2(position.X + size.X - 1.0f, position.Y),
             new Vector2(position.X + size.X - 1.0f, position.Y + height),
@@ -3661,6 +3715,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.EndChild();
         ImGui.PopStyleVar();
         ImGui.PopStyleColor();
+        RegisterGuideTarget(GuideTarget.ReviewPulls, position, position + size);
 
         var lineX = position.X + size.X - 1.0f;
         ImGui.GetWindowDrawList().AddLine(
@@ -4426,7 +4481,9 @@ public sealed partial class RecapWindow : Window, IDisposable
                 : $"{selectedItem.Label} ({selectedItem.BadgeText})";
         var width = MathF.Min(240.0f, MathF.Max(140.0f, ImGui.GetContentRegionAvail().X));
         ImGui.SetNextItemWidth(width);
-        if (!ImGui.BeginCombo($"##DeathDetailCompact{deathId}", selectedLabel))
+        var comboOpen = ImGui.BeginCombo($"##DeathDetailCompact{deathId}", selectedLabel);
+        RegisterGuideTarget(GuideTarget.WhatIf);
+        if (!comboOpen)
         {
             return;
         }
@@ -4481,6 +4538,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
         var buttonMin = ImGui.GetItemRectMin();
         var buttonMax = ImGui.GetItemRectMax();
+        if (page == DeathDetailPage.WhatIf)
+            RegisterGuideTarget(GuideTarget.WhatIf, buttonMin, buttonMax);
         if (!string.IsNullOrWhiteSpace(badgeText))
         {
             DrawFloatingTabPill(buttonMin, buttonMax, badgeText);
@@ -4734,7 +4793,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         if (ImGui.IsItemHovered())
         {
             SetThemedTooltip(canOpenReplay
-                ? "Opens the saved pull replay around this death."
+                ? pull.Source == DeathSelectionSource.Example
+                    ? "Opens the tutorial replay around this death."
+                    : "Opens the saved pull replay around this death."
                 : "Full replay is available after the pull is saved.");
         }
 
@@ -4743,6 +4804,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private bool TryGetReplayRecordedPullSummary(ReviewPull pull, out RecordedPullSummary summary)
     {
+        if (pull.Source == DeathSelectionSource.Example && TutorialSampleData.GetPullIfReady() is { } sample)
+        {
+            summary = TutorialSampleData.CreatePullSummary(sample);
+            return true;
+        }
+
         if (pull.RecordedPull is { } recordedPull)
         {
             summary = recordedPull;
@@ -18148,7 +18215,11 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             var titleHeight = DrawWidgetPreviewBackground(theme, opacity);
             ImGui.SetCursorPos(new Vector2(0.0f, titleHeight));
-            DrawCurrentPullWidgetContent(GetExampleDeaths(), "Sigmascape V4.0 - 04:53", "WidgetPreview");
+            var sample = TutorialSampleData.GetPullIfReady();
+            var title = sample is null
+                ? "Sigmascape V4.0 - 04:53"
+                : $"Tutorial sample - {FormatCombatTimer(sample.PullElapsedSeconds)}";
+            DrawCurrentPullWidgetContent(GetExampleDeaths(), title, "WidgetPreview");
             DrawWidgetPreviewChrome(theme, titleHeight);
         }
 
@@ -19968,6 +20039,17 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.52");
+        ImGui.TextDisabled("Testing update: In-Game Guide and Capture Improvements.");
+        DrawWrappedBullet("Added an optional, 17-step walkthrough explaining how to use Review, Replay, Widgets, Analyzer, Options, Data, and Updates.");
+        DrawWrappedBullet("The guide opens each section, highlights relevant controls, and explains how to understand the information. Reopen it anytime using Guide.");
+        DrawWrappedBullet("Added name-redacted tutorial data for exploring death timelines, Replay, Analyzer, and widget previews without recorded pulls. Tutorial samples remain separate from saved history.");
+        DrawWrappedBullet("Improved DPS Meter capture so opening damage can start an encounter without waiting for your character's combat flag.");
+        DrawWrappedBullet("Regular content now requires a verified game death notification before recording a death. This should prevent random death detections when dungeon mob packs end or player state disappears.");
+        DrawWrappedBullet("Preserved existing death-detection behavior in Extreme, Savage, Ultimate, and Criterion Savage content.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.49");
         ImGui.TextDisabled("Testing update.");
         DrawWrappedBullet("Kept the encounter, duration, and total DPS in a compact header that wraps in narrow windows.");
@@ -21483,6 +21565,9 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<PartyDeathRecord> GetExampleDeaths()
     {
+        if (TutorialSampleData.GetPullIfReady() is { } sample)
+            return sample.Deaths;
+
         exampleDeaths ??= CreateExampleDeaths();
         return exampleDeaths;
     }

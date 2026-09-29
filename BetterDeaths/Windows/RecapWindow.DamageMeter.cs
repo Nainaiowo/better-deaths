@@ -39,7 +39,8 @@ public sealed partial class RecapWindow
             DrawReviewPanel(
                 "##DeathWidgetSettings",
                 Vector2.Zero,
-                DrawWidgetTab);
+                DrawWidgetTab,
+                guideTarget: GuideTarget.DeathWidget);
             return;
         }
 
@@ -47,7 +48,8 @@ public sealed partial class RecapWindow
         DrawReviewPanel(
             "##DeathWidgetSettingsStacked",
             new Vector2(0.0f, deathWidgetHeight),
-            DrawWidgetTab);
+            DrawWidgetTab,
+            guideTarget: GuideTarget.DeathWidget);
         ImGui.Dummy(new Vector2(1.0f, WorkspacePaneGap));
         DrawDamageMeterWorkspace();
     }
@@ -63,16 +65,16 @@ public sealed partial class RecapWindow
             var browserHeight = collapsed
                 ? 54.0f
                 : MathF.Min(210.0f, MathF.Max(expandedBrowserMinimum, available.Y * 0.28f));
-            DrawReviewPanel("##DamageMeterEncountersStacked", new Vector2(0.0f, browserHeight), DrawDamageMeterBrowser);
+            DrawReviewPanel("##DamageMeterEncountersStacked", new Vector2(0.0f, browserHeight), DrawDamageMeterBrowser, guideTarget: GuideTarget.MeterEncounters);
             ImGui.Dummy(new Vector2(1.0f, WorkspacePaneGap));
-            DrawReviewPanel("##DamageMeter", Vector2.Zero, DrawDamageMeterContent);
+            DrawReviewPanel("##DamageMeter", Vector2.Zero, DrawDamageMeterContent, guideTarget: GuideTarget.MeterWidget);
             return;
         }
 
         var browserWidth = collapsed ? PullBrowserCollapsedWidth : PullBrowserExpandedWidth;
-        DrawReviewPanel("##DamageMeterEncounters", new Vector2(browserWidth, available.Y), DrawDamageMeterBrowser);
+        DrawReviewPanel("##DamageMeterEncounters", new Vector2(browserWidth, available.Y), DrawDamageMeterBrowser, guideTarget: GuideTarget.MeterEncounters);
         DrawVerticalReviewDivider("DamageMeterBrowserDivider", available.Y);
-        DrawReviewPanel("##DamageMeter", Vector2.Zero, DrawDamageMeterContent);
+        DrawReviewPanel("##DamageMeter", Vector2.Zero, DrawDamageMeterContent, guideTarget: GuideTarget.MeterWidget);
     }
 
     private void DrawDamageMeterContent()
@@ -97,7 +99,10 @@ public sealed partial class RecapWindow
 
         DrawDamageMeterWidgetSettings();
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
+        var columnsMin = ImGui.GetCursorScreenPos();
         DrawDamageMeterColumnSettings();
+        RegisterGuideTarget(GuideTarget.MeterColumns, columnsMin,
+            new Vector2(columnsMin.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
         DrawDamageMeterPreview();
         DrawReviewPaneBottomPadding();
@@ -192,6 +197,7 @@ public sealed partial class RecapWindow
 
         configuration.DamageMeterColumns = DamageMeterColumnPolicy.Normalize(configuration.DamageMeterColumns);
         ImGui.TextColored(ModernAccentColor, "Widget columns");
+        FocusGuideTarget(GuideTarget.MeterColumns);
         ImGui.TextColored(ModernMutedTextColor, "Drag to reorder or add. Select X to remove a column.");
         ImGui.Dummy(new Vector2(1.0f, 3.0f));
 
@@ -438,6 +444,9 @@ public sealed partial class RecapWindow
         var collapsed = configuration.DamageMeterBrowserCollapsed;
         var history = plugin.RecordedDamageEncounters;
         var current = plugin.CurrentDamageEncounter;
+        var tutorialMeter = current is null && history.Count == 0 && plugin.LastDamageEncounter is null
+            ? TutorialSampleData.GetMeterIfReady()
+            : null;
         var automaticEncounterNumber = current is null && selectedDamageEncounterNumber == 0
             ? history.LastOrDefault()?.EncounterNumber
             : null;
@@ -489,6 +498,9 @@ public sealed partial class RecapWindow
                     automaticEncounterNumber == encounter.EncounterNumber,
                     $"Encounter {encounter.EncounterNumber}: {encounter.TerritoryName}");
             }
+
+            if (tutorialMeter is not null)
+                DrawDamageMeterBrowserRailItem("DEMO", 0, true, "Redacted tutorial encounter");
 
             return;
         }
@@ -558,6 +570,9 @@ public sealed partial class RecapWindow
                     automaticEncounterNumber == encounter.EncounterNumber);
             }
 
+            if (tutorialMeter is not null)
+                DrawDamageMeterBrowserItem("Tutorial sample", $"Redacted encounter | {tutorialMeter.Sources.Count} players", 0, true);
+
             DrawReviewPaneBottomPadding();
         }
 
@@ -613,9 +628,11 @@ public sealed partial class RecapWindow
             if (ImGui.IsItemHovered())
             {
                 SetThemedTooltip(
-                    "Redacted report data is shown until an encounter is recorded.");
+                    "A redacted tutorial encounter is shown until an encounter is recorded.");
             }
         }
+
+        FocusGuideTarget(GuideTarget.MeterPreview);
 
         var previewHeight = MathF.Min(440.0f, MathF.Max(280.0f, ImGui.GetContentRegionAvail().Y));
         var theme = BetterDeathsThemeCatalog.GetTheme(configuration);
@@ -634,6 +651,7 @@ public sealed partial class RecapWindow
         }
 
         ImGui.EndChild();
+        RegisterGuideTarget(GuideTarget.MeterPreview);
         ImGui.PopStyleVar();
         ImGui.PopStyleColor();
     }
@@ -676,10 +694,11 @@ public sealed partial class RecapWindow
             return (last, "Last encounter", false);
         }
 
-        return (
-            DamageMeterPreviewData.Create(),
-            "Dancing Mad | redacted report example",
-            true);
+        if (TutorialSampleData.GetMeterIfReady() is { } sample)
+            return (sample, $"Tutorial sample | {sample.Sources.Count} players", true);
+
+        return (DamageMeterPreviewData.Create(),
+            TutorialSampleData.MeterLoadFailed ? "Tutorial sample unavailable" : "Loading tutorial sample", true);
     }
 
     internal void DrawDamageMeterWidgetContent()

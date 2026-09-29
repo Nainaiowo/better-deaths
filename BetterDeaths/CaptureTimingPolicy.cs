@@ -64,6 +64,14 @@ internal static class CaptureTimingPolicy
         return (isDutyCaptureActive || supportsPreDutyCalibration) && !isPvPCaptureBlocked;
     }
 
+    public static bool ShouldStartDamageEncounterFromAction(
+        bool captureForDamageParsing,
+        bool isDutyCaptureActive,
+        bool isOverworldDamageCaptureEnabled)
+    {
+        return captureForDamageParsing && (isDutyCaptureActive || isOverworldDamageCaptureEnabled);
+    }
+
     public static bool ShouldClosePull(
         bool isDutyCaptureActive,
         bool isPvPCaptureBlocked,

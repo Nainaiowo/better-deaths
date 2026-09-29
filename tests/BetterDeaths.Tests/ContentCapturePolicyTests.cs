@@ -3,6 +3,52 @@ namespace BetterDeaths.Tests;
 public sealed class ContentCapturePolicyTests
 {
     [Theory]
+    [InlineData(false, 2, 6, 3)] // ARR dungeon.
+    [InlineData(false, 2, 45, 3)] // Dawntrail dungeon.
+    [InlineData(false, 21, 0, 31)] // Deep dungeon.
+    [InlineData(false, 4, 8, 10)] // Normal/Hard trial.
+    [InlineData(false, 4, 46, 10)] // Dawntrail normal trial.
+    [InlineData(false, 5, 11, 16)] // Normal raid.
+    [InlineData(false, 5, 48, 17)] // Dawntrail normal raid.
+    [InlineData(false, 5, 42, 8)] // Alliance raid.
+    [InlineData(false, 30, 0, 4)] // Variant.
+    [InlineData(false, 30, 0, 57)] // Criterion.
+    [InlineData(false, 0, 0, 0)] // Unavailable content metadata.
+    [InlineData(false, 999, 999, 999)]
+    [InlineData(false, 2, 19, 3)] // A category on the wrong content type grants no exemption.
+    public void RegularContentRequiresExplicitDeathNotice(
+        bool highEndDuty, uint contentType, uint contentUiCategory, uint intendedUse)
+    {
+        Assert.True(ContentCapturePolicy.RequiresExplicitDeathNotice(
+            highEndDuty, contentType, contentUiCategory, intendedUse));
+    }
+
+    [Theory]
+    [InlineData(false, 4, 19, 10)] // ARR high-end trials, including legacy Extreme.
+    [InlineData(false, 4, 20, 10)] // Heavensward.
+    [InlineData(false, 4, 22, 10)] // Stormblood.
+    [InlineData(false, 4, 33, 10)] // Shadowbringers.
+    [InlineData(false, 4, 39, 10)] // Endwalker.
+    [InlineData(false, 4, 47, 10)] // Dawntrail.
+    [InlineData(false, 5, 12, 16)] // ARR Savage.
+    [InlineData(false, 5, 13, 16)] // Heavensward.
+    [InlineData(false, 5, 17, 17)] // Stormblood.
+    [InlineData(false, 5, 35, 17)] // Shadowbringers.
+    [InlineData(false, 5, 41, 17)] // Endwalker.
+    [InlineData(false, 5, 49, 17)] // Dawntrail.
+    [InlineData(false, 28, 0, 17)] // Ultimate.
+    [InlineData(true, 4, 0, 10)] // Current/future high-end trial.
+    [InlineData(true, 5, 0, 17)] // Current/future high-end raid.
+    [InlineData(false, 30, 0, 58)] // Criterion Savage.
+    [InlineData(false, 0, 0, 58)] // Criterion Savage territory without a duty row.
+    public void HighEndContentRetainsExistingDeathConfirmation(
+        bool highEndDuty, uint contentType, uint contentUiCategory, uint intendedUse)
+    {
+        Assert.False(ContentCapturePolicy.RequiresExplicitDeathNotice(
+            highEndDuty, contentType, contentUiCategory, intendedUse));
+    }
+
+    [Theory]
     [InlineData(true, false, 0, 0, true)]
     [InlineData(true, false, 0, 1, true)]
     [InlineData(true, false, 0, 2, true)]

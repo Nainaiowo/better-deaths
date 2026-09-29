@@ -107,6 +107,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool GoofyMode { get; set; }
 
+    public bool HasSeenInGameGuide { get; set; }
+
     public BetterDeathsTheme Theme { get; set; } = BetterDeathsTheme.Classic;
 
     public bool AnimateStyleThemes { get; set; }

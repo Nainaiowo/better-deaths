@@ -45,7 +45,9 @@ namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
-    private sealed record ContentCaptureState(uint TerritoryId, bool SupportsPreDutyCalibration, bool SupportsOverworldMeter);
+    private sealed record ContentCaptureState(
+        uint TerritoryId, bool SupportsPreDutyCalibration, bool SupportsOverworldMeter,
+        bool RequiresExplicitDeathNotice);
     private ContentCaptureState? contentCaptureState;
 
     private ContentCaptureState GetContentCaptureState()
@@ -58,12 +60,15 @@ public sealed partial class Plugin
         }
 
         var territory = DataManager.GetExcelSheet<TerritoryType>()?.GetRowOrDefault(territoryId);
-        var contentType = territory?.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0;
+        var duty = territory?.ContentFinderCondition.ValueNullable;
+        var contentType = duty?.ContentType.RowId ?? 0;
         var intendedUse = territory?.TerritoryIntendedUse.RowId ?? 0;
         var state = new ContentCaptureState(territoryId,
             ContentCapturePolicy.SupportsPreDutyCalibration(contentType, intendedUse),
             ContentCapturePolicy.SupportsOverworldMeter(territoryId != 0 && territory is not null,
-                (territory?.ContentFinderCondition.RowId ?? 0) != 0, contentType, intendedUse));
+                (territory?.ContentFinderCondition.RowId ?? 0) != 0, contentType, intendedUse),
+            ContentCapturePolicy.RequiresExplicitDeathNotice(
+                duty?.HighEndDuty == true, contentType, duty?.ContentUICategory.RowId ?? 0, intendedUse));
         contentCaptureState = state;
         return state;
     }

@@ -565,6 +565,115 @@ public sealed class DamageParsingTests
     }
 
     [Fact]
+    public void DutyOpenerFromAnotherPlayerSurvivesDelayedLocalCombat()
+    {
+        var module = new DamageParsingModule { RequireKnownPlayerForAutomaticStart = true };
+        var otherPlayer = Source with { EntityId = 0x1002, Name = "Other player" };
+        module.SetCombatActive(false, SeenAtUtc);
+
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+                source: otherPlayer),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+        module.SetCombatActive(false, SeenAtUtc.AddSeconds(3));
+        module.SetCombatActive(true, SeenAtUtc.AddSeconds(3.5));
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddSeconds(4)),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        Assert.Equal(1500ul, snapshot.TotalDamage);
+        Assert.Equal(SeenAtUtc, snapshot.MeterStartedAtUtc);
+        Assert.Equal(4.0, snapshot.DurationSeconds);
+        Assert.Equal(2, snapshot.PacketCount);
+    }
+
+    [Fact]
+    public void DutyPetOpenerStartsForItsPlayerOwner()
+    {
+        var module = new DamageParsingModule { RequireKnownPlayerForAutomaticStart = true };
+        var pet = new DamageActorIdentity(0x3001, "Pet", Source.EntityId, Source.Name, false, 0)
+        {
+            IsPet = true,
+        };
+
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+                source: pet,
+                sourceOwner: Source),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        Assert.Equal(1000ul, Assert.Single(snapshot.Sources).TotalDamage);
+        Assert.Equal(Source.EntityId, snapshot.Sources[0].Source.EntityId);
+        Assert.Equal(SeenAtUtc, snapshot.MeterStartedAtUtc);
+    }
+
+    [Fact]
+    public void DutyAutomaticStartRequiresMeterEligibleDamage()
+    {
+        var module = new DamageParsingModule { RequireKnownPlayerForAutomaticStart = true };
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)],
+                source: Target),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddMilliseconds(100)) with
+            {
+                Targets = [new DamageActionTarget(0, Source,
+                    [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)])],
+            },
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+
+        Assert.Null(module.GetCurrentEncounter());
+
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 750)],
+                packetSequence: 3,
+                seenAtUtc: SeenAtUtc.AddMilliseconds(200)),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+
+        var snapshot = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        Assert.Equal(750.0, Assert.Single(snapshot.Sources,
+            source => source.Source.EntityId == Source.EntityId).ObservedMeterDamage);
+        Assert.Equal(SeenAtUtc.AddMilliseconds(200), snapshot.MeterStartedAtUtc);
+    }
+
+    [Fact]
+    public void DutyResetKeepsTheNextAutomaticOpenerSeparate()
+    {
+        var module = new DamageParsingModule { RequireKnownPlayerForAutomaticStart = true };
+        module.Process(CreatePacket(new DamageActionEffect(0, 3, 0, 0, 0, 0, 1000)),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+        var first = Assert.IsType<DamageEncounterSnapshot>(
+            module.EndEncounter(SeenAtUtc.AddSeconds(1), "Duty reset"));
+
+        module.SetCombatActive(false, SeenAtUtc.AddSeconds(2));
+        module.Process(CreatePacket(
+                [new DamageActionEffect(0, 3, 0, 0, 0, 0, 500)],
+                packetSequence: 2,
+                seenAtUtc: SeenAtUtc.AddSeconds(3)),
+            allowAutomaticEncounterStart: true,
+            requireMeterEligibleDamageForStart: true);
+
+        var next = Assert.IsType<DamageEncounterSnapshot>(module.GetCurrentEncounter());
+        Assert.Equal(1000ul, first.TotalDamage);
+        Assert.Equal(500ul, next.TotalDamage);
+        Assert.Equal(SeenAtUtc.AddSeconds(3), next.MeterStartedAtUtc);
+    }
+
+    [Fact]
     public void DiscardsBufferedTrafficWhenCombatNeverStarts()
     {
         var module = new DamageParsingModule();

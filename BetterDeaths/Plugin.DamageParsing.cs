@@ -165,7 +165,8 @@ public sealed partial class Plugin
                 HasSourceStatusSnapshot = packet.SourceSnapshot is not null,
             };
             var parsed = damageParsingModule.Process(damagePacket,
-                allowAutomaticEncounterStart: packet.AllowAutomaticDamageEncounterStart);
+                allowAutomaticEncounterStart: packet.AllowAutomaticDamageEncounterStart,
+                requireMeterEligibleDamageForStart: packet.RequireMeterEligibleDamageForStart);
             QueueDamageMeterActionDebug(packet, damagePacket);
             QueueDamageMeterParsedDebug("Action", parsed);
         }

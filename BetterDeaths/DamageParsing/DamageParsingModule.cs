@@ -96,7 +96,8 @@ internal sealed class DamageParsingModule
 
     public IReadOnlyList<ParsedDamageEvent> Process(
         DamageActionPacket packet,
-        bool allowAutomaticEncounterStart = true)
+        bool allowAutomaticEncounterStart = true,
+        bool requireMeterEligibleDamageForStart = false)
     {
         lock (syncRoot)
         {
@@ -126,7 +127,8 @@ internal sealed class DamageParsingModule
             if (parsed.Count > 0)
             {
                 parsed = effectiveDamageResolver.ObserveDirect(parsed).ToList();
-                RecordParsedEvents(parsed, 1, allowAutomaticEncounterStart);
+                RecordParsedEvents(parsed, 1, allowAutomaticEncounterStart,
+                    requireMeterEligibleDamageForStart);
             }
 
             foreach (var application in packet.StatusApplications)
@@ -862,7 +864,8 @@ internal sealed class DamageParsingModule
     private void RecordParsedEvents(
         IReadOnlyList<ParsedDamageEvent> parsed,
         int parsedPacketCount,
-        bool allowAutomaticEncounterStart)
+        bool allowAutomaticEncounterStart,
+        bool requireMeterEligibleDamageForStart = false)
     {
         if (startedAtUtc is not null || combatActive)
         {
@@ -876,7 +879,10 @@ internal sealed class DamageParsingModule
             parsedPacketCount,
             parsed.ToList()));
         MarkPreEncounterActivity(parsed.Max(entry => entry.SeenAtUtc));
-        if (allowAutomaticEncounterStart && parsed.Any(IsEncounterStartingDamage))
+        if (allowAutomaticEncounterStart && parsed.Any(entry =>
+                requireMeterEligibleDamageForStart
+                    ? IsMeterDamage(entry, entry.AttributedSource ?? entry.Source)
+                    : IsEncounterStartingDamage(entry)))
         {
             combatActive = true;
             ActivateStagedEncounter();

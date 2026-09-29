@@ -9,8 +9,28 @@ internal enum PlayerDeathObservation
     WorldObjectDead,
 }
 
+internal enum DeathConfirmationSignal
+{
+    Unknown,
+    ActorControl,
+    EffectResult,
+    WorldObject,
+    DutyReset,
+}
+
 internal static class DeathDetectionPolicy
 {
+    public static bool CanCaptureDeath(DeathConfirmationSignal signal, bool requiresExplicitDeathNotice)
+    {
+        return signal switch
+        {
+            DeathConfirmationSignal.ActorControl => true,
+            DeathConfirmationSignal.EffectResult or DeathConfirmationSignal.WorldObject or
+                DeathConfirmationSignal.DutyReset => !requiresExplicitDeathNotice,
+            _ => false,
+        };
+    }
+
     public static bool IsMatchingPlayerWorldObject(
         uint memberEntityId, string memberName, bool isPlayerObject, uint objectEntityId, string objectName)
     {

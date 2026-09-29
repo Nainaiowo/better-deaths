@@ -51,6 +51,27 @@ public sealed class CaptureTimingPolicyTests
             isPvPCaptureBlocked: true));
     }
 
+    [Fact]
+    public void ActionDamageCanStartAnActiveDutyBeforeLocalCombatIsReported()
+    {
+        Assert.True(CaptureTimingPolicy.ShouldStartDamageEncounterFromAction(
+            captureForDamageParsing: true,
+            isDutyCaptureActive: true,
+            isOverworldDamageCaptureEnabled: false));
+        Assert.True(CaptureTimingPolicy.ShouldStartDamageEncounterFromAction(
+            captureForDamageParsing: true,
+            isDutyCaptureActive: false,
+            isOverworldDamageCaptureEnabled: true));
+        Assert.False(CaptureTimingPolicy.ShouldStartDamageEncounterFromAction(
+            captureForDamageParsing: true,
+            isDutyCaptureActive: false,
+            isOverworldDamageCaptureEnabled: false));
+        Assert.False(CaptureTimingPolicy.ShouldStartDamageEncounterFromAction(
+            captureForDamageParsing: false,
+            isDutyCaptureActive: true,
+            isOverworldDamageCaptureEnabled: false));
+    }
+
     [Theory]
     [InlineData(false, false, false, false)]
     [InlineData(false, false, true, true)]
