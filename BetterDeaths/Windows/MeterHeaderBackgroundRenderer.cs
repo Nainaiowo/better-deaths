@@ -144,8 +144,11 @@ internal static partial class MeterHeaderBackgroundRenderer
             var shimmer = .5f + .5f * MathF.Sin((phase * (1 + i % 3) + i * .27f) * MathF.Tau);
             draw.AddLine(new Vector2(x, position.Y + size.Y * .78f),
                 new Vector2(x + size.Y * .09f, position.Y + size.Y),
-                ImGui.GetColorU32(accent with { W = alpha * (.08f + shimmer * .1f) *
-                    MeterHeaderMotionPolicy.DensityWeight(i, maximum, strength) }), 1);
+                ImGui.GetColorU32(accent with
+                {
+                    W = alpha * (.08f + shimmer * .1f) *
+                    MeterHeaderMotionPolicy.DensityWeight(i, maximum, strength)
+                }), 1);
         }
     }
 
@@ -163,8 +166,11 @@ internal static partial class MeterHeaderBackgroundRenderer
         for (var lane = 0; lane < lanes; lane++)
         {
             var color = lane % 2 == 0 ? accent : secondary;
-            var line = ImGui.GetColorU32(color with { W = alpha * (fabric ? .32f : .26f) *
-                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength) });
+            var line = ImGui.GetColorU32(color with
+            {
+                W = alpha * (fabric ? .32f : .26f) *
+                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength)
+            });
             var previous = position + new Vector2(startX, 0) + MeterHeaderMotionPolicy.Contour(theme, bandSize, lane, 0, phase, segments);
             for (var segment = 1; segment <= segments; segment++)
             {
@@ -187,8 +193,11 @@ internal static partial class MeterHeaderBackgroundRenderer
         {
             var x = size.X * (.3f + lane * .13f);
             var previous = position + new Vector2(x, 0);
-            var color = ImGui.GetColorU32((lane % 2 == 0 ? accent : secondary) with { W = alpha * .24f *
-                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength) });
+            var color = ImGui.GetColorU32((lane % 2 == 0 ? accent : secondary) with
+            {
+                W = alpha * .24f *
+                MeterHeaderMotionPolicy.DensityWeight(lane, maximum, strength)
+            });
             var steps = thumbnail ? 4 : 12;
             for (var step = 1; step <= steps; step++)
             {

@@ -117,13 +117,13 @@ internal static class ThemeOrnamentLibrary
             if (i >= (int)ThemeDecoration.Sweets)
             {
                 for (var copy = 0; copy < 3; copy++)
-                foreach (var path in Glyphs[i])
-                {
-                    var points = path.Points.ToArray();
-                    for (var p = 0; p < points.Length; p++)
-                        points[p] = points[p] * 0.78f + new Vector2(3 + copy * 32, 3);
-                    paths.Add(path with { Points = points });
-                }
+                    foreach (var path in Glyphs[i])
+                    {
+                        var points = path.Points.ToArray();
+                        for (var p = 0; p < points.Length; p++)
+                            points[p] = points[p] * 0.78f + new Vector2(3 + copy * 32, 3);
+                        paths.Add(path with { Points = points });
+                    }
             }
             result[i] = paths.ToArray();
         }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BetterDeaths;
 
@@ -44,11 +45,16 @@ internal readonly record struct GuideStep(
 
 internal static class OnboardingGuide
 {
+    public const string ButtonLabel = "Walkthrough";
+
+    public static RecordedPullSummary? SelectRecordedPull(IEnumerable<RecordedPullSummary> visiblePulls) =>
+        visiblePulls.FirstOrDefault(pull => pull.DeathCount > 0);
+
     public static IReadOnlyList<GuideStep> Steps { get; } =
     [
         new(GuideSection.Review, GuideTarget.Navigation, "Start with a pull",
-            "Review connects each death to its pull, its place in the death timeline, and the evidence behind it. With no saved pulls, Example shows a redacted tutorial pull you can explore now.",
-            "Open a recorded pull, or explore Example until you have your first one."),
+            "Review connects each death to its pull, its place in the death timeline, and the evidence behind it. The walkthrough selects a saved pull with deaths, or a redacted tutorial sample when none is available.",
+            "Explore the selected saved pull, or the tutorial sample if none is available."),
         new(GuideSection.Review, GuideTarget.ReviewPulls, "Choose the right pull",
             "The pull rail lists the current pull and saved attempts. Its duty filter and player search help narrow the history; collapsing the rail leaves more room for the review.",
             "Select a pull in the left rail. Example has one sample pull instead."),
@@ -95,7 +101,7 @@ internal static class OnboardingGuide
             "Data shows local storage and pull history. Recorded pulls and encounters stay on your computer. Optional chat sharing sends a local link; FFLogs analysis sends a report code to its service.",
             "Check storage details here; use the section Help button for the full privacy explanation."),
         new(GuideSection.Updates, GuideTarget.Updates, "Keep track of changes",
-            "Updates contains the plugin changelog and release notes. You can reopen this guide from the header at any time, and Help opens detailed instructions for the current section.",
+            "Updates contains the plugin changelog and release notes. You can reopen Walkthrough from the header at any time, and Help opens detailed instructions for the current section.",
             "You are ready to explore your own pulls."),
     ];
 

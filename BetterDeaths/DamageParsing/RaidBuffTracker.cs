@@ -281,10 +281,14 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
                 source = ChooseMoreCompleteSource(source, tracked.Application.Source);
             ObserveCore(new DamageStatusApplication(target, source, snapshot.StatusId, string.Empty,
                 0, 0, string.Empty, seenAtUtc, snapshot.RemainingTime, false, false, false)
-            { Parameter = snapshot.Parameter, HasParameter = snapshot.HasParameter ?? snapshot.Parameter != 0,
-                AppliedParameter = snapshot.AppliedParameter, StatusSlot = snapshot.StatusSlot,
+            {
+                Parameter = snapshot.Parameter,
+                HasParameter = snapshot.HasParameter ?? snapshot.Parameter != 0,
+                AppliedParameter = snapshot.AppliedParameter,
+                StatusSlot = snapshot.StatusSlot,
                 ApplicationSequence = snapshot.ApplicationSequence,
-                ObservationKind = DamageStatusObservationKind.Observation });
+                ObservationKind = DamageStatusObservationKind.Observation
+            });
         }
     }
 
@@ -298,8 +302,11 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
                      (status.RemovedAtUtc is null || status.RemovedAtUtc > seenAtUtc) &&
                      status.ExpiresAtUtc > seenAtUtc))
         {
-            Update(status, status.Application with { SeenAtUtc = seenAtUtc,
-                DurationSeconds = (float)GetDefaultDurationSeconds(statusId) });
+            Update(status, status.Application with
+            {
+                SeenAtUtc = seenAtUtc,
+                DurationSeconds = (float)GetDefaultDurationSeconds(statusId)
+            });
         }
     }
 
@@ -476,8 +483,11 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             if (sameApplication && !HasParameter(application) && HasParameter(previous!.Application))
                 application = application with { Parameter = previous.Application.Parameter, HasParameter = true };
             if (sameApplication)
-                application = application with { AppliedParameter = application.AppliedParameter ?? previous!.Application.AppliedParameter,
-                    StatusSlot = application.StatusSlot ?? previous!.Application.StatusSlot };
+                application = application with
+                {
+                    AppliedParameter = application.AppliedParameter ?? previous!.Application.AppliedParameter,
+                    StatusSlot = application.StatusSlot ?? previous!.Application.StatusSlot
+                };
             var earlier = new TrackedStatus(application, HasDuration(application)
                 ? application.SeenAtUtc.AddSeconds(application.DurationSeconds) : previous!.ExpiresAtUtc);
             earlier.RemovedAtUtc = sameApplication && previous!.RemovedAtUtc < status.Application.SeenAtUtc
@@ -504,8 +514,11 @@ internal sealed class RaidBuffTracker(bool confirmedOnly = false)
             application = application with { Parameter = status.Application.Parameter, HasParameter = true };
         }
         if (!startsApplication && wasActive)
-            application = application with { AppliedParameter = application.AppliedParameter ?? status.Application.AppliedParameter,
-                StatusSlot = application.StatusSlot ?? status.Application.StatusSlot };
+            application = application with
+            {
+                AppliedParameter = application.AppliedParameter ?? status.Application.AppliedParameter,
+                StatusSlot = application.StatusSlot ?? status.Application.StatusSlot
+            };
 
         var futureRemoval = status.RemovedAtUtc > application.SeenAtUtc ? status.RemovedAtUtc : null;
         var expiresAtUtc = HasDuration(application) ? application.SeenAtUtc.AddSeconds(application.DurationSeconds) : status.ExpiresAtUtc;

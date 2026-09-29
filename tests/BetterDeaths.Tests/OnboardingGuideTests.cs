@@ -7,6 +7,38 @@ namespace BetterDeaths.Tests;
 public sealed class OnboardingGuideTests
 {
     [Fact]
+    public void WalkthroughUsesOneLabelForButtonAndSizing()
+    {
+        Assert.Equal("Walkthrough", OnboardingGuide.ButtonLabel);
+    }
+
+    [Fact]
+    public void WalkthroughChoosesFirstSavedPullWithDeathsInVisibleOrder()
+    {
+        var empty = CreatePull(104, 0);
+        var first = CreatePull(103, 2);
+        var older = CreatePull(102, 8);
+
+        Assert.Same(first, OnboardingGuide.SelectRecordedPull([empty, first, older]));
+    }
+
+    [Fact]
+    public void WalkthroughRespectsFilteredListOrderRatherThanResortingIt()
+    {
+        var first = CreatePull(100, 1);
+        var second = CreatePull(101, 3);
+
+        Assert.Same(first, OnboardingGuide.SelectRecordedPull([first, second]));
+    }
+
+    [Fact]
+    public void WalkthroughUsesSampleWhenNoSavedPullHasDeaths()
+    {
+        Assert.Null(OnboardingGuide.SelectRecordedPull([]));
+        Assert.Null(OnboardingGuide.SelectRecordedPull([CreatePull(104, 0)]));
+    }
+
+    [Fact]
     public void GuideCoversEveryUserFacingSectionInNavigationOrder()
     {
         var expectedSections = new[]
@@ -42,4 +74,6 @@ public sealed class OnboardingGuideTests
         }
     }
 
+    private static RecordedPullSummary CreatePull(long number, int deaths) =>
+        new(System.DateTime.UtcNow, "Combat ended", 1, "Duty", 60, deaths) { PullNumber = number };
 }

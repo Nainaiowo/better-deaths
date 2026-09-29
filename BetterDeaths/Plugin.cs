@@ -51,6 +51,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string WidgetCommandName = "/bdw";
     private const string DamageMeterWidgetCommandName = "/bdm";
     private const string DamageMeterResetCommandName = "/bdr";
+    private const string ReadyCheckCommandName = "/rc";
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
@@ -324,6 +325,7 @@ public sealed partial class Plugin : IDalamudPlugin
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
     private readonly WindowSystem windowSystem = new("BetterDeaths");
+    private readonly bool readyCheckCommandRegistered;
     private readonly RecapWindow recapWindow;
     private readonly CurrentPullWidgetWindow currentPullWidgetWindow;
     private readonly DamageMeterWidgetWindow damageMeterWidgetWindow;
@@ -639,6 +641,12 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             HelpMessage = "Reset the DPS meter in the overworld, saving the current encounter. Unavailable inside duties.",
         });
+        readyCheckCommandRegistered = CommandManager.AddHandler(ReadyCheckCommandName, new CommandInfo(OnReadyCheckCommand)
+        {
+            HelpMessage = "Start a ready check.",
+        });
+        if (!readyCheckCommandRegistered)
+            Log.Warning("Better Deaths could not register /rc because another command handler already uses it.");
 
         actionEffectHook = GameInteropProvider.HookFromAddress<ActionEffectHandler.Delegates.Receive>(
             ActionEffectHandler.MemberFunctionPointers.Receive,
@@ -766,6 +774,8 @@ public sealed partial class Plugin : IDalamudPlugin
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
+        if (readyCheckCommandRegistered)
+            CommandManager.RemoveHandler(ReadyCheckCommandName);
         CommandManager.RemoveHandler(DamageMeterResetCommandName);
         CommandManager.RemoveHandler(DamageMeterWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);
@@ -795,6 +805,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private void OnDamageMeterWidgetCommand(string command, string args)
     {
         SetShowDamageMeterWidget(!Configuration.ShowDamageMeterWidget);
+    }
+
+    private void OnReadyCheckCommand(string command, string args)
+    {
+        ExecuteChatCommand("/readycheck");
+        ChatGui.Print(BuildSystemMessageEntry("ready check, sponsored by BD"));
     }
 
     private void OpenMainUi()
@@ -1037,7 +1053,8 @@ public sealed partial class Plugin : IDalamudPlugin
                     status.StatusId,
                     status.SourceId,
                     status.Param,
-                    status.RemainingTime) { StatusSlot = (byte)index });
+                    status.RemainingTime)
+                { StatusSlot = (byte)index });
             }
 
             return new RawCombatSnapshot(

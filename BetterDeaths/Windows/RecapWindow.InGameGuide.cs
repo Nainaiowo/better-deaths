@@ -1,6 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace BetterDeaths.Windows;
@@ -10,6 +11,9 @@ public sealed partial class RecapWindow
     private bool guideActive;
     private bool guideScrollPending;
     private int guideStepIndex;
+    private GuideSection? guideDataSelectionPending;
+    private (ReviewSelectionState Selection, string PullKey)? guideDeathSelectionPending;
+    private bool guideUsesExampleReview;
     private readonly Dictionary<GuideTarget, (Vector2 Min, Vector2 Max)> guideTargets = new();
     private Vector2 guidePanelMin;
     private Vector2 guidePanelMax;
@@ -103,7 +107,7 @@ public sealed partial class RecapWindow
 
     private void DrawGuideButton(string idSuffix, float width)
     {
-        if (DrawThemedToggleButton("Guide", $"InGameGuide{idSuffix}", guideActive, width))
+        if (DrawThemedToggleButton(OnboardingGuide.ButtonLabel, $"InGameGuide{idSuffix}", guideActive, width))
         {
             if (guideActive)
                 guideActive = false;
@@ -112,7 +116,7 @@ public sealed partial class RecapWindow
         }
 
         if (ImGui.IsItemHovered())
-            SetThemedTooltip(guideActive ? "Close the in-game guide." : "Walk through Better Deaths inside the plugin.");
+            SetThemedTooltip(guideActive ? "Close the walkthrough." : "Walk through Better Deaths inside the plugin.");
     }
 
     private void StartInGameGuide()
@@ -120,6 +124,9 @@ public sealed partial class RecapWindow
         MarkInGameGuideSeen();
         pendingDeathSelection = null;
         clearPendingDeathSelection = false;
+        guideDataSelectionPending = GuideSection.Review;
+        guideDeathSelectionPending = null;
+        guideUsesExampleReview = false;
         guideActive = true;
         MoveInGameGuideTo(0);
     }
@@ -135,7 +142,10 @@ public sealed partial class RecapWindow
 
     private void MoveInGameGuideTo(int index)
     {
+        var previousSection = OnboardingGuide.Steps[guideStepIndex].Section;
         guideStepIndex = Math.Clamp(index, 0, OnboardingGuide.Steps.Count - 1);
+        if (OnboardingGuide.Steps[guideStepIndex].Section != previousSection)
+            guideDataSelectionPending = OnboardingGuide.Steps[guideStepIndex].Section;
         guideScrollPending = true;
         currentMainPage = OnboardingGuide.Steps[guideStepIndex].Section switch
         {
@@ -151,6 +161,77 @@ public sealed partial class RecapWindow
         };
     }
 
+    private void PrepareInGameGuideData()
+    {
+        if (!guideActive || guideDataSelectionPending is not { } section)
+            return;
+
+        if ((section is GuideSection.Review or GuideSection.Replay or GuideSection.Analyzer) &&
+            plugin.RecordedPullHistoryLoading)
+            return;
+
+        switch (section)
+        {
+            case GuideSection.Review:
+                var recorded = OnboardingGuide.SelectRecordedPull(GetVisibleRecordedPulls().Select(entry => entry.Summary));
+                guideUsesExampleReview = recorded is null;
+                if (guideUsesExampleReview && TutorialSampleData.GetPullIfReady() is null &&
+                    !TutorialSampleData.PullLoadFailed)
+                    return;
+                var selection = recorded is null ? exampleReviewSelection : recapReviewSelection;
+                var pullKey = recorded is null ? "ExamplePull" : BuildRecordedPullKey(recorded);
+                selection.PullKey = pullKey;
+                ClearSelectedDeath(selection);
+                selectedDeathDetailPage = DeathDetailPage.Summary;
+                guideDeathSelectionPending = (selection, pullKey);
+                currentMainPage = recorded is null ? MainPage.Example : MainPage.Review;
+                break;
+            case GuideSection.Replay:
+                var replay = OnboardingGuide.SelectRecordedPull(GetVisibleRecordedPulls().Select(entry => entry.Summary));
+                if (replay is null)
+                {
+                    if (TutorialSampleData.GetPullIfReady() is not { } sample)
+                        return;
+                    replay = TutorialSampleData.CreatePullSummary(sample);
+                }
+                SelectReplayPull(BuildRecordedPullKey(replay));
+                break;
+            case GuideSection.Widgets:
+                selectedDamageEncounterNumber = plugin.RecordedDamageEncounters.LastOrDefault()?.EncounterNumber ?? 0;
+                break;
+            case GuideSection.Analyzer:
+                var analysisPull = GetWtfDigLocalPulls().FirstOrDefault();
+                if (analysisPull is null)
+                    return;
+                wtfDigAnalyzer.SetSource(WtfDigAnalyzerSource.LocalPull);
+                SelectWtfDigLocalPull(analysisPull);
+                break;
+        }
+
+        guideDataSelectionPending = null;
+    }
+
+    private void SelectInGameGuideDeath(IReadOnlyList<ReviewPull> pulls, ReviewSelectionState selection)
+    {
+        if (!guideActive || guideDeathSelectionPending is not { } pending ||
+            !ReferenceEquals(pending.Selection, selection))
+            return;
+
+        if (!string.Equals(selection.PullKey, pending.PullKey, StringComparison.Ordinal))
+        {
+            guideDeathSelectionPending = null;
+            return;
+        }
+
+        var pull = GetSelectedReviewPull(pulls, pending.PullKey);
+        if (pull is null || GetDeathsInTimelineOrder(pull.Deaths).FirstOrDefault() is not { } death)
+            return;
+
+        if (GetSelectedReviewDeath(pull, selection) is null)
+            SelectTimelineDeathAndOpenLeadUp(death, selection);
+        guideDeathSelectionPending = null;
+    }
+
     private void DrawInGameGuide()
     {
         if (!guideActive && configuration.HasSeenInGameGuide)
@@ -164,8 +245,11 @@ public sealed partial class RecapWindow
             OnboardingGuide.Steps[guideStepIndex].Section != section)
         {
             guideStepIndex = OnboardingGuide.FirstStepFor(section);
+            guideDataSelectionPending = section;
             guideScrollPending = true;
         }
+
+        PrepareInGameGuideData();
 
         var title = guideActive ? OnboardingGuide.Steps[guideStepIndex].Title : "Get to know Better Deaths";
         var description = guideActive
@@ -182,7 +266,7 @@ public sealed partial class RecapWindow
             ? (guideStepIndex > 0 ? GetThemedActionButtonWidth("Back") : 0.0f) +
               GetThemedActionButtonWidth("Next") + GetThemedActionButtonWidth("Close") +
               (ImGui.GetStyle().ItemSpacing.X * (guideStepIndex > 0 ? 2.0f : 1.0f))
-            : GetThemedActionButtonWidth("Start guide") + GetThemedActionButtonWidth("Not now") +
+            : GetThemedActionButtonWidth("Start walkthrough") + GetThemedActionButtonWidth("Not now") +
               ImGui.GetStyle().ItemSpacing.X;
         var wrapButtons = buttonWidth > width;
         var buttonRows = wrapButtons ? guideActive && guideStepIndex > 0 ? 3 : 2 : 1;
@@ -204,11 +288,11 @@ public sealed partial class RecapWindow
             {
                 var sectionName = OnboardingGuide.Steps[guideStepIndex].Section.ToString();
                 ImGui.TextColored(ModernAccentColor,
-                    $"Guide {guideStepIndex + 1} / {OnboardingGuide.Steps.Count}  |  {sectionName}");
+                    $"Walkthrough {guideStepIndex + 1} / {OnboardingGuide.Steps.Count}  |  {sectionName}");
             }
             else
             {
-                ImGui.TextColored(ModernAccentColor, "IN-GAME GUIDE");
+                ImGui.TextColored(ModernAccentColor, "WALKTHROUGH");
             }
 
             ImGui.TextColored(ModernTextColor, title);
@@ -223,7 +307,7 @@ public sealed partial class RecapWindow
             ImGui.Dummy(new Vector2(1.0f, 2.0f));
             if (!guideActive)
             {
-                if (DrawThemedActionButton("Start guide", "StartInGameGuide"))
+                if (DrawThemedActionButton("Start walkthrough", "StartInGameGuide"))
                     StartInGameGuide();
                 if (!wrapButtons)
                     ImGui.SameLine();

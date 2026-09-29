@@ -76,9 +76,14 @@
         </div>
         <p>Open <strong>Widgets &gt; DPS Meter</strong> and enable <strong>Show DPS meter widget</strong>, or toggle it with <code>/bdm</code>. Hiding the widget does not stop capture or reset the encounter. The separate window follows the current encounter and keeps the last result visible when combat ends. Drag its title bar to move it, or a lower corner to resize it.</p>
 
+        <figure class="guide-figure narrow-figure">
+          <img src="../assets/help-dps-meter.png" alt="DPS Meter settings with draggable column tiles and a Concise encounter preview showing player initials, damage, DPS, damage share, direct-hit percentage, and critical-hit percentage" width="919" height="970" loading="lazy" decoding="async">
+          <figcaption>Column controls and the encounter preview in Concise display. Player names appear as initials, while damage and DPS use shortened values.</figcaption>
+        </figure>
+
         <h3 class="subheading">The default columns</h3>
         <div class="setting-table labeled">
-          <div class="setting-row"><strong>Name</strong><span>The job icon and player name share one column. Name Redaction applies to the displayed name.</span></div>
+          <div class="setting-row"><strong>Name</strong><span>The job icon and player name share one column. Name Redaction replaces every captured player's name with a numbered Player label, including nearby players and alliance members. It also applies to hover text and saved-encounter previews.</span></div>
           <div class="setting-row"><strong>Damage</strong><span>The player's recorded damage total for the encounter.</span></div>
           <div class="setting-row"><strong>DPS</strong><span>Recorded damage divided by the captured encounter duration. Players are ordered by damage contribution over that shared duration.</span></div>
           <div class="setting-row"><strong>Damage %</strong><span>The player's percentage of the total damage shown in the meter.</span></div>
@@ -92,6 +97,8 @@
           <h2>Choose what the widget shows</h2>
         </div>
         <div class="setting-table labeled">
+          <div class="setting-row"><strong>Background opacity</strong><span>The slider under Widget changes only the DPS Meter background and its preview. It is independent of the Death Widget.</span></div>
+          <div class="setting-row"><strong>Icon size</strong><span>Adjust job and ability icons from 12 to 32 px. The meter's rows and column sizing follow the selected size. Death Widget icons are controlled separately.</span></div>
           <div class="setting-row"><strong>Add</strong><span>Click an available column's <strong>+</strong> or drag its tile into Widget columns.</span></div>
           <div class="setting-row"><strong>Reorder</strong><span>Drag an active column tile to change its position.</span></div>
           <div class="setting-row"><strong>Remove</strong><span>Select the tile's <strong>X</strong>. At least one column remains active.</span></div>

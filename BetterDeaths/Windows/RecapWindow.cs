@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.52";
+    private const string CurrentChangelogVersion = "1.0.0.53";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -895,7 +895,8 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private bool ShouldShowExamplePage()
     {
-        return !plugin.RecordedPullHistoryLoading && plugin.RecordedPulls.Count == 0;
+        return (!plugin.RecordedPullHistoryLoading && plugin.RecordedPulls.Count == 0) ||
+            (guideActive && guideUsesExampleReview);
     }
 
     private void DrawModernShell()
@@ -1147,7 +1148,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         var helpWidth = string.Equals(helpLabel, fullHelpLabel, StringComparison.Ordinal)
             ? fullHelpWidth
             : compactHelpWidth;
-        var guideWidth = GetThemedActionButtonWidth("Guide");
+        var guideWidth = GetThemedActionButtonWidth(OnboardingGuide.ButtonLabel);
         if (funControlsWidth + guideWidth + helpWidth + (spacing * 2.0f) > availableWidth)
         {
             helpLabel = helpIcon;
@@ -2471,6 +2472,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ReviewSelectionState selection)
     {
         ApplyPendingSelectionToReviewWorkspace(pulls, selection);
+        SelectInGameGuideDeath(pulls, selection);
         EnsureReviewSelection(pulls, selection);
 
         if (pulls.Count == 0)
@@ -20039,6 +20041,27 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted("v1.0.0.53");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Walkthrough");
+        DrawWrappedBullet("Added an optional, 17-step walkthrough covering Review, Replay, Widgets, Analyzer, Options, Data, and Updates.");
+        DrawWrappedBullet("Opens each section, highlights relevant controls, and explains how to use and understand the information.");
+        DrawWrappedBullet("Automatically selects the first saved pull with deaths, skipping Now, and opens a death's lead-up and summary.");
+        DrawWrappedBullet("Selects saved data when entering Replay, Widgets, and Analyzer. Users can still change selections afterward.");
+        DrawWrappedBullet("Includes name-redacted tutorial data when suitable recorded data is unavailable. Samples remain separate from saved history.");
+        DrawWrappedBullet("Reopen it anytime using Walkthrough in the header.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Capture Improvements");
+        DrawWrappedBullet("DPS Meter encounters can now start from opening damage without waiting for your character's combat flag.");
+        DrawWrappedBullet("Regular content now requires a verified game death notification before recording a death. This should prevent random death detections when dungeon mob packs end or player state disappears.");
+        DrawWrappedBullet("Preserved existing death-detection behavior in Extreme, Savage, Ultimate, and Criterion Savage content.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Help Updates");
+        DrawWrappedBullet("Added a DPS Meter screenshot to the website and Help Center.");
+        DrawWrappedBullet("Clarified name redaction and the separate appearance controls for each widget.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.52");
         ImGui.TextDisabled("Testing update: In-Game Guide and Capture Improvements.");
         DrawWrappedBullet("Added an optional, 17-step walkthrough explaining how to use Review, Replay, Widgets, Analyzer, Options, Data, and Updates.");
