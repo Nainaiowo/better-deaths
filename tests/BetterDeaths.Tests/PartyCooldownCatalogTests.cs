@@ -118,14 +118,44 @@ public sealed class PartyCooldownCatalogTests
     }
 
     [Fact]
-    public void PartyReorderMatchesDisplayRowsNotArrayIndices()
+    public void PartyReorderUsesHudMemberIndicesNotArrayOrder()
     {
-        int[] rows = [0, 3, 1, 2];
-        Assert.Equal(2, PartyCooldownLayout.FindUniqueRow(rows, 1));
-        Assert.Equal(1, PartyCooldownLayout.FindUniqueRow(rows, 3));
-        Assert.Equal(-1, PartyCooldownLayout.FindUniqueRow(rows, 7));
-        Assert.Equal(-1, PartyCooldownLayout.FindUniqueRow([0, 0, 1], 0));
-        Assert.Equal(-1, PartyCooldownLayout.FindUniqueRow(rows, -1));
+        PartyCooldownHudMember[] members = [new(10, 2), new(11, 0), new(12, 3), new(13, 1)];
+        Assert.Equal(0, PartyCooldownLayout.FindUniqueHudMember(members, 2));
+        Assert.Equal(3, PartyCooldownLayout.FindUniqueHudMember(members, 1));
+        Assert.Equal(1, PartyCooldownLayout.FindUniqueHudMember(members, 0));
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember(members, 7));
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember(members, -1));
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember(members, 8));
+    }
+
+    [Fact]
+    public void EmptyAndUnusedHudEntriesCannotHideARealPartyMember()
+    {
+        PartyCooldownHudMember[] members = [new(10, 0), new(0, 0), new(0xE0000000, 0), new(11, 1)];
+        Assert.Equal(0, PartyCooldownLayout.FindUniqueHudMember(members, 0));
+        Assert.Equal(3, PartyCooldownLayout.FindUniqueHudMember(members, 1));
+    }
+
+    [Fact]
+    public void AmbiguousHudSlotsOrEntitiesCannotShowAnotherPlayersCooldowns()
+    {
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember([new(10, 0), new(11, 0)], 0));
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember([new(10, 0), new(10, 1)], 0));
+        Assert.Equal(-1, PartyCooldownLayout.FindUniqueHudMember([new(10, 0), new(10, 1)], 1));
+    }
+
+    [Fact]
+    public void FullPartyHudCanIncludeUnusedPetAndCompanionSlots()
+    {
+        PartyCooldownHudMember[] members = [new(10, 3), new(11, 0), new(12, 1), new(13, 2),
+            new(14, 7), new(15, 4), new(16, 5), new(17, 6), new(18, 8), new(19, 9)];
+        foreach (var slot in Enumerable.Range(0, 8))
+        {
+            var index = PartyCooldownLayout.FindUniqueHudMember(members, slot);
+            Assert.InRange(index, 0, 7);
+            Assert.Equal(slot, members[index].Index);
+        }
     }
 
     [Fact]

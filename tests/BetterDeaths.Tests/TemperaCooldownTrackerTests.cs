@@ -80,6 +80,62 @@ public sealed class TemperaCooldownTrackerTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NativeShieldCallbacksDoNotDependOnTheDamageParsersPacketClock(bool converted)
+    {
+        var tracker = new TemperaCooldownTracker();
+        tracker.Cast(1, 0);
+        tracker.Observe(1, Added() with { ServerFrame = 0 });
+        if (converted)
+        {
+            tracker.Observe(1, new(TemperaEventKind.Conversion, 1));
+            tracker.Observe(1, Added(3687, 1) with { ServerFrame = 0 });
+        }
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost(converted ? 3687u : 3686u) with { ServerFrame = 0 });
+        Assert.True(tracker.TryReduce(1, 4.21, out var reduction));
+        Assert.Equal(converted ? 30 : 60, reduction.Seconds);
+        Assert.False(tracker.TryReduce(1, 5, out _));
+    }
+
+    [Theory]
+    [InlineData(0, 5000, true)]
+    [InlineData(42, 0, true)]
+    [InlineData(42, 5000, false)]
+    [InlineData(999, 5000, true)]
+    public void MissingPacketClockNeverRelaxesNativeDamageCausality(uint sequence, uint hp, bool hasHp)
+    {
+        var tracker = new TemperaCooldownTracker();
+        tracker.Cast(1, 0);
+        tracker.Observe(1, Added() with { ServerFrame = 0 });
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost() with { ServerFrame = 0, Sequence = sequence, Hp = hp, HasHp = hasHp });
+        Assert.False(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Fact]
+    public void ExpiryAndConversionRemainNonRefundingWithoutAPacketClock()
+    {
+        var expiry = new TemperaCooldownTracker();
+        expiry.Cast(1, 0);
+        expiry.Observe(1, Added() with { ServerFrame = 0 });
+        expiry.Observe(1, Damage(9.5));
+        expiry.Observe(1, Lost(at: 10.1) with { ServerFrame = 0, Remaining = 0 });
+        Assert.False(expiry.TryReduce(1, 10.5, out _));
+        Assert.False(expiry.IsUncertain(1, 11));
+
+        var conversion = new TemperaCooldownTracker();
+        conversion.Cast(1, 0);
+        conversion.Observe(1, Added() with { ServerFrame = 0 });
+        conversion.Observe(1, Damage());
+        conversion.Observe(1, Lost() with { ServerFrame = 0 });
+        conversion.Observe(1, new(TemperaEventKind.Conversion, 4));
+        conversion.Observe(1, Added(3687, 4) with { ServerFrame = 0 });
+        Assert.False(conversion.TryReduce(1, 4.21, out _));
+    }
+
+    [Theory]
     [InlineData(0, 42)]
     [InlineData(5000, 999)]
     public void CausalLethalOrNonDamageResultCannotBeOverruledByAnotherHitInTheSameFrame(uint hp, uint sequence)
@@ -176,7 +232,7 @@ public sealed class TemperaCooldownTrackerTests
     }
 
     [Fact]
-    public void DifferentFramesAndMissingServerTimingCannotBeMatchedByProximity()
+    public void SeparateLandingCannotSupplyMissingNativeRemovalContextRegardlessOfPacketClock()
     {
         foreach (var frame in new long[] { 0, 3 })
         {

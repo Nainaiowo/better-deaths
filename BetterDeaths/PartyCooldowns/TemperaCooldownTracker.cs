@@ -41,7 +41,7 @@ internal sealed class TemperaCooldownTracker
         switch (observation.Kind)
         {
             case TemperaEventKind.Applied:
-                if (!IsShield(observation.StatusId) || observation.ServerFrame == 0 ||
+                if (!IsShield(observation.StatusId) ||
                     !double.IsFinite(observation.Remaining) || observation.Remaining is <= 0 or > 10.5)
                     return;
                 if (observation.StatusId == CoatStatus)
@@ -89,9 +89,9 @@ internal sealed class TemperaCooldownTracker
             return false;
         var status = cycle.Converted ? GrassaStatus : CoatStatus;
         if (!cycle.Removals.TryGetValue(status, out var loss) || now - loss.SeenAt < SettleTime ||
-            loss.ServerFrame == 0 || !IsEarly(cycle, loss))
+            !IsEarly(cycle, loss))
             return false;
-        // Only a removal nested in the matching native damage result proves consumption.
+        // Native result nesting and its action sequence prove consumption, not a packet clock.
         if (!loss.HasHp || loss.Hp == 0 || !MatchesDamage(cycle, loss))
             return false;
         cycle.Refunded = true;

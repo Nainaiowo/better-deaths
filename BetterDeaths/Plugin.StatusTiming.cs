@@ -28,8 +28,6 @@ public sealed partial class Plugin
     {
         try
         {
-            if (serverFrameHook is null)
-                throw new InvalidOperationException("Server-frame timing is required for status-update capture.");
             if (StatusManager.Addresses.SetStatus.Value == IntPtr.Zero ||
                 StatusManager.Addresses.RemoveStatus.Value == IntPtr.Zero)
                 throw new InvalidOperationException("Status update addresses are unavailable.");
@@ -39,7 +37,10 @@ public sealed partial class Plugin
                 StatusManager.Addresses.RemoveStatus.Value, OnRemoveStatusTiming);
             statusTimingSetHook.Enable();
             statusTimingRemoveHook.Enable();
-            Log.Information("Better Deaths damage meter status-update timing enabled.");
+            if (serverFrameHook is not null)
+                Log.Information("Better Deaths damage meter status-update timing enabled.");
+            else
+                Log.Information("Better Deaths native shield callbacks enabled; damage status timing still requires server-frame timing.");
         }
         catch (Exception ex)
         {

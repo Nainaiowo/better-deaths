@@ -32,7 +32,7 @@ public sealed partial class Plugin
         uint sourceId, float remaining, bool removal)
     {
         if (!Configuration.ShowPartyCooldowns || manager is null || manager->Owner is null ||
-            index is < 0 or >= 60 || !removal && CurrentServerFrameTiming is null)
+            index is < 0 or >= 60)
             return;
         try
         {
@@ -101,11 +101,11 @@ public sealed partial class Plugin
 
     private void CapturePartyCooldownLanding()
     {
-        if (currentPartyCooldownLanding is { Hp: 0 } landing && CurrentServerFrameTiming is { } timing)
+        if (currentPartyCooldownLanding is { Hp: 0 } landing)
             EnqueueTemperaEvent(landing.Target, new(TemperaEventKind.Landing, PartyCooldownNow)
             {
                 Sequence = landing.Sequence,
-                ServerFrame = timing.SeenAtUtc.Ticks,
+                ServerFrame = CurrentServerFrameTiming?.SeenAtUtc.Ticks ?? 0,
                 Hp = landing.Hp,
                 HasHp = true,
             });

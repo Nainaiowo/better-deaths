@@ -62,6 +62,7 @@ internal readonly record struct PartyCooldownObservation(uint EntityId, uint Act
 }
 
 internal readonly record struct PartyCooldownRow(uint EntityId, int DisplayRow, Vector2 NameMin, Vector2 NameMax, float Scale);
+internal readonly record struct PartyCooldownHudMember(uint EntityId, int Index);
 
 internal static class PartyCooldownLayout
 {
@@ -69,18 +70,22 @@ internal static class PartyCooldownLayout
     public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -300, 300) : 0;
     public static float Gap(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 12) : 3;
 
-    public static int FindUniqueRow(ReadOnlySpan<int> displayRows, int target)
+    public static int FindUniqueHudMember(ReadOnlySpan<PartyCooldownHudMember> members, int row)
     {
-        if (target is < 0 or > 7)
+        if (row is < 0 or > 7)
             return -1;
         var result = -1;
-        for (var index = 0; index < displayRows.Length; index++)
-            if (displayRows[index] == target)
+        for (var index = 0; index < members.Length; index++)
+            if (members[index].EntityId is > 0 and not 0xE0000000 && members[index].Index == row)
             {
                 if (result >= 0)
                     return -1;
                 result = index;
             }
+        if (result >= 0)
+            for (var index = 0; index < members.Length; index++)
+                if (index != result && members[index].EntityId == members[result].EntityId)
+                    return -1;
         return result;
     }
 

@@ -32,6 +32,7 @@ public sealed partial class Plugin
     private readonly PartyCooldownLifecycle partyCooldownLifecycle = new();
     private bool partyCooldownQueueOverflowed;
     private bool partyCooldownCatalogFailureReported;
+    private bool partyCooldownUpdateFailureReported;
 
     internal PartyCooldownCatalog? GetPartyCooldownCatalog()
     {
@@ -315,10 +316,15 @@ public sealed partial class Plugin
                 RefreshPartyCooldownDisplay(PartyCooldownNow);
                 nextPartyCooldownDisplayAt = now + .1;
             }
+            partyCooldownUpdateFailureReported = false;
         }
         catch (Exception error)
         {
-            Log.Debug(error, "Could not update party cooldowns.");
+            if (!partyCooldownUpdateFailureReported)
+            {
+                partyCooldownUpdateFailureReported = true;
+                Log.Warning(error, "Could not update party cooldowns.");
+            }
         }
     }
 
@@ -453,6 +459,8 @@ public sealed partial class Plugin
 
     internal IReadOnlyList<PartyCooldownAction> GetVisiblePartyCooldowns(uint entityId) =>
         Volatile.Read(ref partyCooldownActors).TryGetValue(entityId, out var actor) ? actor.Visible : [];
+
+    internal int PartyCooldownActorCount => Volatile.Read(ref partyCooldownActors).Count;
 
     internal PartyCooldownStatus GetPartyCooldownStatus(uint entityId, PartyCooldownAction action)
     {

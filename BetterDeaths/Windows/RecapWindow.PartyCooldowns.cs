@@ -3,7 +3,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using System;
 using System.Collections.Generic;
@@ -360,6 +360,8 @@ public sealed partial class RecapWindow
     }
 
     private bool partyCooldownOverlayFailureReported;
+    private DateTime? partyCooldownOverlayBlockedAt;
+    private bool partyCooldownOverlayBlockedReported;
 
     internal void DrawPartyCooldownOverlay()
     {
@@ -381,36 +383,59 @@ public sealed partial class RecapWindow
     {
         if (!configuration.ShowPartyCooldowns || Plugin.GameGui.GameUiHidden || Plugin.ClientState.IsPvP ||
             !Plugin.ClientState.IsLoggedIn || Plugin.PluginInterface.UiBuilder.CutsceneActive)
+        {
+            ResetPartyCooldownOverlayWarning();
             return;
+        }
         var addon = Plugin.GameGui.GetAddonByName("_PartyList");
-        if (addon.IsNull || !addon.IsReady || !addon.IsVisible)
+        if (addon.IsNull || !addon.IsVisible)
+        {
+            ResetPartyCooldownOverlayWarning();
             return;
+        }
+        if (!addon.IsReady)
+        {
+            ReportPartyCooldownOverlayBlocked("party list not ready", 0, 0, 0);
+            return;
+        }
         var native = (AddonPartyList*)addon.Address;
-        var numbers = PartyListNumberArray.Instance();
-        if (numbers is null || !numbers->IsVisible)
+        var hud = AgentHUD.Instance();
+        if (hud is null)
+        {
+            ReportPartyCooldownOverlayBlocked("HUD agent unavailable", 0, 0, 0);
             return;
-        var count = Math.Clamp(numbers->PartyListCount, 0, 8);
-        var uiCount = Math.Clamp(native->MemberCount, 0, 8);
-        Span<int> displayRows = stackalloc int[uiCount];
-        for (var index = 0; index < uiCount; index++)
-            displayRows[index] = native->PartyMembers[index].DisplayRow;
-        var draw = ImGui.GetBackgroundDrawList();
+        }
+        // AgentHUD explicitly maps each entity to its native party-list slot.
+        // Its member-array order is not the party-list order, including for self.
+        Span<PartyCooldownHudMember> members = stackalloc PartyCooldownHudMember[hud->PartyMembers.Length];
+        var memberCount = 0;
+        for (var index = 0; index < members.Length; index++)
+        {
+            ref var member = ref hud->PartyMembers[index];
+            members[index] = new(member.EntityId, member.Index);
+            if (member.EntityId is > 0 and not 0xE0000000 && member.Index < native->PartyMembers.Length)
+                memberCount++;
+        }
+        var matchedRows = 0;
+        var selectedIcons = 0;
+        var drawnIcons = 0;
+        var draw = ImGui.GetForegroundDrawList();
         var viewport = ImGui.GetMainViewport();
         draw.PushClipRect(viewport.Pos, viewport.Pos + viewport.Size, true);
         try
         {
-            for (var index = 0; index < count; index++)
+            for (var rowIndex = 0; rowIndex < native->PartyMembers.Length; rowIndex++)
             {
-                ref var data = ref numbers->PartyMembers[index];
-                if (data.EntityId is 0 or 0xE0000000 || data.DisplayRow < 0 || data.DisplayRow >= 8)
+                var memberIndex = PartyCooldownLayout.FindUniqueHudMember(members, rowIndex);
+                if (memberIndex < 0)
                     continue;
-                var uiIndex = PartyCooldownLayout.FindUniqueRow(displayRows, data.DisplayRow);
-                if (uiIndex < 0)
-                    continue;
-                var node = native->PartyMembers[uiIndex].Name;
+                var entityId = members[memberIndex].EntityId;
+                var node = native->PartyMembers[rowIndex].Name;
                 if (node is null || !node->IsVisible())
                     continue;
-                var actions = plugin.GetVisiblePartyCooldowns(data.EntityId);
+                matchedRows++;
+                var actions = plugin.GetVisiblePartyCooldowns(entityId);
+                selectedIcons += actions.Count;
                 if (actions.Count == 0)
                     continue;
                 var scale = node->GetScaleX();
@@ -421,21 +446,50 @@ public sealed partial class RecapWindow
                 node->GetTextDrawSize(&textWidth, &textHeight);
                 var nameMin = viewport.Pos + new Vector2(node->ScreenX, node->ScreenY);
                 var nameMax = nameMin + new Vector2(Math.Max(1, (int)textWidth) * scale, Math.Max(1, (int)node->Height) * scale);
-                var row = new PartyCooldownRow(data.EntityId, data.DisplayRow, nameMin, nameMax, scale);
+                var row = new PartyCooldownRow(entityId, rowIndex, nameMin, nameMax, scale);
                 var origin = PartyCooldownLayout.GetOrigin(row, actions.Count, configuration.PartyCooldownSide,
                     configuration.PartyCooldownIconSize, configuration.PartyCooldownIconGap,
                     new(configuration.PartyCooldownOffsetX, configuration.PartyCooldownOffsetY));
                 var size = PartyCooldownLayout.IconSize(configuration.PartyCooldownIconSize) * scale;
                 var step = size + PartyCooldownLayout.Gap(configuration.PartyCooldownIconGap) * scale;
                 for (var actionIndex = 0; actionIndex < actions.Count; actionIndex++)
-                    DrawPartyCooldownStatus(draw, origin + new Vector2(actionIndex * step, 0), size,
-                        actions[actionIndex], plugin.GetPartyCooldownStatus(data.EntityId, actions[actionIndex]));
+                {
+                    var position = origin + new Vector2(actionIndex * step, 0);
+                    if (position.X + size <= viewport.Pos.X || position.X >= viewport.Pos.X + viewport.Size.X ||
+                        position.Y + size <= viewport.Pos.Y || position.Y >= viewport.Pos.Y + viewport.Size.Y)
+                        continue;
+                    DrawPartyCooldownStatus(draw, position, size,
+                        actions[actionIndex], plugin.GetPartyCooldownStatus(entityId, actions[actionIndex]));
+                    drawnIcons++;
+                }
             }
         }
         finally
         {
             draw.PopClipRect();
         }
+        if (drawnIcons > 0 || matchedRows > 0 && selectedIcons == 0 && plugin.PartyCooldownActorCount > 0)
+            ResetPartyCooldownOverlayWarning();
+        else
+            ReportPartyCooldownOverlayBlocked("no on-screen cooldowns", memberCount, matchedRows, selectedIcons);
+    }
+
+    private void ResetPartyCooldownOverlayWarning()
+    {
+        partyCooldownOverlayBlockedAt = null;
+        partyCooldownOverlayBlockedReported = false;
+    }
+
+    private void ReportPartyCooldownOverlayBlocked(string reason, int members, int rows, int icons)
+    {
+        var now = DateTime.UtcNow;
+        partyCooldownOverlayBlockedAt ??= now;
+        if (partyCooldownOverlayBlockedReported || now - partyCooldownOverlayBlockedAt.Value < TimeSpan.FromSeconds(5))
+            return;
+        partyCooldownOverlayBlockedReported = true;
+        Plugin.Log.Warning("Party cooldown overlay blocked: {Reason}; HUD members {Members}, name rows {Rows}, " +
+            "tracked members {TrackedMembers}, selected icons {Icons}, catalog loaded {CatalogLoaded}.",
+            reason, members, rows, plugin.PartyCooldownActorCount, icons, plugin.GetPartyCooldownCatalog() is not null);
     }
 
     private void DrawPartyCooldownStatus(ImDrawListPtr draw, Vector2 position, float size, PartyCooldownAction action, PartyCooldownStatus status)
