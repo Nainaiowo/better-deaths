@@ -703,6 +703,9 @@ public sealed partial class Plugin : IDalamudPlugin
         DutyState.DutyStarted += OnDutyStarted;
         DutyState.DutyWiped += OnDutyReset;
         DutyState.DutyRecommenced += OnDutyReset;
+        DutyState.DutyWiped += OnPartyCooldownDutyReset;
+        DutyState.DutyRecommenced += OnPartyCooldownDutyReset;
+        DutyState.DutyStarted += OnPartyCooldownDutyStarted;
         ChatGui.ChatMessage += OnChatMessage;
         ChatGui.LogMessage += OnLogMessage;
         if (Configuration.ShowDebugTab)
@@ -763,6 +766,9 @@ public sealed partial class Plugin : IDalamudPlugin
         ChatGui.LogMessage -= OnLogMessage;
         ChatGui.ChatMessage -= OnChatMessage;
         DutyState.DutyRecommenced -= OnDutyReset;
+        DutyState.DutyWiped -= OnPartyCooldownDutyReset;
+        DutyState.DutyRecommenced -= OnPartyCooldownDutyReset;
+        DutyState.DutyStarted -= OnPartyCooldownDutyStarted;
         DutyState.DutyWiped -= OnDutyReset;
         DutyState.DutyStarted -= OnDutyStarted;
         mapEffectHook?.Dispose();
@@ -788,6 +794,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         deathRecapPopupWindow.RefreshVisibility();
         windowSystem.Draw();
+        recapWindow.DrawPartyCooldownOverlay();
     }
 
     public bool IsDeathRecapPopupTestActive => deathRecapPopupWindow.IsTestPopupActive;
@@ -826,6 +833,7 @@ public sealed partial class Plugin : IDalamudPlugin
         try
         {
             var now = DateTime.UtcNow;
+            UpdatePartyCooldownTracking();
             PublishCompletedDamageEncounters();
             RefreshTerritoryCaptureState();
             MaybeCheckForPluginUpdateNotice(now);

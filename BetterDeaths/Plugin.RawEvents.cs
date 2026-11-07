@@ -290,6 +290,15 @@ public sealed partial class Plugin
     {
         try
         {
+            CapturePartyCooldownAction(casterEntityId, header, effects, targetEntityIds);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Could not capture a party cooldown use.");
+        }
+
+        try
+        {
             EnqueueRawActionEffects(casterEntityId, targetPos, header, effects, targetEntityIds);
         }
         catch (Exception ex)
@@ -302,7 +311,33 @@ public sealed partial class Plugin
 
     private unsafe void OnProcessPacketEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
     {
-        effectResultHook?.Original(targetId, actionIntegrityData, isReplay);
+        // Retain the authoritative result while native code removes a consumed shield.
+        var previousLanding = currentPartyCooldownLanding;
+        try
+        {
+            try
+            {
+                currentPartyCooldownLanding = ReadPartyCooldownLanding(targetId, actionIntegrityData);
+            }
+            catch (Exception ex)
+            {
+                currentPartyCooldownLanding = null;
+                Log.Debug(ex, "Could not read a party cooldown damage result.");
+            }
+            effectResultHook?.Original(targetId, actionIntegrityData, isReplay);
+            try
+            {
+                CapturePartyCooldownLanding();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not capture a party cooldown damage result.");
+            }
+        }
+        finally
+        {
+            currentPartyCooldownLanding = previousLanding;
+        }
 
         try
         {
@@ -347,6 +382,7 @@ public sealed partial class Plugin
         RawDeathTargetIdentity? deathTargetIdentity = null;
         if (category == ActorControlDeathCategory)
         {
+            CapturePartyCooldownDeath(entityId);
             try
             {
                 deathTargetIdentity = CaptureRawDeathTargetIdentity(entityId);

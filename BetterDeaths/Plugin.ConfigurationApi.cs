@@ -701,6 +701,8 @@ public sealed partial class Plugin
             changed = true;
         }
 
+        changed |= NormalizePartyCooldownConfiguration();
+
         var replayActiveEffectsSplitRatio = Math.Clamp(Configuration.ReplayActiveEffectsSplitRatio, 0.2f, 0.8f);
         if (!float.IsFinite(Configuration.ReplayActiveEffectsSplitRatio) ||
             MathF.Abs(Configuration.ReplayActiveEffectsSplitRatio - replayActiveEffectsSplitRatio) > 0.001f)

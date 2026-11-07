@@ -54,6 +54,7 @@ public sealed partial class Plugin
     private unsafe bool OnSetStatusTiming(StatusManager* manager, int index, ushort statusId,
         float remaining, ushort parameter, GameObjectId source, bool refreshFlags)
     {
+        CaptureTemperaStatus(manager, index, statusId, source.ObjectId, remaining, removal: statusId == 0);
         CaptureStatusTiming(manager, index, statusId, source.ObjectId, parameter, remaining);
         statusTimingSetDepth++;
         try
@@ -70,7 +71,10 @@ public sealed partial class Plugin
     {
         // Replacing a slot is atomic; its internal clear is not a later server removal.
         if (statusTimingSetDepth == 0)
+        {
+            CaptureTemperaStatus(manager, index, 0, 0, 0, removal: true);
             CaptureStatusTiming(manager, index, 0, 0, 0, 0);
+        }
         statusTimingRemoveHook!.Original(manager, index, flags);
     }
 

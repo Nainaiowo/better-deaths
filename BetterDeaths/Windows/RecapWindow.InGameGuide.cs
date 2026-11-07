@@ -254,7 +254,7 @@ public sealed partial class RecapWindow
         var title = guideActive ? OnboardingGuide.Steps[guideStepIndex].Title : "Get to know Better Deaths";
         var description = guideActive
             ? OnboardingGuide.Steps[guideStepIndex].Description
-            : "Take a short tour of Review, Replay, Widgets, Analyzer, Options, and saved data. It uses the real plugin views and can be reopened later.";
+            : "Take a short tour of Review, Replay, HUD, Analyzer, Options, and saved data. It uses the real plugin views and can be reopened later.";
         var action = guideActive ? OnboardingGuide.Steps[guideStepIndex].TryThis : string.Empty;
         if (guideActive && plugin.RecordedPulls.Count == 0 &&
             OnboardingGuide.Steps[guideStepIndex].Section is GuideSection.Replay or GuideSection.Analyzer)
@@ -286,7 +286,8 @@ public sealed partial class RecapWindow
         {
             if (guideActive)
             {
-                var sectionName = OnboardingGuide.Steps[guideStepIndex].Section.ToString();
+                var sectionName = OnboardingGuide.Steps[guideStepIndex].Section == GuideSection.Widgets
+                    ? "HUD" : OnboardingGuide.Steps[guideStepIndex].Section.ToString();
                 ImGui.TextColored(ModernAccentColor,
                     $"Walkthrough {guideStepIndex + 1} / {OnboardingGuide.Steps.Count}  |  {sectionName}");
             }

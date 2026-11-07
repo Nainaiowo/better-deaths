@@ -1,6 +1,7 @@
 using Dalamud.Configuration;
 using System;
 using System.Collections.Generic;
+using BetterDeaths.PartyCooldowns;
 
 namespace BetterDeaths;
 
@@ -203,6 +204,20 @@ public sealed class Configuration : IPluginConfiguration
     public float WtfDigAnalyzerMapSide { get; set; }
 
     public bool ShowDamageMeterWidget { get; set; }
+
+    public bool ShowPartyCooldowns { get; set; }
+
+    public PartyCooldownSide PartyCooldownSide { get; set; } = PartyCooldownSide.Right;
+
+    public float PartyCooldownIconSize { get; set; } = 24;
+
+    public float PartyCooldownIconGap { get; set; } = 3;
+
+    public float PartyCooldownOffsetX { get; set; }
+
+    public float PartyCooldownOffsetY { get; set; }
+
+    public Dictionary<uint, List<uint>> PartyCooldownActions { get; set; } = [];
 
     // Missing in older configurations: inherit the previously shared opacity once on load.
     public float? DamageMeterWidgetBackgroundOpacity { get; set; }

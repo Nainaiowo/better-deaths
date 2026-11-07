@@ -1,0 +1,47 @@
+[
+  {
+    "Name": "Coat break with matched nonlethal result",
+    "SourceWindow": "2026-11-07 01:06:16.509-01:06:18.333 -05:00",
+    "ExpectedReduction": 60,
+    "Events": [
+      { "Kind": "Applied", "SeenAt": 0, "StatusId": 3686, "Remaining": 10, "ServerFrame": 1 },
+      { "Kind": "Damage", "SeenAt": 1.201, "Sequence": 17882 },
+      { "Kind": "Landing", "SeenAt": 1.824, "Sequence": 17882, "ServerFrame": 2, "Hp": 77943, "HasHp": true },
+      { "Kind": "Removed", "SeenAt": 1.824, "StatusId": 3686, "Remaining": 8.176, "ServerFrame": 2, "Sequence": 17882, "Hp": 77943, "HasHp": true }
+    ]
+  },
+  {
+    "Name": "Conversion followed by Grassa break refunds only thirty seconds",
+    "SourceWindow": "2026-11-06 22:22:37.799-22:22:47.530 -05:00",
+    "ExpectedReduction": 30,
+    "Events": [
+      { "Kind": "Applied", "SeenAt": 0, "StatusId": 3686, "Remaining": 10, "ServerFrame": 1 },
+      { "Kind": "Conversion", "SeenAt": 5.466 },
+      { "Kind": "Removed", "SeenAt": 5.466, "StatusId": 3686, "Remaining": 4.534, "ServerFrame": 2 },
+      { "Kind": "Applied", "SeenAt": 5.466, "StatusId": 3687, "Remaining": 10, "ServerFrame": 2 },
+      { "Kind": "Damage", "SeenAt": 8.754, "Sequence": 4233 },
+      { "Kind": "Landing", "SeenAt": 9.731, "Sequence": 4233, "ServerFrame": 3, "Hp": 92572, "HasHp": true },
+      { "Kind": "Removed", "SeenAt": 9.731, "StatusId": 3687, "Remaining": 5.735, "ServerFrame": 3, "Sequence": 4233, "Hp": 92572, "HasHp": true }
+    ]
+  },
+  {
+    "Name": "Coat expires without a reduction",
+    "SourceWindow": "2026-11-06 22:57:16.096-22:57:26.129 -05:00",
+    "ExpectedReduction": 0,
+    "Events": [
+      { "Kind": "Applied", "SeenAt": 0, "StatusId": 3686, "Remaining": 10, "ServerFrame": 1 },
+      { "Kind": "Removed", "SeenAt": 10.033, "StatusId": 3686, "Remaining": 0, "ServerFrame": 2 }
+    ]
+  },
+  {
+    "Name": "Conversion alone does not refund Coat",
+    "SourceWindow": "2026-11-06 22:26:11.915-22:26:12.583 -05:00",
+    "ExpectedReduction": 0,
+    "Events": [
+      { "Kind": "Applied", "SeenAt": 0, "StatusId": 3686, "Remaining": 10, "ServerFrame": 1 },
+      { "Kind": "Conversion", "SeenAt": 0.668 },
+      { "Kind": "Removed", "SeenAt": 0.668, "StatusId": 3686, "Remaining": 9.332, "ServerFrame": 2 },
+      { "Kind": "Applied", "SeenAt": 0.668, "StatusId": 3687, "Remaining": 10, "ServerFrame": 2 }
+    ]
+  }
+]

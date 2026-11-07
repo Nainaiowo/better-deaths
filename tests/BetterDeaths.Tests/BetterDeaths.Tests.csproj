@@ -16,9 +16,16 @@
 
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownSelectionPolicy.cs" Link="PartyCooldowns/PartyCooldownSelectionPolicy.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownCatalog.cs" Link="PartyCooldowns/PartyCooldownCatalog.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownTracker.cs" Link="PartyCooldowns/PartyCooldownTracker.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownLifecycle.cs" Link="PartyCooldowns/PartyCooldownLifecycle.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/TemperaCooldownTracker.cs" Link="PartyCooldowns/TemperaCooldownTracker.cs" />
     <Compile Include="../../BetterDeaths/ContentCapturePolicy.cs" Link="ContentCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/OverworldDamageEncounterState.cs" Link="OverworldDamageEncounterState.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
+    <Compile Include="../../BetterDeaths/HudLayoutPolicy.cs" Link="HudLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRetention.cs" Link="DebugCaptureFileRetention.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRecord.cs" Link="DebugCaptureFileRecord.cs" />
     <Compile Include="../../BetterDeaths/OrderedBackgroundWorkQueue.cs" Link="OrderedBackgroundWorkQueue.cs" />
@@ -121,5 +128,6 @@
     <None Update="Fixtures/CalibrationAdmissionGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/DamageWorkflowGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/CapturedPacketTimingHeaders.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/TemperaCooldownCaptured.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -19,39 +19,7 @@ public sealed partial class RecapWindow
 
     private void DrawWidgetsPage()
     {
-        var available = ImGui.GetContentRegionAvail();
-        if (available.X >= 900.0f)
-        {
-            var dividerWidth = ReviewPaneDividerWidth + (WorkspacePaneGap * 2.0f);
-            var contentWidth = MathF.Max(0.0f, available.X - dividerWidth);
-            var leftWidth = MathF.Max(480.0f, contentWidth * 0.5f);
-            if (ImGui.BeginChild(
-                    "##DamageMeterWorkspaceColumn",
-                    new Vector2(leftWidth, available.Y),
-                    false,
-                    ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
-            {
-                DrawDamageMeterWorkspace();
-            }
-
-            ImGui.EndChild();
-            DrawVerticalReviewDivider("WidgetsWorkspaceDivider", available.Y);
-            DrawReviewPanel(
-                "##DeathWidgetSettings",
-                Vector2.Zero,
-                DrawWidgetTab,
-                guideTarget: GuideTarget.DeathWidget);
-            return;
-        }
-
-        var deathWidgetHeight = MathF.Min(460.0f, MathF.Max(300.0f, available.Y * 0.44f));
-        DrawReviewPanel(
-            "##DeathWidgetSettingsStacked",
-            new Vector2(0.0f, deathWidgetHeight),
-            DrawWidgetTab,
-            guideTarget: GuideTarget.DeathWidget);
-        ImGui.Dummy(new Vector2(1.0f, WorkspacePaneGap));
-        DrawDamageMeterWorkspace();
+        DrawHudSettingsPage();
     }
 
     private void DrawDamageMeterWorkspace()
@@ -79,25 +47,13 @@ public sealed partial class RecapWindow
 
     private void DrawDamageMeterContent()
     {
-        ImGui.TextColored(LeadUpGoldColor, "DPS Meter");
-        ImGui.SameLine();
-        ImGui.TextColored(ModernMutedTextColor, "Widget display and columns");
-        ImGui.Dummy(new Vector2(1.0f, 5.0f));
-        ImGui.Separator();
-        ImGui.Dummy(new Vector2(1.0f, 8.0f));
-
-        ImGui.TextColored(LeadUpGoldColor, "Disclaimer");
-        ImGui.PushStyleColor(ImGuiCol.Text, ModernMutedTextColor);
-        ImGui.TextWrapped(
-            "Better Deaths calculates DPS through the last captured damage event; the delay before saving an encounter does not extend its DPS timer. " +
-            "ACT may use a different encounter end time. If both meters record the same total damage, comparing the same duration will align their DPS values.");
+        DrawModernSectionTitle("DPS Meter");
+        DrawSubtleSeparator();
         ImGui.Spacing();
-        ImGui.TextWrapped(
-            "ACT rounds displayed values, and Better Deaths does as well, so a small difference of dps is expected in values of the hundreds, NOT thousands, or anything bigger than that.");
-        ImGui.PopStyleColor();
-        ImGui.Dummy(new Vector2(1.0f, 10.0f));
-
         DrawDamageMeterWidgetSettings();
+        ImGui.Spacing();
+        if (ImGui.CollapsingHeader("Disclaimer##DamageMeterDisclaimer"))
+            DrawDamageMeterDisclaimer();
         ImGui.Dummy(new Vector2(1.0f, 10.0f));
         var columnsMin = ImGui.GetCursorScreenPos();
         DrawDamageMeterColumnSettings();
@@ -108,9 +64,21 @@ public sealed partial class RecapWindow
         DrawReviewPaneBottomPadding();
     }
 
+    private static void DrawDamageMeterDisclaimer()
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, ModernMutedTextColor);
+        ImGui.TextWrapped(
+            "Better Deaths calculates DPS through the last captured damage event; the delay before saving an encounter does not extend its DPS timer. " +
+            "ACT may use a different encounter end time. If both meters record the same total damage, comparing the same duration will align their DPS values.");
+        ImGui.Spacing();
+        ImGui.TextWrapped(
+            "ACT rounds displayed values, and Better Deaths does as well, so a small difference of dps is expected in values of the hundreds, NOT thousands, or anything bigger than that.");
+        ImGui.PopStyleColor();
+        ImGui.Dummy(new Vector2(1.0f, 10.0f));
+    }
+
     private void DrawDamageMeterWidgetSettings()
     {
-        ImGui.TextColored(ModernAccentColor, "Widget");
         var showWidget = configuration.ShowDamageMeterWidget;
         if (DrawThemedCheckbox("Show DPS meter widget##DamageMeterWidgetVisible", ref showWidget))
         {
@@ -122,39 +90,21 @@ public sealed partial class RecapWindow
         DrawDamageMeterDisplayModeSegment(WidgetDisplayMode.Normal);
         DrawTextSelectorSeparator();
         DrawDamageMeterDisplayModeSegment(WidgetDisplayMode.Concise);
-        DrawSettingsTooltip("Normal shows full names and labels. Concise uses player initials and tighter columns.");
+        DrawSettingsTooltip("Normal uses full values. Concise shortens names, numbers, and column labels. Name redaction applies to both.");
 
         ImGui.Spacing();
-        var appearanceWidth = MathF.Max(400.0f,
-            ImGui.CalcTextSize("Background opacity").X * 2.0f + ImGui.GetStyle().CellPadding.X * 4.0f + 24.0f);
-        if (ImGui.GetContentRegionAvail().X >= appearanceWidth)
-        {
-            if (ImGui.BeginTable("##DamageMeterAppearance", 2, ImGuiTableFlags.SizingStretchSame))
-            {
-                ImGui.TableNextColumn();
-                DrawDamageMeterOpacitySetting();
-                ImGui.TableNextColumn();
-                DrawDamageMeterIconSizeSetting();
-                ImGui.EndTable();
-            }
-        }
-        else
-        {
-            DrawDamageMeterOpacitySetting();
-            ImGui.Spacing();
-            DrawDamageMeterIconSizeSetting();
-        }
+        DrawHudAppearanceSettings("##DamageMeterAppearance", DrawDamageMeterOpacitySetting, DrawDamageMeterIconSizeSetting);
     }
 
     private void DrawDamageMeterOpacitySetting()
     {
         ImGui.TextUnformatted("Background opacity");
         ImGui.SetNextItemWidth(-1.0f);
-        var opacity = GetDamageMeterWidgetBackgroundOpacity();
+        var opacity = GetDamageMeterWidgetBackgroundOpacity() * 100;
         if (ImGui.SliderFloat("##DamageMeterBackgroundOpacity", ref opacity,
-                Plugin.CurrentPullWidgetMinBackgroundOpacity, Plugin.CurrentPullWidgetMaxBackgroundOpacity, "%.2f"))
+                Plugin.CurrentPullWidgetMinBackgroundOpacity * 100, Plugin.CurrentPullWidgetMaxBackgroundOpacity * 100, "%.0f%%"))
         {
-            plugin.SetDamageMeterWidgetBackgroundOpacity(opacity);
+            plugin.SetDamageMeterWidgetBackgroundOpacity(opacity / 100);
         }
 
         DrawSettingsTooltip("Controls only the DPS Meter background. Text, icons, and values stay fully visible.");

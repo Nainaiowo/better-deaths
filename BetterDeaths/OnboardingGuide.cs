@@ -28,6 +28,7 @@ internal enum GuideTarget
     MeterPreview,
     MeterColumns,
     MeterEncounters,
+    PartyCooldowns,
     AnalyzerSource,
     AnalyzerResults,
     OptionsSettings,
@@ -85,6 +86,9 @@ internal static class OnboardingGuide
         new(GuideSection.Widgets, GuideTarget.MeterEncounters, "Revisit an encounter",
             "The Encounters list keeps saved combat results separately from death pulls. Selecting one updates the settings preview, not the floating widget's live or latest encounter.",
             "Select a saved encounter, or explore the tutorial encounter when none is available."),
+        new(GuideSection.Widgets, GuideTarget.PartyCooldowns, "Choose party cooldowns",
+            "Choose abilities for each job beside the native party-list names. Layout settings apply to every job; the preview follows the job you open. Timers count down to the next charge, a small corner number shows remaining charges, and ? means the cooldown history is not yet known.",
+            "Open a role and job, then add, remove, or reorder its cooldowns and check the preview."),
         new(GuideSection.Analyzer, GuideTarget.AnalyzerSource, "Choose an analysis source",
             "Analyzer supports eligible saved Better Deaths pulls and FFLogs links for supported mechanics. A local pull stays local; a report link uses the external report service.",
             "Choose the source, mechanic, and matching pull or report."),
@@ -113,6 +117,14 @@ internal static class OnboardingGuide
                 return index;
         }
 
+        return 0;
+    }
+
+    public static int FirstStepFor(GuideTarget target)
+    {
+        for (var index = 0; index < Steps.Count; index++)
+            if (Steps[index].Target == target)
+                return index;
         return 0;
     }
 }

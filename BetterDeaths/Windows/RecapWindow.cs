@@ -1198,23 +1198,31 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawHelpCenterButton(string idSuffix, string label, float width)
     {
+        var cooldownHelp = currentMainPage == MainPage.Widgets && hudSettingsView == HudSettingsView.PartyCooldowns;
         if (DrawThemedToggleButton(label, $"OpenHelpCenter{idSuffix}", selected: false, width))
         {
-            OpenHelpCenterUrl(GetHelpCenterUrl(currentMainPage));
+            if (cooldownHelp)
+            {
+                StartInGameGuide();
+                MoveInGameGuideTo(OnboardingGuide.FirstStepFor(GuideTarget.PartyCooldowns));
+            }
+            else
+                OpenHelpCenterUrl(GetHelpCenterUrl(currentMainPage));
         }
 
         if (ImGui.IsItemHovered())
         {
-            SetThemedTooltip("Open the Help Center for this section in your browser.");
+            SetThemedTooltip(cooldownHelp ? "Open the Party Cooldowns walkthrough." : "Open the Help Center for this section in your browser.");
         }
     }
 
-    private static string GetHelpCenterUrl(MainPage page)
+    private string GetHelpCenterUrl(MainPage page)
     {
         return page switch
         {
             MainPage.Review => $"{HelpCenterUrl}review.html#review",
             MainPage.Replay => $"{HelpCenterUrl}replay.html#replay",
+            MainPage.Widgets when hudSettingsView == HudSettingsView.DeathWidget => $"{HelpCenterUrl}widget.html#current-pull",
             MainPage.Widgets => $"{HelpCenterUrl}meter.html#meter",
             MainPage.Analyzer => $"{HelpCenterUrl}analyzer.html#analyzer",
             MainPage.Example => $"{HelpCenterUrl}index.html#first-review",
@@ -1344,7 +1352,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             new("Review", MainPage.Review),
             new("Replay", MainPage.Replay, BadgeText: ReplayBetaBadgeText),
-            new("Widgets", MainPage.Widgets, BadgeText: ThemeNewBadgeText),
+            new("HUD", MainPage.Widgets, BadgeText: ThemeNewBadgeText),
             new("Analyzer", MainPage.Analyzer, BadgeText: ThemeNewBadgeText),
             new("Options", MainPage.Options, HasUnseenNewThemeBadges()),
             new("Data", MainPage.Data),
@@ -4587,7 +4595,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         drawList.AddText(pillMin + padding, ImGui.GetColorU32(textColor), text);
     }
 
-    private static bool DrawSegmentedButton(string label, string id, bool selected, float width)
+    private static bool DrawSegmentedButton(string label, string id, bool selected, float width, float height = 24.0f)
     {
         var buttonColor = selected ? ModernNavButtonSelectedColor : ModernNavButtonColor;
         var hoveredColor = selected ? ModernNavButtonSelectedHoveredColor : ModernNavButtonHoveredColor;
@@ -4595,7 +4603,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoveredColor);
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, ModernNavButtonActiveColor);
         ImGui.PushStyleColor(ImGuiCol.Text, GetButtonTextColor(buttonColor, selected));
-        var clicked = ImGui.Button($"{label}##{id}", new Vector2(width, 24.0f));
+        var clicked = ImGui.Button($"{label}##{id}", new Vector2(width, height));
         ImGui.PopStyleColor(4);
         return clicked;
     }
@@ -17322,7 +17330,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawCompactSettingLabel(
             "Icon size",
             "CustomizeIconSizeHelp",
-            "Controls action and status icons in Review. Death Widget icon sizing is in Widgets.");
+            "Controls action and status icons in Review. Death Widget icon sizing is in HUD.");
         ImGui.SameLine(0.0f, ImGui.GetStyle().ItemSpacing.X);
         ImGui.SetCursorPosY(headerStartY);
         DrawCustomizeIconSizePreview(iconSize);
@@ -18145,7 +18153,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawWidgetTab()
     {
-        DrawModernSectionTitle("Death Widget", "Preview");
+        DrawModernSectionTitle("Death Widget");
         DrawSubtleSeparator();
         ImGui.Spacing();
 
@@ -18160,22 +18168,45 @@ public sealed partial class RecapWindow : Window, IDisposable
             SetThemedTooltip("Keeps the current pull death recap in its own window. Closing the widget turns this setting off.");
         }
 
-        var widgetBackgroundOpacity = GetCurrentPullWidgetBackgroundOpacity();
+        ImGui.Spacing();
+        DrawWidgetDisplayModeSetting();
+        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only events, and fits mitigation/debuff icons to available space with a +x count.");
+        ImGui.Spacing();
+        DrawHudAppearanceSettings("##DeathWidgetAppearance", DrawDeathWidgetOpacitySetting, DrawDeathWidgetIconSizeSetting);
+        ImGui.Dummy(new Vector2(1, 10));
+        ImGui.TextColored(ModernAccentColor, "Preview");
+        ImGui.SameLine();
+        DrawQuestionTooltipMarker("DeathWidgetPreviewHelp", () =>
+            SetThemedTooltip("Uses static example pull data so the preview stays available outside combat."));
+        DrawCurrentPullWidgetPreview();
+        DrawReviewPaneBottomPadding();
+    }
+
+    private void DrawDeathWidgetOpacitySetting()
+    {
+        ImGui.TextUnformatted("Background opacity");
+        ImGui.SetNextItemWidth(-1);
+        var widgetBackgroundOpacity = GetCurrentPullWidgetBackgroundOpacity() * 100;
         if (ImGui.SliderFloat(
-            "Widget background opacity",
+            "##DeathWidgetBackgroundOpacity",
             ref widgetBackgroundOpacity,
-            Plugin.CurrentPullWidgetMinBackgroundOpacity,
-            Plugin.CurrentPullWidgetMaxBackgroundOpacity,
-            "%.2f"))
+            Plugin.CurrentPullWidgetMinBackgroundOpacity * 100,
+            Plugin.CurrentPullWidgetMaxBackgroundOpacity * 100,
+            "%.0f%%"))
         {
-            plugin.SetCurrentPullWidgetBackgroundOpacity(widgetBackgroundOpacity);
+            plugin.SetCurrentPullWidgetBackgroundOpacity(widgetBackgroundOpacity / 100);
         }
 
         DrawSettingsTooltip("Controls only the Death Widget background. Text, icons, tables, and HP bars stay fully visible. The lower limit keeps enough contrast over gameplay.");
+    }
 
+    private void DrawDeathWidgetIconSizeSetting()
+    {
+        ImGui.TextUnformatted("Icon size");
+        ImGui.SetNextItemWidth(-1);
         var widgetIconSize = GetWidgetIconSize();
         if (ImGui.SliderFloat(
-            "Widget icon size",
+            "##DeathWidgetIconSize",
             ref widgetIconSize,
             Plugin.MinWidgetIconSize,
             Plugin.MaxWidgetIconSize,
@@ -18185,16 +18216,6 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         DrawSettingsTooltip("Controls only the Death Widget job and mitigation/debuff icon sizes.");
-
-        DrawWidgetDisplayModeSetting();
-
-        DrawSettingsTooltip("Normal keeps the full widget detail. Concise uses player initials, damage-only events, and fits mitigation/debuff icons to available space with a +x count.");
-
-        ImGui.Separator();
-        ImGui.TextUnformatted("Widget preview");
-        ImGui.TextDisabled("Uses static example pull data so the preview stays available outside combat.");
-        DrawCurrentPullWidgetPreview();
-        DrawReviewPaneBottomPadding();
     }
 
     private static string GetWidgetDisplayModeLabel(WidgetDisplayMode mode)

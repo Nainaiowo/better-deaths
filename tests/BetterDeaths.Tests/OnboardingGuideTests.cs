@@ -74,6 +74,15 @@ public sealed class OnboardingGuideTests
         }
     }
 
+    [Fact]
+    public void HudWalkthroughIncludesTheNewPartyCooldownView()
+    {
+        Assert.Contains(OnboardingGuide.Steps, step => step.Section == GuideSection.Widgets &&
+            step.Target == GuideTarget.PartyCooldowns);
+        Assert.Equal(GuideTarget.PartyCooldowns, OnboardingGuide.Steps[
+            OnboardingGuide.FirstStepFor(GuideTarget.PartyCooldowns)].Target);
+    }
+
     private static RecordedPullSummary CreatePull(long number, int deaths) =>
         new(System.DateTime.UtcNow, "Combat ended", 1, "Duty", 60, deaths) { PullNumber = number };
 }
