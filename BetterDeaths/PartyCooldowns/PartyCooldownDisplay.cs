@@ -11,12 +11,23 @@ internal sealed class PartyCooldownDisplayRow
 {
     private readonly object sync = new();
     private readonly PartyCooldownDisplayEntry[] entries;
+    private uint timerRefreshMask;
+
+    public uint TimerRefreshMask
+    {
+        get
+        {
+            lock (sync)
+                return timerRefreshMask;
+        }
+    }
 
     public PartyCooldownDisplayRow(PartyCooldownAction[] actions)
     {
         entries = new PartyCooldownDisplayEntry[actions.Length];
         for (var index = 0; index < actions.Length; index++)
             entries[index] = new(actions[index], default, "?", string.Empty);
+        Invalidate();
     }
 
     public void Update(int index, PartyCooldownStatus status)
@@ -30,7 +41,18 @@ internal sealed class PartyCooldownDisplayRow
                 TimerLabel = PartyCooldownLabels.Timer(status),
                 ChargeLabel = PartyCooldownLabels.Charges(status),
             };
+            if (status.IsKnown && status.Charges == status.MaxCharges)
+                timerRefreshMask &= ~(1u << index);
+            else
+                timerRefreshMask |= 1u << index;
         }
+    }
+
+    public void Invalidate()
+    {
+        // A configured row contains at most twelve actions.
+        lock (sync)
+            timerRefreshMask = (1u << entries.Length) - 1;
     }
 
     public int CopyTo(Span<PartyCooldownDisplayEntry> destination)

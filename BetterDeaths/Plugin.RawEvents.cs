@@ -311,33 +311,8 @@ public sealed partial class Plugin
 
     private unsafe void OnProcessPacketEffectResult(uint targetId, IntPtr actionIntegrityData, byte isReplay)
     {
-        // Retain the authoritative result while native code removes a consumed shield.
-        var previousLanding = currentPartyCooldownLanding;
-        try
-        {
-            try
-            {
-                currentPartyCooldownLanding = ReadPartyCooldownLanding(targetId, actionIntegrityData);
-            }
-            catch (Exception ex)
-            {
-                currentPartyCooldownLanding = null;
-                Log.Debug(ex, "Could not read a party cooldown damage result.");
-            }
+        if (!ProcessTemperaResult(targetId, actionIntegrityData, isReplay))
             effectResultHook?.Original(targetId, actionIntegrityData, isReplay);
-            try
-            {
-                CapturePartyCooldownLanding();
-            }
-            catch (Exception ex)
-            {
-                Log.Debug(ex, "Could not capture a party cooldown damage result.");
-            }
-        }
-        finally
-        {
-            currentPartyCooldownLanding = previousLanding;
-        }
 
         try
         {
@@ -380,6 +355,8 @@ public sealed partial class Plugin
         byte param9)
     {
         RawDeathTargetIdentity? deathTargetIdentity = null;
+        if (category == ActorControlLoseEffectCategory)
+            CaptureTemperaLoss(entityId, param1, param3);
         if (category == ActorControlDeathCategory)
         {
             CapturePartyCooldownDeath(entityId);

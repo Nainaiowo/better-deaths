@@ -26,6 +26,9 @@ public sealed partial class Plugin
 
     private unsafe void TryInitializeStatusTiming()
     {
+        // These optional hooks serve the damage parser's packet clock, not Tempera.
+        if (serverFrameHook is null)
+            return;
         try
         {
             if (StatusManager.Addresses.SetStatus.Value == IntPtr.Zero ||
@@ -37,10 +40,7 @@ public sealed partial class Plugin
                 StatusManager.Addresses.RemoveStatus.Value, OnRemoveStatusTiming);
             statusTimingSetHook.Enable();
             statusTimingRemoveHook.Enable();
-            if (serverFrameHook is not null)
-                Log.Information("Better Deaths damage meter status-update timing enabled.");
-            else
-                Log.Information("Better Deaths native shield callbacks enabled; damage status timing still requires server-frame timing.");
+            Log.Information("Better Deaths damage meter status-update timing enabled.");
         }
         catch (Exception ex)
         {
@@ -55,7 +55,6 @@ public sealed partial class Plugin
     private unsafe bool OnSetStatusTiming(StatusManager* manager, int index, ushort statusId,
         float remaining, ushort parameter, GameObjectId source, bool refreshFlags)
     {
-        CaptureTemperaStatus(manager, index, statusId, source.ObjectId, remaining, removal: statusId == 0);
         CaptureStatusTiming(manager, index, statusId, source.ObjectId, parameter, remaining);
         statusTimingSetDepth++;
         try
@@ -73,7 +72,6 @@ public sealed partial class Plugin
         // Replacing a slot is atomic; its internal clear is not a later server removal.
         if (statusTimingSetDepth == 0)
         {
-            CaptureTemperaStatus(manager, index, 0, 0, 0, removal: true);
             CaptureStatusTiming(manager, index, 0, 0, 0, 0);
         }
         statusTimingRemoveHook!.Original(manager, index, flags);

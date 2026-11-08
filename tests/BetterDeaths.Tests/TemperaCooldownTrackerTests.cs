@@ -94,6 +94,71 @@ public sealed class TemperaCooldownTrackerTests
     }
 
     [Fact]
+    public void NoScheduledCheckIsNeededUntilAMatchedEarlyClearExists()
+    {
+        var tracker = Started();
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(2));
+        tracker.Observe(1, Damage());
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        tracker.Observe(1, Lost());
+        Assert.Equal(4.2, tracker.GetNextReductionCheckAt(1), 6);
+        Assert.False(tracker.HasPendingReduction(1, 4.199));
+        Assert.True(tracker.HasPendingReduction(1, 4.2));
+        tracker.Observe(1, Lost(at: 4.1) with { HasHp = false, Sequence = 0 });
+        Assert.Equal(4.2, tracker.GetNextReductionCheckAt(1), 6);
+        Assert.True(tracker.TryReduce(1, 4.2, out _));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+    }
+
+    [Fact]
+    public void ADelayedDamageObservationCanScheduleAnAlreadyCapturedClear()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Lost());
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        tracker.Observe(1, Damage());
+        Assert.Equal(4.2, tracker.GetNextReductionCheckAt(1), 6);
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DeathOrConversionCancelsAScheduledCoatRefund(bool conversion)
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost());
+        Assert.Equal(4.2, tracker.GetNextReductionCheckAt(1), 6);
+        tracker.Observe(1, new(conversion ? TemperaEventKind.Conversion : TemperaEventKind.Death, 4.1));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        Assert.False(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Fact]
+    public void TwoMembersDeadlinesRemainIndependentAndResetClearsOldWork()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost());
+        tracker.Cast(2, 0);
+        tracker.Observe(2, Added());
+        tracker.Observe(2, Damage(4));
+        tracker.Observe(2, Lost(at: 5) with { Remaining = 5 });
+        Assert.Equal(4.2, tracker.GetNextReductionCheckAt(1), 6);
+        Assert.Equal(5.2, tracker.GetNextReductionCheckAt(2), 6);
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        Assert.Equal(5.2, tracker.GetNextReductionCheckAt(2), 6);
+        tracker.Cast(2, 5.1);
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(2));
+        tracker.Clear();
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(2));
+    }
+
+    [Fact]
     public void ExpiryConversionAndDeathNeverBecomeObjectLookupCandidates()
     {
         foreach (var kind in new[] { TemperaEventKind.Death, TemperaEventKind.Conversion })
@@ -330,6 +395,36 @@ public sealed class TemperaCooldownTrackerTests
         Assert.True(tracker.TryReduce(1, 4.21, out _));
         tracker.Observe(1, Lost());
         Assert.False(tracker.TryReduce(1, 5, out _));
+    }
+
+    [Fact]
+    public void LaterOrdinaryLossNoticeDoesNotEraseExplicitNativeClearEvidence()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost());
+        tracker.Observe(1, Lost(at: 4.05) with { HasHp = false, Sequence = 0, Remaining = double.NaN });
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Fact]
+    public void ExplicitNativeClearCanUpgradeAnEarlierOrdinaryLossNotice()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost(at: 3.99) with { HasHp = false, Sequence = 0 });
+        tracker.Observe(1, Lost());
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Fact]
+    public void LethalDuplicateStillVetoesAPreviouslyNonlethalClear()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost());
+        tracker.Observe(1, Lost(at: 4.1) with { Hp = 0 });
+        Assert.False(tracker.TryReduce(1, 4.31, out _));
     }
 
     [Fact]

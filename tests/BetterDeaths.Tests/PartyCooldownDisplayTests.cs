@@ -47,6 +47,108 @@ public sealed class PartyCooldownDisplayTests(ITestOutputHelper output)
         Assert.Equal("?", buffer[0].TimerLabel);
     }
 
+    [Theory]
+    [InlineData(1, 1, 0, true, 0u)]
+    [InlineData(2, 2, 0, true, 0u)]
+    [InlineData(0, 1, 30, true, 1u)]
+    [InlineData(1, 2, 30, true, 1u)]
+    [InlineData(0, 2, 30, true, 1u)]
+    [InlineData(1, 1, 0, false, 1u)]
+    public void OnlyFullyReadyKnownEntriesStopPeriodicRefresh(int charges, int maximum, double remaining,
+        bool known, uint expected)
+    {
+        var row = new PartyCooldownDisplayRow([Action]);
+        Assert.Equal(1u, row.TimerRefreshMask);
+        row.Update(0, new(charges, maximum, remaining, known));
+        Assert.Equal(expected, row.TimerRefreshMask);
+    }
+
+    [Fact]
+    public void CapturedUseImmediatelyWakesAReadyEntryWithoutWakingOtherEntries()
+    {
+        var row = new PartyCooldownDisplayRow([Action, Action with { Id = 2, Group = 2 }]);
+        row.Update(0, new(2, 2, 0, true));
+        row.Update(1, new(2, 2, 0, true));
+        Assert.Equal(0u, row.TimerRefreshMask);
+        row.Update(1, new(1, 2, 120, true));
+        Assert.Equal(2u, row.TimerRefreshMask);
+        var entries = new PartyCooldownDisplayEntry[2];
+        row.CopyTo(entries);
+        Assert.Equal("120", entries[1].TimerLabel);
+        Assert.Equal("1", entries[1].ChargeLabel);
+        row.Update(1, new(2, 2, 0, true));
+        Assert.Equal(0u, row.TimerRefreshMask);
+    }
+
+    [Fact]
+    public void RosterResetOrCaptureLossCanInvalidateEveryCachedReadyEntry()
+    {
+        var row = new PartyCooldownDisplayRow(Enumerable.Repeat(Action, 12).ToArray());
+        for (var index = 0; index < 12; index++)
+            row.Update(index, new(2, 2, 0, true));
+        Assert.Equal(0u, row.TimerRefreshMask);
+        row.Invalidate();
+        Assert.Equal(4095u, row.TimerRefreshMask);
+        for (var index = 0; index < 12; index++)
+            row.Update(index, default);
+        var entries = new PartyCooldownDisplayEntry[12];
+        row.CopyTo(entries);
+        Assert.All(entries, entry => Assert.Equal("?", entry.TimerLabel));
+        Assert.Equal(4095u, row.TimerRefreshMask);
+        Assert.Equal(0u, new PartyCooldownDisplayRow([]).TimerRefreshMask);
+    }
+
+    [Fact]
+    public void SkippingReadyEntriesMatchesFullRefreshThroughUsesRechargeResetAndLostHistory()
+    {
+        var actions = Enumerable.Range(0, 12)
+            .Select(index => Action with { Id = (uint)index + 1, Group = (byte)(index + 1) }).ToArray();
+        var profiles = actions.Select(action => new PartyCooldownProfile(action.Id, action.Group, 10, 2)).ToArray();
+        var tracker = new PartyCooldownTracker();
+        var reference = new PartyCooldownDisplayRow(actions);
+        var cached = new PartyCooldownDisplayRow(actions);
+        var referenceEntries = new PartyCooldownDisplayEntry[12];
+        var cachedEntries = new PartyCooldownDisplayEntry[12];
+        var calculations = 0;
+        for (var tick = 0; tick < 1000; tick++)
+        {
+            var now = tick / 10d;
+            if (tick is 0 or 300)
+            {
+                foreach (var profile in profiles)
+                    tracker.ConfirmReady(1, profile, now);
+                cached.Invalidate();
+            }
+            if (tick == 200)
+            {
+                tracker.Clear();
+                cached.Invalidate();
+            }
+            if (tick is 10 or 15 or 50 or 299 or 500)
+            {
+                var index = tick is 10 or 15 ? 1 : 5;
+                Assert.True(tracker.Observe(1, profiles[index], now, (uint)tick));
+                cached.Update(index, tracker.Get(1, profiles[index], now));
+                Assert.NotEqual(0u, cached.TimerRefreshMask & (1u << index));
+            }
+            var refresh = cached.TimerRefreshMask;
+            for (var index = 0; index < profiles.Length; index++)
+            {
+                reference.Update(index, tracker.Get(1, profiles[index], now));
+                if ((refresh & (1u << index)) != 0)
+                {
+                    cached.Update(index, tracker.Get(1, profiles[index], now));
+                    calculations++;
+                }
+            }
+            reference.CopyTo(referenceEntries);
+            cached.CopyTo(cachedEntries);
+            Assert.Equal(referenceEntries, cachedEntries);
+        }
+        Assert.True(calculations < 12 * 1000 / 2);
+        output.WriteLine($"Ready-entry cache performed {calculations} status calculations instead of 12000, with identical displayed output.");
+    }
+
     [Fact]
     public async Task DrawingCannotObserveATornStatusAndLabelDuringConcurrentUpdates()
     {
@@ -80,6 +182,24 @@ public sealed class PartyCooldownDisplayTests(ITestOutputHelper output)
             row.CopyTo(buffer);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    [Fact]
+    public void RefreshMaskReadsAndInvalidationAllocateNoManagedMemory()
+    {
+        var row = new PartyCooldownDisplayRow([Action]);
+        row.Invalidate();
+        var expected = row.TimerRefreshMask;
+        uint observed = 0;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 10000; index++)
+        {
+            row.Invalidate();
+            observed |= row.TimerRefreshMask;
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(expected, observed);
+        Assert.Equal(0, allocated);
     }
 
     [Fact]

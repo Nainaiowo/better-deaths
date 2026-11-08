@@ -11,16 +11,19 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using LuminaAction = Lumina.Excel.Sheets.Action;
+using NativePartyMember = FFXIVClientStructs.FFXIV.Client.Game.Group.PartyMember;
 
 namespace BetterDeaths;
 
 public sealed partial class Plugin
 {
+    private const double PartyCooldownRosterInterval = 1;
     private readonly PartyCooldownTracker partyCooldownTracker = new();
     private readonly object partyCooldownQueueLock = new();
     private readonly Queue<PartyCooldownObservation> partyCooldownObservations = new(256);
     private readonly PartyCooldownObservation[] partyCooldownDrain = new PartyCooldownObservation[256];
     private Dictionary<uint, PartyCooldownActor> partyCooldownActors = [];
+    private bool partyCooldownHasTempera;
     private HashSet<ulong> partyCooldownMemberKeys = [];
     private readonly Dictionary<ulong, (uint Job, byte Level)> partyCooldownContexts = [];
     private PartyCooldownCatalog? loadedPartyCooldownCatalog;
@@ -190,7 +193,7 @@ public sealed partial class Plugin
         SaveConfiguration();
         partyCooldownRosterInvalidated = true;
         nextPartyCooldownRosterAt = 0;
-        nextPartyCooldownDisplayAt = 0;
+        InvalidatePartyCooldownDisplay();
     }
 
     internal void SetPartyCooldownVisibility(bool visible)
@@ -262,7 +265,7 @@ public sealed partial class Plugin
             {
                 partyCooldownLifecycle.EnterTerritory(ClientState.TerritoryType);
                 // UI/entity IDs can change on zoning; content-ID cooldown history must not reset with them.
-                Volatile.Write(ref partyCooldownActors, []);
+                PublishPartyCooldownActors([]);
                 partyCooldownRosterInvalidated = true;
                 nextPartyCooldownRosterAt = 0;
                 partyCooldownTerritory = ClientState.TerritoryType;
@@ -272,7 +275,7 @@ public sealed partial class Plugin
             if (now >= nextPartyCooldownRosterAt)
             {
                 RefreshPartyCooldownRoster(catalog, now);
-                nextPartyCooldownRosterAt = now + .25;
+                nextPartyCooldownRosterAt = now + PartyCooldownRosterInterval;
             }
             var observationCount = 0;
             var overflowed = false;
@@ -287,7 +290,8 @@ public sealed partial class Plugin
             {
                 partyCooldownTracker.Clear();
                 temperaCooldownTracker.Clear();
-                nextPartyCooldownDisplayAt = 0;
+                nextTemperaResolutionAt = double.PositiveInfinity;
+                InvalidatePartyCooldownDisplay();
             }
             var rosterCheckedForBatch = false;
             for (var index = 0; index < observationCount; index++)
@@ -311,7 +315,7 @@ public sealed partial class Plugin
                 if (actor is null && !rosterCheckedForBatch && IsCurrentPartyCooldownMember(observation.EntityId))
                 {
                     RefreshPartyCooldownRoster(catalog, now);
-                    nextPartyCooldownRosterAt = now + .25;
+                    nextPartyCooldownRosterAt = now + PartyCooldownRosterInterval;
                     rosterCheckedForBatch = true;
                     actor = partyCooldownActors.GetValueOrDefault(observation.EntityId);
                 }
@@ -320,6 +324,7 @@ public sealed partial class Plugin
                 if (observation.Tempera is { } tempera)
                 {
                     temperaCooldownTracker.Observe(actor.Key, tempera);
+                    ScheduleTemperaCooldownCheck(actor.Key);
                     if (tempera.Kind != TemperaEventKind.Damage)
                         RefreshPartyCooldownDisplay(entityId, actor, now, TemperaCooldownTracker.CoatAction);
                     continue;
@@ -327,6 +332,7 @@ public sealed partial class Plugin
                 if (observation.ActionId == TemperaCooldownTracker.GrassaAction)
                 {
                     temperaCooldownTracker.Observe(actor.Key, new(TemperaEventKind.Conversion, observation.SeenAt));
+                    ScheduleTemperaCooldownCheck(actor.Key);
                     RefreshPartyCooldownDisplay(entityId, actor, now, TemperaCooldownTracker.CoatAction);
                     continue;
                 }
@@ -349,7 +355,7 @@ public sealed partial class Plugin
                         if (partyCooldownLifecycle.CanConfirmReadyAtEntry(actor.Key, profile.Group, ClientState.TerritoryType))
                             partyCooldownTracker.ConfirmReady(actor.Key, profile, now);
                 partyCooldownLifecycle.EndEntry();
-                nextPartyCooldownDisplayAt = 0;
+                InvalidatePartyCooldownDisplay();
             }
             ResolveTemperaCooldowns(now);
             if (now >= nextPartyCooldownDisplayAt)
@@ -375,14 +381,12 @@ public sealed partial class Plugin
         var count = 0;
         var local = ObjectTable.LocalPlayer;
         var includesLocal = false;
-        foreach (var member in PartyList)
+        var memberCount = PartyList.Length;
+        for (var index = 0; index < memberCount && count < roster.Length; index++)
         {
-            if (count >= roster.Length)
-                break;
-            var key = member.ContentId != 0 ? member.ContentId : 0xF000000000000000ul | member.EntityId;
-            if (member.ContentId == 0 && member.EntityId == 0)
+            if (!TryReadPartyCooldownMember(index, memberCount, out var member))
                 continue;
-            roster[count++] = new(key, member.EntityId, PartyCooldownCatalog.NormalizeJob(member.ClassJob.RowId), member.Level);
+            roster[count++] = member;
             includesLocal |= member.EntityId == local?.EntityId;
         }
         if (local is not null && !includesLocal && count < roster.Length)
@@ -404,7 +408,7 @@ public sealed partial class Plugin
         }
         if (members.Count == 0 && local is null)
         {
-            Volatile.Write(ref partyCooldownActors, next);
+            PublishPartyCooldownActors(next);
             partyCooldownRosterInvalidated = true;
             return;
         }
@@ -418,21 +422,49 @@ public sealed partial class Plugin
             partyCooldownMemberKeys = members;
         }
         // The receive hook only reads these dictionaries; publish replacements rather than mutate them.
-        Volatile.Write(ref partyCooldownActors, next);
+        PublishPartyCooldownActors(next);
         roster[..count].CopyTo(partyCooldownRoster);
         partyCooldownRosterCount = count;
         partyCooldownRosterInvalidated = false;
-        nextPartyCooldownDisplayAt = 0;
+        InvalidatePartyCooldownDisplay();
     }
 
     private bool IsCurrentPartyCooldownMember(uint entityId)
     {
         if (ObjectTable.LocalPlayer?.EntityId == entityId)
             return true;
-        foreach (var member in PartyList)
-            if (member.EntityId == entityId)
+        var count = PartyList.Length;
+        for (var index = 0; index < count; index++)
+            if (TryReadPartyCooldownMember(index, count, out var member) && member.EntityId == entityId)
                 return true;
         return false;
+    }
+
+    private unsafe bool TryReadPartyCooldownMember(int index, int count, out PartyCooldownRosterMember member)
+    {
+        member = default;
+        var address = count > 8 ? PartyList.GetAllianceMemberAddress(index) : PartyList.GetPartyMemberAddress(index);
+        if (address == 0)
+            return false;
+        // The same bound native structure used by Dalamud, without boxing a party-member wrapper.
+        var native = (NativePartyMember*)address;
+        var entity = native->EntityId;
+        var content = native->ContentId;
+        if (content == 0 && entity == 0)
+            return false;
+        var key = content != 0 ? content : 0xF000000000000000ul | entity;
+        member = new(key, entity, PartyCooldownCatalog.NormalizeJob(native->ClassJob), native->Level);
+        return true;
+    }
+
+    private void PublishPartyCooldownActors(Dictionary<uint, PartyCooldownActor> actors)
+    {
+        Volatile.Write(ref partyCooldownActors, actors);
+        Volatile.Write(ref partyCooldownHasTempera,
+            actors.Values.Any(actor => actor.JobId == 42 && actor.Profiles.ContainsKey(TemperaCooldownTracker.CoatAction)));
+        nextTemperaResolutionAt = double.PositiveInfinity;
+        foreach (var actor in actors.Values)
+            ScheduleTemperaCooldownCheck(actor.Key);
     }
 
     private unsafe void AddPartyCooldownActor(Dictionary<uint, PartyCooldownActor> next, PartyCooldownCatalog catalog,
@@ -477,7 +509,7 @@ public sealed partial class Plugin
 
     private void ClearPartyCooldownTracking()
     {
-        Volatile.Write(ref partyCooldownActors, []);
+        PublishPartyCooldownActors([]);
         partyCooldownTracker.Clear();
         temperaCooldownTracker.Clear();
         partyCooldownMemberKeys.Clear();
@@ -491,7 +523,7 @@ public sealed partial class Plugin
             partyCooldownQueueOverflowed = false;
         }
         nextPartyCooldownRosterAt = 0;
-        nextPartyCooldownDisplayAt = 0;
+        InvalidatePartyCooldownDisplay();
     }
 
     private void ConfirmPartyCooldownDutyReset()
@@ -507,7 +539,8 @@ public sealed partial class Plugin
                 partyCooldownTracker.ConfirmReady(actor.Key, profile, now);
         partyCooldownLifecycle.Clear();
         temperaCooldownTracker.Clear();
-        nextPartyCooldownDisplayAt = 0;
+        nextTemperaResolutionAt = double.PositiveInfinity;
+        InvalidatePartyCooldownDisplay();
     }
 
     private void OnPartyCooldownDutyReset(IDutyStateEventArgs args)
@@ -533,21 +566,37 @@ public sealed partial class Plugin
 
     internal int PartyCooldownActorCount => Volatile.Read(ref partyCooldownActors).Count;
 
-    private void RefreshPartyCooldownDisplay(double now)
+    private void InvalidatePartyCooldownDisplay()
     {
+        foreach (var actor in partyCooldownActors.Values)
+            actor.Display.Invalidate();
+        nextPartyCooldownDisplayAt = 0;
+    }
+
+    private unsafe void RefreshPartyCooldownDisplay(double now)
+    {
+        var ownEntity = ObjectTable.LocalPlayer?.EntityId ?? 0;
+        var manager = ownEntity != 0 ? ActionManager.Instance() : null;
         foreach (var pair in partyCooldownActors)
-            RefreshPartyCooldownDisplay(pair.Key, pair.Value, now);
+            RefreshPartyCooldownDisplay(pair.Value, now, pair.Key == ownEntity ? manager : null);
     }
 
     private unsafe void RefreshPartyCooldownDisplay(uint entityId, PartyCooldownActor actor, double now, uint? usedAction = null)
     {
-        var group = usedAction is { } action && actor.Profiles.TryGetValue(action, out var usedProfile) ? usedProfile.Group : 0;
         var ownEntity = ObjectTable.LocalPlayer?.EntityId ?? 0;
         var manager = entityId == ownEntity ? ActionManager.Instance() : null;
+        RefreshPartyCooldownDisplay(actor, now, manager, usedAction);
+    }
+
+    private unsafe void RefreshPartyCooldownDisplay(PartyCooldownActor actor, double now, ActionManager* manager, uint? usedAction = null)
+    {
+        var group = usedAction is { } action && actor.Profiles.TryGetValue(action, out var usedProfile) ? usedProfile.Group : 0;
+        // Own hotbar reads and captured uses bypass the settled teammate cache.
+        var refreshMask = manager is not null || usedAction is not null ? uint.MaxValue : actor.Display.TimerRefreshMask;
         for (var index = 0; index < actor.Visible.Length; index++)
         {
             var visible = actor.Visible[index];
-            if (group != 0 && visible.Group != group)
+            if ((refreshMask & (1u << index)) == 0 || group != 0 && visible.Group != group)
                 continue;
             actor.Display.Update(index, CalculatePartyCooldownStatus(actor, visible, now, manager));
         }

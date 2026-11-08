@@ -58,7 +58,10 @@ internal sealed class TemperaCooldownTracker
             case TemperaEventKind.Removed:
                 if (IsShield(observation.StatusId))
                 {
-                    cycle.Removals[observation.StatusId] = observation;
+                    // An ordinary loss notice must not erase an already-captured causal result.
+                    if (!cycle.Removals.TryGetValue(observation.StatusId, out var previous) ||
+                        !previous.HasHp && observation.HasHp)
+                        cycle.Removals[observation.StatusId] = observation;
                     if (observation.HasHp && observation.Hp == 0)
                         cycle.Dead = true;
                 }
@@ -93,16 +96,19 @@ internal sealed class TemperaCooldownTracker
         return true;
     }
 
-    public bool HasPendingReduction(ulong member, double now)
+    public bool HasPendingReduction(ulong member, double now) =>
+        double.IsFinite(now) && now >= GetNextReductionCheckAt(member);
+
+    public double GetNextReductionCheckAt(ulong member)
     {
-        if (!double.IsFinite(now) || !cycles.TryGetValue(member, out var cycle) || cycle.Dead || cycle.Refunded)
-            return false;
+        if (!cycles.TryGetValue(member, out var cycle) || cycle.Dead || cycle.Refunded)
+            return double.PositiveInfinity;
         var status = cycle.Converted ? GrassaStatus : CoatStatus;
-        if (!cycle.Removals.TryGetValue(status, out var loss) || now - loss.SeenAt < SettleTime ||
-            !IsEarly(cycle, loss))
-            return false;
-        // Native result nesting and its action sequence prove consumption, not a packet clock.
-        return loss.HasHp && loss.Hp > 0 && MatchesDamage(cycle, loss);
+        if (!cycle.Removals.TryGetValue(status, out var loss) || !IsEarly(cycle, loss))
+            return double.PositiveInfinity;
+        // An explicit native slot clear and its action sequence prove consumption, not a packet clock.
+        return loss.HasHp && loss.Hp > 0 && MatchesDamage(cycle, loss)
+            ? loss.SeenAt + SettleTime : double.PositiveInfinity;
     }
 
     public bool IsUncertain(ulong member, double now = double.NaN)

@@ -1,9 +1,9 @@
 using BetterDeaths.PartyCooldowns;
-using BetterDeaths.DamageParsing;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
+using System.Numerics;
 using System.Threading;
 
 namespace BetterDeaths;
@@ -11,14 +11,13 @@ namespace BetterDeaths;
 public sealed partial class Plugin
 {
     private readonly TemperaCooldownTracker temperaCooldownTracker = new();
-    [ThreadStatic]
-    private static PartyCooldownLanding? currentPartyCooldownLanding;
-    private readonly record struct PartyCooldownLanding(uint Target, uint Sequence, uint Hp);
+    private double nextTemperaResolutionAt = double.PositiveInfinity;
 
-    private void EnqueueTemperaEvent(uint target, TemperaEvent observation)
+    private void EnqueueTemperaEvent(uint target, TemperaEvent observation, ulong expectedMember = 0)
     {
         if (!Configuration.ShowPartyCooldowns || disposing ||
-            !Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) || actor.JobId != 42)
+            !Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) || actor.JobId != 42 ||
+            expectedMember != 0 && actor.Key != expectedMember)
             return;
         EnqueuePartyCooldownObservation(new(target, 0, 0, observation.SeenAt)
         {
@@ -28,47 +27,116 @@ public sealed partial class Plugin
         });
     }
 
-    private unsafe void CaptureTemperaStatus(StatusManager* manager, int index, uint statusId,
-        uint sourceId, float remaining, bool removal)
+    private unsafe bool ProcessTemperaResult(uint target, IntPtr data, byte isReplay)
     {
-        if (!Configuration.ShowPartyCooldowns || manager is null || manager->Owner is null ||
-            index is < 0 or >= 60)
+        if (!Configuration.ShowPartyCooldowns || disposing || isReplay != 0 || data == IntPtr.Zero ||
+            !Volatile.Read(ref partyCooldownHasTempera) ||
+            !Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) || actor.JobId != 42)
+            return false;
+        var entries = TemperaResultReader.GetEntryCount(new ReadOnlySpan<byte>((void*)data, TemperaResultReader.HeaderSize));
+        if (entries == 0)
+            return false;
+        Span<TemperaStatusSlot> expected = stackalloc TemperaStatusSlot[TemperaResultReader.SlotCount];
+        Span<TemperaStatusSlot> actual = stackalloc TemperaStatusSlot[TemperaResultReader.SlotCount];
+        Span<TemperaEvent> observations = stackalloc TemperaEvent[entries * TemperaResultReader.MaximumEventsPerEntry];
+        var count = 0;
+        ulong changedSlots = 0;
+        var prepared = false;
+        try
+        {
+            using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
+            var packet = new ReadOnlySpan<byte>((void*)data, TemperaResultReader.HeaderSize + entries * TemperaResultReader.EntrySize);
+            prepared = TemperaResultReader.TryGetUpdatedSlots(packet, out changedSlots) &&
+                ReadTemperaSlots(target, actor, changedSlots, expected) &&
+                TemperaResultReader.TryRead(packet, target, PartyCooldownNow, expected, observations, out count, out changedSlots);
+        }
+        catch (Exception error)
+        {
+            Log.Debug(error, "Could not read a party Tempera result.");
+        }
+
+        // Run native code exactly once, then verify that it applied the expected slot updates.
+        effectResultHook?.Original(target, data, isReplay);
+        try
+        {
+            using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
+            if (prepared && count > 0 && ReadTemperaSlots(target, actor, changedSlots, actual) &&
+                TemperaResultReader.MatchesAppliedSlots(expected, actual, changedSlots))
+                for (var index = 0; index < count; index++)
+                    EnqueueTemperaEvent(target, observations[index], actor.Key);
+        }
+        catch (Exception error)
+        {
+            Log.Debug(error, "Could not capture a party Tempera result.");
+        }
+        return true;
+    }
+
+    private unsafe StatusManager* GetTemperaStatusManager(uint target, PartyCooldownActor actor)
+    {
+        var objects = GameObjectManager.Instance();
+        var entity = objects is not null ? objects->Objects.GetObjectByEntityId(target) : null;
+        if (entity is null || entity->EntityId != target || entity->ObjectKind != ObjectKind.Pc)
+            return null;
+        var character = (Character*)entity;
+        if (character->ClassJob != 42 ||
+            actor.Key != (0xF000000000000000ul | target) && character->ContentId != actor.Key)
+            return null;
+        var manager = character->GetStatusManager();
+        return manager is not null && manager->Owner == character ? manager : null;
+    }
+
+    private unsafe bool ReadTemperaSlots(uint target, PartyCooldownActor actor, ulong changedSlots, Span<TemperaStatusSlot> slots)
+    {
+        if (changedSlots == 0)
+            return true;
+        var manager = GetTemperaStatusManager(target, actor);
+        if (manager is null)
+            return false;
+        while (changedSlots != 0)
+        {
+            var index = BitOperations.TrailingZeroCount(changedSlots);
+            var status = manager->Status[index];
+            slots[index] = new(status.StatusId, status.SourceObject.ObjectId, status.RemainingTime);
+            changedSlots &= changedSlots - 1;
+        }
+        return true;
+    }
+
+    private unsafe void CaptureTemperaLoss(uint target, uint statusId, uint source)
+    {
+        if (!Configuration.ShowPartyCooldowns || disposing || !Volatile.Read(ref partyCooldownHasTempera) ||
+            !TemperaCooldownTracker.IsOwnShield(target, source, statusId) ||
+            !Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) || actor.JobId != 42)
             return;
         using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
         try
         {
-            var target = manager->Owner->EntityId;
-            if (removal)
-            {
-                var status = manager->Status[index];
-                statusId = status.StatusId;
-                sourceId = status.SourceObject.ObjectId;
-                remaining = status.RemainingTime;
-            }
-            if (!TemperaCooldownTracker.IsOwnShield(target, sourceId, statusId))
+            var manager = GetTemperaStatusManager(target, actor);
+            if (manager is null)
                 return;
-            var landing = currentPartyCooldownLanding is { } context && context.Target == target
-                ? context : (PartyCooldownLanding?)null;
-            EnqueueTemperaEvent(target, new(removal ? TemperaEventKind.Removed : TemperaEventKind.Applied, PartyCooldownNow)
-            {
-                StatusId = statusId,
-                ServerFrame = CurrentServerFrameTiming?.SeenAtUtc.Ticks ?? 0,
-                Remaining = float.IsFinite(remaining) ? DamageStatusTiming.DecodeRemaining(remaining) : double.NaN,
-                Sequence = landing?.Sequence ?? 0,
-                Hp = landing?.Hp ?? 0,
-                HasHp = landing is not null,
-            });
+            foreach (var status in manager->Status)
+                if (status.StatusId == statusId && status.SourceObject.ObjectId == source)
+                {
+                    // A loss notice can finish expiry, but cannot prove damage consumption.
+                    EnqueueTemperaEvent(target, new(TemperaEventKind.Removed, PartyCooldownNow)
+                    {
+                        StatusId = statusId,
+                        Remaining = float.IsFinite(status.RemainingTime) ? Math.Abs(status.RemainingTime) : double.NaN,
+                    }, actor.Key);
+                    return;
+                }
         }
         catch (Exception error)
         {
-            Log.Debug(error, "Could not capture a party Tempera status update.");
+            Log.Debug(error, "Could not capture a party Tempera loss.");
         }
     }
 
     private unsafe void CaptureTemperaDamage(ActionEffectHandler.Header* header,
         ActionEffectHandler.TargetEffects* effects, GameObjectId* targets)
     {
-        if (effects is null || targets is null)
+        if (!Volatile.Read(ref partyCooldownHasTempera) || effects is null || targets is null)
             return;
         var actors = Volatile.Read(ref partyCooldownActors);
         for (var index = 0; index < Math.Min((int)header->NumTargets, MaxActionEffectTargets); index++)
@@ -90,29 +158,6 @@ public sealed partial class Plugin
         }
     }
 
-    private unsafe PartyCooldownLanding? ReadPartyCooldownLanding(uint target, IntPtr data)
-    {
-        if (!Configuration.ShowPartyCooldowns || data == IntPtr.Zero)
-            return null;
-        using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
-        var packet = (EffectResultPacket*)data;
-        target = target != 0 ? target : packet->ActorId;
-        return Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) && actor.JobId == 42
-            ? new(target, packet->RelatedActionSequence, packet->CurrentHp) : null;
-    }
-
-    private void CapturePartyCooldownLanding()
-    {
-        if (currentPartyCooldownLanding is { Hp: 0 } landing)
-            EnqueueTemperaEvent(landing.Target, new(TemperaEventKind.Landing, PartyCooldownNow)
-            {
-                Sequence = landing.Sequence,
-                ServerFrame = CurrentServerFrameTiming?.SeenAtUtc.Ticks ?? 0,
-                Hp = landing.Hp,
-                HasHp = true,
-            });
-    }
-
     private void CapturePartyCooldownDeath(uint target)
     {
         using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
@@ -126,14 +171,25 @@ public sealed partial class Plugin
         }
     }
 
+    private void ScheduleTemperaCooldownCheck(ulong member) =>
+        nextTemperaResolutionAt = Math.Min(nextTemperaResolutionAt, temperaCooldownTracker.GetNextReductionCheckAt(member));
+
     private void ResolveTemperaCooldowns(double now)
     {
+        if (now < nextTemperaResolutionAt)
+            return;
+        nextTemperaResolutionAt = double.PositiveInfinity;
         foreach (var pair in partyCooldownActors)
         {
             var actor = pair.Value;
-            if (actor.JobId != 42 || !actor.Profiles.TryGetValue(TemperaCooldownTracker.CoatAction, out var profile) ||
-                !temperaCooldownTracker.HasPendingReduction(actor.Key, now))
+            if (actor.JobId != 42 || !actor.Profiles.TryGetValue(TemperaCooldownTracker.CoatAction, out var profile))
                 continue;
+            var dueAt = temperaCooldownTracker.GetNextReductionCheckAt(actor.Key);
+            if (now < dueAt)
+            {
+                nextTemperaResolutionAt = Math.Min(nextTemperaResolutionAt, dueAt);
+                continue;
+            }
             if (ObjectTable.SearchByEntityId(pair.Key) is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
                 (player.IsDead || player.CurrentHp == 0))
                 temperaCooldownTracker.Observe(actor.Key, new(TemperaEventKind.Death, now));
