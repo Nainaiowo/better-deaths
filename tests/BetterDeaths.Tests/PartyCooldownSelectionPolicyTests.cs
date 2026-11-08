@@ -8,12 +8,12 @@ public sealed class PartyCooldownSelectionPolicyTests
     [
         [19u, new uint[] { 7531, 7535, 17, 22, 27, 30, 3540, 3542, 7382, 7385, 25746, 36920 }],
         [21u, new uint[] { 7531, 7535, 40, 43, 44, 3551, 3552, 7388, 16464, 25751, 36923 }],
-        [32u, new uint[] { 7531, 7535, 3634, 3636, 3638, 7393, 16471, 25754, 36927 }],
+        [32u, new uint[] { 7531, 7535, 3634, 3636, 3638, 3641, 7393, 16471, 25754, 36927 }],
         [37u, new uint[] { 7531, 7535, 16140, 16148, 16151, 16152, 16160, 16161, 25758, 36935 }],
-        [24u, new uint[] { 7432, 7433, 16536, 25861 }],
-        [28u, new uint[] { 188, 3585, 16538, 16545, 16546, 25867, 25868 }],
-        [33u, new uint[] { 3613, 16556, 16559, 25873 }],
-        [40u, new uint[] { 24288, 24298, 24300, 24302, 24303, 24305, 24310, 24311, 24317 }],
+        [24u, new uint[] { 3570, 3571, 7432, 7433, 16536, 25861 }],
+        [28u, new uint[] { 188, 3583, 3585, 3586, 7434, 16537, 16538, 16543, 16545, 16546, 25867, 25868 }],
+        [33u, new uint[] { 3613, 3614, 16553, 16556, 16559, 25873 }],
+        [40u, new uint[] { 24288, 24298, 24299, 24300, 24301, 24302, 24303, 24305, 24310, 24311, 24317 }],
         [20u, new uint[] { 7549, 65, 7394 }],
         [22u, new uint[] { 7549, 7541, 7542 }],
         [30u, new uint[] { 7549, 2241 }],
@@ -24,11 +24,11 @@ public sealed class PartyCooldownSelectionPolicyTests
         [31u, new uint[] { 2887, 16889 }],
         [38u, new uint[] { 16012, 16014, 16015 }],
         [25u, new uint[] { 7560, 157 }],
-        [27u, new uint[] { 7560, 25799 }],
+        [27u, new uint[] { 7560, 25799, 36997 }],
         [35u, new uint[] { 7560, 25857 }],
         [42u, new uint[] { 7560, 34685 }],
         [36u, new uint[] { 18306, 18320, 23273, 23280, 34575 }],
-        [43u, new uint[] { 44896, 44897, 44901 }],
+        [43u, new uint[] { 44896, 44897, 44898, 44899, 44901, 44903 }],
     ];
 
     [Theory]
@@ -47,6 +47,16 @@ public sealed class PartyCooldownSelectionPolicyTests
     }
 
     [Theory]
+    [InlineData(7538)] // Interject.
+    [InlineData(7540)] // Low Blow.
+    [InlineData(7551)] // Head Graze.
+    [InlineData(7553)] // Foot Graze.
+    [InlineData(7554)] // Leg Graze.
+    [InlineData(7863)] // Leg Sweep.
+    public void RoleCrowdControlIsAvailableAsOptionalDefensiveUtility(uint id) =>
+        Assert.True(PartyCooldownSelectionPolicy.IsMitigation(id));
+
+    [Theory]
     [InlineData(20)] // Fight or Flight.
     [InlineData(7389)] // Inner Release.
     [InlineData(7390)] // Delirium.
@@ -63,16 +73,15 @@ public sealed class PartyCooldownSelectionPolicyTests
     public void MajorShorterBurstButtonsRemainInScope(uint id) => Assert.True(PartyCooldownSelectionPolicy.IsMajorCooldown(id));
 
     [Theory]
-    [InlineData(2874)] // Gauss Round.
-    [InlineData(2890)] // Ricochet.
-    [InlineData(16498)] // Drill.
     [InlineData(7533)] // Provoke.
     [InlineData(7537)] // Shirk.
-    [InlineData(7561)] // Swiftcast.
-    [InlineData(7562)] // Lucid Dreaming.
     [InlineData(2262)] // Shukuchi.
     [InlineData(36934)] // Trajectory.
-    public void RoutineAttacksMovementAndUtilityAreNotOffered(uint id) => Assert.False(PartyCooldownSelectionPolicy.Includes(id));
+    [InlineData(16470)] // Edge of Shadow: MP, not an independent reusable cooldown.
+    [InlineData(16501)] // Automaton Queen: battery, not a six-second summon cycle.
+    [InlineData(25755)] // Salt and Darkness: consumed Salted Earth follow-up.
+    [InlineData(34686)] // Tempera Grassa: conversion, tracked through Coat.
+    public void ResourceSpendersMovementAndEnmityAreNotOfferedAsIndependentCooldowns(uint id) => Assert.False(PartyCooldownSelectionPolicy.Includes(id));
 
     [Theory]
     [InlineData(34675, 35349, 42)]
@@ -80,6 +89,14 @@ public sealed class PartyCooldownSelectionPolicyTests
     [InlineData(25831, 7427, 27)]
     [InlineData(36992, 7427, 27)]
     [InlineData(37018, 37017, 33)]
+    [InlineData(36984, 15997, 38)]
+    [InlineData(34670, 35347, 42)]
+    [InlineData(34671, 35347, 42)]
+    [InlineData(34672, 35347, 42)]
+    [InlineData(34673, 35347, 42)]
+    [InlineData(34677, 34676, 42)]
+    [InlineData(16516, 7429, 27)]
+    [InlineData(36998, 7429, 27)]
     public void TransformedExecutionsStayCapturableWithoutDuplicateChoices(uint variant, uint canonical, uint job)
     {
         var original = new PartyCooldownAction(canonical, "Cooldown", 1, 1, 1, 60, 1, [job]);
@@ -139,5 +156,34 @@ public sealed class PartyCooldownSelectionPolicyTests
     {
         var catalog = new PartyCooldownCatalog([new(id, "Sheltron", 1, 1, 3, 5, 1, new uint[] { 19 })]);
         Assert.Single(catalog.ForJob(19));
+    }
+
+    [Fact]
+    public void ThreeSecondDefensiveCooldownIsNotConfusedWithAGlobalCooldown()
+    {
+        var catalog = new PartyCooldownCatalog([new(44898, "Cloud Skim", 1, 22, 9, 3, 0, new uint[] { 43 })]);
+        Assert.Single(catalog.ForJob(43));
+    }
+
+    [Fact]
+    public void ShortDamagingMovementCooldownIsStillAvailableLikeOtherDamagingGapClosers()
+    {
+        var catalog = new PartyCooldownCatalog([new(7492, "Hissatsu: Gyoten", 1, 54, 5, 5, 0, new uint[] { 34 })]);
+        Assert.Single(catalog.ForJob(34));
+    }
+
+    [Theory]
+    [InlineData(52)]
+    [InlineData(110)]
+    [InlineData(2874)]
+    [InlineData(36980)]
+    [InlineData(2259)]
+    [InlineData(3586)]
+    [InlineData(34576)]
+    [InlineData(44895)]
+    public void ConditionalChoicesExplainWhyTheyCannotBeSelected(uint id)
+    {
+        Assert.True(PartyCooldownSelectionPolicy.Includes(id));
+        Assert.False(string.IsNullOrWhiteSpace(PartyCooldownSelectionPolicy.UnsupportedReason(id)));
     }
 }

@@ -26,6 +26,8 @@ internal sealed class TemperaCooldownTracker
     public static bool IsOwnShield(uint target, uint source, uint status) =>
         target is > 0 and not 0xE0000000 && target == source && IsShield(status);
     public static bool IsTargetDamage(byte type, byte flags) => type is 3 or 5 or 6 or 74 && (flags & 0x80) == 0;
+    public static bool IsTerminal(TemperaEvent observation) => observation.Kind == TemperaEventKind.Death ||
+        observation.Kind is TemperaEventKind.Landing or TemperaEventKind.Removed && observation.HasHp && observation.Hp == 0;
 
     public void Cast(ulong member, double now)
     {

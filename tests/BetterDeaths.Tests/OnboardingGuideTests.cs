@@ -83,6 +83,40 @@ public sealed class OnboardingGuideTests
             OnboardingGuide.FirstStepFor(GuideTarget.PartyCooldowns)].Target);
     }
 
+    [Fact]
+    public void DeathWalkthroughUsesTheCurrentWindowName()
+    {
+        var step = OnboardingGuide.Steps[OnboardingGuide.FirstStepFor(GuideTarget.DeathWidget)];
+
+        Assert.Equal("Set up the Death Window", step.Title);
+        Assert.Contains("Death Window", step.Description);
+        Assert.Contains("Death Window", step.TryThis);
+    }
+
+    [Fact]
+    public void CooldownWalkthroughCoversSelectionLayoutAndPreviewInOrder()
+    {
+        var targets = new[] { GuideTarget.PartyCooldowns, GuideTarget.PartyCooldownLayout, GuideTarget.PartyCooldownPreview };
+        var steps = OnboardingGuide.Steps.Where(step => OnboardingGuide.IsPartyCooldownTarget(step.Target)).ToArray();
+        Assert.Equal(targets, steps.Select(step => step.Target));
+        Assert.All(steps, step => Assert.Equal(GuideSection.Widgets, step.Section));
+        foreach (var target in targets)
+            Assert.Equal(target, OnboardingGuide.Steps[OnboardingGuide.FirstStepFor(target)].Target);
+        Assert.False(OnboardingGuide.IsPartyCooldownTarget(null));
+        Assert.False(OnboardingGuide.IsPartyCooldownTarget(GuideTarget.DeathWidget));
+        Assert.False(OnboardingGuide.IsPartyCooldownTarget(GuideTarget.MeterPreview));
+    }
+
+    [Fact]
+    public void CooldownPreviewIsExplicitlySampleDataAndLayoutDoesNotEnableTheOverlay()
+    {
+        var preview = OnboardingGuide.Steps[OnboardingGuide.FirstStepFor(GuideTarget.PartyCooldownPreview)];
+        var layout = OnboardingGuide.Steps[OnboardingGuide.FirstStepFor(GuideTarget.PartyCooldownLayout)];
+        Assert.Contains("example timers", preview.Description);
+        Assert.Contains("Left and right", layout.Description);
+        Assert.Contains("Enable Show party cooldowns", layout.Description);
+    }
+
     private static RecordedPullSummary CreatePull(long number, int deaths) =>
         new(System.DateTime.UtcNow, "Combat ended", 1, "Duty", 60, deaths) { PullNumber = number };
 }

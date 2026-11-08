@@ -14,6 +14,28 @@ internal static class TemperaResultReader
     public static int GetEntryCount(ReadOnlySpan<byte> header) => header.Length >= HeaderSize && header[0] is > 0 and <= MaximumEntries
         ? header[0] : 0;
 
+    public static bool TryReadLethalResult(ReadOnlySpan<byte> packet, double now, out TemperaEvent observation)
+    {
+        observation = default;
+        var entries = GetEntryCount(packet);
+        if (entries == 0 || packet.Length < HeaderSize + entries * EntrySize || !double.IsFinite(now))
+            return false;
+        for (var entry = 0; entry < entries; entry++)
+        {
+            var result = packet.Slice(HeaderSize + entry * EntrySize, EntrySize);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(result[8..]) != 0)
+                continue;
+            observation = new(TemperaEventKind.Landing, now)
+            {
+                Sequence = BinaryPrimitives.ReadUInt32LittleEndian(result),
+                Hp = 0,
+                HasHp = true,
+            };
+            return true;
+        }
+        return false;
+    }
+
     public static bool TryGetUpdatedSlots(ReadOnlySpan<byte> packet, out ulong changedSlots)
     {
         changedSlots = 0;

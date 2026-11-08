@@ -69,6 +69,7 @@ public sealed partial class RecapWindow
                 GuideTarget.ReplayPulls => GuideTarget.ReplayViewer,
                 GuideTarget.MeterPreview => GuideTarget.MeterWidget,
                 GuideTarget.MeterColumns => GuideTarget.MeterWidget,
+                GuideTarget.PartyCooldownLayout or GuideTarget.PartyCooldownPreview => GuideTarget.PartyCooldowns,
                 GuideTarget.AnalyzerSource => GuideTarget.AnalyzerResults,
                 _ => GuideTarget.Navigation,
             };

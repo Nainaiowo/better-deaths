@@ -158,6 +158,53 @@ public sealed class TemperaResultReaderTests
         Assert.False(tracker.TryReduce(1, 4.21, out _));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CapturedLethalClearPreservesTheKnownCooldownEvenWhenLiveStatusSlotsAreUnavailable(bool lossFirst)
+    {
+        // November 7, 21:29:12.632 Eastern: sequence 35D6, zero HP, slots 30 and 31 cleared.
+        var packet = Packet(new Result(0x35D6, 0, new Update(30, 0, 0xE0000000, 0), new Update(31, 0, 0xE0000000, 0)));
+        var tracker = new TemperaCooldownTracker();
+        var cooldowns = new PartyCooldownTracker();
+        var profile = new PartyCooldownProfile(34685, 22, 120, 1);
+        Assert.True(cooldowns.Observe(1, profile, 0, 1));
+        tracker.Cast(1, 0);
+        var loss = new TemperaEvent(TemperaEventKind.Removed, .491) { StatusId = 3686, Remaining = 9.509 };
+        if (lossFirst)
+        {
+            tracker.Observe(1, loss);
+            Assert.True(tracker.IsUncertain(1, .491));
+        }
+        Assert.True(TemperaResultReader.TryReadLethalResult(packet, .491, out var lethal));
+        Assert.Equal(0x35D6u, lethal.Sequence);
+        tracker.Observe(1, lethal);
+        // The regular slot-dependent read cannot succeed; its rejection must not erase zero-HP evidence.
+        Assert.False(TemperaResultReader.TryRead(packet, Target, .491, Span<TemperaStatusSlot>.Empty, Events(1), out _, out _));
+        if (!lossFirst)
+            tracker.Observe(1, loss);
+        Assert.False(tracker.IsUncertain(1, 3));
+        Assert.False(tracker.TryReduce(1, 3, out _));
+        var status = cooldowns.Get(1, profile, 3);
+        Assert.True(status.IsKnown);
+        Assert.True(status.IsOnCooldown);
+        Assert.Equal(117, status.RemainingSeconds);
+    }
+
+    [Fact]
+    public void LethalEvidenceInLaterBatchEntriesDoesNotNeedAnyShieldSlotData()
+    {
+        var packet = Packet(new Result(42, 5000), new Result(43, 0));
+        Assert.True(TemperaResultReader.TryReadLethalResult(packet, 4, out var lethal));
+        Assert.Equal(43u, lethal.Sequence);
+        Assert.True(lethal.HasHp);
+        Assert.Equal(0u, lethal.Hp);
+        Assert.False(TemperaResultReader.TryReadLethalResult(Packet(new Result(42, 5000)), 4, out _));
+        Assert.False(TemperaResultReader.TryReadLethalResult([], 4, out _));
+        Assert.False(TemperaResultReader.TryReadLethalResult(packet.AsSpan(0, packet.Length - 1), 4, out _));
+        Assert.False(TemperaResultReader.TryReadLethalResult(packet, double.NaN, out _));
+    }
+
     [Fact]
     public void ExpiredShieldCannotRefundEvenWhenAClearContainsAMatchingDamageSequence()
     {

@@ -12,7 +12,7 @@ public sealed partial class RecapWindow
     private const string CommunityAcknowledgementFeedback =
         "I appreciate the feedback, the countless hours I have spent with you fellow raiders improving and working on the plugin. It will continue to improve as ideas come, and remain open source for the benefit of the community.";
     private const string CommunityAcknowledgementMczub =
-        "Also a special thank you to the amazing Mczub for this genius in raid tools.";
+        "Also a special thank you to the amazing Mczub for their genius in raid tools.";
     private const string CommunityAcknowledgementFuture =
         "Me and the future (possibilities possibilities...) team will remain dedicated to providing only the best as members of the raiding community. All feedback is appreciated to continue development and give you the tools you deserve.";
     private const string CommunityAcknowledgementClosing = "Thank you all \u2665";

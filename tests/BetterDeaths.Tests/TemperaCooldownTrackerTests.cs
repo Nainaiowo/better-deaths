@@ -28,6 +28,18 @@ public sealed class TemperaCooldownTrackerTests
         Assert.Equal(expected, TemperaCooldownTracker.IsTargetDamage(type, flags));
 
     [Fact]
+    public void OnlyConfirmedDeathOrExplicitZeroHpCanEndUncertaintyWithoutALiveEntity()
+    {
+        Assert.True(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Death, 4)));
+        Assert.True(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Landing, 4) { HasHp = true, Hp = 0 }));
+        Assert.True(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Removed, 4) { HasHp = true, Hp = 0 }));
+        Assert.False(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Landing, 4) { Hp = 0 }));
+        Assert.False(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Removed, 4) { StatusId = 3686 }));
+        Assert.False(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Landing, 4) { HasHp = true, Hp = 5000 }));
+        Assert.False(TemperaCooldownTracker.IsTerminal(new(TemperaEventKind.Applied, 4) { HasHp = true, Hp = 0 }));
+    }
+
+    [Fact]
     public void CapturedAnonymizedBreakExpiryAndConversionTracesReplayCorrectly()
     {
         var options = new JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } };

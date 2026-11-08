@@ -29,6 +29,8 @@ internal enum GuideTarget
     MeterColumns,
     MeterEncounters,
     PartyCooldowns,
+    PartyCooldownLayout,
+    PartyCooldownPreview,
     AnalyzerSource,
     AnalyzerResults,
     OptionsSettings,
@@ -72,11 +74,11 @@ internal static class OnboardingGuide
             "Replay places captured players and waymarks on an arena timeline. Play, pause, or scrub; skull markers identify recorded deaths. Open in Replay from a death to jump near that moment.",
             "Choose a saved or tutorial pull, then drag the timeline or select a skull marker."),
         new(GuideSection.Replay, GuideTarget.ReplayViewer, "Read synchronized context",
-            "Party HP and Active Effects follow replay time. Effects can show mitigations, debuffs, or both. Missing capture data can leave a replay incomplete, so use it alongside Review.",
-            "Move the timeline and watch HP, shields, and effect timers change."),
-        new(GuideSection.Widgets, GuideTarget.DeathWidget, "Set up the Death Widget",
-            "The Death Widget is a compact view of the current pull's death information. Its visibility, display mode, background opacity, and icon size are independent of the DPS Meter.",
-            "Adjust the Death Widget controls and inspect its preview."),
+            "Party HP and Active Effects are separate panels outside the arena: beside it when space allows, or below in compact layouts. Effects can show mitigations, debuffs, or both, with independently scrollable lists. Missing capture data can leave a replay incomplete, so use it alongside Review.",
+            "Move the timeline and watch HP, shields, and effect timers change. Scroll overflowing lists; +x more disappears as the remaining entries come into view."),
+        new(GuideSection.Widgets, GuideTarget.DeathWidget, "Set up the Death Window",
+            "The Death Window is a compact view of the current pull's death information. Its visibility, display mode, background opacity, and icon size are independent of the DPS Meter.",
+            "Adjust the Death Window controls and inspect its preview."),
         new(GuideSection.Widgets, GuideTarget.MeterPreview, "Read the DPS Meter",
             "The floating meter shows personal damage and DPS over the captured encounter duration. Damage % is the player's share of the displayed total; expanding a player shows ability details.",
             "Use the preview when you are not in combat; live results stay in the floating widget."),
@@ -87,8 +89,14 @@ internal static class OnboardingGuide
             "The Encounters list keeps saved combat results separately from death pulls. Selecting one updates the settings preview, not the floating widget's live or latest encounter.",
             "Select a saved encounter, or explore the tutorial encounter when none is available."),
         new(GuideSection.Widgets, GuideTarget.PartyCooldowns, "Choose party cooldowns",
-            "Choose abilities for each job beside the native party-list names. Layout settings apply to every job; the preview follows the job you open. Timers count down to the next charge, a small corner number shows remaining charges, and ? means the cooldown history is not yet known.",
-            "Open a role and job, then add, remove, or reorder its cooldowns and check the preview."),
+            "HUD > Party Cooldowns places selected abilities beside names in the game's party list. Open a role and job to choose up to 12 damage, defensive, or support cooldowns. Grey choices explain why tracking is unavailable. Your choices do not change What-if or damage capture.",
+            "Open a job and add or reorder abilities. Custom rows sits above Selected cooldowns: enable it, use + to add up to three rows, and drag abilities into each row. Selecting a row chooses where clicked ability + buttons add it. Off remembers your arrangement."),
+        new(GuideSection.Widgets, GuideTarget.PartyCooldownLayout, "Place the party icons",
+            "Enable Show party cooldowns to display the live overlay. Position, size, spacing, and offsets apply to every party member. Left and right of name each save their own placement; per-job ability choices and custom rows are shared between both sides.",
+            "Choose a side and adjust its icon size, spacing, and offsets. Row assignments live inside each job, not in these shared controls. In a narrow window, Layout (all jobs) opens for this step."),
+        new(GuideSection.Widgets, GuideTarget.PartyCooldownPreview, "Read the cooldown display",
+            "The preview works outside combat and uses example timers, not the party's current cooldowns. On the live overlay, a number counts down to the next charge and the corner number shows available charges. ? means the captured history is unknown. A ready timer does not guarantee enough resources or the required buff.",
+            "Choose a preview job to see a sample party frame with its selected icons. The whole preview shrinks to fit without scrolling; its percentage does not change your live settings. Hover an icon for details. Ordinary combat endings keep timers; confirmed duty resets restore them."),
         new(GuideSection.Analyzer, GuideTarget.AnalyzerSource, "Choose an analysis source",
             "Analyzer supports eligible saved Better Deaths pulls and FFLogs links for supported mechanics. A local pull stays local; a report link uses the external report service.",
             "Choose the source, mechanic, and matching pull or report."),
@@ -108,6 +116,9 @@ internal static class OnboardingGuide
             "Updates contains the plugin changelog and release notes. You can reopen Walkthrough from the header at any time, and Help opens detailed instructions for the current section.",
             "You are ready to explore your own pulls."),
     ];
+
+    public static bool IsPartyCooldownTarget(GuideTarget? target) => target is
+        GuideTarget.PartyCooldowns or GuideTarget.PartyCooldownLayout or GuideTarget.PartyCooldownPreview;
 
     public static int FirstStepFor(GuideSection section)
     {

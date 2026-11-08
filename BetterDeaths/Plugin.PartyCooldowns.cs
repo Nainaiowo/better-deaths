@@ -30,6 +30,7 @@ public sealed partial class Plugin
     private readonly PartyCooldownRosterMember[] partyCooldownRoster = new PartyCooldownRosterMember[9];
     private int partyCooldownRosterCount;
     private bool partyCooldownRosterInvalidated = true;
+    private int partyCooldownLayoutRevision;
     private double nextPartyCooldownDisplayAt;
     private Task<PartyCooldownCatalog>? partyCooldownCatalogTask;
     private double nextPartyCooldownRosterAt;
@@ -55,6 +56,23 @@ public sealed partial class Plugin
                     Configuration.PartyCooldownActions[entry.Key] = selection;
                     changed = true;
                 }
+                foreach (var entry in Configuration.PartyCooldownRowLayouts.ToArray())
+                {
+                    if (entry.Value is null)
+                    {
+                        Configuration.PartyCooldownRowLayouts.Remove(entry.Key);
+                        changed = true;
+                        continue;
+                    }
+                    var selection = Configuration.PartyCooldownActions.GetValueOrDefault(entry.Key) ??
+                        partyCooldownCatalogTask.Result.DefaultSelection(entry.Key);
+                    changed |= entry.Value.Normalize(selection);
+                    if (entry.Value.Enabled && !selection.SequenceEqual(entry.Value.Flatten()))
+                    {
+                        Configuration.PartyCooldownActions[entry.Key] = entry.Value.Flatten();
+                        changed = true;
+                    }
+                }
                 Volatile.Write(ref loadedPartyCooldownCatalog, partyCooldownCatalogTask.Result);
                 if (changed)
                     SaveConfiguration();
@@ -77,6 +95,11 @@ public sealed partial class Plugin
         if (Configuration.PartyCooldownActions is null)
         {
             Configuration.PartyCooldownActions = [];
+            changed = true;
+        }
+        if (Configuration.PartyCooldownRowLayouts is null)
+        {
+            Configuration.PartyCooldownRowLayouts = [];
             changed = true;
         }
         foreach (var entry in Configuration.PartyCooldownActions.ToArray())
@@ -103,6 +126,18 @@ public sealed partial class Plugin
             Configuration.PartyCooldownSide = PartyCooldownSide.Right;
             changed = true;
         }
+        if (Configuration.PartyCooldownPlacements is null)
+        {
+            Configuration.PartyCooldownPlacements = new();
+            changed = true;
+        }
+        changed |= Configuration.PartyCooldownPlacements.Normalize(new()
+        {
+            IconSize = size,
+            Spacing = gap,
+            OffsetX = x,
+            OffsetY = y,
+        });
         return changed;
     }
 
@@ -134,7 +169,7 @@ public sealed partial class Plugin
                 continue;
             actions.Add(new PartyCooldownAction(action.RowId, name, display.Icon, action.ClassJobLevel,
                 action.CooldownGroup, action.Recast100ms / 10f, action.MaxCharges, jobs,
-                defaults.Contains(action.RowId), action.CanTargetParty, GetConditionalCooldownReason(action.RowId),
+                defaults.Contains(action.RowId), action.CanTargetParty, PartyCooldownSelectionPolicy.UnsupportedReason(action.RowId),
                 !PartyCooldownSelectionPolicy.Includes(action.RowId) || PartyCooldownSelectionPolicy.IsExecutionVariant(action.RowId)));
         }
         return new PartyCooldownCatalog(actions);
@@ -168,17 +203,6 @@ public sealed partial class Plugin
         _ => false,
     };
 
-    private static string? GetConditionalCooldownReason(uint actionId) => actionId switch
-    {
-        52 => "Infuriate's recharge can be reduced by other attacks. Party tracking is not available yet.",
-        110 or 117 or 36975 => "Song procs change this recharge. Party tracking is not available yet.",
-        2874 or 2890 or 36979 or 36980 => "Overheated attacks change this recharge. Party tracking is not available yet.",
-        2259 or 2261 or 2263 => "Mudra recharge needs Ninjutsu-specific tracking. Party tracking is not available yet.",
-        2262 or 36926 => "Other actions can reset or reduce this movement cooldown. Party tracking is not available yet.",
-        44890 or 47092 or 44895 or >= 47238 and <= 47245 => "Summoning a familiar can reset this cooldown. Party tracking is not available yet.",
-        _ => null,
-    };
-
     internal IReadOnlyList<uint> GetPartyCooldownSelection(uint jobId)
     {
         var catalog = GetPartyCooldownCatalog();
@@ -191,7 +215,47 @@ public sealed partial class Plugin
     {
         if (GetPartyCooldownCatalog() is not { } catalog)
             return;
-        Configuration.PartyCooldownActions[PartyCooldownCatalog.NormalizeJob(jobId)] = catalog.NormalizeSelection(jobId, actionIds);
+        jobId = PartyCooldownCatalog.NormalizeJob(jobId);
+        var selection = catalog.NormalizeSelection(jobId, actionIds);
+        Configuration.PartyCooldownActions[jobId] = selection;
+        if (actionIds is null)
+            Configuration.PartyCooldownRowLayouts.Remove(jobId);
+        else if (Configuration.PartyCooldownRowLayouts.TryGetValue(jobId, out var rows))
+        {
+            rows.Normalize(selection);
+            if (rows.Enabled)
+                Configuration.PartyCooldownActions[jobId] = rows.Flatten();
+        }
+        SavePartyCooldownLayout();
+    }
+
+    internal PartyCooldownRows GetPartyCooldownRows(uint jobId)
+    {
+        jobId = PartyCooldownCatalog.NormalizeJob(jobId);
+        if (!Configuration.PartyCooldownRowLayouts.TryGetValue(jobId, out var rows))
+        {
+            rows = new();
+            rows.Normalize(GetPartyCooldownSelection(jobId));
+            Configuration.PartyCooldownRowLayouts[jobId] = rows;
+        }
+        return rows;
+    }
+
+    internal void SetPartyCooldownRows(uint jobId, PartyCooldownRows rows)
+    {
+        if (GetPartyCooldownCatalog() is not { } catalog)
+            return;
+        jobId = PartyCooldownCatalog.NormalizeJob(jobId);
+        var selection = catalog.NormalizeSelection(jobId, rows.Flatten());
+        rows.Normalize(selection);
+        Configuration.PartyCooldownRowLayouts[jobId] = rows;
+        Configuration.PartyCooldownActions[jobId] = rows.Flatten();
+        SavePartyCooldownLayout();
+    }
+
+    private void SavePartyCooldownLayout()
+    {
+        partyCooldownLayoutRevision++;
         SaveConfiguration();
         partyCooldownRosterInvalidated = true;
         nextPartyCooldownRosterAt = 0;
@@ -301,6 +365,10 @@ public sealed partial class Plugin
                 var observation = partyCooldownDrain[index];
                 if (observation.TerritoryId != ClientState.TerritoryType)
                     continue;
+                // Confirmed terminal evidence belongs to the member even while their live entity is unavailable.
+                if (observation.MemberKey != 0 && partyCooldownMemberKeys.Contains(observation.MemberKey) &&
+                    observation.Tempera is { } terminal && TemperaCooldownTracker.IsTerminal(terminal))
+                    temperaCooldownTracker.Observe(observation.MemberKey, terminal);
                 var entityId = observation.EntityId;
                 var actor = partyCooldownActors.GetValueOrDefault(entityId);
                 if (actor is null && observation.MemberKey != 0)
@@ -475,7 +543,8 @@ public sealed partial class Plugin
         jobId = PartyCooldownCatalog.NormalizeJob(jobId);
         var selection = GetPartyCooldownSelection(jobId);
         if (partyCooldownActors.TryGetValue(entityId, out var previous) && previous.Key == key &&
-            previous.JobId == jobId && previous.Level == level && previous.Selection.SequenceEqual(selection))
+            previous.JobId == jobId && previous.Level == level && previous.LayoutRevision == partyCooldownLayoutRevision &&
+            previous.Selection.SequenceEqual(selection))
         {
             next[entityId] = previous;
             return;
@@ -501,9 +570,19 @@ public sealed partial class Plugin
             foreach (var profile in group)
                 profiles[profile.ActionId] = profile with { MaxCharges = charges };
         }
-        var visible = selection.Select(id => catalog.AtLevel(jobId, id, level)).OfType<PartyCooldownAction>()
-            .Where(action => profiles.ContainsKey(action.Id)).DistinctBy(action => action.Id).ToArray();
-        var actor = new PartyCooldownActor(key, jobId, level, profiles, selection.ToArray(), visible, new(visible));
+        var visible = new List<PartyCooldownAction>(selection.Count);
+        var seen = new HashSet<uint>();
+        Span<byte> rowIndices = stackalloc byte[PartyCooldownRows.MaximumAbilities];
+        Configuration.PartyCooldownRowLayouts.TryGetValue(jobId, out var rows);
+        foreach (var id in selection)
+            if (catalog.AtLevel(jobId, id, level) is { } action && profiles.ContainsKey(action.Id) && seen.Add(action.Id))
+            {
+                rowIndices[visible.Count] = rows?.RowFor(id) ?? 0;
+                visible.Add(action);
+            }
+        var actions = visible.ToArray();
+        var actor = new PartyCooldownActor(key, jobId, level, partyCooldownLayoutRevision, profiles, selection.ToArray(), actions,
+            new(actions, rowIndices[..actions.Length]));
         foreach (var profile in profiles.Values)
             _ = partyCooldownTracker.Get(key, profile, now);
         next[entityId] = actor;
@@ -623,7 +702,7 @@ public sealed partial class Plugin
             ? status with { IsKnown = false } : status;
     }
 
-    private sealed record PartyCooldownActor(ulong Key, uint JobId, byte Level,
+    private sealed record PartyCooldownActor(ulong Key, uint JobId, byte Level, int LayoutRevision,
         Dictionary<uint, PartyCooldownProfile> Profiles, IReadOnlyList<uint> Selection, PartyCooldownAction[] Visible,
         PartyCooldownDisplayRow Display);
 }

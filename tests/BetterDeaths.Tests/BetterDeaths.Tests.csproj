@@ -17,6 +17,9 @@
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPlacements.cs" Link="PartyCooldowns/PartyCooldownPlacements.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownRows.cs" Link="PartyCooldowns/PartyCooldownRows.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPreviewLayout.cs" Link="PartyCooldowns/PartyCooldownPreviewLayout.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownDisplay.cs" Link="PartyCooldowns/PartyCooldownDisplay.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownProfiler.cs" Link="PartyCooldowns/PartyCooldownProfiler.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownSelectionPolicy.cs" Link="PartyCooldowns/PartyCooldownSelectionPolicy.cs" />
@@ -135,5 +138,6 @@
     <None Update="Fixtures/CapturedPacketTimingHeaders.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/TemperaCooldownCaptured.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/TemperaStatusUpdatesCaptured.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/PartyCooldownActions.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

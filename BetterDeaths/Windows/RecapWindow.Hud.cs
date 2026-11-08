@@ -20,8 +20,12 @@ public sealed partial class RecapWindow
         {
             if (target is GuideTarget.DeathWidget)
                 hudSettingsView = HudSettingsView.DeathWidget;
-            else if (target is GuideTarget.PartyCooldowns)
+            else if (OnboardingGuide.IsPartyCooldownTarget(target))
+            {
                 hudSettingsView = HudSettingsView.PartyCooldowns;
+                if (target == GuideTarget.PartyCooldowns)
+                    cooldownRequestedJob = cooldownPreviewJob;
+            }
             else if (target is GuideTarget.MeterWidget or GuideTarget.MeterColumns or GuideTarget.MeterEncounters or GuideTarget.MeterPreview)
                 hudSettingsView = HudSettingsView.DamageMeter;
             hudGuideTarget = target;
@@ -80,7 +84,7 @@ public sealed partial class RecapWindow
     private static string GetHudViewLabel(HudSettingsView view) => view switch
     {
         HudSettingsView.DamageMeter => "DPS Meter",
-        HudSettingsView.DeathWidget => "Death Widget",
+        HudSettingsView.DeathWidget => "Death Window",
         _ => "Party Cooldowns",
     };
 

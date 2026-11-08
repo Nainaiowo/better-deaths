@@ -9,6 +9,58 @@ public sealed class PartyCooldownDisplayTests(ITestOutputHelper output)
 {
     private static readonly PartyCooldownAction Action = new(1, "Cooldown", 1, 1, 1, 300, 2, [23]);
 
+    [Fact]
+    public void CachedRowsSurviveTimerRefreshAndDoNotShareTheInputBuffer()
+    {
+        byte[] rows = [2, 1];
+        var display = new PartyCooldownDisplayRow([Action, Action with { Id = 2, Group = 2 }], rows);
+        rows[0] = 0;
+        var entries = new PartyCooldownDisplayEntry[2];
+        display.CopyTo(entries);
+        Assert.Equal(2, entries[0].Row);
+        Assert.Equal(1, entries[1].Row);
+        display.Update(0, new(0, 2, 25, true));
+        display.Update(1, new(2, 2, 0, true));
+        display.Invalidate();
+        display.CopyTo(entries);
+        Assert.Equal(2, entries[0].Row);
+        Assert.Equal("25", entries[0].TimerLabel);
+        Assert.Equal(1, entries[1].Row);
+        Assert.Equal("", entries[1].TimerLabel);
+    }
+
+    [Fact]
+    public void RebuildingDisplayForARowChangeKeepsTheExistingCooldownHistory()
+    {
+        var tracker = new PartyCooldownTracker();
+        var profile = new PartyCooldownProfile(Action.Id, Action.Group, 300, 2);
+        tracker.ConfirmReady(1, profile, 0);
+        tracker.Observe(1, profile, 10, 1);
+        var first = new PartyCooldownDisplayRow([Action]);
+        first.Update(0, tracker.Get(1, profile, 20));
+        var before = new PartyCooldownDisplayEntry[1];
+        first.CopyTo(before);
+        var moved = new PartyCooldownDisplayRow([Action], [2]);
+        moved.Update(0, tracker.Get(1, profile, 20));
+        var after = new PartyCooldownDisplayEntry[1];
+        moved.CopyTo(after);
+        Assert.Equal(2, after[0].Row);
+        Assert.Equal(before[0].Status, after[0].Status);
+        Assert.Equal(before[0].TimerLabel, after[0].TimerLabel);
+        Assert.Equal(before[0].ChargeLabel, after[0].ChargeLabel);
+    }
+
+    [Fact]
+    public void MissingAndOutOfRangeRowMetadataDefaultsToRowOne()
+    {
+        var display = new PartyCooldownDisplayRow([Action, Action, Action], [99, 2]);
+        var entries = new PartyCooldownDisplayEntry[3];
+        display.CopyTo(entries);
+        Assert.Equal(0, entries[0].Row);
+        Assert.Equal(2, entries[1].Row);
+        Assert.Equal(0, entries[2].Row);
+    }
+
     [Theory]
     [InlineData(0, 1, 90, false, "?", "")]
     [InlineData(0, 1, 89.1, true, "90", "")]

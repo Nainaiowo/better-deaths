@@ -9,7 +9,7 @@ public sealed class CurrentPullWidgetWindow : ThemedWidgetWindow
     public CurrentPullWidgetWindow(Plugin plugin, RecapWindow recapWindow)
         : base(
             plugin,
-            "Better Deaths Widget###BetterDeathsCurrentPullWidget",
+            "Better Deaths Death Window###BetterDeathsCurrentPullWidget",
             new Vector2(620.0f, 360.0f),
             Vector2.One)
     {

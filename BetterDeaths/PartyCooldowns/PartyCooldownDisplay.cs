@@ -5,7 +5,7 @@ using System.Numerics;
 namespace BetterDeaths.PartyCooldowns;
 
 internal readonly record struct PartyCooldownDisplayEntry(PartyCooldownAction Action, PartyCooldownStatus Status,
-    string TimerLabel, string ChargeLabel);
+    string TimerLabel, string ChargeLabel, byte Row = 0);
 
 internal sealed class PartyCooldownDisplayRow
 {
@@ -22,11 +22,12 @@ internal sealed class PartyCooldownDisplayRow
         }
     }
 
-    public PartyCooldownDisplayRow(PartyCooldownAction[] actions)
+    public PartyCooldownDisplayRow(PartyCooldownAction[] actions, ReadOnlySpan<byte> rows = default)
     {
         entries = new PartyCooldownDisplayEntry[actions.Length];
         for (var index = 0; index < actions.Length; index++)
-            entries[index] = new(actions[index], default, "?", string.Empty);
+            entries[index] = new(actions[index], default, "?", string.Empty,
+                index < rows.Length && rows[index] < PartyCooldownRows.MaximumRows ? rows[index] : (byte)0);
         Invalidate();
     }
 

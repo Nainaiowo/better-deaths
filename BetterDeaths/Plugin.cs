@@ -631,7 +631,7 @@ public sealed partial class Plugin : IDalamudPlugin
         });
         CommandManager.AddHandler(WidgetCommandName, new CommandInfo(OnWidgetCommand)
         {
-            HelpMessage = "Toggle the Better Deaths death widget.",
+            HelpMessage = "Toggle the Better Deaths Death Window.",
         });
         CommandManager.AddHandler(DamageMeterWidgetCommandName, new CommandInfo(OnDamageMeterWidgetCommand)
         {

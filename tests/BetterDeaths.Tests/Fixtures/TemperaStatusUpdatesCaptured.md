@@ -24,3 +24,8 @@ RVA 008A78F0 receives a manager and a 30-status buffer; RVA 008A7980 receives a
 manager and two 30-status buffers. Both write the slots through SetStatus and
 return void. Production capture compares native slots before and after the
 original handler. Their runtime loading still requires an in-game check.
+
+The result-reader death regression additionally uses the captured zero-HP result
+at 21:29:12.632 Eastern (sequence 35D6, slots 30 and 31 cleared). That terminal HP
+observation must survive independently of live status-slot availability. It
+neither guesses death from disappearance nor records a death in the review.

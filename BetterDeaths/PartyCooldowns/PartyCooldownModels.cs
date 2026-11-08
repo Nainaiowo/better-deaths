@@ -68,9 +68,13 @@ internal readonly record struct PartyCooldownHudMember(uint EntityId, int Index)
 internal static class PartyCooldownLayout
 {
     public const float MinimumIconSize = 16, MaximumIconSize = 72;
+    public const int MaximumRows = PartyCooldownRows.MaximumRows;
     public static float IconSize(float value) => float.IsFinite(value) ? Math.Clamp(value, MinimumIconSize, MaximumIconSize) : 24;
     public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -300, 300) : 0;
     public static float Gap(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 12) : 3;
+    public static float TimerTextSize(float iconSize, float previewScale = 1) => MathF.Max(11 * previewScale, iconSize * .48f);
+    public static float ChargeTextSize(float iconSize, float previewScale = 1) => MathF.Max(10 * previewScale, iconSize * .36f);
+    public static float TextOutlineWidth(float fontSize, float previewScale = 1) => MathF.Max(previewScale, fontSize / 24);
 
     public static int FindUniqueHudMember(ReadOnlySpan<PartyCooldownHudMember> members, int row)
     {
@@ -91,10 +95,47 @@ internal static class PartyCooldownLayout
         return result;
     }
 
-    public static Vector2 GetOrigin(PartyCooldownRow row, int count, PartyCooldownSide side, float size, float gap, Vector2 offset)
+    public static Vector2 GetSize(int count, float size, float gap) => GetSize([count], size, gap);
+
+    public static Vector2 GetSize(ReadOnlySpan<int> rowCounts, float size, float gap)
+    {
+        var columns = 0;
+        var rows = 0;
+        for (var index = 0; index < rowCounts.Length && index < MaximumRows; index++)
+            if (rowCounts[index] > 0)
+            {
+                columns = Math.Max(columns, rowCounts[index]);
+                rows = index + 1;
+            }
+        return rows == 0 ? Vector2.Zero : new(columns * IconSize(size) + (columns - 1) * Gap(gap),
+            rows * IconSize(size) + (rows - 1) * Gap(gap));
+    }
+
+    public static Vector2 GetIconOffset(int rowIndex, int columnIndex, ReadOnlySpan<int> rowCounts,
+        PartyCooldownSide side, float size, float gap)
+    {
+        if (rowIndex < 0 || rowIndex >= rowCounts.Length || rowIndex >= MaximumRows ||
+            columnIndex < 0 || columnIndex >= rowCounts[rowIndex])
+            return Vector2.Zero;
+        if (side == PartyCooldownSide.Left)
+        {
+            var columns = 0;
+            for (var index = 0; index < rowCounts.Length && index < MaximumRows; index++)
+                columns = Math.Max(columns, rowCounts[index]);
+            columnIndex += columns - rowCounts[rowIndex];
+        }
+        var step = IconSize(size) + Gap(gap);
+        return new(columnIndex * step, rowIndex * step);
+    }
+
+    public static Vector2 GetOrigin(PartyCooldownRow row, int count, PartyCooldownSide side, float size, float gap, Vector2 offset) =>
+        GetOrigin(row, [count], side, size, gap, offset);
+
+    public static Vector2 GetOrigin(PartyCooldownRow row, ReadOnlySpan<int> rowCounts, PartyCooldownSide side,
+        float size, float gap, Vector2 offset)
     {
         var scale = float.IsFinite(row.Scale) && row.Scale > 0 ? row.Scale : 1;
-        var width = Math.Max(0, count) * IconSize(size) + Math.Max(0, count - 1) * Gap(gap);
+        var width = GetSize(rowCounts, size, gap).X;
         var x = side == PartyCooldownSide.Left ? row.NameMin.X - (width + 6) * scale : row.NameMax.X + 6 * scale;
         return new Vector2(x, (row.NameMin.Y + row.NameMax.Y - IconSize(size) * scale) * .5f) + offset * scale;
     }

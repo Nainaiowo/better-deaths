@@ -42,7 +42,7 @@ internal sealed class PartyCooldownCatalog
     {
         var definitions = source.Where(action => action.Id != 0 && action.Group is > 0 and not 58 &&
             float.IsFinite(action.RecastSeconds) && action.RecastSeconds > 0 &&
-            (action.RecastSeconds >= 10 || action.CaptureOnly || PartyCooldownSelectionPolicy.IsMitigation(action.Id)) &&
+            (action.RecastSeconds >= 10 || action.CaptureOnly || PartyCooldownSelectionPolicy.Includes(action.Id)) &&
             !string.IsNullOrWhiteSpace(action.Name)).DistinctBy(action => action.Id).ToArray();
         var groupsByJob = Jobs.ToDictionary(job => job.Id, job => definitions
             .Where(action => !action.CaptureOnly && action.Jobs.Contains(job.Id)).Select(action => action.Group).ToHashSet());

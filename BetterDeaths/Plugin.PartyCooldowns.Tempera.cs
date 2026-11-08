@@ -46,6 +46,9 @@ public sealed partial class Plugin
         {
             using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
             var packet = new ReadOnlySpan<byte>((void*)data, TemperaResultReader.HeaderSize + entries * TemperaResultReader.EntrySize);
+            // The result's zero HP remains valid even if death makes the live status slots unreadable.
+            if (TemperaResultReader.TryReadLethalResult(packet, PartyCooldownNow, out var lethal))
+                EnqueueTemperaEvent(target, lethal, actor.Key);
             prepared = TemperaResultReader.TryGetUpdatedSlots(packet, out changedSlots) &&
                 ReadTemperaSlots(target, actor, changedSlots, expected) &&
                 TemperaResultReader.TryRead(packet, target, PartyCooldownNow, expected, observations, out count, out changedSlots);

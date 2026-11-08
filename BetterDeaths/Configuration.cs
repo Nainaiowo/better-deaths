@@ -209,6 +209,7 @@ public sealed class Configuration : IPluginConfiguration
 
     public PartyCooldownSide PartyCooldownSide { get; set; } = PartyCooldownSide.Right;
 
+    // Legacy shared values are retained for migrating existing configurations.
     public float PartyCooldownIconSize { get; set; } = 24;
 
     public float PartyCooldownIconGap { get; set; } = 3;
@@ -217,7 +218,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public float PartyCooldownOffsetY { get; set; }
 
+    public PartyCooldownPlacements? PartyCooldownPlacements { get; set; }
+
+    internal PartyCooldownPlacement GetPartyCooldownPlacement() => PartyCooldownPlacements!.Get(PartyCooldownSide);
+
     public Dictionary<uint, List<uint>> PartyCooldownActions { get; set; } = [];
+    public Dictionary<uint, PartyCooldownRows> PartyCooldownRowLayouts { get; set; } = [];
 
     // Missing in older configurations: inherit the previously shared opacity once on load.
     public float? DamageMeterWidgetBackgroundOpacity { get; set; }
