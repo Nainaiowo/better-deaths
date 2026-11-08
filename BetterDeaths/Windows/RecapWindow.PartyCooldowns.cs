@@ -14,7 +14,8 @@ namespace BetterDeaths.Windows;
 
 public sealed partial class RecapWindow
 {
-    private uint cooldownPreviewJob = 19;
+    private readonly PartyCooldownEditorState cooldownEditor = new();
+    private uint cooldownPreviewJob => cooldownEditor.FocusedJob;
     private bool cooldownPreviewInitialized;
     private uint? cooldownRequestedJob;
     private const string PartyCooldownDragPayload = "BETTER_DEATHS_PARTY_COOLDOWN";
@@ -35,13 +36,26 @@ public sealed partial class RecapWindow
         var visible = configuration.ShowPartyCooldowns;
         if (DrawThemedCheckbox("Show party cooldowns", ref visible))
             plugin.SetPartyCooldownVisibility(visible);
+        const string collapseLabel = "Auto-collapse other jobs";
+        var checkboxWidth = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize(collapseLabel).X;
+        if (ImGui.GetContentRegionAvail().X - ImGui.GetItemRectSize().X - ImGui.GetStyle().ItemSpacing.X * 2 >= checkboxWidth)
+            ImGui.SameLine(0, ImGui.GetStyle().ItemSpacing.X * 2);
+        var autoCollapse = configuration.PartyCooldownAutoCollapseJobs;
+        if (DrawThemedCheckbox(collapseLabel, ref autoCollapse))
+        {
+            configuration.PartyCooldownAutoCollapseJobs = autoCollapse;
+            if (autoCollapse)
+                FocusPartyCooldownJob(cooldownPreviewJob);
+            plugin.SaveConfiguration();
+        }
+        DrawSettingsTooltip("Focusing a job closes the other job and role sections. Applies to job headers and the preview dropdown. Turn off to keep multiple jobs expanded.");
         ImGui.Spacing();
         if (!cooldownPreviewInitialized)
         {
             cooldownPreviewInitialized = true;
             var ownJob = PartyCooldownCatalog.NormalizeJob(Plugin.ObjectTable.LocalPlayer?.ClassJob.RowId ?? 0);
             if (PartyCooldownCatalog.Jobs.Any(job => job.Id == ownJob))
-                cooldownRequestedJob = cooldownPreviewJob = ownJob;
+                FocusPartyCooldownJob(ownJob);
         }
         var available = ImGui.GetContentRegionAvail();
         var gap = ImGui.GetStyle().ItemSpacing.X * 2;
@@ -144,6 +158,9 @@ public sealed partial class RecapWindow
             return;
         }
         var requested = cooldownRequestedJob;
+        cooldownRequestedJob = null;
+        if (requested is { } requestedId)
+            cooldownEditor.Focus(requestedId, configuration.PartyCooldownAutoCollapseJobs);
         foreach (var role in Enum.GetValues<PartyCooldownRole>())
         {
             var label = role switch
@@ -153,31 +170,42 @@ public sealed partial class RecapWindow
                 PartyCooldownRole.Melee => "Melee",
                 _ => "Ranged",
             };
-            if (requested is { } requestedId && PartyCooldownCatalog.Jobs.Any(job => job.Id == requestedId && job.Role == role))
-                ImGui.SetNextItemOpen(true);
-            if (!ImGui.CollapsingHeader($"{label}##CooldownRole{role}"))
+            ImGui.SetNextItemOpen(cooldownEditor.IsRoleOpen(role), ImGuiCond.Always);
+            var roleOpen = ImGui.CollapsingHeader($"{label}##CooldownRole{role}");
+            cooldownEditor.SetRoleOpen(role, roleOpen);
+            if (!roleOpen)
                 continue;
             foreach (var job in PartyCooldownCatalog.Jobs.Where(job => job.Role == role))
             {
                 var selected = plugin.GetPartyCooldownSelection(job.Id);
-                if (requested == job.Id)
-                    ImGui.SetNextItemOpen(true);
+                var wasOpen = cooldownEditor.IsJobOpen(job.Id);
+                ImGui.SetNextItemOpen(wasOpen, ImGuiCond.Always);
                 var flags = ImGuiTreeNodeFlags.SpanAvailWidth |
                     (job.Id == cooldownPreviewJob ? ImGuiTreeNodeFlags.Selected : ImGuiTreeNodeFlags.None);
-                if (!ImGui.TreeNodeEx($"{job.Name}  ({selected.Count}/12)###CooldownJob{job.Id}", flags))
+                var jobOpen = ImGui.TreeNodeEx($"{job.Name}  ({selected.Count}/12)###CooldownJob{job.Id}", flags);
+                if (jobOpen != wasOpen)
+                {
+                    cooldownEditor.SetJobOpen(job.Id, jobOpen, configuration.PartyCooldownAutoCollapseJobs);
+                    if (jobOpen)
+                        cooldownRequestedJob = job.Id;
+                }
+                if (!jobOpen)
                     continue;
                 if (requested == job.Id)
                     ImGui.SetScrollHereY(.2f);
-                if (ImGui.IsItemToggledOpen())
-                    cooldownPreviewJob = job.Id;
                 DrawPartyCooldownJobEditor(catalog, job, selected);
                 ImGui.TreePop();
             }
         }
-        cooldownRequestedJob = null;
         RegisterGuideTarget(GuideTarget.PartyCooldowns, start,
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
         DrawReviewPaneBottomPadding();
+    }
+
+    private void FocusPartyCooldownJob(uint jobId)
+    {
+        if (cooldownEditor.Focus(jobId, configuration.PartyCooldownAutoCollapseJobs))
+            cooldownRequestedJob = cooldownPreviewJob;
     }
 
     private void DrawCooldownSlider(string label, string id, ref float value, float minimum, float maximum, string format)
@@ -261,11 +289,11 @@ public sealed partial class RecapWindow
             ImGui.Spacing();
         }
         ImGui.Spacing();
-        if (DrawThemedActionButton($"{FontAwesomeIcon.Undo.ToIconString()}  Reset {job.Abbreviation}", $"ResetPartyCooldownJob{job.Id}"))
+        if (DrawThemedActionButton(FontAwesomeIcon.Undo, $"Reset {job.Abbreviation}", $"ResetPartyCooldownJob{job.Id}"))
         {
             plugin.SetPartyCooldownSelection(job.Id, null);
             partyCooldownTargetRows.Remove(job.Id);
-            cooldownPreviewJob = job.Id;
+            FocusPartyCooldownJob(job.Id);
         }
         DrawSettingsTooltip("Restore this job's default abilities and one-row layout. Does not reset cooldown timers or placement settings.");
         ImGui.Spacing();
@@ -276,7 +304,7 @@ public sealed partial class RecapWindow
         plugin.SetPartyCooldownRows(jobId, rows);
         selected.Clear();
         selected.AddRange(plugin.GetPartyCooldownSelection(jobId));
-        cooldownPreviewJob = jobId;
+        FocusPartyCooldownJob(jobId);
     }
 
     private void DrawPartyCooldownTiles(PartyCooldownCatalog catalog, uint jobId, IReadOnlyList<uint> ids, List<uint> selected,
@@ -311,7 +339,7 @@ public sealed partial class RecapWindow
                     else if (selected.Count < 12)
                         selected.Add(id);
                     plugin.SetPartyCooldownSelection(jobId, selected);
-                    cooldownPreviewJob = jobId;
+                    FocusPartyCooldownJob(jobId);
                 }
             }
             rowWidth += tileWidth;
@@ -343,7 +371,7 @@ public sealed partial class RecapWindow
         using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
         {
             draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), start + new Vector2(5, (height - ImGui.GetTextLineHeight()) * .5f),
-                ImGui.GetColorU32(color with { W = color.W * .6f }), FontAwesomeIcon.GripLines.ToIconString());
+                ImGui.GetColorU32(color with { W = color.W * .6f }), FontAwesomeIcon.GripVertical.ToIconString());
             var glyph = (active ? FontAwesomeIcon.Times : FontAwesomeIcon.Plus).ToIconString();
             draw.AddText(ImGui.GetFont(), ImGui.GetFontSize(), start + new Vector2(width - 23, (height - ImGui.GetTextLineHeight()) * .5f),
                 ImGui.GetColorU32(color), glyph);
@@ -421,7 +449,7 @@ public sealed partial class RecapWindow
             if (changed)
             {
                 plugin.SetPartyCooldownSelection(jobId, selected);
-                cooldownPreviewJob = jobId;
+                FocusPartyCooldownJob(jobId);
             }
         }
     }
@@ -439,8 +467,7 @@ public sealed partial class RecapWindow
             foreach (var candidate in PartyCooldownCatalog.Jobs)
                 if (ImGui.Selectable(candidate.Name, candidate.Id == cooldownPreviewJob))
                 {
-                    cooldownPreviewJob = candidate.Id;
-                    cooldownRequestedJob = candidate.Id;
+                    FocusPartyCooldownJob(candidate.Id);
                 }
             ImGui.EndCombo();
         }

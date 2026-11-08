@@ -1135,23 +1135,22 @@ public sealed partial class RecapWindow : Window, IDisposable
         var ligmaWidth = funModeEnabled ? GetThemedActionButtonWidth("Ligma") : 0.0f;
         var funControlsWidth = switchWidth +
             (funModeEnabled ? ligmaWidth + spacing : 0.0f);
-        var helpIcon = FontAwesomeIcon.QuestionCircle.ToIconString();
         var fullHelpLabel = funModeEnabled
-            ? $"{helpIcon} How the fuck do I read this plugin?"
-            : $"{helpIcon} Help";
+            ? "How the fuck do I read this plugin?"
+            : "Help";
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var fullHelpWidth = GetThemedActionButtonWidth(fullHelpLabel);
-        var compactHelpWidth = GetThemedActionButtonWidth(helpIcon);
+        var fullHelpWidth = GetThemedIconButtonWidth(FontAwesomeIcon.QuestionCircle, fullHelpLabel);
+        var compactHelpWidth = GetThemedIconButtonWidth(FontAwesomeIcon.QuestionCircle, string.Empty);
         var helpLabel = funControlsWidth + spacing + fullHelpWidth <= availableWidth
             ? fullHelpLabel
-            : helpIcon;
+            : string.Empty;
         var helpWidth = string.Equals(helpLabel, fullHelpLabel, StringComparison.Ordinal)
             ? fullHelpWidth
             : compactHelpWidth;
         var guideWidth = GetThemedActionButtonWidth(OnboardingGuide.ButtonLabel);
         if (funControlsWidth + guideWidth + helpWidth + (spacing * 2.0f) > availableWidth)
         {
-            helpLabel = helpIcon;
+            helpLabel = string.Empty;
             helpWidth = compactHelpWidth;
         }
         var left = ImGui.GetCursorPosX();
@@ -1163,7 +1162,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             ImGui.SetCursorPosX(MathF.Max(left, right - guideWidth - compactHelpWidth - spacing));
             DrawGuideButton(idSuffix, guideWidth);
             ImGui.SameLine();
-            DrawHelpCenterButton(idSuffix, helpIcon, compactHelpWidth);
+            DrawHelpCenterButton(idSuffix, string.Empty, compactHelpWidth);
             ImGui.SetCursorPosX(MathF.Max(left, right - funControlsWidth));
             DrawFunModeControls(idSuffix, funModeEnabled, ligmaWidth);
             return;
@@ -1198,7 +1197,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private void DrawHelpCenterButton(string idSuffix, string label, float width)
     {
-        if (DrawThemedToggleButton(label, $"OpenHelpCenter{idSuffix}", selected: false, width))
+        if (DrawThemedToggleButton(FontAwesomeIcon.QuestionCircle, label, $"OpenHelpCenter{idSuffix}", selected: false, width))
         {
             OpenHelpCenterUrl(GetHelpCenterUrl(currentMainPage));
         }
@@ -2233,7 +2232,15 @@ public sealed partial class RecapWindow : Window, IDisposable
             timeText);
 
         var skullIcon = FontAwesomeIcon.Skull.ToIconString();
-        var skullSize = ImGui.CalcTextSize(skullIcon);
+        ImFontPtr skullFont;
+        float skullFontSize;
+        Vector2 skullSize;
+        using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+        {
+            skullFont = ImGui.GetFont();
+            skullFontSize = ImGui.GetFontSize();
+            skullSize = ImGui.CalcTextSize(skullIcon);
+        }
         foreach (var group in markerGroups)
         {
             var isFocused = focusDeath is not null && group.Deaths.Any(death =>
@@ -2248,8 +2255,11 @@ public sealed partial class RecapWindow : Window, IDisposable
                 isFocused ? 2.0f : 1.2f);
             drawList.AddCircleFilled(markerCenter, radius + 2.0f, ImGui.GetColorU32(ModernPanelColor with { W = 0.92f }), 16);
             drawList.AddCircleFilled(markerCenter, radius, ImGui.GetColorU32(markerColor), 16);
+            var iconScale = MathF.Min(1, radius * 1.6f / MathF.Max(1, MathF.Max(skullSize.X, skullSize.Y)));
             drawList.AddText(
-                markerCenter - (skullSize * 0.5f),
+                skullFont,
+                skullFontSize * iconScale,
+                markerCenter - (skullSize * (0.5f * iconScale)),
                 ImGui.GetColorU32(ModernPanelColor),
                 skullIcon);
 
@@ -3543,8 +3553,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         var startCursor = ImGui.GetCursorPos();
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
-        var iconText = FontAwesomeIcon.ChevronDown.ToIconString();
-        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonWidth = GetIconTextSize(FontAwesomeIcon.ChevronDown).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
         var buttonX = startCursor.X + MathF.Max(0.0f, ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset);
         ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X, buttonX));
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
@@ -3639,8 +3648,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         var startCursor = ImGui.GetCursorPos();
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
-        var iconText = FontAwesomeIcon.ChevronDown.ToIconString();
-        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonWidth = GetIconTextSize(FontAwesomeIcon.ChevronDown).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
         var buttonX = startCursor.X + MathF.Max(0.0f, ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset);
         ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X, buttonX));
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);
@@ -19810,8 +19818,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawDataStat("URL", FeedbackDiscordUrl);
 
         ImGui.Spacing();
-        var discordButtonLabel = $"{FontAwesomeIcon.Comments.ToIconString()} Open Punish Discord";
-        if (DrawThemedActionButton(discordButtonLabel, "OpenBetterDeathsFeedbackDiscord"))
+        if (DrawThemedActionButton(FontAwesomeIcon.Comments, "Open Punish Discord", "OpenBetterDeathsFeedbackDiscord"))
         {
             ImGui.OpenPopup(FeedbackConfirmPopupId);
         }
@@ -22188,8 +22195,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static bool DrawCenteredTransparentIconButton(string id, FontAwesomeIcon icon)
     {
-        var iconText = icon.ToIconString();
-        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonWidth = GetIconTextSize(icon).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
         CenterNextItem(buttonWidth);
         return DrawTransparentIconButton(id, icon);
     }

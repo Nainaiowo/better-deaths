@@ -627,8 +627,7 @@ public sealed partial class RecapWindow
     {
         var startCursor = ImGui.GetCursorPos();
         ImGui.TextColored(LeadUpGoldColor, "Pulls");
-        var iconText = FontAwesomeIcon.ChevronDown.ToIconString();
-        var buttonWidth = ImGui.CalcTextSize(iconText).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
+        var buttonWidth = GetIconTextSize(FontAwesomeIcon.ChevronDown).X + (ImGui.GetStyle().FramePadding.X * 2.0f);
         var buttonX = startCursor.X + MathF.Max(0.0f, ImGui.GetContentRegionAvail().X - buttonWidth - PullBrowserHeaderButtonInset);
         ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X, buttonX));
         ImGui.PushStyleColor(ImGuiCol.Text, LeadUpGoldColor);

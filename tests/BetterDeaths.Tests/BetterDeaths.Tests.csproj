@@ -19,6 +19,7 @@
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPlacements.cs" Link="PartyCooldowns/PartyCooldownPlacements.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownRows.cs" Link="PartyCooldowns/PartyCooldownRows.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownEditorState.cs" Link="PartyCooldowns/PartyCooldownEditorState.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPreviewLayout.cs" Link="PartyCooldowns/PartyCooldownPreviewLayout.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownDisplay.cs" Link="PartyCooldowns/PartyCooldownDisplay.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownProfiler.cs" Link="PartyCooldowns/PartyCooldownProfiler.cs" />

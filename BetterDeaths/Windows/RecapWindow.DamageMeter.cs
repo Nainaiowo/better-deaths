@@ -217,9 +217,7 @@ public sealed partial class RecapWindow
         }
 
         ImGui.Dummy(new Vector2(1.0f, 6.0f));
-        var resetLabel = $"{FontAwesomeIcon.Undo.ToIconString()}  Reset";
-        var resetWidth = GetThemedActionButtonWidth(resetLabel);
-        if (DrawThemedActionButton(resetLabel, "DamageMeterResetColumns", resetWidth))
+        if (DrawThemedActionButton(FontAwesomeIcon.Undo, "Reset", "DamageMeterResetColumns"))
         {
             configuration.DamageMeterColumns = DamageMeterColumnPolicy.CreateDefault();
             draggingDamageMeterColumn = null;
@@ -259,7 +257,7 @@ public sealed partial class RecapWindow
         drawList.AddRectFilled(start, end, ImGui.GetColorU32(fill), 4.0f);
         drawList.AddRect(start, end, ImGui.GetColorU32(border), 4.0f);
 
-        var grip = FontAwesomeIcon.GripLines.ToIconString();
+        var grip = FontAwesomeIcon.GripVertical.ToIconString();
         var textSize = ImGui.CalcTextSize(label);
         var close = (isActiveColumn ? FontAwesomeIcon.Times : FontAwesomeIcon.Plus).ToIconString();
         ImFontPtr iconFont;
@@ -393,7 +391,7 @@ public sealed partial class RecapWindow
         float gripWidth;
         using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
         {
-            gripWidth = ImGui.CalcTextSize(FontAwesomeIcon.GripLines.ToIconString()).X;
+            gripWidth = ImGui.CalcTextSize(FontAwesomeIcon.GripVertical.ToIconString()).X;
         }
 
         return 9.0f + gripWidth + 8.0f + ImGui.CalcTextSize(GetDamageMeterColumnLabel(column)).X +

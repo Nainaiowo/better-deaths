@@ -89,7 +89,7 @@ internal static class OnboardingGuide
             "The Encounters list keeps saved combat results separately from death pulls. Selecting one updates the settings preview, not the floating widget's live or latest encounter.",
             "Select a saved encounter, or explore the tutorial encounter when none is available."),
         new(GuideSection.Widgets, GuideTarget.PartyCooldowns, "Choose party cooldowns",
-            "HUD > Party Cooldowns places selected abilities beside names in the game's party list. Open a role and job to choose up to 12 damage, defensive, or support cooldowns. Grey choices explain why tracking is unavailable. Your choices do not change What-if or damage capture.",
+            "HUD > Party Cooldowns places selected abilities beside names in the game's party list. Open a role and job to choose up to 12 damage, defensive, or support cooldowns. Auto-collapse other jobs keeps only the focused job and role open; turn it off to keep several expanded. Grey choices explain why tracking is unavailable. Your choices do not change What-if or damage capture.",
             "Open a job and add or reorder abilities. Custom rows sits above Selected cooldowns: enable it, use + to add up to three rows, and drag abilities into each row. Selecting a row chooses where clicked ability + buttons add it. Off remembers your arrangement."),
         new(GuideSection.Widgets, GuideTarget.PartyCooldownLayout, "Place the party icons",
             "Enable Show party cooldowns to display the live overlay. Position, size, spacing, and offsets apply to every party member. Left and right of name each save their own placement; per-job ability choices and custom rows are shared between both sides.",
