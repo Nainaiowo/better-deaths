@@ -20,6 +20,11 @@ public sealed partial class RecapWindow
     private const string PartyCooldownDragPayload = "BETTER_DEATHS_PARTY_COOLDOWN";
     private readonly Dictionary<uint, ISharedImmediateTexture> partyCooldownTextures = [];
     private readonly Dictionary<uint, int> partyCooldownPreviewCharges = [];
+    private readonly PartyCooldownDisplayEntry[] partyCooldownDrawEntries = new PartyCooldownDisplayEntry[12];
+    private readonly PartyCooldownNameMeasurement?[] partyCooldownNameMeasurements = new PartyCooldownNameMeasurement?[8];
+    private readonly Dictionary<string, Vector2> partyCooldownTextMeasurements = new(StringComparer.Ordinal);
+    private ImFontPtr partyCooldownDrawFont;
+    private float partyCooldownDrawFontSize;
 
     private void DrawPartyCooldownSettings()
     {
@@ -97,7 +102,8 @@ public sealed partial class RecapWindow
             DrawSettingsTooltip(side == PartyCooldownSide.Left ? "Left of each player's name." : "Right of each player's name.");
         }
         var size = configuration.PartyCooldownIconSize;
-        DrawCooldownSlider("Icon size", "PartyCooldownSize", ref size, 16, 36, "%.0f px");
+        DrawCooldownSlider("Icon size", "PartyCooldownSize", ref size,
+            PartyCooldownLayout.MinimumIconSize, PartyCooldownLayout.MaximumIconSize, "%.0f px");
         configuration.PartyCooldownIconSize = size;
         var gap = configuration.PartyCooldownIconGap;
         DrawCooldownSlider("Spacing", "PartyCooldownGap", ref gap, 0, 12, "%.0f px");
@@ -184,9 +190,6 @@ public sealed partial class RecapWindow
         var selected = catalog.NormalizeSelection(job.Id, current);
         ImGui.TextColored(ModernMutedTextColor, "Selected cooldowns");
         DrawPartyCooldownTiles(catalog, job.Id, selected, selected, true);
-        if (selected.Count == 0)
-            ImGui.TextDisabled("None");
-        DrawPartyCooldownDropZone(job.Id, selected);
         ImGui.Spacing();
         foreach (var mitigation in new[] { true, false })
         {
@@ -232,6 +235,8 @@ public sealed partial class RecapWindow
             }
             rowWidth += tileWidth;
         }
+        if (active)
+            DrawPartyCooldownDropZone(jobId, selected, rowWidth, width);
     }
 
     private unsafe bool DrawPartyCooldownTile(uint jobId, PartyCooldownAction action, List<uint> selected, bool active, float width)
@@ -267,47 +272,68 @@ public sealed partial class RecapWindow
                 : $"{action.Name}\n{action.RecastSeconds:0.#}s base recast | Level {action.Level}"));
         if (enabled && ImGui.BeginDragDropSource())
         {
-            var payload = new uint[] { jobId, action.Id };
-            fixed (uint* data = payload)
-                ImGui.SetDragDropPayload(PartyCooldownDragPayload, new ReadOnlySpan<byte>(data, 8));
+            uint* data = stackalloc uint[2] { jobId, action.Id };
+            ImGui.SetDragDropPayload(PartyCooldownDragPayload, new ReadOnlySpan<byte>(data, 8));
             ImGui.TextUnformatted(action.Name);
             ImGui.EndDragDropSource();
         }
         if (active && ImGui.BeginDragDropTarget())
         {
-            AcceptPartyCooldownDrop(jobId, selected, action.Id);
+            AcceptPartyCooldownDrop(jobId, selected, action.Id, ImGui.GetIO().MousePos.X >= start.X + size.X * .5f, start, size);
             ImGui.EndDragDropTarget();
         }
         ImGui.EndDisabled();
         return enabled && clicked && (!active || ImGui.GetIO().MousePos.X >= removeMin);
     }
 
-    private void DrawPartyCooldownDropZone(uint jobId, List<uint> selected)
+    private void DrawPartyCooldownDropZone(uint jobId, List<uint> selected, float rowWidth, float availableWidth)
     {
+        var width = availableWidth;
+        if (selected.Count > 0)
+        {
+            width -= rowWidth + ImGui.GetStyle().ItemSpacing.X;
+            if (width < 12)
+                return;
+            ImGui.SameLine();
+        }
         var start = ImGui.GetCursorScreenPos();
-        var size = new Vector2(MathF.Max(1, ImGui.GetContentRegionAvail().X), selected.Count == 0 ? 30 : 12);
+        var size = new Vector2(MathF.Max(1, width), MathF.Max(30, ImGui.GetFrameHeight() + 6));
         ImGui.InvisibleButton($"##PartyCooldownAppend{jobId}", size);
+        if (selected.Count == 0)
+            ImGui.GetWindowDrawList().AddText(start + new Vector2(4, (size.Y - ImGui.GetTextLineHeight()) * .5f),
+                ImGui.GetColorU32(ModernMutedTextColor), "None");
         if (ImGui.BeginDragDropTarget())
         {
-            ImGui.GetWindowDrawList().AddRectFilled(start, start + size, ImGui.GetColorU32(ModernAccentColor with { W = .35f }), 2);
-            AcceptPartyCooldownDrop(jobId, selected, null);
+            AcceptPartyCooldownDrop(jobId, selected, null, false, start, size);
             ImGui.EndDragDropTarget();
         }
     }
 
-    private unsafe void AcceptPartyCooldownDrop(uint jobId, List<uint> selected, uint? before)
+    private unsafe void AcceptPartyCooldownDrop(uint jobId, List<uint> selected, uint? target, bool after, Vector2 start, Vector2 size)
     {
-        var payload = ImGui.AcceptDragDropPayload(PartyCooldownDragPayload);
+        var payload = ImGui.AcceptDragDropPayload(PartyCooldownDragPayload,
+            ImGuiDragDropFlags.AcceptBeforeDelivery | ImGuiDragDropFlags.AcceptNoDrawDefaultRect);
         if (payload.IsNull || payload.Data is null || payload.DataSize != 8)
             return;
         var data = (uint*)payload.Data;
-        if (data[0] == jobId && plugin.GetPartyCooldownCatalog()?.Find(data[1]) is { UnsupportedReason: null } action &&
-            action.Jobs.Contains(jobId) && PartyCooldownCatalog.PlaceBefore(selected, data[1], before))
-            plugin.SetPartyCooldownSelection(jobId, selected);
+        if (data[0] != jobId || plugin.GetPartyCooldownCatalog()?.Find(data[1]) is not { UnsupportedReason: null } action ||
+            !action.Jobs.Contains(jobId) || data[1] == target || selected.Count >= 12 && !selected.Contains(data[1]))
+            return;
+        if (target is null)
+            ImGui.GetWindowDrawList().AddRectFilled(start, start + size, ImGui.GetColorU32(ModernAccentColor with { W = .12f }), 2);
+        DrawTileInsertionMarker(start, start + size, after);
+        if (payload.Delivery)
+        {
+            var changed = after && target is { } anchor ? PartyCooldownCatalog.PlaceAfter(selected, data[1], anchor)
+                : PartyCooldownCatalog.PlaceBefore(selected, data[1], target);
+            if (changed)
+                plugin.SetPartyCooldownSelection(jobId, selected);
+        }
     }
 
     private unsafe void DrawPartyCooldownPreview()
     {
+        PreparePartyCooldownFont();
         ImGui.TextColored(ModernAccentColor, "Preview");
         var job = PartyCooldownCatalog.Jobs.First(candidate => candidate.Id == cooldownPreviewJob);
         ImGui.SetNextItemWidth(-1);
@@ -365,6 +391,7 @@ public sealed partial class RecapWindow
 
     internal void DrawPartyCooldownOverlay()
     {
+        using var sample = plugin.MeasurePartyCooldown(PartyCooldownPhase.Draw);
         try
         {
             DrawNativePartyCooldownOverlay();
@@ -419,6 +446,7 @@ public sealed partial class RecapWindow
         var matchedRows = 0;
         var selectedIcons = 0;
         var drawnIcons = 0;
+        PreparePartyCooldownFont();
         var draw = ImGui.GetForegroundDrawList();
         var viewport = ImGui.GetMainViewport();
         draw.PushClipRect(viewport.Pos, viewport.Pos + viewport.Size, true);
@@ -430,36 +458,53 @@ public sealed partial class RecapWindow
                 if (memberIndex < 0)
                     continue;
                 var entityId = members[memberIndex].EntityId;
-                var node = native->PartyMembers[rowIndex].Name;
-                if (node is null || !node->IsVisible())
+                ref var partyRow = ref native->PartyMembers[rowIndex];
+                var node = partyRow.Name;
+                var component = partyRow.PartyMemberComponent;
+                // Casting hides the name, not the member row or its cooldowns.
+                if (node is null || component is null || component->OwnerNode is null || !component->OwnerNode->IsVisible())
                     continue;
                 matchedRows++;
-                var actions = plugin.GetVisiblePartyCooldowns(entityId);
-                selectedIcons += actions.Count;
-                if (actions.Count == 0)
+                var actionCount = plugin.CopyPartyCooldownDisplay(entityId, partyCooldownDrawEntries);
+                selectedIcons += actionCount;
+                if (actionCount == 0)
                     continue;
                 var scale = node->GetScaleX();
                 if (!float.IsFinite(scale) || scale <= 0)
                     continue;
-                ushort textWidth = 0;
-                ushort textHeight = 0;
-                node->GetTextDrawSize(&textWidth, &textHeight);
+                var textWidth = 0f;
+                if (configuration.PartyCooldownSide == PartyCooldownSide.Right)
+                {
+                    var cache = partyCooldownNameMeasurements[rowIndex] ??= new();
+                    var key = new PartyCooldownNameKey((nint)node, node->Width, node->Height, node->FontSize,
+                        node->AlignmentFontType, node->CharSpacing, node->LineSpacing, (ushort)node->TextFlags, node->FontCacheHandle);
+                    var name = node->NodeText.AsSpan();
+                    if (!cache.TryGet(key, name, out var measured))
+                    {
+                        ushort width = 0;
+                        ushort height = 0;
+                        node->GetTextDrawSize(&width, &height);
+                        measured = new(width, height);
+                        cache.Store(key, name, measured);
+                    }
+                    textWidth = measured.X;
+                }
                 var nameMin = viewport.Pos + new Vector2(node->ScreenX, node->ScreenY);
-                var nameMax = nameMin + new Vector2(Math.Max(1, (int)textWidth) * scale, Math.Max(1, (int)node->Height) * scale);
+                var nameMax = nameMin + new Vector2(MathF.Max(1, textWidth) * scale, Math.Max(1, (int)node->Height) * scale);
                 var row = new PartyCooldownRow(entityId, rowIndex, nameMin, nameMax, scale);
-                var origin = PartyCooldownLayout.GetOrigin(row, actions.Count, configuration.PartyCooldownSide,
+                var origin = PartyCooldownLayout.GetOrigin(row, actionCount, configuration.PartyCooldownSide,
                     configuration.PartyCooldownIconSize, configuration.PartyCooldownIconGap,
                     new(configuration.PartyCooldownOffsetX, configuration.PartyCooldownOffsetY));
                 var size = PartyCooldownLayout.IconSize(configuration.PartyCooldownIconSize) * scale;
                 var step = size + PartyCooldownLayout.Gap(configuration.PartyCooldownIconGap) * scale;
-                for (var actionIndex = 0; actionIndex < actions.Count; actionIndex++)
+                for (var actionIndex = 0; actionIndex < actionCount; actionIndex++)
                 {
                     var position = origin + new Vector2(actionIndex * step, 0);
                     if (position.X + size <= viewport.Pos.X || position.X >= viewport.Pos.X + viewport.Size.X ||
                         position.Y + size <= viewport.Pos.Y || position.Y >= viewport.Pos.Y + viewport.Size.Y)
                         continue;
-                    DrawPartyCooldownStatus(draw, position, size,
-                        actions[actionIndex], plugin.GetPartyCooldownStatus(entityId, actions[actionIndex]));
+                    ref var entry = ref partyCooldownDrawEntries[actionIndex];
+                    DrawPartyCooldownStatus(draw, position, size, entry.Action, entry.Status, entry.TimerLabel, entry.ChargeLabel);
                     drawnIcons++;
                 }
             }
@@ -492,16 +537,16 @@ public sealed partial class RecapWindow
             reason, members, rows, plugin.PartyCooldownActorCount, icons, plugin.GetPartyCooldownCatalog() is not null);
     }
 
-    private void DrawPartyCooldownStatus(ImDrawListPtr draw, Vector2 position, float size, PartyCooldownAction action, PartyCooldownStatus status)
+    private void DrawPartyCooldownStatus(ImDrawListPtr draw, Vector2 position, float size, PartyCooldownAction action,
+        PartyCooldownStatus status, string? timerLabel = null, string? chargeLabel = null)
     {
-        var tint = new Vector4(1, 1, 1, status.IsReady ? 1 : .45f);
+        var tint = new Vector4(1, 1, 1, status.IsOnCooldown ? .45f : 1);
         DrawPartyCooldownIcon(draw, position, size, action.IconId, tint);
-        var label = !status.IsKnown ? "?" : status.RemainingSeconds > 0 && status.Charges < status.MaxCharges
-            ? Math.Ceiling(status.RemainingSeconds).ToString("0") : string.Empty;
+        var label = timerLabel ?? PartyCooldownLabels.Timer(status);
         if (label.Length > 0)
             DrawPartyCooldownText(draw, position + new Vector2(size * .5f, size * .5f), label, MathF.Max(11, size * .48f));
         if (status.MaxCharges > 1 && status.IsKnown)
-            DrawPartyCooldownText(draw, position + new Vector2(size - 5, size - 5), status.Charges.ToString(), MathF.Max(10, size * .36f));
+            DrawPartyCooldownText(draw, position + new Vector2(size - 5, size - 5), chargeLabel ?? PartyCooldownLabels.Charges(status), MathF.Max(10, size * .36f));
     }
 
     private void DrawPartyCooldownIcon(ImDrawListPtr draw, Vector2 position, float size, uint iconId, Vector4 tint)
@@ -515,12 +560,26 @@ public sealed partial class RecapWindow
             draw.AddImage(wrap.Handle, position, position + new Vector2(size), Vector2.Zero, Vector2.One, ImGui.GetColorU32(tint));
     }
 
-    private static void DrawPartyCooldownText(ImDrawListPtr draw, Vector2 center, string value, float fontSize)
+    private unsafe void PreparePartyCooldownFont()
     {
         var font = ImGui.GetFont();
-        var measured = ImGui.CalcTextSize(value) * (fontSize / ImGui.GetFontSize());
+        var size = ImGui.GetFontSize();
+        if (font.Handle != partyCooldownDrawFont.Handle || size != partyCooldownDrawFontSize)
+            partyCooldownTextMeasurements.Clear();
+        partyCooldownDrawFont = font;
+        partyCooldownDrawFontSize = size;
+    }
+
+    private void DrawPartyCooldownText(ImDrawListPtr draw, Vector2 center, string value, float fontSize)
+    {
+        if (!partyCooldownTextMeasurements.TryGetValue(value, out var baseSize))
+        {
+            baseSize = ImGui.CalcTextSize(value);
+            partyCooldownTextMeasurements[value] = baseSize;
+        }
+        var measured = baseSize * (fontSize / partyCooldownDrawFontSize);
         var position = center - measured * .5f;
-        draw.AddText(font, fontSize, position + Vector2.One, 0xFF000000, value);
-        draw.AddText(font, fontSize, position, 0xFFFFFFFF, value);
+        draw.AddText(partyCooldownDrawFont, fontSize, position + Vector2.One, 0xFF000000, value);
+        draw.AddText(partyCooldownDrawFont, fontSize, position, 0xFFFFFFFF, value);
     }
 }

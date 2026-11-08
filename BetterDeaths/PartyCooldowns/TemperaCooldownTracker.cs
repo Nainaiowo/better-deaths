@@ -85,6 +85,16 @@ internal sealed class TemperaCooldownTracker
     public bool TryReduce(ulong member, double now, out TemperaReduction reduction)
     {
         reduction = default;
+        if (!HasPendingReduction(member, now))
+            return false;
+        var cycle = cycles[member];
+        cycle.Refunded = true;
+        reduction = new(cycle.CastAt, cycle.Converted ? 30 : 60);
+        return true;
+    }
+
+    public bool HasPendingReduction(ulong member, double now)
+    {
         if (!double.IsFinite(now) || !cycles.TryGetValue(member, out var cycle) || cycle.Dead || cycle.Refunded)
             return false;
         var status = cycle.Converted ? GrassaStatus : CoatStatus;
@@ -92,11 +102,7 @@ internal sealed class TemperaCooldownTracker
             !IsEarly(cycle, loss))
             return false;
         // Native result nesting and its action sequence prove consumption, not a packet clock.
-        if (!loss.HasHp || loss.Hp == 0 || !MatchesDamage(cycle, loss))
-            return false;
-        cycle.Refunded = true;
-        reduction = new(cycle.CastAt, cycle.Converted ? 30 : 60);
-        return true;
+        return loss.HasHp && loss.Hp > 0 && MatchesDamage(cycle, loss);
     }
 
     public bool IsUncertain(ulong member, double now = double.NaN)

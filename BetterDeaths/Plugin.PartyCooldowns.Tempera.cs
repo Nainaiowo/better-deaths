@@ -34,6 +34,7 @@ public sealed partial class Plugin
         if (!Configuration.ShowPartyCooldowns || manager is null || manager->Owner is null ||
             index is < 0 or >= 60)
             return;
+        using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
         try
         {
             var target = manager->Owner->EntityId;
@@ -93,6 +94,7 @@ public sealed partial class Plugin
     {
         if (!Configuration.ShowPartyCooldowns || data == IntPtr.Zero)
             return null;
+        using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
         var packet = (EffectResultPacket*)data;
         target = target != 0 ? target : packet->ActorId;
         return Volatile.Read(ref partyCooldownActors).TryGetValue(target, out var actor) && actor.JobId == 42
@@ -113,6 +115,7 @@ public sealed partial class Plugin
 
     private void CapturePartyCooldownDeath(uint target)
     {
+        using var sample = MeasurePartyCooldown(PartyCooldownPhase.Capture);
         try
         {
             EnqueueTemperaEvent(target, new(TemperaEventKind.Death, PartyCooldownNow));
@@ -128,14 +131,15 @@ public sealed partial class Plugin
         foreach (var pair in partyCooldownActors)
         {
             var actor = pair.Value;
-            if (actor.JobId != 42 || !actor.Profiles.TryGetValue(TemperaCooldownTracker.CoatAction, out var profile))
+            if (actor.JobId != 42 || !actor.Profiles.TryGetValue(TemperaCooldownTracker.CoatAction, out var profile) ||
+                !temperaCooldownTracker.HasPendingReduction(actor.Key, now))
                 continue;
             if (ObjectTable.SearchByEntityId(pair.Key) is Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter player &&
                 (player.IsDead || player.CurrentHp == 0))
                 temperaCooldownTracker.Observe(actor.Key, new(TemperaEventKind.Death, now));
             if (temperaCooldownTracker.TryReduce(actor.Key, now, out var reduction) &&
                 partyCooldownTracker.Reduce(actor.Key, profile, reduction, now))
-                nextPartyCooldownDisplayAt = 0;
+                RefreshPartyCooldownDisplay(pair.Key, actor, now, TemperaCooldownTracker.CoatAction);
         }
     }
 

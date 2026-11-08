@@ -79,6 +79,37 @@ public sealed class TemperaCooldownTrackerTests
         Assert.True(tracker.TryReduce(1, 4.21, out _));
     }
 
+    [Fact]
+    public void ObjectLookupIsNeededOnlyForASettledEligibleRefund()
+    {
+        var tracker = Started();
+        Assert.False(tracker.HasPendingReduction(1, 1));
+        tracker.Observe(1, Damage());
+        Assert.False(tracker.HasPendingReduction(1, 3.1));
+        tracker.Observe(1, Lost());
+        Assert.False(tracker.HasPendingReduction(1, 4.1));
+        Assert.True(tracker.HasPendingReduction(1, 4.21));
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+        Assert.False(tracker.HasPendingReduction(1, 5));
+    }
+
+    [Fact]
+    public void ExpiryConversionAndDeathNeverBecomeObjectLookupCandidates()
+    {
+        foreach (var kind in new[] { TemperaEventKind.Death, TemperaEventKind.Conversion })
+        {
+            var tracker = Started();
+            tracker.Observe(1, Damage());
+            tracker.Observe(1, Lost());
+            tracker.Observe(1, new(kind, 4.1));
+            Assert.False(tracker.HasPendingReduction(1, 5));
+        }
+        var expired = Started();
+        expired.Observe(1, Damage(9.5));
+        expired.Observe(1, Lost(at: 10.1) with { Remaining = 0 });
+        Assert.False(expired.HasPendingReduction(1, 11));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

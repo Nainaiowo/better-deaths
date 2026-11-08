@@ -18,6 +18,76 @@ public sealed class PartyCooldownTrackerTests
     }
 
     [Fact]
+    public void UnobservedCooldownIsNotDimmedOrReportedAsKnownReady()
+    {
+        var tracker = new PartyCooldownTracker();
+        var status = tracker.Get(1, Rampart, 100);
+        Assert.True(status.RemainingSeconds > 0);
+        Assert.False(status.IsKnown);
+        Assert.False(status.IsReady);
+        Assert.False(status.IsOnCooldown);
+        Assert.False(default(PartyCooldownStatus).IsOnCooldown);
+    }
+
+    [Fact]
+    public void ConfirmedReadyDimsOnlyAfterUseAndReturnsToFullColorAfterRecharge()
+    {
+        var tracker = new PartyCooldownTracker();
+        tracker.ConfirmReady(1, Rampart, 0);
+        Assert.False(tracker.Get(1, Rampart, 10).IsOnCooldown);
+        tracker.Observe(1, Rampart, 10, 1);
+        Assert.True(tracker.Get(1, Rampart, 11).IsOnCooldown);
+        Assert.False(tracker.Get(1, Rampart, 100).IsOnCooldown);
+        Assert.True(tracker.Get(1, Rampart, 100).IsReady);
+    }
+
+    [Fact]
+    public void ChargedAbilityStaysFullColorUntilAllKnownChargesAreSpent()
+    {
+        var tracker = new PartyCooldownTracker();
+        tracker.ConfirmReady(1, Oblation, 0);
+        tracker.Observe(1, Oblation, 10, 1);
+        Assert.False(tracker.Get(1, Oblation, 20).IsOnCooldown);
+        tracker.Observe(1, Oblation, 30, 2);
+        Assert.True(tracker.Get(1, Oblation, 40).IsOnCooldown);
+        Assert.False(tracker.Get(1, Oblation, 70).IsOnCooldown);
+    }
+
+    [Fact]
+    public void UncertainChargesDoNotLookLikeAConfirmedUnavailableAbility()
+    {
+        var tracker = new PartyCooldownTracker();
+        tracker.Observe(1, Oblation, 10, 1);
+        var status = tracker.Get(1, Oblation, 11);
+        Assert.False(status.IsKnown);
+        Assert.False(status.IsReady);
+        Assert.False(status.IsOnCooldown);
+    }
+
+    [Fact]
+    public void PrePullUseStaysDimmedUntilRechargeOrConfirmedReset()
+    {
+        var tracker = new PartyCooldownTracker();
+        tracker.Observe(1, Rampart, 10, 1);
+        Assert.True(tracker.Get(1, Rampart, 20).IsOnCooldown);
+        Assert.True(tracker.Get(1, Rampart, 30).IsOnCooldown);
+        tracker.ConfirmReady(1, Rampart, 31);
+        Assert.False(tracker.Get(1, Rampart, 31).IsOnCooldown);
+    }
+
+    [Theory]
+    [InlineData(0, 1, 10, 90, true)]
+    [InlineData(1, 1, 0, 0, false)]
+    [InlineData(0, 1, 0, 0, false)]
+    [InlineData(1, 2, 10, 120, false)]
+    [InlineData(0, 2, 10, 120, true)]
+    public void NativeIconDimmingRequiresAnActiveCooldownAndNoAvailableCharge(int charges, int maximum,
+        double elapsed, double total, bool dimmed)
+    {
+        Assert.Equal(dimmed, PartyCooldownStatus.FromNative(charges, maximum, elapsed, total).IsOnCooldown);
+    }
+
+    [Fact]
     public void SingleChargeObservationEstablishesExactTimerWithoutCombatFlag()
     {
         var tracker = new PartyCooldownTracker();

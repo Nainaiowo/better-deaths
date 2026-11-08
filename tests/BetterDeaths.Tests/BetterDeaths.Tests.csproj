@@ -17,6 +17,8 @@
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownDisplay.cs" Link="PartyCooldowns/PartyCooldownDisplay.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownProfiler.cs" Link="PartyCooldowns/PartyCooldownProfiler.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownSelectionPolicy.cs" Link="PartyCooldowns/PartyCooldownSelectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownCatalog.cs" Link="PartyCooldowns/PartyCooldownCatalog.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownTracker.cs" Link="PartyCooldowns/PartyCooldownTracker.cs" />
@@ -26,6 +28,7 @@
     <Compile Include="../../BetterDeaths/OverworldDamageEncounterState.cs" Link="OverworldDamageEncounterState.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
     <Compile Include="../../BetterDeaths/HudLayoutPolicy.cs" Link="HudLayoutPolicy.cs" />
+    <Compile Include="../../BetterDeaths/TileOrderPolicy.cs" Link="TileOrderPolicy.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRetention.cs" Link="DebugCaptureFileRetention.cs" />
     <Compile Include="../../BetterDeaths/DebugCaptureFileRecord.cs" Link="DebugCaptureFileRecord.cs" />
     <Compile Include="../../BetterDeaths/OrderedBackgroundWorkQueue.cs" Link="OrderedBackgroundWorkQueue.cs" />

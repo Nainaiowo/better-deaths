@@ -175,7 +175,7 @@ public sealed class PartyCooldownCatalogTests
         Assert.Equal(24, PartyCooldownLayout.IconSize(float.NaN));
         Assert.Equal(3, PartyCooldownLayout.Gap(float.PositiveInfinity));
         Assert.Equal(0, PartyCooldownLayout.Offset(float.NegativeInfinity));
-        Assert.Equal(36, PartyCooldownLayout.IconSize(900));
+        Assert.Equal(72, PartyCooldownLayout.IconSize(900));
         Assert.Equal(-300, PartyCooldownLayout.Offset(-1000));
     }
 
@@ -184,6 +184,52 @@ public sealed class PartyCooldownCatalogTests
     {
         var row = new PartyCooldownRow(1, 0, new(200, 100), new(600, 180), 4);
         Assert.Equal(new Vector2(624, 100), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Right, 20, 4, Vector2.Zero));
+    }
+
+    [Theory]
+    [InlineData(36, 36)]
+    [InlineData(48, 48)]
+    [InlineData(72, 72)]
+    [InlineData(73, 72)]
+    [InlineData(8, 16)]
+    public void CooldownIconsAcceptTheExpandedRangeWithoutChangingTheMinimum(float requested, float expected)
+    {
+        Assert.Equal(expected, PartyCooldownLayout.IconSize(requested));
+    }
+
+    [Fact]
+    public void MaximumIconSizeUsesTheSameGeometryForPreviewAndOverlay()
+    {
+        var row = new PartyCooldownRow(1, 0, new(200, 100), new(300, 120), 1);
+        Assert.Equal(new Vector2(-103, 74), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Left, 72, 3, Vector2.Zero));
+        Assert.Equal(new Vector2(306, 74), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Right, 72, 3, Vector2.Zero));
+    }
+
+    [Fact]
+    public void CooldownsCanMoveOrBeAddedAfterTheLastTile()
+    {
+        List<uint> selected = [1, 2, 3];
+        Assert.True(PartyCooldownCatalog.PlaceAfter(selected, 1, 3));
+        Assert.Equal(new uint[] { 2, 3, 1 }, selected);
+        Assert.True(PartyCooldownCatalog.PlaceAfter(selected, 4, 1));
+        Assert.Equal(new uint[] { 2, 3, 1, 4 }, selected);
+        Assert.False(PartyCooldownCatalog.PlaceBefore(selected, 4, null));
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 3, 2));
+    }
+
+    [Fact]
+    public void AfterDropsRespectCapacityAndRejectInvalidTargetsWithoutLosingAnything()
+    {
+        List<uint> selected = Enumerable.Range(1, 12).Select(value => (uint)value).ToList();
+        var original = selected.ToArray();
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 13, 12));
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 1, 999));
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 0, 12));
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 12, 12));
+        Assert.Equal(original, selected);
+        Assert.True(PartyCooldownCatalog.PlaceAfter(selected, 1, 12));
+        Assert.Equal(12, selected.Count);
+        Assert.Equal(1u, selected[^1]);
     }
 
     [Theory]

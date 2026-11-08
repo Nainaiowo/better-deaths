@@ -91,26 +91,12 @@ internal static class DamageMeterColumnPolicy
         return true;
     }
 
-    public static bool PlaceBefore(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn target)
-    {
-        if (!IsEnabled(source) || !IsEnabled(target))
-        {
-            return false;
-        }
+    public static bool PlaceBefore(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn? target) =>
+        Place(columns, source, target, false);
 
-        var targetIndex = columns.IndexOf(target);
-        if (targetIndex < 0)
-        {
-            return false;
-        }
+    public static bool PlaceAfter(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn target) =>
+        Place(columns, source, target, true);
 
-        var sourceIndex = columns.IndexOf(source);
-        if (sourceIndex >= 0)
-        {
-            return Move(columns, source, target);
-        }
-
-        columns.Insert(targetIndex, source);
-        return true;
-    }
+    private static bool Place(IList<DamageMeterColumn> columns, DamageMeterColumn source, DamageMeterColumn? target, bool after) =>
+        IsEnabled(source) && (target is null || IsEnabled(target.Value)) && TileOrderPolicy.Place(columns, source, target, after);
 }

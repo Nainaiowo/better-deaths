@@ -263,6 +263,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool ShowDebugTab { get; set; }
 
     public bool DebugLogEnabled { get; set; }
+    public bool DebugProfilePartyCooldowns { get; set; }
 
     public bool DebugSaveToFileEnabled { get; set; } = true;
 

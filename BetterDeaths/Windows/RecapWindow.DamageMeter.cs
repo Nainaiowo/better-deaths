@@ -183,6 +183,8 @@ public sealed partial class RecapWindow
             plugin.SaveConfiguration();
         }
 
+        DrawDamageMeterColumnAppendTarget(rowWidth, availableWidth);
+
         ImGui.Dummy(new Vector2(1.0f, 8.0f));
         ImGui.TextColored(ModernMutedTextColor, "Available columns");
         rowWidth = 0.0f;
@@ -307,21 +309,15 @@ public sealed partial class RecapWindow
         if (enabled && ImGui.BeginDragDropSource())
         {
             draggingDamageMeterColumn = column;
-            ImGui.SetDragDropPayload(DamageMeterColumnDragPayload, BitConverter.GetBytes((int)column));
+            var value = (int)column;
+            ImGui.SetDragDropPayload(DamageMeterColumnDragPayload, new ReadOnlySpan<byte>(&value, sizeof(int)));
             ImGui.TextUnformatted(label);
             ImGui.EndDragDropSource();
         }
 
         if (enabled && isActiveColumn && ImGui.BeginDragDropTarget())
         {
-            var payload = ImGui.AcceptDragDropPayload(DamageMeterColumnDragPayload);
-            if (TryReadDamageMeterColumnPayload(payload, out var source) &&
-                DamageMeterColumnPolicy.PlaceBefore(configuration.DamageMeterColumns, source, column))
-            {
-                draggingDamageMeterColumn = null;
-                plugin.SaveConfiguration();
-            }
-
+            AcceptDamageMeterColumnDrop(column, mouse.X >= start.X + size.X * .5f, start, size);
             ImGui.EndDragDropTarget();
         }
 
@@ -332,6 +328,44 @@ public sealed partial class RecapWindow
         }
 
         return enabled && clicked && (!isActiveColumn || closeHovered && canRemove);
+    }
+
+    private void DrawDamageMeterColumnAppendTarget(float rowWidth, float availableWidth)
+    {
+        var width = availableWidth - rowWidth - ImGui.GetStyle().ItemSpacing.X;
+        if (width < 12)
+            return;
+        ImGui.SameLine();
+        var start = ImGui.GetCursorScreenPos();
+        var size = new Vector2(width, ImGui.GetFrameHeight() + 6);
+        ImGui.InvisibleButton("##DamageMeterColumnAppend", size);
+        if (ImGui.BeginDragDropTarget())
+        {
+            AcceptDamageMeterColumnDrop(null, false, start, size);
+            ImGui.EndDragDropTarget();
+        }
+    }
+
+    private unsafe void AcceptDamageMeterColumnDrop(DamageMeterColumn? target, bool after, Vector2 start, Vector2 size)
+    {
+        var payload = ImGui.AcceptDragDropPayload(DamageMeterColumnDragPayload,
+            ImGuiDragDropFlags.AcceptBeforeDelivery | ImGuiDragDropFlags.AcceptNoDrawDefaultRect);
+        if (!TryReadDamageMeterColumnPayload(payload, out var source) || source == target)
+            return;
+        if (target is null)
+            ImGui.GetWindowDrawList().AddRectFilled(start, start + size, ImGui.GetColorU32(ModernAccentColor with { W = .12f }), 2);
+        DrawTileInsertionMarker(start, start + size, after);
+        if (payload.Delivery)
+        {
+            var changed = after && target is { } anchor
+                ? DamageMeterColumnPolicy.PlaceAfter(configuration.DamageMeterColumns, source, anchor)
+                : DamageMeterColumnPolicy.PlaceBefore(configuration.DamageMeterColumns, source, target);
+            if (changed)
+            {
+                draggingDamageMeterColumn = null;
+                plugin.SaveConfiguration();
+            }
+        }
     }
 
     private static unsafe bool TryReadDamageMeterColumnPayload(

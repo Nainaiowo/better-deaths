@@ -18654,6 +18654,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.TextDisabled(plugin.DebugCaptureFilePath);
 
         DrawDamageMeterDiagnostics();
+        DrawPartyCooldownPerformanceDiagnostics();
 
         DrawDebugFilters();
 

@@ -81,15 +81,16 @@ internal sealed class PartyCooldownCatalog
             .OrderByDescending(candidate => candidate.Level).FirstOrDefault();
     }
 
-    public static bool PlaceBefore(List<uint> selection, uint source, uint? target)
+    public static bool PlaceBefore(List<uint> selection, uint source, uint? target) => Place(selection, source, target, false);
+
+    public static bool PlaceAfter(List<uint> selection, uint source, uint target) => Place(selection, source, target, true);
+
+    private static bool Place(List<uint> selection, uint source, uint? target, bool after)
     {
         if (source == 0 || source == target || target is { } id && !selection.Contains(id) ||
             !selection.Contains(source) && selection.Count >= 12)
             return false;
-        var previous = selection.ToArray();
-        selection.Remove(source);
-        selection.Insert(target is { } before ? selection.IndexOf(before) : selection.Count, source);
-        return !previous.SequenceEqual(selection);
+        return TileOrderPolicy.Place(selection, source, target, after);
     }
 
     public static uint NormalizeJob(uint jobId) => jobId switch

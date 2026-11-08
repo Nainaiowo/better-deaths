@@ -134,6 +134,49 @@ public sealed class DamageMeterColumnPolicyTests
     }
 
     [Fact]
+    public void LeftAndRightHalvesInsertBeforeAndAfterRatherThanSwapSlots()
+    {
+        List<DamageMeterColumn> columns = [DamageMeterColumn.PlayerName, DamageMeterColumn.TotalDamage,
+            DamageMeterColumn.DamagePerSecond, DamageMeterColumn.HitCount];
+        Assert.True(DamageMeterColumnPolicy.PlaceBefore(columns, DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond));
+        Assert.Equal([DamageMeterColumn.TotalDamage, DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond, DamageMeterColumn.HitCount], columns);
+        Assert.True(DamageMeterColumnPolicy.PlaceAfter(columns, DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePerSecond));
+        Assert.Equal([DamageMeterColumn.TotalDamage, DamageMeterColumn.DamagePerSecond, DamageMeterColumn.PlayerName, DamageMeterColumn.HitCount], columns);
+    }
+
+    [Fact]
+    public void ExistingAndAvailableColumnsCanReachTheFarRightOrTheAppendArea()
+    {
+        var columns = DamageMeterColumnPolicy.CreateDefault();
+        Assert.True(DamageMeterColumnPolicy.PlaceAfter(columns, DamageMeterColumn.PlayerName, DamageMeterColumn.DamagePercent));
+        Assert.Equal(DamageMeterColumn.PlayerName, columns[^1]);
+        Assert.True(DamageMeterColumnPolicy.PlaceAfter(columns, DamageMeterColumn.HitCount, DamageMeterColumn.PlayerName));
+        Assert.Equal(DamageMeterColumn.HitCount, columns[^1]);
+        Assert.True(DamageMeterColumnPolicy.PlaceBefore(columns, DamageMeterColumn.CriticalHitPercent, null));
+        Assert.Equal(DamageMeterColumn.CriticalHitPercent, columns[^1]);
+        Assert.True(DamageMeterColumnPolicy.PlaceBefore(columns, DamageMeterColumn.TotalDamage, null));
+        Assert.Equal(DamageMeterColumn.TotalDamage, columns[^1]);
+        Assert.False(DamageMeterColumnPolicy.PlaceBefore(columns, DamageMeterColumn.TotalDamage, null));
+        Assert.Equal(columns.Count, columns.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData(DamageMeterColumn.RaidDamagePerSecond)]
+    [InlineData(DamageMeterColumn.NeutralDamagePerSecond)]
+    [InlineData(DamageMeterColumn.AdjustedDamagePerSecond)]
+    [InlineData(DamageMeterColumn.JobIcon)]
+    [InlineData((DamageMeterColumn)999)]
+    public void AfterAndAppendTargetsCannotEnableDisabledOrUnknownColumns(DamageMeterColumn invalid)
+    {
+        var columns = DamageMeterColumnPolicy.CreateDefault();
+        var original = columns.ToArray();
+        Assert.False(DamageMeterColumnPolicy.PlaceAfter(columns, invalid, DamageMeterColumn.PlayerName));
+        Assert.False(DamageMeterColumnPolicy.PlaceAfter(columns, DamageMeterColumn.PlayerName, invalid));
+        Assert.False(DamageMeterColumnPolicy.PlaceBefore(columns, invalid, null));
+        Assert.Equal(original, columns);
+    }
+
+    [Fact]
     public void DefaultsUseOneNameColumnAndNormalDamageOnly()
     {
         Assert.Equal(

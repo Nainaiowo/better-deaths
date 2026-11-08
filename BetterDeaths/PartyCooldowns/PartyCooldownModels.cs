@@ -30,6 +30,7 @@ internal readonly record struct PartyCooldownProfile(uint ActionId, byte Group, 
 internal readonly record struct PartyCooldownStatus(int Charges, int MaxCharges, double RemainingSeconds, bool IsKnown)
 {
     public bool IsReady => IsKnown && Charges > 0;
+    public bool IsOnCooldown => IsKnown && Charges == 0 && RemainingSeconds > 0;
 
     public static PartyCooldownStatus Preview(int maximum, double recastSeconds, int index)
     {
@@ -66,7 +67,8 @@ internal readonly record struct PartyCooldownHudMember(uint EntityId, int Index)
 
 internal static class PartyCooldownLayout
 {
-    public static float IconSize(float value) => float.IsFinite(value) ? Math.Clamp(value, 16, 36) : 24;
+    public const float MinimumIconSize = 16, MaximumIconSize = 72;
+    public static float IconSize(float value) => float.IsFinite(value) ? Math.Clamp(value, MinimumIconSize, MaximumIconSize) : 24;
     public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -300, 300) : 0;
     public static float Gap(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 12) : 3;
 
