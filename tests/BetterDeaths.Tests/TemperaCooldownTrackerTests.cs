@@ -112,6 +112,59 @@ public sealed class TemperaCooldownTrackerTests
     }
 
     [Fact]
+    public void ConfirmedCoatUseShowsItsRunningCooldownBeforeAnyShieldMessage()
+    {
+        var cooldowns = new PartyCooldownTracker();
+        var tracker = new TemperaCooldownTracker();
+        Assert.True(cooldowns.Observe(1, Profile, 10, 42));
+        tracker.Cast(1, 10);
+        var status = cooldowns.Get(1, Profile, 10);
+        Assert.True(status.IsKnown);
+        Assert.True(status.IsOnCooldown);
+        Assert.Equal("120", PartyCooldownLabels.Timer(status));
+        Assert.False(tracker.IsUncertain(1, 10));
+        Assert.Equal(double.PositiveInfinity, tracker.GetNextReductionCheckAt(1));
+    }
+
+    [Fact]
+    public void MatchedBreakKeepsTheKnownTimerVisibleDuringTheShortSettlementWait()
+    {
+        var tracker = Started();
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost());
+        Assert.False(tracker.TryReduce(1, 4.1, out _));
+        Assert.False(tracker.IsUncertain(1, 4.1));
+        Assert.True(tracker.TryReduce(1, 4.21, out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NativeShieldAtRemovalSuppliesItsIdentityAndRemainingTimeWhenEarlierUpdatesWereMissed(bool grassa)
+    {
+        var tracker = new TemperaCooldownTracker();
+        tracker.Cast(1, 0);
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost(grassa ? 3687u : 3686u));
+        Assert.True(tracker.TryReduce(1, 4.21, out var reduction));
+        Assert.Equal(grassa ? 30 : 60, reduction.Seconds);
+        Assert.False(tracker.TryReduce(1, 5, out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissedApplicationCannotTurnExpiryOrUnknownRemovalIntoARefund(bool unknown)
+    {
+        var tracker = new TemperaCooldownTracker();
+        tracker.Cast(1, 0);
+        tracker.Observe(1, Damage());
+        tracker.Observe(1, Lost() with { Remaining = unknown ? double.NaN : 0 });
+        Assert.False(tracker.TryReduce(1, 4.21, out _));
+        Assert.Equal(unknown, tracker.IsUncertain(1, 5));
+    }
+
+    [Fact]
     public void ADelayedDamageObservationCanScheduleAnAlreadyCapturedClear()
     {
         var tracker = Started();

@@ -65,4 +65,5 @@ internal static class PartyCooldownSelectionPolicy
     public static bool Includes(uint actionId) => IsMitigation(actionId) || IsMajorCooldown(actionId);
     public static bool IsExecutionVariant(uint actionId) => ExecutionVariants.ContainsKey(actionId);
     public static uint CanonicalAction(uint actionId) => ExecutionVariants.GetValueOrDefault(actionId, actionId);
+    public static uint DisplayAction(uint actionId) => actionId == 35349 ? 34675u : actionId;
 }

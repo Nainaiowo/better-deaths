@@ -80,7 +80,7 @@ public sealed partial class Plugin
             return null;
         var character = (Character*)entity;
         if (character->ClassJob != 42 ||
-            actor.Key != (0xF000000000000000ul | target) && character->ContentId != actor.Key)
+            character->ContentId != 0 && actor.Key != (0xF000000000000000ul | target) && character->ContentId != actor.Key)
             return null;
         var manager = character->GetStatusManager();
         return manager is not null && manager->Owner == character ? manager : null;

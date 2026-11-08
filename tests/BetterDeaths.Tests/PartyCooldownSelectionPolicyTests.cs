@@ -112,6 +112,26 @@ public sealed class PartyCooldownSelectionPolicyTests
         Assert.Empty(catalog.NormalizeSelection(36, [shared.Id]));
     }
 
+    [Fact]
+    public void StarryMuseUsesItsActualPresentationWithoutBreakingSavedScenicMuseSelections()
+    {
+        Assert.Equal(34675u, PartyCooldownSelectionPolicy.DisplayAction(35349));
+        Assert.Equal(34675u, PartyCooldownSelectionPolicy.DisplayAction(34675));
+        Assert.Equal(34685u, PartyCooldownSelectionPolicy.DisplayAction(34685));
+        var choice = new PartyCooldownAction(35349, "Starry Muse", 3826, 70, 21, 120, 1, [42]);
+        var execution = choice with { Id = 34675, CaptureOnly = true };
+        var catalog = new PartyCooldownCatalog([choice, execution]);
+        var displayed = Assert.Single(catalog.ForJob(42));
+        Assert.Equal("Starry Muse", displayed.Name);
+        Assert.Equal(3826u, displayed.IconId);
+        Assert.Equal(new uint[] { 35349 }, catalog.NormalizeSelection(42, [35349, 34675]));
+        Assert.Contains(catalog.CaptureActionsForJob(42), action => action.Id == 34675);
+        var tracker = new PartyCooldownTracker();
+        Assert.True(tracker.Observe(1, new(34675, 21, 120, 1), 10, 42));
+        Assert.Equal(120, tracker.Get(1, new(35349, 21, 120, 1), 10).RemainingSeconds);
+        Assert.Equal(119, tracker.Get(1, new(35349, 21, 120, 1), 11).RemainingSeconds);
+    }
+
     [Theory]
     [InlineData(3542)]
     [InlineData(25746)]

@@ -25,6 +25,7 @@
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownLifecycle.cs" Link="PartyCooldowns/PartyCooldownLifecycle.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/TemperaCooldownTracker.cs" Link="PartyCooldowns/TemperaCooldownTracker.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/TemperaResultReader.cs" Link="PartyCooldowns/TemperaResultReader.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/TemperaStatusListReader.cs" Link="PartyCooldowns/TemperaStatusListReader.cs" />
     <Compile Include="../../BetterDeaths/ContentCapturePolicy.cs" Link="ContentCapturePolicy.cs" />
     <Compile Include="../../BetterDeaths/OverworldDamageEncounterState.cs" Link="OverworldDamageEncounterState.cs" />
     <Compile Include="../../BetterDeaths/CustomizeLayoutPolicy.cs" Link="CustomizeLayoutPolicy.cs" />
@@ -133,5 +134,6 @@
     <None Update="Fixtures/DamageWorkflowGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/CapturedPacketTimingHeaders.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/TemperaCooldownCaptured.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/TemperaStatusUpdatesCaptured.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

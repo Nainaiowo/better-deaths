@@ -1,0 +1,41 @@
+[
+  {
+    "Name": "Coat application in the second status-list half, followed by a damage-result clear",
+    "SourceWindow": "2026-11-07 20:35:45.575-20:35:50.113 -05:00",
+    "ExpectedReduction": 60,
+    "Steps": [
+      { "Kind": "Use", "At": 0, "ActionId": 34685 },
+      { "Kind": "StatusList", "At": 0, "SlotCount": 60, "Updates": [
+        { "Slot": 30, "Packed": "00000E66", "Duration": "41200000", "Source": "10000001" }
+      ] },
+      { "Kind": "Damage", "At": 3.738, "Sequence": "0000396B", "DamageWord0": "00750003", "DamageWord1": "68590000" },
+      { "Kind": "Result", "At": 4.538, "Sequence": "0000396B", "Hp": 3764, "Updates": [
+        { "Slot": 30, "Packed": "1E000000", "Duration": "00000000", "Source": "E0000000" }
+      ] },
+      { "Kind": "StatusList", "At": 4.538, "SlotCount": 60, "Updates": [] }
+    ]
+  },
+  {
+    "Name": "Grassa conversion in a status list, refresh in a result, and fully shielded damage",
+    "SourceWindow": "2026-11-07 20:37:06.236-20:37:11.929 -05:00",
+    "ExpectedReduction": 30,
+    "Steps": [
+      { "Kind": "Use", "At": 0, "ActionId": 34685 },
+      { "Kind": "StatusList", "At": 0, "SlotCount": 60, "Updates": [
+        { "Slot": 30, "Packed": "00000E66", "Duration": "41200000", "Source": "10000001" }
+      ] },
+      { "Kind": "Use", "At": 2.044, "ActionId": 34686 },
+      { "Kind": "StatusList", "At": 2.044, "SlotCount": 60, "Updates": [
+        { "Slot": 31, "Packed": "00000E67", "Duration": "41200000", "Source": "10000001" }
+      ] },
+      { "Kind": "Result", "At": 2.979, "Sequence": "00003988", "Hp": 30477, "Updates": [
+        { "Slot": 31, "Packed": "1F000E67", "Duration": "4111C292", "Source": "10000001" }
+      ] },
+      { "Kind": "Damage", "At": 4.894, "Sequence": "0000398A", "DamageWord0": "00750003", "DamageWord1": "00000000" },
+      { "Kind": "Result", "At": 5.693, "Sequence": "0000398A", "Hp": 30477, "Updates": [
+        { "Slot": 31, "Packed": "1F000000", "Duration": "00000000", "Source": "E0000000" }
+      ] },
+      { "Kind": "StatusList", "At": 5.693, "SlotCount": 60, "Updates": [] }
+    ]
+  }
+]

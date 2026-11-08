@@ -58,6 +58,16 @@ internal sealed class TemperaCooldownTracker
             case TemperaEventKind.Removed:
                 if (IsShield(observation.StatusId))
                 {
+                    // The native slot at removal is authoritative even if its earlier application was missed.
+                    if (observation.StatusId == GrassaStatus)
+                        cycle.Converted = true;
+                    if (double.IsFinite(observation.Remaining) && observation.Remaining is >= 0 and <= 10.5)
+                    {
+                        if (observation.StatusId == CoatStatus && !double.IsFinite(cycle.CoatExpiresAt))
+                            cycle.CoatExpiresAt = observation.SeenAt + observation.Remaining;
+                        if (observation.StatusId == GrassaStatus && !double.IsFinite(cycle.GrassaExpiresAt))
+                            cycle.GrassaExpiresAt = observation.SeenAt + observation.Remaining;
+                    }
                     // An ordinary loss notice must not erase an already-captured causal result.
                     if (!cycle.Removals.TryGetValue(observation.StatusId, out var previous) ||
                         !previous.HasHp && observation.HasHp)
@@ -92,7 +102,8 @@ internal sealed class TemperaCooldownTracker
             return false;
         var cycle = cycles[member];
         cycle.Refunded = true;
-        reduction = new(cycle.CastAt, cycle.Converted ? 30 : 60);
+        var loss = cycle.Removals[cycle.Converted ? GrassaStatus : CoatStatus];
+        reduction = new(cycle.CastAt, loss.StatusId == GrassaStatus ? 30 : 60);
         return true;
     }
 
@@ -115,12 +126,13 @@ internal sealed class TemperaCooldownTracker
     {
         if (!cycles.TryGetValue(member, out var cycle) || cycle.Dead || cycle.Refunded)
             return false;
-        if (!double.IsFinite(cycle.CoatExpiresAt) || cycle.Converted && !double.IsFinite(cycle.GrassaExpiresAt))
-            return true;
+        if (double.IsFinite(GetNextReductionCheckAt(member)))
+            return false;
         var status = cycle.Converted ? GrassaStatus : CoatStatus;
         var expiry = status == CoatStatus ? cycle.CoatExpiresAt : cycle.GrassaExpiresAt;
         if (!cycle.Removals.TryGetValue(status, out var removal))
-            return double.IsFinite(now) && now > expiry + ExpiryMargin;
+            // A confirmed use starts its timer without waiting for a separate shield-application message.
+            return double.IsFinite(expiry) && double.IsFinite(now) && now > expiry + ExpiryMargin;
         return !double.IsFinite(removal.Remaining) || removal.Remaining > ExpiryMargin || removal.SeenAt < expiry;
     }
 

@@ -127,10 +127,12 @@ public sealed partial class Plugin
                 .Select(job => job.Id).ToArray();
             if (jobs.Length == 0)
                 continue;
-            var name = action.Name.ExtractText();
+            var displayId = PartyCooldownSelectionPolicy.DisplayAction(action.RowId);
+            var display = displayId != action.RowId ? sheet.GetRowOrDefault(displayId) ?? action : action;
+            var name = display.Name.ExtractText();
             if (string.IsNullOrWhiteSpace(name))
                 continue;
-            actions.Add(new PartyCooldownAction(action.RowId, name, action.Icon, action.ClassJobLevel,
+            actions.Add(new PartyCooldownAction(action.RowId, name, display.Icon, action.ClassJobLevel,
                 action.CooldownGroup, action.Recast100ms / 10f, action.MaxCharges, jobs,
                 defaults.Contains(action.RowId), action.CanTargetParty, GetConditionalCooldownReason(action.RowId),
                 !PartyCooldownSelectionPolicy.Includes(action.RowId) || PartyCooldownSelectionPolicy.IsExecutionVariant(action.RowId)));

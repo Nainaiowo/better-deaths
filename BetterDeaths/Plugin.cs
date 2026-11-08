@@ -654,6 +654,7 @@ public sealed partial class Plugin : IDalamudPlugin
         actionEffectHook.Enable();
         TryInitializeServerFrameTiming();
         TryInitializeStatusTiming();
+        TryInitializeTemperaStatusLists();
 
         try
         {
@@ -777,6 +778,8 @@ public sealed partial class Plugin : IDalamudPlugin
         serverFrameHook?.Dispose();
         packetTimingDispatchHook?.Dispose();
         effectResultHook?.Dispose();
+        temperaStatusListHook?.Dispose();
+        temperaDoubleStatusListHook?.Dispose();
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);

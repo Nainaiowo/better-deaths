@@ -193,6 +193,24 @@ public sealed class TemperaResultReaderTests
     }
 
     [Fact]
+    public void ActualGrassaSlotClearCannotBecomeASixtySecondCoatRefundWhenEarlierMessagesAreMissing()
+    {
+        var slots = Slots();
+        slots[4] = new(3687, Target, 6);
+        var events = Events(1);
+        Assert.True(TemperaResultReader.TryRead(Packet(new Result(42, 5000, new Update(4, 0, 0, 0))), Target, 4,
+            slots, events, out var count, out _));
+        Assert.Equal(1, count);
+        Assert.Equal(3687u, events[0].StatusId);
+        var tracker = new TemperaCooldownTracker();
+        tracker.Cast(1, 0);
+        tracker.Observe(1, new(TemperaEventKind.Damage, 3) { Sequence = 42 });
+        tracker.Observe(1, events[0]);
+        Assert.True(tracker.TryReduce(1, 4.21, out var reduction));
+        Assert.Equal(30, reduction.Seconds);
+    }
+
+    [Fact]
     public void NaNRemainingDoesNotBecomeEarlyBreakEvidence()
     {
         var slots = Slots();
