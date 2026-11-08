@@ -3,6 +3,48 @@ namespace BetterDeaths.Tests;
 public sealed class HudLayoutPolicyTests
 {
     [Theory]
+    [InlineData(1000, 3, 160)]
+    [InlineData(520, 3, 160)]
+    [InlineData(519, 2, 160)]
+    [InlineData(352, 2, 160)]
+    [InlineData(351, 1, 160)]
+    [InlineData(140, 1, 116)]
+    public void NavigationKeepsItsGuttersAndWrapsBeforeButtonsReachTheWindowEdges(float width, int columns, float buttonWidth)
+    {
+        var layout = HudLayoutPolicy.NavigationLayout(width, 160, 8, 3, 12);
+        Assert.Equal(12, layout.Inset);
+        Assert.Equal(columns, layout.Columns);
+        Assert.Equal(buttonWidth, layout.ButtonWidth);
+        Assert.True(layout.Inset * 2 + layout.Columns * layout.ButtonWidth + (layout.Columns - 1) * 8 <= width);
+    }
+
+    [Fact]
+    public void NavigationFitsBothGuttersAtEverySupportedWindowAndLabelSize()
+    {
+        foreach (var preferred in new[] { 90, 160, 260 })
+            for (var width = 1; width <= 2560; width++)
+            {
+                var layout = HudLayoutPolicy.NavigationLayout(width, preferred, 8, 3, 12);
+                Assert.InRange(layout.Columns, 1, 3);
+                Assert.InRange(layout.ButtonWidth, 1, preferred);
+                Assert.InRange(layout.Inset, 0, 12);
+                Assert.True(layout.Inset * 2 + layout.Columns * layout.ButtonWidth + (layout.Columns - 1) * 8 <= width + .001f);
+            }
+    }
+
+    [Fact]
+    public void NavigationHandlesEmptyAndInvalidMeasurementsWithoutMovingContentOutsideTheWindow()
+    {
+        var empty = HudLayoutPolicy.NavigationLayout(1000, 160, 8, 0, 12);
+        Assert.Equal(0, empty.Columns);
+        Assert.Equal(0, empty.ButtonWidth);
+        var invalid = HudLayoutPolicy.NavigationLayout(float.NaN, float.NaN, float.NaN, 3, float.NaN);
+        Assert.Equal(1, invalid.Columns);
+        Assert.Equal(1, invalid.ButtonWidth);
+        Assert.Equal(0, invalid.Inset);
+    }
+
+    [Theory]
     [InlineData(1000, 160, 8, 3)]
     [InlineData(496, 160, 8, 3)]
     [InlineData(495, 160, 8, 2)]

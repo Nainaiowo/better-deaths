@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Better Deaths - FFXIV Death Review and DPS Meter</title>
-  <meta name="description" content="Better Deaths brings death review, a customizable DPS meter, saved encounters, mitigation checks, Death Replay, and supported Dancing Mad mechanic analysis into one FFXIV Dalamud plugin.">
+  <meta name="description" content="Review FFXIV deaths, track damage with a customizable DPS meter, watch party cooldowns beside player names, and revisit captured pulls with Better Deaths.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Better Deaths - FFXIV Death Review and DPS Meter">
-  <meta property="og:description" content="Review deaths, track damage with a customizable DPS meter, revisit saved encounters, and replay captured pulls.">
+  <meta property="og:description" content="Review deaths, track damage, customize party cooldown icons, and replay captured pulls.">
   <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/">
   <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Better Deaths - FFXIV Death Review and DPS Meter">
-  <meta name="twitter:description" content="Death review, a customizable DPS meter, saved encounters, pull replay, and supported mechanic analysis in one Dalamud plugin.">
+  <meta name="twitter:description" content="Death review, a customizable DPS meter, party cooldowns, and pull replay in one Dalamud plugin.">
   <meta name="twitter:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
   <script type="application/ld+json">
   {
@@ -24,7 +24,7 @@
     "name": "Better Deaths",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows",
-    "description": "Better Deaths brings death review, a customizable DPS meter, saved encounters, mitigation checks, Death Replay, and supported Dancing Mad mechanic analysis into one FFXIV Dalamud plugin.",
+    "description": "Review FFXIV deaths, track damage with a customizable DPS meter, watch party cooldowns beside player names, and revisit captured pulls with Better Deaths.",
     "softwareRequirements": "Dalamud",
     "url": "https://nainaiowo.github.io/better-deaths/",
     "codeRepository": "https://github.com/Nainaiowo/better-deaths",
@@ -388,7 +388,7 @@
           <p class="eyebrow">FFXIV Dalamud plugin</p>
         </div>
         <h1>Better Deaths</h1>
-        <p class="lead">Review deaths and mitigation, track damage with a customizable DPS meter, revisit saved encounters, and replay captured pulls without leaving the game.</p>
+        <p class="lead">Review deaths and mitigation, track damage, keep party cooldowns beside player names, and replay captured pulls without leaving the game.</p>
         <div class="actions">
           <a class="button primary" href="#install">Install with Dalamud</a>
           <a class="button" href="help/">Help Center</a>
@@ -430,14 +430,25 @@
           <p>Select available mitigation and compare the projected damage against the recorded fatal hit before changing the next pull's plan.</p>
         </article>
         <article class="feature">
-          <h3><a href="help/widget.html">Death Widget</a></h3>
+          <h3><a href="help/widget.html">Death Window</a></h3>
           <p>Keep a compact current-pull death list open during progression, then open the latest recap directly when a closer review is needed.</p>
+        </article>
+        <article class="feature">
+          <h3><a href="help/cooldowns.html#party-cooldowns">Party Cooldowns</a></h3>
+          <p>Choose damage and defensive cooldowns per job, place their icons beside native party-list names, and customize each side's size and spacing with an out-of-combat preview.</p>
         </article>
         <article class="feature">
           <h3><a href="help/settings.html">Themes and Sharing</a></h3>
           <p>Match the plugin to your UI, redact names for screenshots, and share concise death information through optional in-game chat posts.</p>
         </article>
       </div>
+    </section>
+
+    <section class="wrap" id="hud">
+      <h2>Your HUD, your choices</h2>
+      <p class="muted">Open <code>/bd</code> and choose <strong>HUD</strong> for DPS Meter, Death Window, and Party Cooldowns. Each has its own settings and preview; wide and narrow layouts keep the controls accessible.</p>
+      <p class="muted"><a href="help/cooldowns.html#party-cooldowns">Party Cooldowns</a> is off until you enable it. Expand a role and job to choose up to 12 abilities, click + or drag to add, and drag to reorder. Left and right of name save separate layouts. A countdown shows the next charge; ? means the history is unknown. Grey choices explain unsupported recharge behavior.</p>
+      <p class="muted">Select <strong>Walkthrough</strong> in the plugin header for a guided tour using recorded data or redacted examples. Cooldown previews use sample timers, so you can arrange them outside combat.</p>
     </section>
 
     <section class="wrap" id="privacy">
@@ -509,7 +520,7 @@
     <section class="wrap" id="commands">
       <h2>Commands</h2>
       <p><code>/betterdeaths</code> <code>/bd</code> <code>/bdw</code> <code>/bdm</code> <code>/bdr</code></p>
-      <p class="muted"><code>/betterdeaths</code> and <code>/bd</code> open the main death recap window. <code>/bdw</code> toggles the Death Widget. <code>/bdm</code> toggles the DPS Meter widget without stopping capture or resetting the encounter.</p>
+      <p class="muted"><code>/betterdeaths</code> and <code>/bd</code> open the main death recap window. <code>/bdw</code> toggles the Death Window. <code>/bdm</code> toggles the DPS Meter widget without stopping capture or resetting the encounter.</p>
       <p class="muted"><code>/bdr</code> saves and resets the active DPS meter encounter in the overworld. Manual resets are unavailable inside duties; saved encounters are kept.</p>
     </section>
 

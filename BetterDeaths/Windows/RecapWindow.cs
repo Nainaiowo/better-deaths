@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.53";
+    private const string CurrentChangelogVersion = "1.0.0.61";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -824,6 +824,16 @@ public sealed partial class RecapWindow : Window, IDisposable
             pendingDeathSelection = null;
             clearPendingDeathSelection = false;
         }
+    }
+
+    public void OpenUpdates()
+    {
+        pendingDeathSelection = null;
+        guideActive = false;
+        guideDataSelectionPending = null;
+        guideDeathSelectionPending = null;
+        currentMainPage = MainPage.Updates;
+        IsOpen = true;
     }
 
     public bool FocusDeath(long deathSeenAtTicks, uint memberKeyHash)
@@ -19996,6 +20006,48 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
+        ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Party Cooldowns");
+        DrawHighlightedChangelogBullet("Added an optional cooldown tracker beside player names in the game's party list.");
+        DrawWrappedBullet("Choose up to 12 damage, burst, party buff, defensive, healing, and support cooldowns per job.");
+        DrawWrappedBullet("Abilities are organized into collapsible role and job lists. Click to add, drag to reorder, or remove individual choices.");
+        DrawWrappedBullet("Includes Salted Earth, Starry Muse, short damage cooldowns, healer recovery tools, shared or transformed abilities, and optional role stuns and interrupts. Unsupported conditional recharges are greyed out with an explanation.");
+        DrawWrappedBullet("Added Auto-collapse other jobs beside the visibility checkbox. Switching jobs closes other job and role sections; disable it to keep several expanded.");
+        DrawWrappedBullet("Place icons left or right of names, with sizes up to 72 px, adjustable spacing, and horizontal and vertical offsets. Each side saves its own settings.");
+        DrawHighlightedChangelogBullet("Added per-job custom layouts with up to three rows. Drag abilities between rows and choose where clicked additions go. Disabling custom rows remembers the arrangement.");
+        DrawHighlightedChangelogBullet("Added a non-scrolling party-frame preview with a job icon and HP/MP bars. The entire preview shrinks when needed to fit without changing live settings.");
+        DrawWrappedBullet("Countdown and charge numbers have black outlines for readability.");
+        DrawWrappedBullet("Unknown cooldown history displays ? instead of assuming an ability is ready.");
+        DrawWrappedBullet("Tempera Coat and Grassa apply confirmed shield-break reductions: 60 seconds for Coat and 30 for Grassa. Conversion, expiry, overwrite, and death do not count as shield breaks.");
+        DrawWrappedBullet("Cooldowns continue through ordinary combat endings and follow confirmed duty resets.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("HUD and UI");
+        DrawHighlightedChangelogBullet("Renamed Widgets to HUD, with separate DPS Meter, Death Window, and Party Cooldowns views.");
+        DrawWrappedBullet("Renamed Death Widget to Death Window, including its title, settings, and walkthrough.");
+        DrawWrappedBullet("Added visible borders and spacing from the window edge to the three HUD section buttons.");
+        DrawWrappedBullet("Reorganized settings and previews to accommodate wide and narrow windows.");
+        DrawWrappedBullet("Tidied visibility, Normal/Concise display, appearance controls, and previews for the DPS Meter and Death Window.");
+        DrawWrappedBullet("Background opacity sliders now display percentages.");
+        DrawWrappedBullet("Moved the DPS Meter disclaimer into a collapsible section.");
+        DrawWrappedBullet("Fixed missing icons on Help, Punish Discord, reset buttons, and replay death markers.");
+        DrawWrappedBullet("Replaced two-line drag handles with dotted grips.");
+        DrawWrappedBullet("Improved dragging for cooldown abilities and DPS Meter columns, including reliable placement at the end of a list.");
+        DrawWrappedBullet("Expanded the walkthrough with cooldown selection, layout, and preview steps that automatically open the relevant controls.");
+        DrawWrappedBullet("Added Party Cooldowns documentation to the website, Help Center, and GitHub page. Updated HUD and Death Window instructions.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Replay");
+        DrawHighlightedChangelogBullet("Party HP and Active Effects now remain in separate, independently resizable panels outside the arena. Compact layouts place them below the arena instead of covering it.");
+        DrawWrappedBullet("Added scrolling for overflowing HP, mitigation, and debuff lists. Split mode scrolls each effects list independently.");
+        DrawWrappedBullet("The +x more indicator counts entries below the visible area and disappears as they come into view.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Performance and Diagnostics");
+        DrawWrappedBullet("Reduced repeated party-data rebuilding and unnecessary updates to fully ready teammate cooldowns.");
+        DrawWrappedBullet("Reused display data and cached text measurements.");
+        DrawWrappedBullet("Added optional cooldown CPU-time and memory-allocation readings under Debug. Measurement is disabled by default.");
+
+        ImGui.Separator();
+
         ImGui.TextUnformatted("v1.0.0.53");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Walkthrough");

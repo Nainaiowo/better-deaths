@@ -32,14 +32,22 @@ public sealed partial class RecapWindow
         }
         var views = Enum.GetValues<HudSettingsView>();
         var preferredWidth = views.Max(view => GetThemedActionButtonWidth(GetHudViewLabel(view)));
-        var columns = HudLayoutPolicy.NavigationColumns(ImGui.GetContentRegionAvail().X, preferredWidth,
-            ImGui.GetStyle().ItemSpacing.X, views.Length);
-        var width = GetResponsiveSegmentWidth(columns, preferredWidth);
+        var navigation = HudLayoutPolicy.NavigationLayout(ImGui.GetContentRegionAvail().X, preferredWidth,
+            ImGui.GetStyle().ItemSpacing.X, views.Length, ModernWorkspaceHorizontalPadding);
+        var columns = navigation.Columns;
+        var width = navigation.ButtonWidth;
+        var left = ImGui.GetCursorPosX();
         var height = MathF.Max(24, ImGui.GetFrameHeight());
         for (var index = 0; index < views.Length; index++)
         {
             if (index % columns != 0)
                 ImGui.SameLine();
+            else
+                ImGui.SetCursorPosX(left + navigation.Inset);
+            var selected = hudSettingsView == views[index];
+            var border = selected ? GetButtonTextColor(ModernNavButtonSelectedColor, selected: true) : ModernMutedTextColor;
+            ImGui.PushStyleColor(ImGuiCol.Border, border with { W = .8f });
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1.0f);
             var fullLabel = GetHudViewLabel(views[index]);
             var label = GetThemedActionButtonWidth(fullLabel) <= width ? fullLabel : views[index] switch
             {
@@ -57,10 +65,12 @@ public sealed partial class RecapWindow
                     HudSettingsView.DeathWidget => FontAwesomeIcon.Skull,
                     _ => FontAwesomeIcon.Clock,
                 };
-                clicked = DrawSegmentedButton(icon.ToIconString(), $"HudSettings{views[index]}", hudSettingsView == views[index], width, height);
+                clicked = DrawSegmentedButton(icon.ToIconString(), $"HudSettings{views[index]}", selected, width, height);
             }
             else
-                clicked = DrawSegmentedButton(label, $"HudSettings{views[index]}", hudSettingsView == views[index], width, height);
+                clicked = DrawSegmentedButton(label, $"HudSettings{views[index]}", selected, width, height);
+            ImGui.PopStyleVar();
+            ImGui.PopStyleColor();
             if (ImGui.IsItemHovered())
                 SetThemedTooltip(fullLabel);
             if (clicked)

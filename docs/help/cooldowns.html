@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Party Cooldowns | Better Deaths Help</title>
+  <meta name="description" content="Configure party cooldown icons beside the FFXIV party list, choose abilities per job, and understand timers, charges, and limitations.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/cooldowns.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Party Cooldowns | Better Deaths Help">
+  <meta property="og:description" content="Configure party cooldown icons beside the FFXIV party list, choose abilities per job, and understand timers, charges, and limitations.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/cooldowns.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/help-review-lead-up.png">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span>
+        <strong>Better Deaths</strong>
+        <small>Help Center</small>
+      </span>
+    </a>
+
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Death Window</a>
+        <a href="meter.html#meter">DPS Meter</a>
+        <a href="cooldowns.html#party-cooldowns">Party Cooldowns</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="party-cooldowns" class="guide-section searchable" data-search-title="Party Cooldowns" data-search-keywords="hud party cooldown tracker enable native party list abilities jobs overlay">
+        <div class="section-heading">
+          <p class="eyebrow">HUD</p>
+          <h1 class="page-title">Keep party cooldowns beside player names</h1>
+          <p>Party Cooldowns adds optional ability icons alongside the game's own party list. Choose the damage, defensive, healing, and support cooldowns you want to see for each job.</p>
+        </div>
+        <div class="scope-note" role="note">
+          <strong>Off until you enable it</strong>
+          <span>Open <code>/bd</code>, choose <strong>HUD &gt; Party Cooldowns</strong>, and check <strong>Show party cooldowns</strong>. The preview works without enabling the live overlay or entering combat.</span>
+        </div>
+        <p>HUD also contains the <a href="widget.html#current-pull">Death Window</a> and <a href="meter.html#meter">DPS Meter</a>. Cooldown selections do not change What-if calculations, death capture, or damage recording.</p>
+        <p>For an in-game tour, select <strong>Walkthrough</strong> in the Better Deaths header. Its Party Cooldowns steps cover ability selection, layout, and reading the preview.</p>
+      </section>
+
+      <section id="cooldown-choices" class="guide-section searchable" data-search-title="Choose cooldowns by job" data-search-keywords="role tank healer melee ranged job class damage mitigation defensive burst salted earth living muse selected plus remove drag reorder reset custom rows row one two three">
+        <div class="section-heading">
+          <p class="eyebrow">Abilities by job</p>
+          <h2>Choose the abilities that matter to you</h2>
+          <p>Expand Tanks, Healers, Melee, or Ranged, then expand a job. Each job keeps its own ordered selection of up to 12 abilities; Ranged includes physical ranged and casters.</p>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Auto-collapse</strong><span>Auto-collapse other jobs sits beside Show party cooldowns and starts enabled. Focusing a job through its header or the preview dropdown closes the other job and role sections. Turn it off to keep several sections expanded. It does not change selected abilities, row layouts, or live cooldown timers.</span></div>
+          <div class="setting-row"><strong>Add</strong><span>Click an available tile's <strong>+</strong>, or drag it into Selected cooldowns. Available defensives and Available damage and support cooldowns are separate lists.</span></div>
+          <div class="setting-row"><strong>Reorder</strong><span>Drag a selected tile before or after another tile. The insertion marker shows where it will land; the open space after the final tile accepts an end-of-list drop.</span></div>
+          <div class="setting-row"><strong>Remove</strong><span>Click the selected tile's <strong>X</strong>. An empty selection intentionally hides that job's icons.</span></div>
+          <div class="setting-row"><strong>Custom rows</strong><span>Each expanded job has a Custom rows checkbox directly above Selected cooldowns. Enable it for separate row drop areas, then use the small <strong>+</strong> to add Row 2 and Row 3. Drag abilities between rows or into them from the available lists. Select a row's radio button to make it the destination for clicked ability <strong>+</strong> buttons. The limit remains 12 abilities total, with no duplicates.</span></div>
+          <div class="setting-row"><strong>Remember rows</strong><span>Turning Custom rows off puts the job's abilities on one row without forgetting its groups. Empty additional rows can be removed; Row 1 remains. Row assignments belong to the job and are shared between left and right placement.</span></div>
+          <div class="setting-row"><strong>Reset a job</strong><span>Reset PLD, Reset DRK, or the equivalent job button restores that job's default abilities and one-row layout. It does not reset live combat timers or either side's placement settings.</span></div>
+          <div class="setting-row"><strong>Grey choices</strong><span>Hover for the reason tracking is unavailable. These cannot be added to a selection; they are not a claim that the ability is currently on cooldown.</span></div>
+        </div>
+        <p>Choices include independent damage cooldowns such as Salted Earth, defensive and recovery tools, raid buffs, and casting support. Role stuns, interrupts, bind, and heavy are also available as optional defensive utility; a ready timer does not mean the enemy can be affected. Upgraded abilities use an eligible predecessor when level-synced. Shared or transformed executions update the corresponding cooldown, such as Finishing Move for Standard Step or creature Muses for Living Muse.</p>
+        <div class="caution-note" role="note">
+          <strong>A cooldown is not every button on the hotbar</strong>
+          <p>Routine shared-GCD attacks, resource-only spenders, and consumed follow-ups are not separate reusable cooldowns. For example, Tempera Grassa is tracked through Coat, rather than shown as an independently reusable one-second defensive. Limited-job selections do not verify which spells or familiar prerequisites a teammate has equipped.</p>
+        </div>
+      </section>
+
+      <section id="cooldown-layout" class="guide-section searchable" data-search-title="Party cooldown layout and preview" data-search-keywords="left right name position layout icon size spacing offset 72 pixels preview outside combat narrow window">
+        <div class="section-heading">
+          <p class="eyebrow">Layout</p>
+          <h2>Fit the icons around your party list</h2>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Position</strong><span>Choose Left of name or Right of name. Each side saves its own icon size, spacing, and horizontal and vertical offsets. Switching sides does not change per-job ability selections.</span></div>
+          <div class="setting-row"><strong>Icon size</strong><span>Choose 16-72 px before the native party-list scale is applied.</span></div>
+          <div class="setting-row"><strong>Spacing</strong><span>Choose 0-12 px between ability icons.</span></div>
+          <div class="setting-row"><strong>Offsets</strong><span>Move the icons horizontally or vertically by up to 300 px in either direction. The reset arrow restores only the selected side's offsets, keeping its size, spacing, and per-job abilities and custom rows.</span></div>
+          <div class="setting-row"><strong>Preview</strong><span>Choose a job to see a sample party frame with its job icon, name, HP/MP bars, and all selected cooldowns. The entire frame stays at full size when it fits and keeps shrinking as needed without scrolling. Preview: 75%, for example, describes only the preview scale; it does not change your saved size, spacing, rows, or offsets. Hover an ability for its name and recast.</span></div>
+        </div>
+        <p>Wide windows place the ability editor beside the preview and layout controls. Narrow windows stack the preview above the job lists and put layout controls under <strong>Layout (all jobs)</strong>. The walkthrough opens the relevant controls for its current step.</p>
+        <p>Custom rows extend downward from the name. Short rows align toward the name on either side. The preview shows the same row assignments as the live overlay; moving icons between rows does not reset their cooldowns.</p>
+        <p>The sample uses your party-list measurements and scale when the player's frame is available, or a standard layout otherwise. Names are placeholders, and HP/MP values and cooldown timers are examples rather than live party readings. Countdown and charge numbers have black outlines in both the preview and live tracker.</p>
+        <p>The overlay follows the native party-list rows and scale. It is not a replacement party list and does not attach icons to the separate alliance-party panels.</p>
+      </section>
+
+      <section id="cooldown-timers" class="guide-section searchable" data-search-title="Read party cooldown timers" data-search-keywords="ready dim countdown charges question mark unknown timer death wipe reset tempera coat grassa shield break">
+        <div class="section-heading">
+          <p class="eyebrow">Reading the display</p>
+          <h2>Separate cooldown time from active protection</h2>
+        </div>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Full-color icon</strong><span>A charge is known to be available. Abilities with available charges stay colored while another charge recharges.</span></div>
+          <div class="setting-row"><strong>Dim icon</strong><span>No charge is available and the ability is on cooldown.</span></div>
+          <div class="setting-row"><strong>Countdown</strong><span>Time remaining until the next charge. A small corner number shows available charges on charged abilities.</span></div>
+          <div class="setting-row"><strong>?</strong><span>Cooldown history is not known. The tracker does not treat missing history as proof that an ability is ready.</span></div>
+          <div class="setting-row"><strong>Combat ends</strong><span>Timers keep running through ordinary combat endings. Confirmed duty wipes and restarts reset them; pre-pull uses are retained through combat starting.</span></div>
+          <div class="setting-row"><strong>Tempera</strong><span>Coat starts its timer on captured use. A confirmed Coat shield break removes 60 seconds, and a confirmed Grassa break removes 30 seconds from Coat. Expiry, conversion, overwrite, and death do not count as shield breaks.</span></div>
+        </div>
+        <p>The icon reports cooldown availability, not whether its buff is active, whether the target is in range, or whether the player has enough MP, gauge, a required motif, or another prerequisite. Use the death timeline's recorded effects when checking protection on a hit.</p>
+      </section>
+
+      <section id="cooldown-limits" class="guide-section searchable" data-search-title="Party cooldown limitations and troubleshooting" data-search-keywords="missing icons blinking unavailable conditional infuriate mudra bloodletter overheated winged reprobation seraphism performance debug">
+        <div class="section-heading">
+          <p class="eyebrow">Capture and limits</p>
+          <h2>Know what the tracker can observe</h2>
+        </div>
+        <p>Your own cooldowns can use native game readings. Teammate timers use captured ability executions and level-aware recharge and charge rules. They cannot recover uses that your client never received; missing history can display <strong>?</strong>. Gear- or status-dependent recast modifiers can also affect remote timing.</p>
+        <p>Some abilities have additional recharge reductions or resets that are not supported yet. These remain greyed out with an explanation, including Infuriate, proc-driven Bard and Machinist recharge, Mudra, Seraphism-altered Emergency Tactics, Winged Reprobation, and familiar-reset abilities.</p>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>No live icons</strong><span>Check Show party cooldowns, a nonempty selection for the player's current job, and that the native party list is visible. PvP, cutscenes, and hidden game UI suppress the overlay. Preview icons alone do not enable it.</span></div>
+          <div class="setting-row"><strong>An icon is missing</strong><span>The ability may be above the player's synced level, have no eligible predecessor, or be intentionally excluded from the selection. Check the expanded job list and grey-choice tooltip.</span></div>
+          <div class="setting-row"><strong>History became unknown</strong><span>Enabling the tracker midway through combat, changing jobs or levels, or missing captured uses can make history uncertain. Turning the overlay off clears its live tracking history.</span></div>
+          <div class="setting-row"><strong>Performance readings</strong><span>Optional measurement is under Debug &gt; Party cooldown performance. It is off by default and reports CPU time and managed allocations, not a direct FPS measurement.</span></div>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="Adjacent help topics">
+        <a class="page-nav-link previous" href="meter.html#meter"><small>Previous</small><strong>DPS Meter</strong></a>
+        <a class="page-nav-link next" href="settings.html#options"><small>Next</small><strong>Options and customization</strong></a>
+      </nav>
+      <footer class="help-footer">
+        <div>
+          <img src="../assets/icon.png" alt="">
+          <span><strong>Better Deaths</strong><small>FFXIV duty death review</small></span>
+        </div>
+        <nav aria-label="Footer links">
+          <a href="index.html#start">Help home</a>
+          <a href="../">Project home</a>
+          <a href="https://github.com/Nainaiowo/better-deaths">Source</a>
+          <a href="https://github.com/Nainaiowo/better-deaths/issues">Report an issue</a>
+        </nav>
+      </footer>    </main>
+  </div>
+
+  <script src="help.js"></script>
+</body>
+</html>

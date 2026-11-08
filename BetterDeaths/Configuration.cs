@@ -284,6 +284,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public string LastAnnouncedUpdateNoticeKey { get; set; } = string.Empty;
 
+    public string LastRecordedPluginVersion { get; set; } = string.Empty;
+
     public string LastSeenChangelogVersion { get; set; } = string.Empty;
 
     public bool PuniRepositoryMigrationComplete { get; set; }

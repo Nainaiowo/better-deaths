@@ -591,7 +591,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public unsafe Plugin()
     {
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        var savedConfiguration = PluginInterface.GetPluginConfig() as Configuration;
+        Configuration = savedConfiguration ?? new Configuration();
         NormalizeUserConfiguration();
         LoadRecordedDamageEncounters();
         damageParsingModule.LiveSnapshotFailed = error => Log.Warning(error, "Could not refresh Better Deaths live meter.");
@@ -599,6 +600,7 @@ public sealed partial class Plugin : IDalamudPlugin
             QueueDamageMeterParsedDebug("PeriodicResolved", parsed);
         BeginLoadRecordedPullHistory();
         deathChatLinkPayload = ChatGui.AddChatLinkHandler(0, OnDeathChatLinkClick);
+        installedUpdateChatLinkPayload = ChatGui.AddChatLinkHandler(InstalledUpdateChatLinkHandlerId, OnInstalledUpdateChatLinkClick);
 
         recapWindow = new RecapWindow(this)
         {
@@ -719,11 +721,13 @@ public sealed partial class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenMainUi;
         BeginPuniRepositoryMigration();
+        InitializeInstalledUpdateNotice(savedConfiguration is not null);
     }
 
     public void Dispose()
     {
         disposing = true;
+        DisposeInstalledUpdateNotice();
         CaptureCurrentPullSnapshot("Plugin unloaded");
         EndDamageEncounter(DateTime.UtcNow, "Plugin unloaded");
         damageEncounterWork.Drain();
@@ -783,6 +787,7 @@ public sealed partial class Plugin : IDalamudPlugin
         actorControlHook?.Dispose();
         actionEffectHook?.Dispose();
         ChatGui.RemoveChatLinkHandler(0);
+        ChatGui.RemoveChatLinkHandler(InstalledUpdateChatLinkHandlerId);
         if (readyCheckCommandRegistered)
             CommandManager.RemoveHandler(ReadyCheckCommandName);
         CommandManager.RemoveHandler(DamageMeterResetCommandName);

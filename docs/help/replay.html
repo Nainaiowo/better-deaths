@@ -55,8 +55,9 @@
         <a href="review.html#what-if">What-if</a>
         <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
         <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
-        <a href="widget.html#current-pull">Death Widget</a>
+        <a href="widget.html#current-pull">Death Window</a>
         <a href="meter.html#meter">DPS Meter</a>
+        <a href="cooldowns.html#party-cooldowns">Party Cooldowns</a>
         <p class="nav-label">Setup</p>
         <a href="settings.html#options">Options</a>
         <a href="settings.html#customize">Customize</a>
@@ -87,11 +88,11 @@
           </article>
           <article>
             <h3>Party HP</h3>
-            <p><strong>Show HP</strong> opens the resizable Party HP window with job icon, name, HP percentage, and shields. The window updates with replay time.</p>
+            <p><strong>Show HP</strong> opens its own resizable Party HP panel outside the arena, separate from Active Effects. It shows job icon, name, HP percentage, and shields, synchronized with replay time.</p>
           </article>
           <article>
             <h3>Active Effects</h3>
-            <p>The resizable effects window can show Mitigations, Debuffs, or a split view. Timed effects count down and disappear when their captured duration ends.</p>
+            <p>The resizable effects panel can show Mitigations, Debuffs, or a split view. Lists scroll when they overflow; timed effects count down and disappear when their captured duration ends.</p>
           </article>
         </div>
 
@@ -128,11 +129,12 @@
         <h3 class="subheading">Party HP and Active Effects</h3>
         <div class="setting-table labeled">
           <div class="setting-row"><strong>Enough side space</strong><span>Party HP and Active Effects stack vertically beside the arena as separate, independently resizable panels.</span></div>
-          <div class="setting-row"><strong>Limited side space</strong><span>The panels move over the arena and share one resizable container by rows so neither view consumes the entire replay.</span></div>
+          <div class="setting-row"><strong>Limited side space</strong><span>The separate panels move below the arena. They never move inside it, and enabling Show HP does not combine them into an arena overlay.</span></div>
           <div class="setting-row"><strong>Party HP</strong><span>Shows job icon, redacted or captured name, HP percentage, shield percentage, and a synchronized HP/shield bar. Dead players show 0.</span></div>
           <div class="setting-row"><strong>Mits mode</strong><span>Shows active captured mitigation, its owner, remaining time, and related child effects when available.</span></div>
           <div class="setting-row"><strong>Debuffs mode</strong><span>Shows every active captured player debuff, stacks, owner, and remaining duration when one exists. Untimed debuffs disappear when the removal was captured.</span></div>
-          <div class="setting-row"><strong>Split mode</strong><span>Shows mitigations above debuffs. Drag the internal horizontal divider to change their share; the ratio is remembered.</span></div>
+          <div class="setting-row"><strong>Split mode</strong><span>Shows mitigations above debuffs, each with its own scroll area. Drag the internal horizontal divider to change their share; the ratio is remembered.</span></div>
+          <div class="setting-row"><strong>Overflow</strong><span>Scroll over an overflowing HP, mitigation, or debuff list to read the rest. +x more counts entries still below that list's visible area and disappears at the end. The global scrollbar setting hides the visual scrollbar only; wheel scrolling still works.</span></div>
         </div>
         <figure class="guide-figure">
           <img src="../assets/help-replay.png" alt="Better Deaths Replay showing playback controls, death markers, a Forsaken arena snapshot, and Active Effects in Split mode">

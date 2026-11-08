@@ -55,8 +55,9 @@
         <a href="review.html#what-if">What-if</a>
         <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
         <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
-        <a href="widget.html#current-pull">Death Widget</a>
+        <a href="widget.html#current-pull">Death Window</a>
         <a href="meter.html#meter">DPS Meter</a>
+        <a href="cooldowns.html#party-cooldowns">Party Cooldowns</a>
         <p class="nav-label">Setup</p>
         <a href="settings.html#options">Options</a>
         <a href="settings.html#customize">Customize</a>
@@ -97,8 +98,8 @@
             <p>Part of that event arrived in a different snapshot, so Better Deaths cannot safely combine the before-hit and after-hit HP into one bar. The arrow points toward the after-hit state and follows your Newest or Oldest timeline order.</p>
           </details>
           <details>
-            <summary>Party HP and Active Effects moved over the arena</summary>
-            <p>Replay changes layout when the window no longer has enough side space. The two panels share rows over the arena until more horizontal room is available, then return to separate, vertically stacked panels beside it.</p>
+            <summary>Party HP and Active Effects moved below the arena</summary>
+            <p>When side space is limited, the separate panels move below the arena instead of covering it. Scroll the Replay page to reach them. Each panel keeps its own size, and overflowing lists scroll independently; +x more disappears when the remaining entries are in view.</p>
           </details>
           <details>
             <summary>The arena or player position is slightly off</summary>
@@ -121,8 +122,12 @@
             <p>The pull did not contain the preferred mechanic timing marker. Better Deaths aligned the view using nearby recorded fight data instead, so treat exact timing and positions with more caution.</p>
           </details>
           <details>
-            <summary>The Death Widget is missing</summary>
-            <p>Enable it under <strong>Widgets → Death Widget</strong> or toggle it with <code>/bdw</code>. The widget is separate from the main Better Deaths window.</p>
+            <summary>The Death Window is missing</summary>
+            <p>Enable it under <strong>HUD → Death Window</strong> or toggle it with <code>/bdw</code>. The widget is separate from the main Better Deaths window.</p>
+          </details>
+          <details>
+            <summary>Party cooldown icons are missing or show ?</summary>
+            <p>Open <strong>HUD &gt; Party Cooldowns</strong>, check Show party cooldowns, and confirm the current job has selected abilities. The native party list must be visible. Preview icons use sample timers and do not enable the overlay. A ? means captured cooldown history is unknown. See <a href="cooldowns.html#cooldown-limits">Party Cooldowns troubleshooting</a> for capture and unsupported-ability limits.</p>
           </details>
         </div>
       </section>
@@ -134,7 +139,7 @@
         </div>
         <div class="command-list">
           <div><code>/betterdeaths</code><code>/bd</code><span>Open the main Better Deaths window.</span></div>
-          <div class="single-command"><code>/bdw</code><span>Toggle the Death Widget.</span></div>
+          <div class="single-command"><code>/bdw</code><span>Toggle the Death Window.</span></div>
           <div class="single-command"><code>/bdm</code><span>Toggle the DPS Meter widget without stopping capture or resetting the encounter.</span></div>
           <div class="single-command"><code>/bdr</code><span>Save and reset the active DPS meter encounter in the overworld. Unavailable inside duties; saved encounters are kept.</span></div>
         </div>

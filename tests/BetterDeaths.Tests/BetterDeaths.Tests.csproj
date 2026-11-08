@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Compile Include="../../BetterDeaths/CaptureTimingPolicy.cs" Link="CaptureTimingPolicy.cs" />
+    <Compile Include="../../BetterDeaths/InstalledUpdateNotice.cs" Link="InstalledUpdateNotice.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPlacements.cs" Link="PartyCooldowns/PartyCooldownPlacements.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownRows.cs" Link="PartyCooldowns/PartyCooldownRows.cs" />
