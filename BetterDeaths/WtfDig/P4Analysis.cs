@@ -25,7 +25,16 @@ internal sealed class P4WoundInfo
     public P4AntilightTier? Antilight { get; init; }
     public bool CaughtMiddle { get; init; }
     public bool Died { get; init; }
+    public bool FloodResolved { get; init; }
     public bool? Success { get; set; }
+
+    public string ResultLabel => !FloodResolved ? "Not resolved" : Success switch
+    {
+        true => "Correct",
+        false when CaughtMiddle => "Caught in middle",
+        false => "Wrong side",
+        _ => "No result captured",
+    };
 }
 
 internal sealed record P4DebuffTarget(
@@ -113,6 +122,12 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
     private const uint RealFakeDebuffId = 1002056;
     private const uint WhiteAntilightId = 50068;
     private const uint BlackAntilightId = 50069;
+    private const uint EdgeOfDeathId = 50070;
+    private const long AntilightMinimumHit = 600;
+    private const uint WhiteWound1Id = 1004887;
+    private const uint BlackWound1Id = 1004888;
+    private const uint WhiteWound2Id = 1005541;
+    private const uint BlackWound2Id = 1005542;
     private const uint CursedShriekId = 1005543;
     private const uint ForkedLightningId = 1005544;
     private const uint CompressedWaterId = 1005545;
@@ -163,7 +178,13 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
         var start = says.Timestamp - 3_000;
         var end = says.Timestamp + 110_000;
         var deathEnd = Math.Min(fight.EndTime, says.Timestamp + 200_000);
-        var woundKindById = new Dictionary<uint, string>();
+        var woundKindById = new Dictionary<uint, string>
+        {
+            [WhiteWound1Id] = "white",
+            [BlackWound1Id] = "black",
+            [WhiteWound2Id] = "white",
+            [BlackWound2Id] = "black",
+        };
         foreach (var ability in report.Abilities)
         {
             var kind = ability.Name switch
@@ -191,7 +212,7 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
         var friendlyIds = new[]
             {
                 CursedShriekId, ForkedLightningId, CompressedWaterId, AccelerationBombId,
-                WhiteAntilightId, BlackAntilightId,
+                WhiteAntilightId, BlackAntilightId, EdgeOfDeathId,
             }
             .Concat(woundKindById.Keys)
             .ToArray();
@@ -209,9 +230,12 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
         var bossCasts = boss.Where(entry => entry.Type == "cast").ToArray();
         var headmarkers = boss.Where(entry => entry.Type == "headmarker").ToArray();
         var realFakeEvents = boss.Where(entry => entry.AbilityGameID == RealFakeDebuffId).ToArray();
-        var debuffs = friendly.Where(entry => entry.Type == "applydebuff").ToArray();
+        var debuffs = friendly.Where(entry => entry.Type == "applydebuff" ||
+            entry.Type is "refreshdebuff" or "applydebuffstack" && entry.AbilityGameID is { } id &&
+            woundKindById.GetValueOrDefault(id) is "white" or "black").ToArray();
         var antilightEvents = friendly
-            .Where(entry => entry.Type is "damage" or "calculateddamage")
+            .Where(entry => entry.Type == "damage" && !entry.IsEstimated &&
+                entry.AbilityGameID is WhiteAntilightId or BlackAntilightId)
             .ToArray();
         var deaths = friendly.Where(entry => entry.Type == "death").ToArray();
         FflogsEvent[] Casts(uint id) => bossCasts.Where(entry => entry.AbilityGameID == id).OrderBy(entry => entry.Timestamp).ToArray();
@@ -247,72 +271,106 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
             return new KefkaCall(group[0].Timestamp, ice, lightning);
         }).ToArray();
 
-        var applies = realFakeEvents.Where(entry => entry.Type == "applydebuff").OrderBy(entry => entry.Timestamp).ToArray();
-        bool IsChaos(int? actorId) => report.Actors.FirstOrDefault(actor => actor.Id == actorId)?.Name
-            .Contains("chaos", StringComparison.OrdinalIgnoreCase) == true;
-        var neoExdeathRealFake = applies.Where(entry => !IsChaos(entry.TargetID)).Select(entry => RealFakeFromExtra(entry.ExtraInfo)).ToArray();
-        var chaosApplies = applies.Where(entry => IsChaos(entry.TargetID)).ToArray();
-        P4RealFake? RealFakeForCast(double? castTime)
+        var tells = realFakeEvents.Where(entry => entry.Type is "applydebuff" or "refreshdebuff" or "statussnapshot")
+            .OrderBy(entry => entry.Timestamp).ToArray();
+        P4RealFake? RealFakeForCast(FflogsEvent? cast, IReadOnlyList<FflogsEvent> sameBossCasts, bool chaos)
         {
-            if (castTime is not { } time || chaosApplies.Length == 0)
-            {
+            if (cast is null)
                 return null;
-            }
-
-            var before = chaosApplies.Where(entry => entry.Timestamp <= time + 1000).ToArray();
-            var pick = before.Length > 0
-                ? before[^1]
-                : chaosApplies.OrderBy(entry => Math.Abs(entry.Timestamp - time)).First();
-            return RealFakeFromExtra(pick.ExtraInfo);
+            // Status 2056 encodes Chaos as 1119/1120 and Neo Exdeath as 1121/1122 (fake/real).
+            bool MatchesRole(long? value) => chaos ? value is 1119 or 1120 : value is 1121 or 1122;
+            var roleActors = tells.Where(entry => entry.Timestamp <= cast.Timestamp && MatchesRole(entry.ExtraInfo) && entry.TargetID is not null)
+                .Select(entry => entry.TargetID!.Value).ToHashSet();
+            var previous = sameBossCasts.Where(entry => entry.Timestamp < cast.Timestamp)
+                .Select(entry => entry.Timestamp).DefaultIfEmpty(start).Max();
+            var before = tells.Where(entry => entry.Timestamp > previous && entry.Timestamp <= cast.Timestamp &&
+                entry.TargetID is { } actor && (roleActors.Contains(actor) || actor == cast.SourceID)).ToArray();
+            var exact = before.Where(entry => cast.SourceID is not null && entry.TargetID == cast.SourceID).ToArray();
+            // Local casts can come from helper actors. The encoded tell identifies the mechanic's boss role.
+            var pick = exact.LastOrDefault() ?? (before.Select(entry => entry.TargetID).Distinct().Count() == 1 ? before.LastOrDefault() : null);
+            return pick is not null && MatchesRole(pick.ExtraInfo) ? RealFakeFromExtra(pick.ExtraInfo) : null;
         }
 
-        var infernoRealFake = RealFakeForCast(infernos.FirstOrDefault()?.Timestamp);
-        var tsunamiRealFake = RealFakeForCast(tsunamis.FirstOrDefault()?.Timestamp);
-        var chaosCastList = infernos.Select(cast => new ChaosCast(cast.Timestamp, "Inferno"))
-            .Concat(tsunamis.Select(cast => new ChaosCast(cast.Timestamp, "Tsunami")))
+        var neoExdeathRealFake = grandCrosses.Select(cast => RealFakeForCast(cast, grandCrosses, false)).ToArray();
+        var chaosCasts = infernos.Concat(tsunamis).OrderBy(entry => entry.Timestamp).ToArray();
+        var infernoRealFake = RealFakeForCast(infernos.FirstOrDefault(), chaosCasts, true);
+        var tsunamiRealFake = RealFakeForCast(tsunamis.FirstOrDefault(), chaosCasts, true);
+        var chaosCastList = infernos.Select(cast => new ChaosCast(cast.Timestamp, "Inferno", cast))
+            .Concat(tsunamis.Select(cast => new ChaosCast(cast.Timestamp, "Tsunami", cast)))
+            .OrderBy(cast => cast.Time)
             .ToArray();
         var chaosByRound = grandCrosses.Select((grandCross, index) =>
         {
             var next = index + 1 < grandCrosses.Length ? grandCrosses[index + 1].Timestamp : double.PositiveInfinity;
             var cast = chaosCastList.FirstOrDefault(candidate => candidate.Time >= grandCross.Timestamp && candidate.Time < next);
-            return cast is null ? null : new ChaosRound(cast.Ability, RealFakeForCast(cast.Time));
+            return cast is null ? null : new ChaosRound(cast.Ability, RealFakeForCast(cast.Event, chaosCasts, true));
         }).ToArray();
-        var floodRealFake = neoExdeathRealFake.Length > grandCrosses.Length ? neoExdeathRealFake[^1] : null;
+        var floodSignal = bossCasts.Concat(friendly.Where(entry => entry.Type == "cast" || entry.Type == "damage" && !entry.IsEstimated))
+            .Where(entry => entry.AbilityGameID is FloodOfNaughtId or WhiteAntilightId or BlackAntilightId)
+            .OrderBy(entry => entry.Timestamp).FirstOrDefault();
+        var floodRealFake = RealFakeForCast(floodSignal, grandCrosses, false);
 
         var antilightByPlayer = new Dictionary<int, AntilightRecord>();
+        AntilightRecord AntilightFor(int actorId)
+        {
+            if (!antilightByPlayer.TryGetValue(actorId, out var record))
+                antilightByPlayer[actorId] = record = new();
+            return record;
+        }
         foreach (var entry in antilightEvents.Where(entry => entry.TargetID is not null))
         {
-            if (!antilightByPlayer.TryGetValue(entry.TargetID!.Value, out var record))
-            {
-                record = new AntilightRecord();
-                antilightByPlayer[entry.TargetID.Value] = record;
-            }
-
+            var record = AntilightFor(entry.TargetID!.Value);
             var amount = entry.Amount ?? 0;
             if (entry.AbilityGameID == WhiteAntilightId)
             {
                 record.White = Math.Max(record.White, amount);
+                record.HitWhite |= amount > AntilightMinimumHit;
             }
             else if (entry.AbilityGameID == BlackAntilightId)
             {
                 record.Black = Math.Max(record.Black, amount);
+                record.HitBlack |= amount > AntilightMinimumHit;
             }
         }
 
-        var killedByCategory = new Dictionary<int, string>();
-        var deathSeen = new HashSet<int>();
+        var floodDeaths = new HashSet<int>();
+        var middleDeaths = new HashSet<int>();
+        var confirmedFloodTimes = boss.Concat(friendly)
+            .Where(entry => !entry.IsEstimated && (entry.Type is "cast" or "damage") && IsFloodResolutionAction(entry.AbilityGameID))
+            .Select(entry => entry.Timestamp).ToList();
         foreach (var death in deaths)
         {
-            if (death.TargetID is not { } actorId || !deathSeen.Add(actorId) || death.KillingAbilityGameID is not { } abilityId)
+            if (death.TargetID is not { } actorId || death.KillingAbilityGameID is not { } abilityId)
             {
                 continue;
             }
 
-            if (categoryById.TryGetValue(abilityId, out var category))
+            if (abilityId == EdgeOfDeathId)
+                middleDeaths.Add(actorId);
+            if (abilityId == WhiteAntilightId)
+                AntilightFor(actorId).HitWhite = true;
+            if (abilityId == BlackAntilightId)
+                AntilightFor(actorId).HitBlack = true;
+            if (abilityId is WhiteAntilightId or BlackAntilightId or EdgeOfDeathId || categoryById.GetValueOrDefault(abilityId) == "flood")
             {
-                killedByCategory[actorId] = category;
+                floodDeaths.Add(actorId);
+                confirmedFloodTimes.Add(death.Timestamp);
             }
         }
+        bool IsWound(FflogsEvent entry) => entry.AbilityGameID is { } id && woundKindById.GetValueOrDefault(id) is "white" or "black";
+        var woundTransitions = debuffs.Where(entry => entry.TargetID is not null && IsWound(entry))
+            .GroupBy(entry => entry.TargetID).SelectMany(group =>
+            {
+                var first = group.OrderBy(entry => entry.Timestamp).First();
+                return group.Where(entry => entry.Timestamp > first.Timestamp && entry.AbilityGameID != first.AbilityGameID &&
+                    debuffs.Any(field => field.TargetID == entry.TargetID && field.Timestamp <= entry.Timestamp &&
+                        field.AbilityGameID is { } id && woundKindById.GetValueOrDefault(id) is "swap" or "keep"));
+            }).Select(entry => entry.Timestamp);
+        var floodResolvedAt = confirmedFloodTimes.Count > 0 ? confirmedFloodTimes.Min() :
+            woundTransitions.DefaultIfEmpty(double.PositiveInfinity).Min();
+        var floodResolved = double.IsFinite(floodResolvedAt) || bossCasts.Any(entry => !entry.IsEstimated &&
+            entry.AbilityGameID is ManaChargeId or ManaReleaseId);
+        var woundRemovals = friendly.Where(entry => entry.Type == "removedebuff" && IsWound(entry)).ToArray();
 
         var setTimes = grandCrosses.Select(cast => cast.Timestamp).ToArray();
         int SetOf(double time) => NearestIndex(setTimes, time);
@@ -352,6 +410,7 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
             var shortAccel = new List<P4DebuffTarget>();
             var longAccel = new List<P4DebuffTarget>();
             var woundByPlayer = new Dictionary<int, P4WoundInfo>();
+            var initialWoundByPlayer = new Dictionary<int, FflogsEvent>();
             P4WoundInfo? WoundInfo(int actorId)
             {
                 if (!playerById.TryGetValue(actorId, out var player))
@@ -372,8 +431,9 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
                     Name = player.Name,
                     Job = WtfDigAnalysisHelpers.JobInfo(player.SubType),
                     Antilight = maximum > 0 ? AntilightTier(maximum) : null,
-                    CaughtMiddle = antilight is not null && antilight.White > 600 && antilight.Black > 600,
-                    Died = killedByCategory.GetValueOrDefault(actorId) == "flood",
+                    CaughtMiddle = middleDeaths.Contains(actorId) || antilight is { HitWhite: true, HitBlack: true },
+                    Died = floodDeaths.Contains(actorId),
+                    FloodResolved = floodResolved,
                 };
                 woundByPlayer[actorId] = created;
                 return created;
@@ -410,12 +470,15 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
                     switch (kind)
                     {
                         case "white":
-                            wound.Wound ??= P4WoundColor.White;
-                            wound.FinalWound = P4WoundColor.White;
-                            break;
                         case "black":
-                            wound.Wound ??= P4WoundColor.Black;
-                            wound.FinalWound = P4WoundColor.Black;
+                            var color = kind == "white" ? P4WoundColor.White : P4WoundColor.Black;
+                            if (entry.Timestamp >= floodResolvedAt)
+                                wound.FinalWound = color;
+                            else
+                            {
+                                wound.Wound = color;
+                                initialWoundByPlayer[actorId] = entry;
+                            }
                             break;
                         case "swap":
                             wound.Field = P4WoundField.Swap;
@@ -430,14 +493,33 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
             var wounds = woundByPlayer.Values.OrderBy(RoleRank).ThenBy(wound => wound.Job.Abbreviation).ToArray();
             foreach (var wound in wounds)
             {
-                var expected = wound.Wound is null
-                    ? null
-                    : wound.Field == P4WoundField.Swap
-                        ? wound.Wound == P4WoundColor.White ? P4WoundColor.Black : P4WoundColor.White
-                        : wound.Wound;
+                if (floodResolved && wound.FinalWound is null && initialWoundByPlayer.TryGetValue(wound.ActorId, out var initial))
+                {
+                    var removal = woundRemovals.Where(entry => entry.TargetID == wound.ActorId &&
+                            entry.AbilityGameID == initial.AbilityGameID && entry.Timestamp >= initial.Timestamp)
+                        .OrderBy(entry => entry.Timestamp).FirstOrDefault();
+                    var expired = initial.Duration is > 0 && initial.Timestamp + initial.Duration <= floodResolvedAt;
+                    // An unchanged wound observed until after Flood is evidence too; a death clearing it is not.
+                    if (!expired && removal is not null && removal.Timestamp >= floodResolvedAt &&
+                        !deaths.Any(entry => entry.TargetID == wound.ActorId && entry.Timestamp >= initial.Timestamp && entry.Timestamp <= removal.Timestamp))
+                        wound.FinalWound = wound.Wound;
+                }
+                P4WoundColor? expected = wound.Field switch
+                {
+                    P4WoundField.Swap when wound.Wound is not null =>
+                        wound.Wound == P4WoundColor.White ? P4WoundColor.Black : P4WoundColor.White,
+                    P4WoundField.Keep => wound.Wound,
+                    _ => null,
+                };
+                antilightByPlayer.TryGetValue(wound.ActorId, out var antilight);
+                var hitWhite = antilight?.HitWhite == true;
+                var hitBlack = antilight?.HitBlack == true;
+                P4WoundColor? hitSide = hitWhite == hitBlack ? null : hitWhite ? P4WoundColor.White : P4WoundColor.Black;
+                // A lethal hit can prevent the wound reapplication. The confirmed hit still records the actual side.
+                wound.FinalWound = hitSide ?? wound.FinalWound;
                 wound.WrongSide = wound.FinalWound is not null && expected is not null && wound.FinalWound != expected;
-                var reached = wound.FinalWound is not null || wound.Antilight is not null;
-                wound.Success = reached ? !wound.CaughtMiddle && !wound.WrongSide : null;
+                wound.Success = !floodResolved ? null : wound.CaughtMiddle ? false :
+                    wound.FinalWound is not null && expected is not null ? !wound.WrongSide : null;
             }
 
             var hasMarks = water.Count > 0 || lightning.Count > 0;
@@ -725,10 +807,18 @@ internal sealed class P4Analyzer(IWtfDigEventSource client)
     }
     private static P4Analysis Empty(FflogsFight fight) => new(fight, null, [], null, null, []);
 
+    internal static bool IsFloodResolutionAction(uint? id) => id is FloodOfNaughtId or WhiteAntilightId or BlackAntilightId or EdgeOfDeathId;
+
     private sealed record KefkaCall(double Time, P4RealFake? Ice, P4RealFake? Lightning);
-    private sealed record ChaosCast(double Time, string Ability);
+    private sealed record ChaosCast(double Time, string Ability, FflogsEvent Event);
     private sealed record ChaosRound(string Ability, P4RealFake? Value);
-    private sealed class AntilightRecord { public long White { get; set; } public long Black { get; set; } }
+    private sealed class AntilightRecord
+    {
+        public long White { get; set; }
+        public long Black { get; set; }
+        public bool HitWhite { get; set; }
+        public bool HitBlack { get; set; }
+    }
     private sealed record SubCast(int Round, string Substep, double Time);
     private sealed record ResolutionTime(double Time, string Stage);
 }

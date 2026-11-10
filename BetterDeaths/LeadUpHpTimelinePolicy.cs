@@ -272,13 +272,15 @@ internal sealed class LeadUpHpTimelineState
         var resultSource = SelectLatestResult(first, second);
         return first with
         {
+            ConstituentEvents = CombatEventComponents.Expand(new[] { first, second }).ToArray(),
+            SourceEntityId = first.SourceEntityId == second.SourceEntityId ? first.SourceEntityId : 0,
             Amount = totalAmount > uint.MaxValue ? uint.MaxValue : (uint)totalAmount,
             Critical = first.Critical || second.Critical,
             DirectHit = first.DirectHit || second.DirectHit,
             Blocked = first.Blocked || second.Blocked,
             Parried = first.Parried || second.Parried,
             Statuses = MergeStatuses(first.Statuses, second.Statuses),
-            SourceStatuses = MergeStatuses(first.SourceStatuses, second.SourceStatuses),
+            SourceStatuses = first.SourceEntityId == second.SourceEntityId ? MergeStatuses(first.SourceStatuses, second.SourceStatuses) : [],
             ResultSeenAtUtc = resultSource?.ResultSeenAtUtc,
             ResultCurrentHp = resultSource?.ResultCurrentHp ?? 0,
             ResultShieldHp = resultSource?.ResultShieldHp ?? 0,

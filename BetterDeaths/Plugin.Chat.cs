@@ -215,20 +215,7 @@ public sealed partial class Plugin
 
     private static string FormatDeathStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
     {
-        var groups = new List<string>();
-        var defenses = GetPrimaryDisplayPlayerStatuses(death, selection)
-            .Where(IsDefensiveStatus)
-            .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(status => status.Id)
-            .ToList();
-        if (defenses.Count > 0)
-        {
-            groups.Add(FormatStatusList(defenses));
-        }
-
-        groups.AddRange(FormatBossMitigationGroups(selection));
-
-        return groups.Count == 0 ? "none captured" : string.Join(" | ", groups);
+        return DeathMitigationChatFormatter.ActiveMitigations(DeathMitigationResolver.For(death).Resolve());
     }
 
     private static string FormatPlayerDebuffStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
@@ -242,42 +229,9 @@ public sealed partial class Plugin
         return debuffs.Count == 0 ? "none captured" : FormatStatusList(debuffs);
     }
 
-    private static IReadOnlyList<StatusSnapshot> GetPrimaryDisplayStatusSnapshot(PartyDeathRecord death, DeathDisplaySelection selection)
-    {
-        return selection.Snapshot?.Statuses ??
-            GetPrimaryDisplayCauseEvent(selection.Events)?.Statuses ??
-            death.StatusesAtDeath;
-    }
-
     private static IReadOnlyList<StatusSnapshot> GetPrimaryDisplayPlayerStatuses(PartyDeathRecord death, DeathDisplaySelection selection)
     {
-        return GetRelevantDeathStatuses(
-            GetPrimaryDisplayStatusSnapshot(death, selection)
-                .Concat(selection.Events.SelectMany(combatEvent => combatEvent.Statuses)));
-    }
-
-    private static IReadOnlyList<string> FormatBossMitigationGroups(DeathDisplaySelection selection)
-    {
-        return selection.Events
-            .SelectMany(combatEvent => combatEvent.SourceStatuses
-                .Where(IsBossMitigationStatus)
-                .Select(status => new { combatEvent.SourceName, Status = status }))
-            .GroupBy(entry => entry.SourceName, StringComparer.OrdinalIgnoreCase)
-            .Select(group =>
-            {
-                var statuses = group
-                    .Select(entry => entry.Status)
-                    .GroupBy(status => status.Id)
-                    .Select(statusGroup => statusGroup.OrderBy(status => status.RemainingTime).First())
-                    .OrderBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(status => status.Id)
-                    .ToList();
-
-                return statuses.Count == 0 ? null : $"{group.Key}: {FormatStatusList(statuses)}";
-            })
-            .Where(groupText => groupText is not null)
-            .Select(groupText => groupText!)
-            .ToList();
+        return GetRelevantDeathStatuses(DeathMitigationResolver.For(death).Resolve().PlayerStatuses);
     }
 
     public static uint GetMemberKeyHash(string memberKey)

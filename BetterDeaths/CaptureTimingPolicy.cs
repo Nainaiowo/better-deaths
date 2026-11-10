@@ -56,6 +56,9 @@ internal static class CaptureTimingPolicy
                 postCombatGrace);
     }
 
+    public static bool ShouldCaptureReviewStatusHistory(bool isDutyCaptureActive, bool isPvPCaptureBlocked, bool captureEnabled) =>
+        isDutyCaptureActive && !isPvPCaptureBlocked && captureEnabled;
+
     public static bool ShouldAcceptDamageParserPackets(
         bool isDutyCaptureActive,
         bool isPvPCaptureBlocked,

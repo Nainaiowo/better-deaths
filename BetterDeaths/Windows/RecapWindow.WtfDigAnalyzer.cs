@@ -1419,15 +1419,11 @@ public sealed partial class RecapWindow
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(FormatP4Wound(wound.FinalWound));
             ImGui.TableNextColumn();
-            var label = wound.Success switch
-            {
-                true => "Correct",
-                false when wound.CaughtMiddle => "Caught in middle",
-                false => "Wrong side",
-                _ => "Unknown",
-            };
+            var label = wound.ResultLabel;
+            ImGui.PushTextWrapPos(0.0f);
             ImGui.TextColored(wound.Success == true ? HealColor : wound.Success == false ? DamageColor : ModernMutedTextColor,
                 wound.Died ? $"{label} | died" : label);
+            ImGui.PopTextWrapPos();
         }
 
         ImGui.EndTable();

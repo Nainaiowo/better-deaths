@@ -1044,7 +1044,9 @@ public sealed partial class Plugin
                 droppedStatusTimingUpdates = 0;
             }
         }
-        // Only the damage parser changes ordering; review keeps its existing resolution passes.
+        // Record status evidence from this receive batch before any pass can freeze a death record.
+        CaptureReviewStatusHistory(actionPackets, effectResultPackets, actorControlPackets, statusTimingUpdates);
+        // Death detection keeps its existing resolution passes; damage parsing retains receive order.
         var damagePackets = new List<(long CaptureOrder, object Packet)>();
         damagePackets.AddRange(actionPackets.Where(packet => packet.CaptureForDamageParsing)
             .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
@@ -1052,7 +1054,8 @@ public sealed partial class Plugin
             .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         damagePackets.AddRange(actorControlPackets.Where(packet => packet.CaptureForDamageParsing)
             .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
-        damagePackets.AddRange(statusTimingUpdates.Select(packet => (packet.DamageCaptureOrder, (object)packet)));
+        damagePackets.AddRange(statusTimingUpdates.Where(packet => packet.CaptureForDamageParsing)
+            .Select(packet => (packet.DamageCaptureOrder, (object)packet)));
         foreach (var entry in damagePackets.OrderBy(entry => entry.CaptureOrder))
         {
             switch (entry.Packet)
@@ -1105,6 +1108,7 @@ public sealed partial class Plugin
                 ResolveRawActorControlPacket(packet);
             }
         }
+        RefreshRecentPossibleMitigations();
     }
 
     private List<RawActionEffectPacket> DrainRawActionEffectPackets(DateTime now)

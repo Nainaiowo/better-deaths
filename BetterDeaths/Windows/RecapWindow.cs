@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.61";
+    private const string CurrentChangelogVersion = "1.0.0.62";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -525,7 +525,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private readonly record struct StatusDisplayKey(uint Id, uint IconId, uint SourceId, string Name);
 
-    private sealed record BossStatusDisplayEntry(StatusSnapshot Status, string SourceName);
+    private sealed record BossStatusDisplayEntry(StatusSnapshot Status, string SourceName, uint EntityId = 0);
 
     private sealed record LeadUpSummaryRow(
         DateTime AnchorSeenAtUtc,
@@ -533,7 +533,10 @@ public sealed partial class RecapWindow : Window, IDisposable
         HpHistorySnapshot HpSnapshot,
         IReadOnlyList<CombatEventRecord> Events,
         IReadOnlyList<StatusSnapshot> SourceStatuses,
-        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> SourceStatusNames);
+        IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> SourceStatusNames)
+    {
+        public DeathMitigationContext Mitigations { get; init; } = DeathMitigationContext.Empty;
+    }
 
     private sealed record ResolvedDeathDisplay(
         uint TerritoryId,
@@ -583,15 +586,6 @@ public sealed partial class RecapWindow : Window, IDisposable
         string CompactText,
         Vector4 Color,
         string TooltipLine);
-
-    private sealed record MitigationTotalDisplay(
-        double AllReduction,
-        double PhysicalReduction,
-        double MagicReduction,
-        bool HasTypedReduction,
-        bool AllVariable,
-        bool PhysicalVariable,
-        bool MagicVariable);
 
     private sealed record ReviewPull(
         string Key,
@@ -1964,9 +1958,10 @@ public sealed partial class RecapWindow : Window, IDisposable
             replayFrame.MechanicStates,
             worldMarkers,
             replayFrame.WorldMarkerStates,
-            mitigations,
+            pull.ReplayStatusHistoryCaptured ? ReplayMitigationTimeline.For(pull).At(selectedAtUtc, scrubSeconds) : mitigations,
             debuffs,
             pull.ReplayDebuffsCaptured,
+            pull.ReplayStatusHistoryCaptured,
             scrubSeconds,
             selectedAtUtc,
             idSuffix,
@@ -6160,12 +6155,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private IReadOnlyList<WidgetMitStatus> GetWidgetMitStatuses(PartyDeathRecord death, DeathDisplaySelection selection)
     {
+        var context = DeathMitigationResolver.For(death).Resolve();
         var playerStatuses = plugin
-            .GetRelevantPlayerStatusesForDisplay(selection.Snapshot?.Statuses ?? death.StatusesAtDeath)
+            .GetRelevantPlayerStatusesForDisplay(context.PlayerStatuses)
             .Select(status => new WidgetMitStatus(status, "Player", string.Empty));
-        var bossStatuses = selection.Events
-            .SelectMany(combatEvent => Plugin.GetBossMitigationStatusesForDisplay(GetEventSourceMitigationStatuses(death, combatEvent))
-                .Select(status => new WidgetMitStatus(status, "Boss", combatEvent.SourceName)));
+        var bossStatuses = context.BossStatuses.Where(value => Plugin.IsBossMitigationStatus(value.Status))
+            .Select(value => new WidgetMitStatus(value.Status, "Boss", value.Name));
 
         return playerStatuses
             .Concat(bossStatuses)
@@ -6528,12 +6523,19 @@ public sealed partial class RecapWindow : Window, IDisposable
         var leadUpEvents = GetLeadUpEvents(death, GetLeadUpDisplaySeconds());
         var timelineRows = GetLeadUpTimelineRows(death, GetLeadUpDisplayAnchorSeenAtUtc(death), leadUpEvents);
         var summaryRow = GetLeadUpSummaryRow(death, selection, leadUpEvents, timelineRows);
-        var summaryMitigationDebuffStatuses = summaryRow is not null
-            ? GetLeadUpSummaryMitigationDebuffStatuses(summaryRow, out _)
-            : GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
-        var summaryMitigationDebuffStatusSources = summaryRow?.SourceStatusNames ??
-            GetEventSourceMitigationStatusSourceNames(death, selection.Events, leadUpEvents);
-        var selectedMitigationDebuffStatuses = GetSelectedMitigationDebuffStatuses(death, selection, leadUpEvents);
+        var context = DeathMitigationResolver.For(death).Resolve();
+        var summaryMitigationDebuffStatuses = GetCombinedMitigationDebuffStatuses(context.PlayerStatuses,
+            context.BossStatuses.Select(value => value.Status), out _);
+        var summaryMitigationDebuffStatusSources = BuildBossStatusSourceNames(context.BossStatuses
+            .Select(value => new BossStatusDisplayEntry(value.Status, value.Name, value.EntityId)));
+        if (summaryRow is not null)
+            summaryRow = summaryRow with
+            {
+                Mitigations = context,
+                SourceStatuses = context.BossStatuses.Select(value => value.Status).ToArray(),
+                SourceStatusNames = summaryMitigationDebuffStatusSources,
+            };
+        var selectedMitigationDebuffStatuses = summaryMitigationDebuffStatuses;
 
         return new ResolvedDeathDisplay(
             territoryId,
@@ -7629,7 +7631,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawMitigationTotal(activeStatuses);
         ImGui.Separator();
 
-        DrawLeadUpLabelWithInlineMutedText("Available mitigation", "Shows all available abilities at the time.");
+        DrawLeadUpLabelWithInlineMutedText("Available mitigation", "Includes late uses retained for simulation.");
         DrawWhatIfChatControls(
             death,
             idSuffix,
@@ -7833,7 +7835,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private string FormatPossibleMitigationChatOption(PossibleMitigationSnapshot option)
     {
-        return $"{option.ActionName} ({option.ClassJobName})";
+        return MitigationReviewPresentation.ChatOption(option);
     }
 
     private static string? BuildWhatIfOutcomeChatLine(
@@ -7847,10 +7849,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             return null;
         }
 
-        var selectedStatuses = selectedOptions
-            .SelectMany(option => option.Statuses)
-            .ToList();
-        var potentialDamage = CalculateDamageWithAdditionalMitigation(damageEvents, selectedStatuses);
+        var potentialDamage = WhatIfMitigationRules.DamageWithOptions(damageEvents, selectedOptions);
         var preventedDamage = observedDamage.Value > potentialDamage
             ? observedDamage.Value - potentialDamage
             : 0UL;
@@ -7899,7 +7898,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         return death.PossibleMitigations
             .Where(option => option.Statuses.Any(HasCalculableMitigationPercent))
-            .Where(option => !option.Statuses.Any(status => StatusAlreadyActive(status, activeStatuses)))
+            .Where(option => option.SimulationHits.Count > 0 || !PossibleMitigationTimingPolicy.IsAlreadyActive(option, activeStatuses))
             .OrderBy(option => GetPossibleMitigationRoleOrder(option.ClassJobId))
             .ThenBy(option => GetPossibleMitigationClassOrder(option.ClassJobId))
             .ThenBy(option => option.PartyIndex)
@@ -7998,7 +7997,9 @@ public sealed partial class RecapWindow : Window, IDisposable
             ImGui.SetCursorScreenPos(new Vector2(
                 rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing,
                 contentY));
-            DrawIconTextWrapped(option.ActionIconId, iconSize, option.ActionName, abilityLabel, abilityColumnWidth);
+            DrawIconTextWrapped(option.ActionIconId, iconSize,
+                option.WasUsedTooLate ? MitigationReviewPresentation.LateUseTooltip : option.ActionName,
+                abilityLabel, abilityColumnWidth, textColor: option.WasUsedTooLate ? OverkillColor : null);
 
             ImGui.SetCursorScreenPos(new Vector2(
                 rowStart.X + FocusedDataRowPaddingX + checkboxColumnWidth + spacing + abilityColumnWidth + spacing,
@@ -8034,9 +8035,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawIconTextWrapped(
             option.ActionIconId,
             iconSize,
-            option.ActionName,
+            option.WasUsedTooLate ? MitigationReviewPresentation.LateUseTooltip : option.ActionName,
             FormatPossibleMitigationAbilityLabel(option.ActionName),
-            MathF.Max(24.0f, width));
+            MathF.Max(24.0f, width), textColor: option.WasUsedTooLate ? OverkillColor : null);
     }
 
     private static string FormatPossibleMitigationAbilityLabel(string actionName)
@@ -8216,7 +8217,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             .SelectMany(option => option.Statuses)
             .ToList();
         var combinedStatuses = WhatIfMitigationRules.DeduplicateStatuses(activeStatuses.Concat(selectedStatuses));
-        var potentialDamage = CalculateDamageWithAdditionalMitigation(damageEvents, selectedStatuses);
+        var potentialDamage = WhatIfMitigationRules.DamageWithOptions(damageEvents, selectedOptions);
         var preventedDamage = observedDamage.Value > potentialDamage
             ? observedDamage.Value - potentialDamage
             : 0UL;
@@ -8240,76 +8241,16 @@ public sealed partial class RecapWindow : Window, IDisposable
             }
         }
 
-        DrawMitigationTotal(combinedStatuses);
+        if (WhatIfMitigationRules.HasMixedSourceCoverage(damageEvents, selectedOptions))
+            DrawLeadUpLabelWithInlineMutedText("Mit total:", "Varies by hit");
+        else
+            DrawMitigationTotal(combinedStatuses);
         ImGui.Dummy(new Vector2(0.0f, ImGui.GetStyle().ItemSpacing.Y * 1.5f));
-    }
-
-    private static ulong CalculateDamageWithAdditionalMitigation(
-        IReadOnlyList<CombatEventRecord> damageEvents,
-        IReadOnlyList<StatusSnapshot> selectedStatuses)
-    {
-        var deduplicatedStatuses = WhatIfMitigationRules.DeduplicateStatuses(selectedStatuses);
-        var total = 0UL;
-        foreach (var damageEvent in damageEvents)
-        {
-            total += ApplyAdditionalMitigation(damageEvent.Amount, damageEvent.DamageType, deduplicatedStatuses);
-        }
-
-        return total;
-    }
-
-    private static ulong ApplyAdditionalMitigation(
-        uint amount,
-        DamageType damageType,
-        IReadOnlyList<StatusSnapshot> selectedStatuses)
-    {
-        var remaining = 1.0;
-        foreach (var status in selectedStatuses)
-        {
-            foreach (var part in Plugin.GetMitigationDisplayInfo(status).MitigationPercents)
-            {
-                if (part.Percent <= 0.0f || !MitigationPartAppliesToDamageType(part.Scope, damageType))
-                {
-                    continue;
-                }
-
-                remaining *= 1.0 - (Math.Clamp(part.Percent, 0.0f, 100.0f) / 100.0);
-            }
-        }
-
-        return (ulong)Math.Ceiling(amount * remaining);
-    }
-
-    private static bool MitigationPartAppliesToDamageType(Plugin.MitigationPercentScope scope, DamageType damageType)
-    {
-        return scope switch
-        {
-            Plugin.MitigationPercentScope.Physical => IsPhysicalDamageType(damageType),
-            Plugin.MitigationPercentScope.Magic => IsMagicDamageType(damageType),
-            _ => true,
-        };
-    }
-
-    private static bool IsPhysicalDamageType(DamageType damageType)
-    {
-        return damageType is DamageType.Slashing or DamageType.Piercing or DamageType.Blunt or DamageType.Shot or DamageType.Physical;
-    }
-
-    private static bool IsMagicDamageType(DamageType damageType)
-    {
-        return damageType is DamageType.Magic or DamageType.Breath;
     }
 
     private static bool HasCalculableMitigationPercent(StatusSnapshot status)
     {
         return Plugin.GetMitigationDisplayInfo(status).MitigationPercents.Count > 0;
-    }
-
-    private static bool StatusAlreadyActive(StatusSnapshot status, IReadOnlyList<StatusSnapshot> activeStatuses)
-    {
-        return activeStatuses.Any(activeStatus =>
-            status.Id != 0 && activeStatus.Id == status.Id ||
-            string.Equals(activeStatus.Name, status.Name, StringComparison.OrdinalIgnoreCase));
     }
 
     private void SetPossibleMitigationSelected(
@@ -10390,6 +10331,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayMitigationSnapshot> mitigations,
         IReadOnlyList<ReplayDebuffSnapshot> debuffs,
         bool debuffHistoryCaptured,
+        bool mitigationHistoryCaptured,
         float scrubSeconds,
         DateTime selectedAtUtc,
         string idSuffix,
@@ -10403,7 +10345,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         var partyHpEntries = BuildReplayPartyHpEntries(actorStates);
         var mitigationOverlayEntries = BuildReplayMitigationOverlayEntries(mitigations, scrubSeconds);
         var debuffOverlayEntries = ReplayDebuffTimeline.GetActiveStates(debuffs, scrubSeconds);
-        var showActiveEffectsPanel = mitigations.Count > 0 || debuffs.Count > 0;
+        var showActiveEffectsPanel = mitigationHistoryCaptured || mitigations.Count > 0 || debuffs.Count > 0;
         var hasReplayStatusEntries = partyHpEntries.Count > 0 || showActiveEffectsPanel;
         var canUseExternalMitigationPanel = TryGetReplayExternalStatusPanelLayout(
             availableWidth,
@@ -10945,9 +10887,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         return mitigations
             .Select(snapshot => new ReplayMitigationOverlayEntry(
                 snapshot,
-                (snapshot.PullElapsedSeconds + Math.Max(0.05f, snapshot.DurationSeconds)) - scrubSeconds,
+                ReplayMitigationTimeline.RemainingSeconds(snapshot, scrubSeconds),
                 BuildReplayMitigationChildText(snapshot)))
-            .Where(entry => entry.RemainingSeconds > 0.05f && entry.Snapshot.PullElapsedSeconds <= scrubSeconds + 0.001f)
+            .Where(entry => (entry.Snapshot.ObservedEffect || entry.RemainingSeconds > 0.05f) && entry.Snapshot.PullElapsedSeconds <= scrubSeconds + 0.001f)
             .OrderBy(entry => entry.RemainingSeconds)
             .ThenBy(entry => entry.Snapshot.PartyIndex)
             .ThenBy(entry => entry.Snapshot.MemberName, StringComparer.OrdinalIgnoreCase)
@@ -10957,6 +10899,8 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static string BuildReplayMitigationChildText(ReplayMitigationSnapshot snapshot)
     {
+        if (snapshot.ObservedEffect)
+            return snapshot.TargetMemberNames.Count > 1 ? $"{snapshot.TargetMemberNames.Count} affected" : string.Empty;
         var parts = new List<string>();
         foreach (var status in snapshot.Statuses)
         {
@@ -12416,7 +12360,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         alpha = Math.Clamp(alpha, 0.0f, 1.0f);
         var iconSize = ReplayMitigationOverlayIconSize;
         var textX = x + iconSize + 7.0f;
-        var timerText = $"{FormatStatusDurationNumber(entry.RemainingSeconds, true)}s";
+        var timerText = entry.Snapshot.ObservedEffect && entry.RemainingSeconds <= 0 ? "?" : $"{FormatStatusDurationNumber(entry.RemainingSeconds, true)}s";
         var timerSize = ImGui.CalcTextSize(timerText);
         var labelMaxWidth = MathF.Max(24.0f, width - iconSize - 12.0f - timerSize.X);
         var mainText = $"{FormatKnownPlayerName(entry.Snapshot.MemberName)} > {FormatPossibleMitigationAbilityLabel(entry.Snapshot.ActionName)}";
@@ -12424,6 +12368,10 @@ public sealed partial class RecapWindow : Window, IDisposable
         var iconTooltip = string.IsNullOrWhiteSpace(entry.ChildText)
             ? entry.Snapshot.ActionName
             : $"{entry.Snapshot.ActionName}\n{entry.ChildText}";
+        iconTooltip += entry.Snapshot.ObservedEffect
+            ? "\nObserved effect. Affected: " + string.Join(", ", entry.Snapshot.TargetMemberNames.Select(name =>
+                entry.Snapshot.Scope == PossibleMitigationScope.Boss ? name : FormatKnownPlayerName(name)))
+            : "\nLegacy recording: duration estimated from ability use; actual recipients were not recorded.";
 
         ImGui.SetCursorScreenPos(new Vector2(x, y));
         ImGui.PushStyleVar(ImGuiStyleVar.Alpha, alpha);
@@ -14672,8 +14620,8 @@ public sealed partial class RecapWindow : Window, IDisposable
                 displayHp.CurrentHp,
                 displayHp.ShieldHp,
                 displayHp.MaxHp,
-                combatEvent.Statuses,
-                GetNearbyHpHistoryStatuses(history, combatEvent.SeenAtUtc),
+                DeathMitigationResolver.For(death).PlayerForHit(combatEvent),
+                [],
                 eventSourceStatuses,
                 eventSourceStatusNames,
                 combatEvent,
@@ -14946,32 +14894,6 @@ public sealed partial class RecapWindow : Window, IDisposable
         return CombatEventHasResultHp(combatEvent) &&
             combatEvent.ResultCurrentHp == 0 &&
             combatEvent.ResultShieldHp == 0;
-    }
-
-    private static IReadOnlyList<StatusSnapshot> GetNearbyHpHistoryStatuses(
-        IReadOnlyList<HpHistorySnapshot> history,
-        DateTime seenAtUtc)
-    {
-        var statuses = new List<StatusSnapshot>();
-        var priorSnapshot = history
-            .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
-            .OrderByDescending(snapshot => snapshot.SeenAtUtc)
-            .FirstOrDefault();
-        if (priorSnapshot is not null && seenAtUtc - priorSnapshot.SeenAtUtc <= LeadUpStatusMergeWindow)
-        {
-            statuses.AddRange(priorSnapshot.Statuses);
-        }
-
-        var nextSnapshot = history
-            .Where(snapshot => snapshot.SeenAtUtc > seenAtUtc)
-            .OrderBy(snapshot => snapshot.SeenAtUtc)
-            .FirstOrDefault();
-        if (nextSnapshot is not null && nextSnapshot.SeenAtUtc - seenAtUtc <= LeadUpStatusMergeWindow)
-        {
-            statuses.AddRange(nextSnapshot.Statuses);
-        }
-
-        return statuses;
     }
 
     private void DrawTimelineEventCell(CombatEventRecord? combatEvent)
@@ -15270,11 +15192,11 @@ public sealed partial class RecapWindow : Window, IDisposable
             MathF.Max(0, types.Count - 1) * lineGap;
     }
 
-    private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo)
+    private static void DrawMitigationPercentCell(Plugin.MitigationDisplayInfo displayInfo, bool emphasize = false)
     {
         if (displayInfo.MitigationPercents.Count == 0)
         {
-            DrawCenteredText("-", DisabledColor);
+            DrawCenteredText("-", DisabledColor, emphasize);
             return;
         }
 
@@ -15283,7 +15205,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         {
             foreach (var part in displayInfo.MitigationPercents)
             {
-                DrawMitigationPercentLine(part, iconSize, displayInfo);
+                DrawMitigationPercentLine(part, iconSize, displayInfo, emphasize);
             }
 
             return;
@@ -15295,28 +15217,30 @@ public sealed partial class RecapWindow : Window, IDisposable
         CenterNextItem(groupWidth);
 
         ImGui.BeginGroup();
-        DrawMitigationPercentPart(percentPart, iconSize, displayInfo);
+        DrawMitigationPercentPart(percentPart, iconSize, displayInfo, emphasize);
         ImGui.EndGroup();
     }
 
     private static void DrawMitigationPercentLine(
         Plugin.MitigationPercentDisplay part,
         float iconSize,
-        Plugin.MitigationDisplayInfo displayInfo)
+        Plugin.MitigationDisplayInfo displayInfo,
+        bool emphasize = false)
     {
         var spacing = ImGui.GetStyle().ItemSpacing.X;
         var lineWidth = (part.IconId == 0 ? 0.0f : iconSize + spacing) + ImGui.CalcTextSize(part.Text).X;
         CenterNextItem(lineWidth);
 
         ImGui.BeginGroup();
-        DrawMitigationPercentPart(part, iconSize, displayInfo);
+        DrawMitigationPercentPart(part, iconSize, displayInfo, emphasize);
         ImGui.EndGroup();
     }
 
     private static void DrawMitigationPercentPart(
         Plugin.MitigationPercentDisplay part,
         float iconSize,
-        Plugin.MitigationDisplayInfo displayInfo)
+        Plugin.MitigationDisplayInfo displayInfo,
+        bool emphasize = false)
     {
         var tooltip = CombineTooltips(part.Tooltip, displayInfo.HasVariableMitigationPercent ? displayInfo.MitigationPercentTooltip : null);
         if (part.IconId != 0)
@@ -15325,7 +15249,11 @@ public sealed partial class RecapWindow : Window, IDisposable
             ImGui.SameLine();
         }
 
-        if (displayInfo.HasVariableMitigationPercent)
+        if (emphasize)
+        {
+            DrawEmphasizedMitigationText(part.Text);
+        }
+        else if (displayInfo.HasVariableMitigationPercent)
         {
             ImGui.TextColored(GetBreathingGoldColor(), part.Text);
         }
@@ -15353,7 +15281,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawMitigationTotal(IReadOnlyList<StatusSnapshot> statuses)
     {
-        var total = CalculateMitigationTotal(statuses);
+        var total = WhatIfMitigationRules.CalculateTotal(statuses);
         if (total is null)
         {
             return;
@@ -15411,66 +15339,6 @@ public sealed partial class RecapWindow : Window, IDisposable
         SetThemedTooltip("Calculated Multiplicatively.");
     }
 
-    private static MitigationTotalDisplay? CalculateMitigationTotal(IReadOnlyList<StatusSnapshot> statuses)
-    {
-        var allRemaining = 1.0;
-        var physicalRemaining = 1.0;
-        var magicRemaining = 1.0;
-        var hasAnyReduction = false;
-        var hasPhysicalReduction = false;
-        var hasMagicReduction = false;
-        var allVariable = false;
-        var physicalVariable = false;
-        var magicVariable = false;
-
-        foreach (var status in statuses)
-        {
-            var displayInfo = Plugin.GetMitigationDisplayInfo(status);
-            foreach (var part in displayInfo.MitigationPercents)
-            {
-                if (part.Percent <= 0.0f)
-                {
-                    continue;
-                }
-
-                var remaining = 1.0 - (Math.Clamp(part.Percent, 0.0f, 100.0f) / 100.0);
-                hasAnyReduction = true;
-
-                switch (part.Scope)
-                {
-                    case Plugin.MitigationPercentScope.Physical:
-                        physicalRemaining *= remaining;
-                        hasPhysicalReduction = true;
-                        physicalVariable |= displayInfo.HasVariableMitigationPercent;
-                        break;
-                    case Plugin.MitigationPercentScope.Magic:
-                        magicRemaining *= remaining;
-                        hasMagicReduction = true;
-                        magicVariable |= displayInfo.HasVariableMitigationPercent;
-                        break;
-                    default:
-                        allRemaining *= remaining;
-                        allVariable |= displayInfo.HasVariableMitigationPercent;
-                        break;
-                }
-            }
-        }
-
-        if (!hasAnyReduction)
-        {
-            return null;
-        }
-
-        return new MitigationTotalDisplay(
-            1.0 - allRemaining,
-            1.0 - (allRemaining * physicalRemaining),
-            1.0 - (allRemaining * magicRemaining),
-            hasPhysicalReduction || hasMagicReduction,
-            allVariable,
-            allVariable || physicalVariable,
-            allVariable || magicVariable);
-    }
-
     private static string FormatMitigationTotalPercent(double reduction, bool variable)
     {
         var clampedPercent = Math.Clamp(reduction, 0.0, 1.0) * 100.0;
@@ -15514,12 +15382,14 @@ public sealed partial class RecapWindow : Window, IDisposable
         PartyDeathRecord death,
         DeathDisplaySelection selection)
     {
-        return selection.Snapshot?.Statuses ?? death.StatusesAtDeath;
+        return DeathMitigationResolver.For(death).Resolve().PlayerStatuses;
     }
 
     private void DrawExpiredMitigations(ResolvedDeathDisplay resolved, string idSuffix)
     {
         DrawLeadUpLabel("Expired Mits");
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip("Effects recorded earlier but not active on the fatal snapshot. An effect may have expired or been removed.");
 
         var rows = GetExpiredMitigationRows(resolved);
         if (rows.Count == 0)
@@ -15550,13 +15420,13 @@ public sealed partial class RecapWindow : Window, IDisposable
             var displayInfo = Plugin.GetMitigationDisplayInfo(row.Status);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawCenteredText(FormatRelativeToDeath(resolved.Selection.AnchorSeenAtUtc, row.SeenAtUtc));
+            DrawCenteredText(FormatRelativeToDeath(resolved.Selection.AnchorSeenAtUtc, row.SeenAtUtc), ModernTextColor, true);
             ImGui.TableNextColumn();
-            DrawCenteredOrWrappedText(FormatKnownPlayerName(row.SourceName));
+            DrawCenteredOrWrappedText(FormatKnownPlayerName(row.SourceName), null, true);
             ImGui.TableNextColumn();
-            DrawCenteredIconText(row.Status.IconId, configuration.StatusIconSize, row.Status.Name, row.Status.Name);
+            DrawCenteredIconText(row.Status.IconId, configuration.StatusIconSize, row.Status.Name, row.Status.Name, true);
             ImGui.TableNextColumn();
-            DrawMitigationPercentCell(displayInfo);
+            DrawMitigationPercentCell(displayInfo, true);
         }
 
         ImGui.EndTable();
@@ -15581,7 +15451,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             DrawGameIcon(row.Status.IconId, iconSize, row.Status.Name);
             ImGui.SameLine(0.0f, spacing);
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX + iconSize + spacing, contentY));
-            DrawWrappedTextLines(row.Status.Name, textWidth);
+            DrawWrappedTextLines(row.Status.Name, textWidth, emphasize: true);
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X, rowStart.Y + rowHeight + FocusedDataRowGap));
         }
     }
@@ -15742,7 +15612,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         return WrapTextForWidth(text, width).Count * ImGui.GetTextLineHeight();
     }
 
-    private static void DrawWrappedTextLines(string text, float width, Vector4? color = null)
+    private static void DrawWrappedTextLines(string text, float width, Vector4? color = null, bool emphasize = false)
     {
         if (color is { } textColor)
         {
@@ -15751,7 +15621,10 @@ public sealed partial class RecapWindow : Window, IDisposable
 
         foreach (var line in WrapTextForWidth(text, width))
         {
-            ImGui.TextUnformatted(line);
+            if (emphasize)
+                DrawEmphasizedMitigationText(line);
+            else
+                ImGui.TextUnformatted(line);
         }
 
         if (color is not null)
@@ -15778,11 +15651,16 @@ public sealed partial class RecapWindow : Window, IDisposable
         string tooltip,
         string text,
         float width,
-        Vector4? iconBorderColor = null)
+        Vector4? iconBorderColor = null,
+        Vector4? textColor = null)
     {
         if (iconId == 0)
         {
-            DrawWrappedTextLines(text, width);
+            ImGui.BeginGroup();
+            DrawWrappedTextLines(text, width, textColor);
+            ImGui.EndGroup();
+            if (ImGui.IsItemHovered())
+                SetThemedTooltip(tooltip);
             return;
         }
 
@@ -15792,7 +15670,11 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawGameIcon(iconId, clampedIconSize, tooltip);
         DrawIconBorderIfNeeded(iconBorderColor);
         ImGui.SetCursorScreenPos(new Vector2(rowStart.X + clampedIconSize + spacing, rowStart.Y));
-        DrawWrappedTextLines(text, MathF.Max(24.0f, width - clampedIconSize - spacing));
+        ImGui.BeginGroup();
+        DrawWrappedTextLines(text, MathF.Max(24.0f, width - clampedIconSize - spacing), textColor);
+        ImGui.EndGroup();
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip(tooltip);
     }
 
     private static void DrawBossStatusIconBorderIfNeeded(IReadOnlyList<string>? bossSourceNames)
@@ -15881,8 +15763,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static bool SourceMatchesForLeadUpDisplay(CombatEventRecord previous, CombatEventRecord next)
     {
-        return previous.SourceEntityId == next.SourceEntityId ||
-            string.Equals(previous.SourceName, next.SourceName, StringComparison.Ordinal);
+        return CombatEventComponents.SameSource(previous, next);
     }
 
     private static bool IsFatalEvent(CombatEventRecord combatEvent)
@@ -16308,7 +16189,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         CombatEventRecord combatEvent)
     {
         return plugin.GetRelevantPlayerStatusesForDisplay(
-            combatEvent.Statuses.Concat(GetNearbyHpHistoryStatuses(death.HpHistory, combatEvent.SeenAtUtc)));
+            DeathMitigationResolver.For(death).PlayerForHit(combatEvent));
     }
 
     private void DrawCombinedMitigationDebuffCell(
@@ -16344,13 +16225,12 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static IEnumerable<StatusSnapshot> GetLeadUpSummaryPlayerStatusSource(LeadUpSummaryRow summary)
     {
-        return summary.Row.LastSnapshot.Statuses
-            .Concat(summary.Events.SelectMany(combatEvent => combatEvent.Statuses));
+        return summary.Mitigations.PlayerStatuses;
     }
 
     private static IEnumerable<StatusSnapshot> GetLeadUpSummaryBossStatusSource(LeadUpSummaryRow summary)
     {
-        return summary.SourceStatuses;
+        return summary.Mitigations.BossStatuses.Select(value => value.Status);
     }
 
     private static IReadOnlyList<StatusSnapshot> GetEventSourceMitigationStatuses(
@@ -16375,9 +16255,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         CombatEventRecord combatEvent,
         IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
-        return SelectBossStatusDisplayEntries(combatEvent.SourceStatuses
-            .Select(status => new BossStatusDisplayEntry(status, combatEvent.SourceName))
-            .Concat(GetActiveSourceMitigationStatusEntries(death, combatEvent.SeenAtUtc, combatEvent.SourceEntityId, leadUpEvents)));
+        return DeathMitigationResolver.For(death).ForHit(combatEvent).Where(value => Plugin.IsBossMitigationStatus(value.Status))
+            .Select(value => new BossStatusDisplayEntry(value.Status, value.Name, value.EntityId)).ToArray();
     }
 
     private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> GetEventSourceMitigationStatusSourceNames(
@@ -16395,28 +16274,6 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         return MergeBossStatusSourceNames(combatEvents
             .Select(combatEvent => GetEventSourceMitigationStatusSourceNames(death, combatEvent, leadUpEvents)));
-    }
-
-    private static IReadOnlyList<BossStatusDisplayEntry> SelectBossStatusDisplayEntries(IEnumerable<BossStatusDisplayEntry> entries)
-    {
-        var entryList = entries.ToList();
-        if (entryList.Count == 0)
-        {
-            return [];
-        }
-
-        var bossStatusKeys = Plugin
-            .GetBossMitigationStatusesForDisplay(entryList.Select(entry => entry.Status))
-            .Select(GetStatusKey)
-            .ToHashSet();
-        return entryList
-            .Where(entry => bossStatusKeys.Contains(GetStatusKey(entry.Status)))
-            .GroupBy(entry => (entry.SourceName, StatusKey: GetStatusKey(entry.Status)))
-            .Select(group => group
-                .OrderBy(entry => entry.Status.RemainingTime <= 0.0f ? float.MaxValue : entry.Status.RemainingTime)
-                .ThenBy(entry => entry.Status.StackCount)
-                .First())
-            .ToList();
     }
 
     private static IReadOnlyList<StatusSnapshot> GetActiveSourceMitigationStatuses(
@@ -16455,75 +16312,9 @@ public sealed partial class RecapWindow : Window, IDisposable
         uint? sourceEntityId,
         IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
-        var sourceMitigationHistory = GetSourceMitigationHistoryForDisplay(death, leadUpEvents);
-        if (sourceMitigationHistory.Count == 0)
-        {
-            return [];
-        }
-
-        var activeEntries = sourceMitigationHistory
-            .Where(snapshot => snapshot.SeenAtUtc <= seenAtUtc)
-            .Where(snapshot => sourceEntityId is null || snapshot.SourceEntityId == sourceEntityId.Value)
-            .SelectMany(snapshot => GetActiveSourceMitigationStatuses(snapshot, seenAtUtc))
-            .GroupBy(entry => (entry.SourceEntityId, entry.Status.Id, entry.Status.IconId, entry.Status.SourceId))
-            .Select(group => group
-                .OrderByDescending(entry => entry.SeenAtUtc)
-                .ThenBy(entry => entry.Status.RemainingTime)
-                .First())
-            .ToList();
-        return activeEntries
-            .Select(entry => new BossStatusDisplayEntry(entry.Status, entry.SourceName))
-            .ToList();
-    }
-
-    private static IReadOnlyList<SourceMitigationSnapshot> GetSourceMitigationHistoryForDisplay(PartyDeathRecord death)
-    {
-        return GetSourceMitigationHistoryForDisplay(death, GetLeadUpEvents(death));
-    }
-
-    private static IReadOnlyList<SourceMitigationSnapshot> GetSourceMitigationHistoryForDisplay(
-        PartyDeathRecord death,
-        IReadOnlyList<CombatEventRecord> leadUpEvents)
-    {
-        var sourceMitigationHistory = death.SourceMitigationHistory?.ToList() ?? [];
-        sourceMitigationHistory.AddRange(leadUpEvents
-            .Where(combatEvent => combatEvent.SourceEntityId != 0)
-            .Select(combatEvent => new SourceMitigationSnapshot(
-                combatEvent.SeenAtUtc,
-                combatEvent.PullElapsedSeconds,
-                combatEvent.SourceEntityId,
-                combatEvent.SourceName,
-                Plugin.GetBossMitigationStatusesForDisplay(combatEvent.SourceStatuses)
-                    .Where(status => status.RemainingTime > 0.0f)
-                    .ToList()))
-            .Where(snapshot => snapshot.Statuses.Count > 0));
-
-        return sourceMitigationHistory
-            .OrderBy(snapshot => snapshot.SeenAtUtc)
-            .ThenBy(snapshot => snapshot.SourceName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(snapshot => snapshot.SourceEntityId)
-            .ToList();
-    }
-
-    private static IEnumerable<(uint SourceEntityId, string SourceName, DateTime SeenAtUtc, StatusSnapshot Status)> GetActiveSourceMitigationStatuses(
-        SourceMitigationSnapshot snapshot,
-        DateTime seenAtUtc)
-    {
-        var elapsedSeconds = (float)(seenAtUtc - snapshot.SeenAtUtc).TotalSeconds;
-        foreach (var status in snapshot.Statuses)
-        {
-            var remainingTime = status.RemainingTime - elapsedSeconds;
-            if (remainingTime <= 0.0f)
-            {
-                continue;
-            }
-
-            yield return (
-                snapshot.SourceEntityId,
-                snapshot.SourceName,
-                snapshot.SeenAtUtc,
-                status with { RemainingTime = remainingTime });
-        }
+        return DeathMitigationResolver.For(death).BossAt(seenAtUtc, sourceEntityId)
+            .Where(value => Plugin.IsBossMitigationStatus(value.Status))
+            .Select(value => new BossStatusDisplayEntry(value.Status, value.Name, value.EntityId)).ToArray();
     }
 
     private static IReadOnlyDictionary<StatusDisplayKey, IReadOnlyList<string>> BuildBossStatusSourceNames(
@@ -16535,7 +16326,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyList<string>)group
-                    .Select(entry => entry.SourceName)
+                    .Select(entry => entry.EntityId == 0 ? entry.SourceName : $"{entry.SourceName} [{entry.EntityId:X8}]")
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(sourceName => sourceName, StringComparer.OrdinalIgnoreCase)
                     .ToList());
@@ -16607,8 +16398,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         IReadOnlyList<CombatEventRecord> leadUpEvents)
     {
         return GetCombinedMitigationDebuffStatuses(
-            GetSelectedPlayerStatuses(death),
-            selection.Events.SelectMany(combatEvent => GetEventSourceMitigationStatuses(death, combatEvent, leadUpEvents)),
+            DeathMitigationResolver.For(death).Resolve().PlayerStatuses,
+            DeathMitigationResolver.For(death).Resolve().BossStatuses.Select(value => value.Status),
             out _);
     }
 
@@ -16824,7 +16615,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static string FormatBossStatusSourceTooltip(IReadOnlyList<string> sourceNames)
     {
-        return string.Join(", ", sourceNames);
+        return "Captured on: " + string.Join(", ", sourceNames) + "\nEnemy debuffs apply only to attacks from the affected enemy.";
     }
 
     private static IReadOnlyList<string>? GetBossSourceNamesForStatus(
@@ -20008,6 +19799,35 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
         ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Review and What-ifs");
+        DrawHighlightedChangelogBullet("Mitigation used too late can now be tested in What-ifs. These abilities appear red, explain why when hovered, and include 'used late' when shared to chat.");
+        DrawWrappedBullet("Added a gentle pulsing highlight to Expired Mits so it's easier to notice. Disabled when reduced motion is enabled.");
+        DrawWrappedBullet("Improved tracking of defensive buffs, including buffs used before combat starts.");
+        DrawWrappedBullet("Fixed expired or removed buffs sometimes appearing active.");
+        DrawWrappedBullet("Review, Death Window, chat summaries, and What-ifs now use the same captured mitigation information and calculation rules.");
+        DrawWrappedBullet("Fixed cases where hits from different enemies could use the wrong enemy's debuffs.");
+        DrawWrappedBullet("Fixed What-if availability for abilities that share a cooldown or have multiple charges.");
+        DrawWrappedBullet("Fixed some mitigation calculations, including effects being counted twice.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Replay");
+        DrawWrappedBullet("Added missing defensive effects, including Sun Sign and some shields.");
+        DrawWrappedBullet("Improved accuracy when showing who received an effect and when it ended.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("P4 Analyzer");
+        DrawHighlightedChangelogBullet("Fixed real/fake tells being matched to the wrong Grand Cross round, which could give incorrect instructions.");
+        DrawWrappedBullet("Fixed some wrong-side deaths being shown as correct.");
+        DrawWrappedBullet("Flood results now use the recorded evidence to identify correct positioning, the wrong side, or being caught in the middle.");
+        DrawWrappedBullet("Shows Not resolved when Flood never happened. If Flood happened but the recording lacks enough information about a player, it shows No result captured instead of guessing.");
+        DrawWrappedBullet("Improved handling of wounds that keep the same color and players dying during Flood.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Performance");
+        DrawWrappedBullet("Reduced unnecessary work while viewing death reviews and Replay.");
+        DrawWrappedBullet("Fixed memory usage continuing to grow while viewing certain death timelines.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.61");
+        ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Party Cooldowns");
         DrawHighlightedChangelogBullet("Added an optional cooldown tracker beside player names in the game's party list.");
         DrawWrappedBullet("Choose up to 12 damage, burst, party buff, defensive, healing, and support cooldowns per job.");
@@ -22300,11 +22120,14 @@ public sealed partial class RecapWindow : Window, IDisposable
         ImGui.TextUnformatted(text);
     }
 
-    private static void DrawCenteredText(string text, Vector4 color)
+    private static void DrawCenteredText(string text, Vector4 color, bool emphasize = false)
     {
         CenterNextItem(ImGui.CalcTextSize(text).X);
         ImGui.PushStyleColor(ImGuiCol.Text, color);
-        ImGui.TextUnformatted(text);
+        if (emphasize)
+            DrawEmphasizedMitigationText(text);
+        else
+            ImGui.TextUnformatted(text);
         ImGui.PopStyleColor();
     }
 
@@ -22313,7 +22136,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawCenteredOrWrappedText(text, null);
     }
 
-    private static void DrawCenteredOrWrappedText(string text, Vector4? color)
+    private static void DrawCenteredOrWrappedText(string text, Vector4? color, bool emphasize = false)
     {
         var textWidth = ImGui.CalcTextSize(text).X;
         var availableWidth = ImGui.GetContentRegionAvail().X;
@@ -22327,14 +22150,20 @@ public sealed partial class RecapWindow : Window, IDisposable
         if (textWidth <= availableWidth)
         {
             CenterNextItem(textWidth);
-            ImGui.TextUnformatted(text);
+            if (emphasize)
+                DrawEmphasizedMitigationText(text);
+            else
+                ImGui.TextUnformatted(text);
         }
         else
         {
             foreach (var line in WrapTextForWidth(text, availableWidth))
             {
                 CenterNextItem(ImGui.CalcTextSize(line).X);
-                ImGui.TextUnformatted(line);
+                if (emphasize)
+                    DrawEmphasizedMitigationText(line);
+                else
+                    ImGui.TextUnformatted(line);
             }
         }
 
@@ -22673,7 +22502,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawGameIcon(iconId, iconSize, tooltip);
     }
 
-    private static void DrawCenteredIconText(uint iconId, float iconSize, string text, string tooltip)
+    private static void DrawCenteredIconText(uint iconId, float iconSize, string text, string tooltip, bool emphasize = false)
     {
         var clampedIconSize = Math.Clamp(iconSize, 12.0f, 48.0f);
         var textWidth = ImGui.CalcTextSize(text).X;
@@ -22691,7 +22520,11 @@ public sealed partial class RecapWindow : Window, IDisposable
         var textOffset = MathF.Max(0.0f, (clampedIconSize - ImGui.GetTextLineHeight()) * 0.5f);
         ImGui.SetCursorPosY(iconTop + textOffset);
 
-        if (shouldCenter)
+        if (emphasize)
+        {
+            DrawWrappedTextLines(text, ImGui.GetContentRegionAvail().X, emphasize: true);
+        }
+        else if (shouldCenter)
         {
             ImGui.TextUnformatted(text);
         }

@@ -57,7 +57,7 @@ public sealed class ReplayDebuffTimelineTests
     }
 
     [Fact]
-    public void TimedDebuffWaitsForCapturedRemoval()
+    public void TimedDebuffExpiresEvenWhenRemovalPacketArrivesLate()
     {
         var changes = new[]
         {
@@ -65,8 +65,9 @@ public sealed class ReplayDebuffTimelineTests
             CreateChange(6.0f, 0.0f, active: false),
         };
 
-        var beforeRemoval = Assert.Single(ReplayDebuffTimeline.GetActiveStates(changes, 5.5f));
-        Assert.Equal(0.0f, beforeRemoval.RemainingSeconds);
+        Assert.Single(ReplayDebuffTimeline.GetActiveStates(changes, 4.99f));
+        Assert.Empty(ReplayDebuffTimeline.GetActiveStates(changes, 5.0f));
+        Assert.Empty(ReplayDebuffTimeline.GetActiveStates(changes, 5.5f));
         Assert.Empty(ReplayDebuffTimeline.GetActiveStates(changes, 6.0f));
     }
 

@@ -80,6 +80,16 @@
     <Compile Include="../../BetterDeaths/DeathDetectionPolicy.cs" Link="DeathDetectionPolicy.cs" />
     <Compile Include="../../BetterDeaths/DeathChatRecapHeaderParser.cs" Link="DeathChatRecapHeaderParser.cs" />
     <Compile Include="../../BetterDeaths/DeathDisplaySelection.cs" Link="DeathDisplaySelection.cs" />
+    <Compile Include="../../BetterDeaths/CombatEventComponents.cs" Link="CombatEventComponents.cs" />
+    <Compile Include="../../BetterDeaths/StatusTimeline.cs" Link="StatusTimeline.cs" />
+    <Compile Include="../../BetterDeaths/StatusHistoryTrack.cs" Link="StatusHistoryTrack.cs" />
+    <Compile Include="../../BetterDeaths/PlayerStatusHistory.cs" Link="PlayerStatusHistory.cs" />
+    <Compile Include="../../BetterDeaths/SourceMitigationHistory.cs" Link="SourceMitigationHistory.cs" />
+    <Compile Include="../../BetterDeaths/DeathMitigationResolver.cs" Link="DeathMitigationResolver.cs" />
+    <Compile Include="../../BetterDeaths/DeathMitigationChatFormatter.cs" Link="DeathMitigationChatFormatter.cs" />
+    <Compile Include="../../BetterDeaths/ReplayMitigationTimeline.cs" Link="ReplayMitigationTimeline.cs" />
+    <Compile Include="../../BetterDeaths/Plugin.StatusDefinitions.cs" Link="Plugin.StatusDefinitions.cs" />
+    <Compile Include="../../BetterDeaths/Plugin.MitigationActionDefinitions.cs" Link="Plugin.MitigationActionDefinitions.cs" />
     <Compile Include="../../BetterDeaths/GoofyDeathText.cs" Link="GoofyDeathText.cs" />
     <Compile Include="../../BetterDeaths/ForsakenCleavePosePolicy.cs" Link="ForsakenCleavePosePolicy.cs" />
     <Compile Include="../../BetterDeaths/ForsakenTowerTimelinePolicy.cs" Link="ForsakenTowerTimelinePolicy.cs" />
@@ -116,6 +126,9 @@
     <Compile Include="../../BetterDeaths/MeterThemeStyle.cs" Link="MeterThemeStyle.cs" />
     <Compile Include="../../BetterDeaths/MeterHeaderMotionPolicy.cs" Link="MeterHeaderMotionPolicy.cs" />
     <Compile Include="../../BetterDeaths/WhatIfMitigationRules.cs" Link="WhatIfMitigationRules.cs" />
+    <Compile Include="../../BetterDeaths/MitigationUseTracker.cs" Link="MitigationUseTracker.cs" />
+    <Compile Include="../../BetterDeaths/PossibleMitigationTimingPolicy.cs" Link="PossibleMitigationTimingPolicy.cs" />
+    <Compile Include="../../BetterDeaths/MitigationReviewPresentation.cs" Link="MitigationReviewPresentation.cs" />
     <Compile Include="../../BetterDeaths/WtfDig/FflogsModels.cs" Link="WtfDig/FflogsModels.cs" />
     <Compile Include="../../BetterDeaths/WtfDig/FflogsClient.cs" Link="WtfDig/FflogsClient.cs" />
     <Compile Include="../../BetterDeaths/WtfDig/LocalPullEventSource.cs" Link="WtfDig/LocalPullEventSource.cs" />
@@ -141,5 +154,7 @@
     <None Update="Fixtures/TemperaCooldownCaptured.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/TemperaStatusUpdatesCaptured.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/PartyCooldownActions.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/DefensiveStatuses.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/P4CapturedSignals.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

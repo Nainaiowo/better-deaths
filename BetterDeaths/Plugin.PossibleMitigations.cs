@@ -3,80 +3,49 @@ namespace BetterDeaths;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BetterDeaths.PartyCooldowns;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using LuminaAction = Lumina.Excel.Sheets.Action;
 
 public sealed partial class Plugin
 {
     private const int MaxPossibleMitigationsPerDeath = 64;
 
-    private static readonly uint[] TankJobIds = [19, 21, 32, 37];
-    private static readonly uint[] MeleeJobIds = [20, 22, 30, 34, 39, 41];
-    private static readonly uint[] CasterJobIds = [25, 27, 35, 42];
+    private readonly MitigationUseTracker possibleMitigationUses = new();
+    private DateTime? possibleMitigationTimingChangedAtUtc;
+    private readonly Dictionary<(uint Action, byte Level), PartyCooldownProfile> possibleMitigationCooldownProfiles = [];
+    private readonly Dictionary<uint, HashSet<byte>> possibleMitigationCooldownGroups = [];
 
-    private sealed record PossibleMitigationDefinition(
-        string Key,
-        string ActionName,
-        uint ActionId,
-        IReadOnlyList<uint> JobIds,
-        PossibleMitigationScope Scope,
-        float CooldownSeconds,
-        float DurationSeconds,
-        IReadOnlyList<PossibleMitigationStatusTemplate> Statuses,
-        IReadOnlyList<PossibleMitigationActionTemplate>? AlternateActions = null);
+    private HashSet<byte> GetPossibleMitigationCooldownGroups(uint jobId)
+    {
+        if (possibleMitigationCooldownGroups.TryGetValue(jobId, out var groups))
+            return groups;
+        var sheet = DataManager.GetExcelSheet<LuminaAction>();
+        if (sheet is null)
+            return [];
+        groups = PossibleMitigationDefinitions.Where(definition => DefinitionMatchesJob(definition, jobId))
+            .Select(definition => sheet.GetRowOrDefault(definition.ActionId)?.CooldownGroup ?? 0)
+            .Where(group => group is > 0 and not 58).ToHashSet();
+        possibleMitigationCooldownGroups[jobId] = groups;
+        return groups;
+    }
 
-    private sealed record PossibleMitigationActionTemplate(
-        uint ActionId,
-        string Name);
-
-    private sealed record PossibleMitigationStatusTemplate(
-        uint StatusId,
-        string Name,
-        float? DurationSeconds = null);
-
-    private sealed record TrackedPossibleMitigationUse(
-        DateTime SeenAtUtc,
-        float PullElapsedSeconds,
-        uint ActionId,
-        string ActionName,
-        uint ActionIconId);
-
-    private static readonly PossibleMitigationDefinition[] PossibleMitigationDefinitions =
-    [
-        new("reprisal", "Reprisal", 7535, TankJobIds, PossibleMitigationScope.Boss, 60.0f, 15.0f, [new(1193, "Reprisal")]),
-        new("feint", "Feint", 7549, MeleeJobIds, PossibleMitigationScope.Boss, 90.0f, 15.0f, [new(1195, "Feint")]),
-        new("addle", "Addle", 7560, CasterJobIds, PossibleMitigationScope.Boss, 90.0f, 15.0f, [new(1203, "Addle")]),
-        new("dismantle", "Dismantle", 2887, [31], PossibleMitigationScope.Boss, 120.0f, 10.0f, [new(860, "Dismantled")]),
-
-        new("rampart", "Rampart", 7531, TankJobIds, PossibleMitigationScope.Personal, 90.0f, 20.0f, [new(1191, "Rampart")]),
-        new("guardian", "Guardian", 36920, [19], PossibleMitigationScope.Personal, 120.0f, 15.0f, [new(3829, "Guardian")]),
-        new("damnation", "Damnation", 36923, [21], PossibleMitigationScope.Personal, 120.0f, 15.0f, [new(3832, "Damnation")]),
-        new("dark-mind", "Dark Mind", 3634, [32], PossibleMitigationScope.Personal, 60.0f, 10.0f, [new(746, "Dark Mind")]),
-        new("shadowed-vigil", "Shadowed Vigil", 36927, [32], PossibleMitigationScope.Personal, 120.0f, 15.0f, [new(3835, "Shadowed Vigil")]),
-        new("camouflage", "Camouflage", 16140, [37], PossibleMitigationScope.Personal, 90.0f, 20.0f, [new(1832, "Camouflage")]),
-        new("great-nebula", "Great Nebula", 36935, [37], PossibleMitigationScope.Personal, 120.0f, 15.0f, [new(3838, "Great Nebula")]),
-        new("riddle-of-earth", "Riddle of Earth", 7394, [20], PossibleMitigationScope.Personal, 120.0f, 10.0f, [new(1179, "Riddle of Earth")]),
-        new("third-eye", "Third Eye / Tengentsu", 36962, [34], PossibleMitigationScope.Personal, 15.0f, 4.0f, [new(3853, "Third Eye")], [new(7498, "Third Eye")]),
-
-        new("bloodwhetting", "Bloodwhetting", 25751, [21], PossibleMitigationScope.Personal, 25.0f, 8.0f, [new(2678, "Bloodwhetting")]),
-        new("nascent-flash", "Nascent Flash", 16464, [21], PossibleMitigationScope.Targeted, 25.0f, 8.0f, [new(1857, "Nascent Glint")]),
-        new("oblation", "Oblation", 25754, [32], PossibleMitigationScope.Targeted, 60.0f, 10.0f, [new(2682, "Oblation")]),
-        new("heart-of-corundum", "Heart of Corundum", 25758, [37], PossibleMitigationScope.Targeted, 25.0f, 8.0f, [new(2683, "Heart of Corundum")]),
-        new("aquaveil", "Aquaveil", 25861, [24], PossibleMitigationScope.Targeted, 60.0f, 8.0f, [new(2708, "Aquaveil")]),
-        new("exaltation", "Exaltation", 25873, [33], PossibleMitigationScope.Targeted, 60.0f, 8.0f, [new(2717, "Exaltation")]),
-        new("taurochole", "Taurochole", 24303, [40], PossibleMitigationScope.Targeted, 45.0f, 15.0f, [new(2619, "Taurochole")]),
-
-        new("dark-missionary", "Dark Missionary", 16471, [32], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(0, "Dark Missionary")]),
-        new("heart-of-light", "Heart of Light", 16160, [37], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(0, "Heart of Light")]),
-        new("temperance", "Temperance", 16536, [24], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Temperance")]),
-        new("sacred-soil", "Sacred Soil", 188, [28], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(299, "Sacred Soil")]),
-        new("expedient", "Expedient", 25868, [28], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(2711, "Desperate Measures")]),
-        new("collective-unconscious", "Collective Unconscious", 3613, [33], PossibleMitigationScope.Party, 60.0f, 18.0f, [new(1206, "Wheel of Fortune")]),
-        new("kerachole", "Kerachole", 24298, [40], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(0, "Kerachole")]),
-        new("holos", "Holos", 24310, [40], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Holos")]),
-        new("troubadour", "Troubadour", 7405, [23], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(1934, "Troubadour")]),
-        new("tactician", "Tactician", 16889, [31], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(0, "Tactician")]),
-        new("shield-samba", "Shield Samba", 16012, [38], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(0, "Shield Samba")]),
-        new("magick-barrier", "Magick Barrier", 25857, [35], PossibleMitigationScope.Party, 120.0f, 10.0f, [new(0, "Magick Barrier")]),
-    ];
+    private unsafe PartyCooldownProfile? GetPossibleMitigationCooldownProfile(uint actionId, byte level)
+    {
+        if (level == 0)
+            return null;
+        var key = (actionId, level);
+        if (possibleMitigationCooldownProfiles.TryGetValue(key, out var cached))
+            return cached;
+        if (DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId) is not { } action ||
+            action.CooldownGroup is 0 or 58 || action.Recast100ms == 0)
+            return null;
+        var profile = new PartyCooldownProfile(actionId, action.CooldownGroup,
+            PartyCooldownCatalog.RecastAtLevel(actionId, level, action.Recast100ms / 10d),
+            Math.Clamp((int)ActionManager.GetMaxCharges(actionId, level), 1, 5));
+        possibleMitigationCooldownProfiles[key] = profile;
+        return profile;
+    }
 
     private static string BuildPossibleMitigationUseKey(PartyMemberSnapshot member, PossibleMitigationDefinition definition)
     {
@@ -91,81 +60,55 @@ public sealed partial class Plugin
             return;
         }
 
+        var groups = GetPossibleMitigationCooldownGroups(member.ClassJobId);
+        if (DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(packet.ActionId) is not { } action ||
+            !groups.Contains(action.CooldownGroup) ||
+            GetPossibleMitigationCooldownProfile(packet.ActionId, member.ClassJobLevel) is not { } cooldown)
+            return;
+
         var actionName = GetActionName(packet.ActionId);
         var definitions = PossibleMitigationDefinitions
             .Where(definition => DefinitionMatchesAction(definition, packet.ActionId, actionName))
             .Where(definition => DefinitionMatchesJob(definition, member.ClassJobId))
             .ToList();
-        if (definitions.Count == 0)
+        var targets = packet.Targets.Select(target => GetDamageTargetEntityId(target.TargetId)).Where(id => id != 0).Distinct().ToArray();
+        // Capture every action sharing the recast, even when it is not a selectable What-if ability.
+        var keys = definitions.Count > 0 ? definitions.Select(definition => BuildPossibleMitigationUseKey(member, definition))
+            : [$"{member.MemberKey}:cooldown-group:{cooldown.Group}"];
+        foreach (var key in keys)
         {
-            return;
-        }
-
-        if (!possibleMitigationUsesByMember.TryGetValue(member.MemberKey, out var memberUses))
-        {
-            memberUses = new Dictionary<string, TrackedPossibleMitigationUse>(StringComparer.Ordinal);
-            possibleMitigationUsesByMember[member.MemberKey] = memberUses;
-        }
-
-        foreach (var definition in definitions)
-        {
-            var use = new TrackedPossibleMitigationUse(
-                packet.SeenAtUtc,
-                pullStartedAtUtc is null ? 0.0f : CalculatePullElapsed(packet.SeenAtUtc),
-                packet.ActionId,
-                actionName,
-                GetActionIconId(packet.ActionId));
-            memberUses[definition.Key] = use;
-            TrackReplayMitigationUse(member, definition, use);
+            if (possibleMitigationUses.ObserveUse(new(packet.Sequence, key,
+                member.MemberKey, member.EntityId, packet.ActionSequence, packet.SeenAtUtc,
+                pullStartedAtUtc is null ? 0.0f : CalculatePullElapsed(packet.SeenAtUtc), packet.ActionId,
+                actionName, GetActionIconId(packet.ActionId), targets)
+            { CooldownGroup = cooldown.Group, CooldownSeconds = cooldown.RecastSeconds }))
+                MarkPossibleMitigationTimingChanged(packet.SeenAtUtc);
         }
     }
 
-    private void TrackReplayMitigationUse(
-        PartyMemberSnapshot member,
-        PossibleMitigationDefinition definition,
-        TrackedPossibleMitigationUse use)
+    private void TrackPossibleMitigationApplications(RawEffectResultPacket packet, IReadOnlyList<StatusSnapshot> statuses)
     {
-        if (pullStartedAtUtc is null ||
-            !DefinitionHasReplayMitigationDisplay(definition))
-        {
+        if (packet.RelatedActionSequence == 0)
             return;
-        }
-
-        if (recentReplayMitigations.Any(snapshot =>
-                string.Equals(snapshot.MemberKey, member.MemberKey, StringComparison.Ordinal) &&
-                snapshot.ActionId == use.ActionId &&
-                Duration(snapshot.SeenAtUtc, use.SeenAtUtc) <= TimeSpan.FromMilliseconds(250)))
+        var target = NormalizeActorEntityId(packet.TargetId);
+        if (target == 0)
+            target = NormalizeActorEntityId(packet.ActorId);
+        foreach (var status in statuses.Where(status => IsPossibleMitigationEffectStatusId(status.Id)))
         {
-            return;
+            var provider = currentMembers.FirstOrDefault(member => member.EntityId == status.SourceId)?.MemberKey;
+            if (provider is null)
+                provider = CaptureStatusSources([status]).FirstOrDefault()?.MemberKey;
+            if (provider is not null && possibleMitigationUses.ObserveApplication(new(packet.Sequence, packet.RelatedActionSequence,
+                packet.SeenAtUtc, target, provider, status)))
+                MarkPossibleMitigationTimingChanged(packet.SeenAtUtc);
         }
-
-        var statuses = definition.Statuses
-            .Select(status => CreatePossibleMitigationStatusSnapshot(status, definition.DurationSeconds, member.EntityId, use.ActionIconId))
-            .ToList();
-        if (statuses.Count == 0)
-        {
-            return;
-        }
-
-        recentReplayMitigations.Add(new ReplayMitigationSnapshot(
-            use.SeenAtUtc,
-            use.PullElapsedSeconds,
-            member.MemberKey,
-            member.MemberName,
-            member.PartyIndex,
-            member.ClassJobId,
-            member.ClassJobName,
-            use.ActionId,
-            use.ActionName,
-            use.ActionIconId,
-            definition.Scope,
-            definition.DurationSeconds,
-            statuses));
     }
+
+    private void MarkPossibleMitigationTimingChanged(DateTime time) => possibleMitigationTimingChangedAtUtc =
+        possibleMitigationTimingChangedAtUtc is { } previous && previous < time ? previous : time;
 
     private IReadOnlyList<PossibleMitigationSnapshot> BuildPossibleMitigationSnapshotsForDeath(
-        PartyMemberSnapshot deathMember,
-        DateTime deathSeenAtUtc)
+        PartyDeathRecord death)
     {
         if (currentMembers.Count == 0)
         {
@@ -180,47 +123,33 @@ public sealed partial class Plugin
             foreach (var definition in PossibleMitigationDefinitions)
             {
                 if (!DefinitionMatchesJob(definition, member.ClassJobId) ||
-                    !DefinitionCanAffectDeath(definition, member, deathMember) ||
+                    !DefinitionCanAffectDeath(definition, member, death.MemberKey) ||
                     !DefinitionHasCalculableReduction(definition))
                 {
                     continue;
                 }
 
-                var use = GetTrackedPossibleMitigationUse(member.MemberKey, definition);
-                if (use is not null &&
-                    use.SeenAtUtc <= deathSeenAtUtc &&
-                    (deathSeenAtUtc - use.SeenAtUtc).TotalSeconds < definition.CooldownSeconds)
-                {
-                    continue;
-                }
-
-                snapshots.Add(CreatePossibleMitigationSnapshot(member, definition, use, deathSeenAtUtc));
-                if (snapshots.Count >= MaxPossibleMitigationsPerDeath)
-                {
-                    return snapshots;
-                }
+                if (CreatePossibleMitigationSnapshot(member, definition) is { } snapshot)
+                    snapshots.Add(snapshot);
             }
         }
 
-        return snapshots;
+        return PossibleMitigationTimingPolicy.ResolveAll(snapshots, death, possibleMitigationUses,
+            death.SeenAtUtc + FatalSequenceEndBuffer, MaxPossibleMitigationsPerDeath);
     }
 
-    private PossibleMitigationSnapshot CreatePossibleMitigationSnapshot(
+    private PossibleMitigationSnapshot? CreatePossibleMitigationSnapshot(
         PartyMemberSnapshot member,
-        PossibleMitigationDefinition definition,
-        TrackedPossibleMitigationUse? use,
-        DateTime deathSeenAtUtc)
+        PossibleMitigationDefinition definition)
     {
-        var actionId = use?.ActionId ?? definition.ActionId;
-        var actionName = use?.ActionName ?? definition.ActionName;
-        var actionIconId = use?.ActionIconId ?? (actionId == 0 ? 0 : GetActionIconId(actionId));
+        var actionId = definition.ActionId;
+        if (GetPossibleMitigationCooldownProfile(actionId, member.ClassJobLevel) is not { } cooldown)
+            return null;
+        var actionName = definition.ActionName;
+        var actionIconId = actionId == 0 ? 0 : GetActionIconId(actionId);
         var statuses = definition.Statuses
             .Select(status => CreatePossibleMitigationStatusSnapshot(status, definition.DurationSeconds, member.EntityId, actionIconId))
             .ToList();
-        var availability = use is null || use.SeenAtUtc > deathSeenAtUtc
-            ? "Ready"
-            : $"Ready; Last used: {FormatMitigationPullTime(use.PullElapsedSeconds)}";
-
         return new PossibleMitigationSnapshot(
             $"{member.MemberKey}:{definition.Key}",
             member.MemberKey,
@@ -232,11 +161,16 @@ public sealed partial class Plugin
             actionName,
             actionIconId,
             definition.Scope,
-            definition.CooldownSeconds,
-            use?.SeenAtUtc <= deathSeenAtUtc ? use.SeenAtUtc : null,
-            use?.SeenAtUtc <= deathSeenAtUtc ? use.PullElapsedSeconds : null,
-            availability,
-            statuses);
+            (float)cooldown.RecastSeconds,
+            null,
+            null,
+            "Ready",
+            statuses)
+        {
+            CooldownGroup = cooldown.Group,
+            MaxCharges = cooldown.MaxCharges,
+            EffectStatusIds = GetPossibleMitigationEffectStatusIds(definition.Key),
+        };
     }
 
     private StatusSnapshot CreatePossibleMitigationStatusSnapshot(
@@ -260,14 +194,28 @@ public sealed partial class Plugin
             template.DurationSeconds ?? definitionDurationSeconds);
     }
 
-    private TrackedPossibleMitigationUse? GetTrackedPossibleMitigationUse(
-        string memberKey,
-        PossibleMitigationDefinition definition)
+    private void RefreshRecentPossibleMitigations()
     {
-        return possibleMitigationUsesByMember.TryGetValue(memberKey, out var memberUses) &&
-            memberUses.TryGetValue(definition.Key, out var use)
-            ? use
-            : null;
+        if (possibleMitigationTimingChangedAtUtc is not { } changed)
+            return;
+        possibleMitigationTimingChangedAtUtc = null;
+        if (currentPullClosedForReview)
+            return;
+        RefreshRecentPossibleMitigations(currentDeaths, changed);
+        RefreshRecentPossibleMitigations(pendingDeathRecapLinks, changed);
+    }
+
+    private void RefreshRecentPossibleMitigations(List<PartyDeathRecord> deaths, DateTime changed)
+    {
+        for (var index = 0; index < deaths.Count; index++)
+        {
+            var death = deaths[index];
+            if (changed > death.SeenAtUtc + FatalSequenceEndBuffer || death.EntityId == 0)
+                continue;
+            var options = BuildPossibleMitigationSnapshotsForDeath(death);
+            if (!PossibleMitigationTimingPolicy.SameOptions(death.PossibleMitigations, options))
+                deaths[index] = death with { PossibleMitigations = options };
+        }
     }
 
     private static bool DefinitionMatchesAction(PossibleMitigationDefinition definition, uint actionId, string actionName)
@@ -290,11 +238,11 @@ public sealed partial class Plugin
     private static bool DefinitionCanAffectDeath(
         PossibleMitigationDefinition definition,
         PartyMemberSnapshot member,
-        PartyMemberSnapshot deathMember)
+        string deathMemberKey)
     {
         return definition.Scope switch
         {
-            PossibleMitigationScope.Personal => string.Equals(member.MemberKey, deathMember.MemberKey, StringComparison.Ordinal),
+            PossibleMitigationScope.Personal => string.Equals(member.MemberKey, deathMemberKey, StringComparison.Ordinal),
             _ => true,
         };
     }
@@ -308,20 +256,4 @@ public sealed partial class Plugin
         });
     }
 
-    private static bool DefinitionHasReplayMitigationDisplay(PossibleMitigationDefinition definition)
-    {
-        return definition.Statuses.Any(status =>
-        {
-            var displayInfo = GetMitigationDisplayInfo(new StatusSnapshot(status.StatusId, status.Name, 0, 0, 0, status.DurationSeconds ?? definition.DurationSeconds));
-            return displayInfo.Types.Any(type => !string.Equals(type.Label, "Debuff", StringComparison.OrdinalIgnoreCase)) ||
-                displayInfo.MitigationPercents.Count > 0 ||
-                displayInfo.InducedStatuses.Count > 0;
-        });
-    }
-
-    private static string FormatMitigationPullTime(float pullElapsedSeconds)
-    {
-        var seconds = Math.Max(0, (int)MathF.Floor(pullElapsedSeconds));
-        return $"{seconds / 60:00}:{seconds % 60:00}";
-    }
 }

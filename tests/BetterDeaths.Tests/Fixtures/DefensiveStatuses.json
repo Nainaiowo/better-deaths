@@ -1,0 +1,1266 @@
+{
+  "ClientVersion": "2026.11.03.0000.0000",
+  "CapturedDate": "2026-11-10",
+  "Statuses": [
+    {
+      "Id": 71,
+      "Name": "Rampart",
+      "Description": "Damage taken is reduced.",
+      "Icon": 210152,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 74,
+      "Name": "Sentinel",
+      "Description": "Damage taken is reduced.",
+      "Icon": 210151,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 77,
+      "Name": "Bulwark",
+      "Description": "Blocking incoming attacks.",
+      "Icon": 210156,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 82,
+      "Name": "Hallowed Ground",
+      "Description": "Impervious to most attacks.",
+      "Icon": 212504,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 87,
+      "Name": "Thrill of Battle",
+      "Description": "Maximum HP is increased.\r\nEnhanced Thrill of Battle Effect: HP recovery via healing actions is increased.",
+      "Icon": 210254,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 88,
+      "Name": "Holmgang",
+      "Description": "Unable to move until effect fades.",
+      "Icon": 210255,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 89,
+      "Name": "Vengeance",
+      "Description": "Damage taken is reduced while inflicting a portion of sustained damage back to its source.",
+      "Icon": 210256,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 102,
+      "Name": "Mantra",
+      "Description": "HP recovery via healing actions is increased.",
+      "Icon": 210206,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 168,
+      "Name": "Manaward",
+      "Description": "An aetherial barrier is preventing damage.",
+      "Icon": 210456,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 194,
+      "Name": "Shield Wall",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 195,
+      "Name": "Stronghold",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 196,
+      "Name": "Last Bastion",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 297,
+      "Name": "Galvanize",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212801,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 298,
+      "Name": "Sacred Soil",
+      "Description": "An area of land has been sanctified, reducing damage taken for all who enter.",
+      "Icon": 212802,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 299,
+      "Name": "Sacred Soil",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212803,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 317,
+      "Name": "Fey Illumination",
+      "Description": "Magic defense and healing magic potency are increased.",
+      "Icon": 212828,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 409,
+      "Name": "Holmgang",
+      "Description": "Most attacks cannot reduce your HP to less than 1.",
+      "Icon": 210266,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 488,
+      "Name": "Shade Shift",
+      "Description": "Shadows are nullifying damage.",
+      "Icon": 210605,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 726,
+      "Name": "Divine Veil",
+      "Description": "Upon HP recovery via healing magic, a damage-reducing barrier is created.",
+      "Icon": 212508,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 727,
+      "Name": "Divine Veil",
+      "Description": "A holy barrier is nullifying damage.",
+      "Icon": 212509,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 728,
+      "Name": "Sheltron",
+      "Description": "Next attack will be blocked.",
+      "Icon": 212510,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 735,
+      "Name": "Raw Intuition",
+      "Description": "Damage taken is reduced and HP is restored with each weaponskill successfully delivered.",
+      "Icon": 212555,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 746,
+      "Name": "Dark Mind",
+      "Description": "Physical and magic damage taken are reduced.",
+      "Icon": 213114,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 747,
+      "Name": "Shadow Wall",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213113,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 810,
+      "Name": "Living Dead",
+      "Description": "Unable to be KO\u0027d by most attacks. Status changed to Walking Dead in most cases when HP is reduced to 0.",
+      "Icon": 213115,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 811,
+      "Name": "Walking Dead",
+      "Description": "Most attacks will not reduce HP below 1. Restoring HP with each weaponskill successfully delivered and spell cast. The inability to restore 100% of HP before timer runs out will result in KO.",
+      "Icon": 213116,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 830,
+      "Name": "The Bole",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213205,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 834,
+      "Name": "The Spire",
+      "Description": "Restoring TP over time.",
+      "Icon": 213209,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 837,
+      "Name": "Nocturnal Field",
+      "Description": "An astromantic field is nullifying damage.",
+      "Icon": 213217,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 849,
+      "Name": "Collective Unconscious",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213226,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 863,
+      "Name": "Land Waker",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 864,
+      "Name": "Dark Force",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1174,
+      "Name": "Intervention",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212511,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1175,
+      "Name": "Passage of Arms",
+      "Description": "An area of land has been granted protection, reducing damage taken for all who enter.",
+      "Icon": 212512,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1176,
+      "Name": "Arms Up",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212513,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1178,
+      "Name": "Blackest Night",
+      "Description": "An all-encompassing darkness is nullifying damage.",
+      "Icon": 213118,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1179,
+      "Name": "Riddle of Earth",
+      "Description": "Contemplating the riddle of earth. Damage taken is reduced.",
+      "Icon": 212527,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1191,
+      "Name": "Rampart",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213911,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1197,
+      "Name": "Tactician",
+      "Description": "Gradually regenerating TP.",
+      "Icon": 213906,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 1202,
+      "Name": "Nature\u0027s Minne",
+      "Description": "HP recovery via healing actions is increased.",
+      "Icon": 212618,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1206,
+      "Name": "Wheel of Fortune",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213226,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1218,
+      "Name": "Divine Benison",
+      "Description": "A holy blessing from the gods is nullifying damage.",
+      "Icon": 212632,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1219,
+      "Name": "Confession",
+      "Description": "Sins are confessed, partially diminishing damage accrued. Additional HP is recovered when receiving the healing effect of certain spells cast by the white mage who granted this effect.",
+      "Icon": 212637,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1232,
+      "Name": "Third Eye",
+      "Description": "Next damage taken is reduced.",
+      "Icon": 213307,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1302,
+      "Name": "Hallowed Ground",
+      "Description": "Impervious to most attacks.",
+      "Icon": 212504,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1304,
+      "Name": "Holmgang",
+      "Description": "Unable to move until effect fades. Most attacks cannot reduce your HP to less than 1.",
+      "Icon": 210255,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1305,
+      "Name": "Holmgang",
+      "Description": "Unable to move until effect fades.",
+      "Icon": 214824,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 1308,
+      "Name": "Blackest Night",
+      "Description": "An all-encompassing darkness is nullifying damage.",
+      "Icon": 213118,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1310,
+      "Name": "Riddle of Earth",
+      "Description": "Contemplating the riddle of earth. Taking a certain amount of damage triggers Earth\u0027s Reply.",
+      "Icon": 212527,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1331,
+      "Name": "Galvanize",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212801,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1339,
+      "Name": "The Bole",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213205,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1341,
+      "Name": "The Spire",
+      "Description": "Limit gauge is gradually filling.",
+      "Icon": 213209,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 1362,
+      "Name": "Divine Veil",
+      "Description": "A holy barrier is nullifying damage.",
+      "Icon": 212509,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1404,
+      "Name": "Divine Benison",
+      "Description": "A holy blessing from the gods is nullifying damage.",
+      "Icon": 212632,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1457,
+      "Name": "Shake It Off",
+      "Description": "A highly effective defensive maneuver is nullifying damage.",
+      "Icon": 212557,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1826,
+      "Name": "Shield Samba",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213715,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1828,
+      "Name": "Improvisation",
+      "Description": "Healing magic potency is increased.",
+      "Icon": 213717,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1832,
+      "Name": "Camouflage",
+      "Description": "Parry rate is increased while damage taken is reduced.",
+      "Icon": 213602,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1834,
+      "Name": "Nebula",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213604,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1836,
+      "Name": "Superbolide",
+      "Description": "Impervious to most attacks.",
+      "Icon": 213606,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1839,
+      "Name": "Heart of Light",
+      "Description": "Physical and magic damage taken are reduced.",
+      "Icon": 213609,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1840,
+      "Name": "Heart of Stone",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213610,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1856,
+      "Name": "Sheltron",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212510,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1857,
+      "Name": "Nascent Flash",
+      "Description": "Restoring HP with each weaponskill successfully delivered.",
+      "Icon": 212558,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1858,
+      "Name": "Nascent Glint",
+      "Description": "Receiving 100% of all HP recovered by the warrior who granted this status via Nascent Flash. Damage taken is reduced.",
+      "Icon": 212559,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1872,
+      "Name": "Temperance",
+      "Description": "Healing magic potency is increased while damage taken by nearby party members is reduced.",
+      "Icon": 212634,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1873,
+      "Name": "Temperance",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212633,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1875,
+      "Name": "Seraphic Illumination",
+      "Description": "Magic defense and healing magic potency are increased.",
+      "Icon": 212847,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1883,
+      "Name": "The Bole",
+      "Description": "Damage dealt is increased.",
+      "Icon": 213205,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 1887,
+      "Name": "The Spire",
+      "Description": "Damage dealt is increased.",
+      "Icon": 213209,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 1889,
+      "Name": "Intersection",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213250,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1892,
+      "Name": "Neutral Sect",
+      "Description": "Healing magic potency is increased.",
+      "Icon": 213253,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1894,
+      "Name": "Dark Missionary",
+      "Description": "Physical and magic damage taken are reduced.",
+      "Icon": 213122,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1898,
+      "Name": "Brutal Shell",
+      "Description": "A highly effective defensive maneuver is nullifying damage.",
+      "Icon": 213614,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1917,
+      "Name": "Seraphic Veil",
+      "Description": "A holy barrier is nullifying damage.",
+      "Icon": 212848,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1918,
+      "Name": "Catalyze",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212814,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1921,
+      "Name": "Neutral Sect",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213255,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1931,
+      "Name": "Gunmetal Soul",
+      "Description": "Damage taken is reduced.",
+      "Icon": 216306,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1934,
+      "Name": "Troubadour",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212615,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1944,
+      "Name": "Sacred Soil",
+      "Description": "A circle of sanctified earth is healing party members and reducing damage taken within its bounds.",
+      "Icon": 212802,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1951,
+      "Name": "Tactician",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213021,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1978,
+      "Name": "Rampart",
+      "Description": "Damage taken is reduced while HP recovered via healing actions is increased.",
+      "Icon": 210152,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1989,
+      "Name": "Manaward",
+      "Description": "An aetherial barrier is preventing damage.",
+      "Icon": 210456,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1993,
+      "Name": "Shake It Off",
+      "Description": "A barrier is preventing damage.",
+      "Icon": 212557,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 1997,
+      "Name": "Brutal Shell",
+      "Description": "A highly effective defensive maneuver is nullifying damage.",
+      "Icon": 213614,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2000,
+      "Name": "Heart of Light",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213609,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2008,
+      "Name": "Riddle of Earth",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212527,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2011,
+      "Name": "Shade Shift",
+      "Description": "Shadows are nullifying damage.",
+      "Icon": 210605,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2020,
+      "Name": "Intervention",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212511,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2040,
+      "Name": "Seraphic Veil",
+      "Description": "An aetherial barrier is preventing damage.",
+      "Icon": 212848,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2043,
+      "Name": "Nocturnal Balance",
+      "Description": "An aetherial barrier is preventing damage.",
+      "Icon": 213255,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2044,
+      "Name": "Neutral Sect",
+      "Description": "Spell cast and recast times are reduced.\r\nHelios is upgraded to Aspected Helios, while Benefic is upgraded to Aspected Benefic.",
+      "Icon": 213253,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 2061,
+      "Name": "Nascent Flash",
+      "Description": "Absorbing HP with each physical attack delivered. Damage taken is also reduced.",
+      "Icon": 212558,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2062,
+      "Name": "Nascent Glint",
+      "Description": "Damage taken is reduced, and receiving 100% of all HP absorbed by the warrior who granted this status via Nascent Flash.",
+      "Icon": 212559,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2108,
+      "Name": "Shake It Off (Over Time)",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212567,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2168,
+      "Name": "Divine Veil",
+      "Description": "A holy barrier is nullifying damage. When barrier is completely absorbed, creates a barrier around all nearby party members.",
+      "Icon": 212508,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2169,
+      "Name": "Divine Veil",
+      "Description": "A holy barrier is nullifying damage.",
+      "Icon": 212509,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2171,
+      "Name": "Dark Missionary",
+      "Description": "Damage taken is reduced while HP recovered via healing actions is increased.",
+      "Icon": 213122,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2177,
+      "Name": "Tactician",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213021,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2183,
+      "Name": "Nocturnal Field",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213217,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2227,
+      "Name": "Nascent Flash",
+      "Description": "Absorbing HP with each physical attack delivered.",
+      "Icon": 212558,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2283,
+      "Name": "Collective Unconscious",
+      "Description": "An area of mind attunement is created, reducing damage taken for all who enter.",
+      "Icon": 213227,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2596,
+      "Name": "Crest of Time Borrowed",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212934,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2597,
+      "Name": "Crest of Time Borrowed",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212934,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2607,
+      "Name": "Eukrasian Diagnosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212954,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2608,
+      "Name": "Differential Diagnosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212955,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2609,
+      "Name": "Eukrasian Prognosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212954,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2612,
+      "Name": "Haima",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212958,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2613,
+      "Name": "Panhaima",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212959,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2618,
+      "Name": "Kerachole",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212964,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2619,
+      "Name": "Taurochole",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212965,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2620,
+      "Name": "Physis II",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212966,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2621,
+      "Name": "Autophysis",
+      "Description": "HP recovery via healing actions is increased.",
+      "Icon": 212967,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2622,
+      "Name": "Krasis",
+      "Description": "HP recovery via healing actions is increased.",
+      "Icon": 212968,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2637,
+      "Name": "Sacred Soil",
+      "Description": "A circle of sanctified earth is healing party members and reducing damage taken within its bounds.",
+      "Icon": 212802,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2638,
+      "Name": "Sacred Soil",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212803,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2642,
+      "Name": "Haimatinon",
+      "Description": "Stacks are consumed to restore the Haima barrier each time it is absorbed. Grants a healing effect when duration expires, its potency based on the number of remaining stacks.",
+      "Icon": 217585,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2643,
+      "Name": "Panhaimatinon",
+      "Description": "Stacks are consumed to restore the Panhaima barrier each time it is absorbed. Grants a healing effect when duration expires, its potency based on the number of remaining stacks.",
+      "Icon": 217355,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2674,
+      "Name": "Holy Sheltron",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212515,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2675,
+      "Name": "Knight\u0027s Resolve",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212516,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2676,
+      "Name": "Knight\u0027s Benediction",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212517,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2678,
+      "Name": "Bloodwhetting",
+      "Description": "Damage taken is reduced and HP is restored with each weaponskill successfully delivered.",
+      "Icon": 212562,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2679,
+      "Name": "Stem the Flow",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212563,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2680,
+      "Name": "Stem the Tide",
+      "Description": "A highly effective defensive maneuver is nullifying damage.",
+      "Icon": 212564,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2681,
+      "Name": "Equilibrium",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212565,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2682,
+      "Name": "Oblation",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213123,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2683,
+      "Name": "Heart of Corundum",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213615,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2684,
+      "Name": "Clarity of Corundum",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213616,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2685,
+      "Name": "Catharsis of Corundum",
+      "Description": "HP will be restored automatically upon falling below a certain level or expiration of effect duration.",
+      "Icon": 213617,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2697,
+      "Name": "Improvised Finish",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213721,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2702,
+      "Name": "Radiant Aegis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212691,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2707,
+      "Name": "Magick Barrier",
+      "Description": "Magic damage taken is reduced and HP recovery via healing actions is increased.",
+      "Icon": 213408,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2708,
+      "Name": "Aquaveil",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212638,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2710,
+      "Name": "Protraction",
+      "Description": "Maximum HP is increased and HP recovery via healing actions is increased.",
+      "Icon": 212815,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2711,
+      "Name": "Desperate Measures",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212816,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2717,
+      "Name": "Exaltation",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213262,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2718,
+      "Name": "Macrocosmos",
+      "Description": "Restores HP when effect duration expires or the astrologian who granted this effect executes Microcosmos. Healing potency is based on damage taken and compiled over the duration of the effect.",
+      "Icon": 213263,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2861,
+      "Name": "Crest of Time Borrowed",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212934,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2865,
+      "Name": "Eukrasian Diagnosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212954,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2866,
+      "Name": "Eukrasian Prognosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212954,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2869,
+      "Name": "Haima",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212958,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 2938,
+      "Name": "Kerakeia",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212970,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3003,
+      "Name": "Holos",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212971,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3031,
+      "Name": "Stem the Tide",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212564,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3039,
+      "Name": "Undead Redemption",
+      "Description": "Most attacks cannot reduce your HP to less than 1. HP is restored with each weaponskill successfully delivered.",
+      "Icon": 213124,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3051,
+      "Name": "Nebula",
+      "Description": "Inflicting a portion of sustained damage back to its source.",
+      "Icon": 213604,
+      "ExpectedDefensive": false
+    },
+    {
+      "Id": 3087,
+      "Name": "Galvanize",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212801,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3097,
+      "Name": "Seraphic Veil",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212848,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3098,
+      "Name": "Consolation",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 214907,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3104,
+      "Name": "Macrocosmos",
+      "Description": "Restores HP when effect duration expires or the astrologian who granted this effect executes Microcosmos. Healing potency is based on damage taken and compiled over the duration of the effect.",
+      "Icon": 213263,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3109,
+      "Name": "Eukrasian Diagnosis",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212954,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3110,
+      "Name": "Haima",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212958,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3185,
+      "Name": "Thrill of Battle",
+      "Description": "Maximum HP is increased.",
+      "Icon": 210254,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3224,
+      "Name": "Radiant Aegis",
+      "Description": "Damage taken is reduced, and a magicked barrier is nullifying damage.",
+      "Icon": 212691,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3240,
+      "Name": "Magick Barrier",
+      "Description": "Damage taken is reduced while HP recovered via healing actions is increased.",
+      "Icon": 213408,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3255,
+      "Name": "Undead Rebirth",
+      "Description": "Most attacks cannot reduce your HP to less than 1.",
+      "Icon": 213124,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3365,
+      "Name": "Holosakos",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212972,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3546,
+      "Name": "Radiant Veil",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 212509,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3686,
+      "Name": "Tempera Coat",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213809,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3687,
+      "Name": "Tempera Grassa",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213810,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3829,
+      "Name": "Guardian",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213050,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3830,
+      "Name": "Guardian\u0027s Will",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213051,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3832,
+      "Name": "Damnation",
+      "Description": "Damage taken is reduced while inflicting a portion of sustained damage back to its source. HP will be restored over time when effect expires.",
+      "Icon": 212568,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3835,
+      "Name": "Shadowed Vigil",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213125,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3838,
+      "Name": "Great Nebula",
+      "Description": "Maximum HP is increased while damage taken is reduced.",
+      "Icon": 213619,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3853,
+      "Name": "Tengentsu",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213316,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3854,
+      "Name": "Tengentsu\u0027s Foresight",
+      "Description": "Damage taken is reduced and regenerating HP over time.",
+      "Icon": 213317,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3888,
+      "Name": "The Arrow",
+      "Description": "HP recovery via healing actions is increased.",
+      "Icon": 213206,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3890,
+      "Name": "The Bole",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213205,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3892,
+      "Name": "The Spire",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213209,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3896,
+      "Name": "Sun Sign",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213267,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3900,
+      "Name": "Primeval Impulse",
+      "Description": "Regenerating HP over time.",
+      "Icon": 212570,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3903,
+      "Name": "Divine Caress",
+      "Description": "A holy barrier is nullifying damage.",
+      "Icon": 212641,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3985,
+      "Name": "Temperance",
+      "Description": "Damage taken is reduced.",
+      "Icon": 212633,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 3988,
+      "Name": "Neutral Sect",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213255,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 4040,
+      "Name": "Intersection",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213250,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 4114,
+      "Name": "Tempera Coat",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213809,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 4115,
+      "Name": "Tempera Grassa",
+      "Description": "A magicked barrier is nullifying damage.",
+      "Icon": 213810,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 4168,
+      "Name": "Rampart",
+      "Description": "Damage taken is reduced and HP recovery via healing actions is increased.",
+      "Icon": 213911,
+      "ExpectedDefensive": true
+    },
+    {
+      "Id": 4295,
+      "Name": "Heart of Corundum",
+      "Description": "Damage taken is reduced.",
+      "Icon": 213615,
+      "ExpectedDefensive": true
+    }
+  ]
+}

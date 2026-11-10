@@ -170,6 +170,9 @@ public sealed partial class Plugin
             ReplayAnalyzerEvents = replayAnalyzerEvents,
             ReplayWorldMarkers = replayWorldMarkers,
             ReplayMitigations = replayMitigations,
+            ReplayStatusHistory = GetCurrentPullReplayStatusHistory(now),
+            ReplaySourceStatusHistory = GetCurrentPullReplaySourceStatusHistory(now),
+            ReplayStatusHistoryCaptured = true,
             ReplayDebuffs = replayDebuffs,
             ReplayDebuffsCaptured = true,
         };
@@ -190,7 +193,8 @@ public sealed partial class Plugin
 
     private void ResetCurrentPull(
         bool suppressResetStateDeaths = true,
-        bool resetDamageParser = true)
+        bool resetDamageParser = true,
+        DateTime? preserveStatusSinceUtc = null)
     {
         if (resetDamageParser)
         {
@@ -198,7 +202,7 @@ public sealed partial class Plugin
         }
 
         currentDeaths.Clear();
-        ClearLivePullCaptureState();
+        ClearLivePullCaptureState(preserveStatusSinceUtc);
         if (suppressResetStateDeaths)
         {
             StartPostResetDeathSuppression();
@@ -237,7 +241,7 @@ public sealed partial class Plugin
         currentPullClosedForReview = true;
     }
 
-    private void ClearLivePullCaptureState()
+    private void ClearLivePullCaptureState(DateTime? preserveStatusSinceUtc = null)
     {
         recentEventsByMember.Clear();
         recentCombatLogEventsByMember.Clear();
@@ -249,16 +253,28 @@ public sealed partial class Plugin
         recentReplayAnalyzerEvents.Clear();
         recentReplayWorldMarkers.Clear();
         recentReplayMitigations.Clear();
+        if (preserveStatusSinceUtc is { } statusStart)
+        {
+            playerStatusHistory.Prune(statusStart);
+            sourceMitigationHistory.Prune(statusStart);
+        }
+        else
+        {
+            playerStatusHistory.Clear();
+            sourceMitigationHistory.Clear();
+            knownStatusSources.Clear();
+            possibleMitigationUses.Clear();
+        }
+        possibleMitigationTimingChangedAtUtc = null;
+        lastMitigationStatusPollAtUtc = DateTime.MinValue;
         recentReplayDebuffs.Clear();
         activeReplayDebuffs.Clear();
         replayWorldMarkersCapturedForPull = false;
         activeDmuP2PathOfLightTowersByIndex.Clear();
         activeDmuP5ArenaHoleIndices.Clear();
         activeReplayMechanicsByKey.Clear();
-        recentSourceMitigationHistoryBySource.Clear();
         pendingEffectResultsByMemberSequence.Clear();
         pendingDeathCandidatesByMember.Clear();
-        possibleMitigationUsesByMember.Clear();
         lastHpHistorySampleByMember.Clear();
         knownAliveMembersByKey.Clear();
         lastKnownMembersByKey.Clear();
@@ -411,7 +427,7 @@ public sealed partial class Plugin
 
         if (currentPullClosedForReview)
         {
-            ResetCurrentPull(suppressResetStateDeaths: false);
+            ResetCurrentPull(suppressResetStateDeaths: false, preserveStatusSinceUtc: now);
         }
 
         if (pullStartedAtUtc is null)
@@ -455,7 +471,8 @@ public sealed partial class Plugin
             {
                 ResetCurrentPull(
                     suppressResetStateDeaths: false,
-                    resetDamageParser: false);
+                    resetDamageParser: false,
+                    preserveStatusSinceUtc: now);
             }
 
             lastInCombatAtUtc = now;

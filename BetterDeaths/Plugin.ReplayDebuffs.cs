@@ -22,8 +22,12 @@ public sealed partial class Plugin
     private void TrackRecentReplayDebuffs(IReadOnlyList<PartyMemberSnapshot> members, DateTime now)
     {
         var observedKeys = new HashSet<ReplayDebuffTrackingKey>();
+        var observedMembers = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in members)
         {
+            if (!member.HasWorldObject)
+                continue;
+            observedMembers.Add(member.MemberKey);
             foreach (var status in member.Statuses)
             {
                 if (!IsReplayPlayerDebuffStatus(status.Id))
@@ -39,7 +43,7 @@ public sealed partial class Plugin
 
         foreach (var pair in activeReplayDebuffs.ToList())
         {
-            if (observedKeys.Contains(pair.Key))
+            if (!observedMembers.Contains(pair.Key.MemberKey) || observedKeys.Contains(pair.Key))
             {
                 continue;
             }

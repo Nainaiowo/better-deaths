@@ -105,6 +105,7 @@ public sealed partial class Plugin
 
         EnsureCurrentDutyInstancePullGroup();
 
+        var statusObservedAtUtc = DateTime.UtcNow;
         var nextMembers = BuildTrackedCharacterSnapshots();
         currentMembers.Clear();
         currentMembers.AddRange(nextMembers);
@@ -119,6 +120,8 @@ public sealed partial class Plugin
         {
             ResolveRawCombatQueues(now);
         }
+
+        PollMitigationStatusHistory(statusObservedAtUtc);
 
         if (!ShouldCaptureLiveCombat(now))
         {
@@ -348,6 +351,7 @@ public sealed partial class Plugin
             {
                 HasWorldObject = gameObject is not null,
                 WorldObjectIsDead = worldObjectIsDead,
+                ClassJobLevel = gameObject?.Level ?? member.Level,
             });
             partyIndex++;
         }
@@ -399,6 +403,7 @@ public sealed partial class Plugin
                 {
                     HasWorldObject = true,
                     WorldObjectIsDead = player.IsDead,
+                    ClassJobLevel = player.Level,
                 });
             }
         }
@@ -453,6 +458,7 @@ public sealed partial class Plugin
         {
             HasWorldObject = true,
             WorldObjectIsDead = localPlayer.IsDead,
+            ClassJobLevel = localPlayer.Level,
         });
         trackedEntityIds.Add(localPlayer.EntityId);
         trackedNames.Add(memberName);
@@ -501,7 +507,6 @@ public sealed partial class Plugin
 
     private void ResolveRawActionEffectPacket(RawActionEffectPacket packet)
     {
-        TrackPossibleMitigationActionUse(packet);
         CaptureReplayAnalyzerEvent(packet);
         var replayMechanicCaptureRevisionBeforeSpecializedHandlers = replayMechanicCaptureRevision;
         CaptureReplayBlackHoleBlast(packet);
@@ -521,8 +526,8 @@ public sealed partial class Plugin
         uint? actionIconId = null;
         string? sourceName = null;
         IReadOnlyList<StatusSnapshot>? sourceStatuses = null;
+        var sourceStatusSnapshotAvailable = false;
         var foundRelevantEffect = false;
-        var trackedSourceStatuses = false;
 
         foreach (var target in packet.Targets)
         {
@@ -544,11 +549,7 @@ public sealed partial class Plugin
                 : priorHp is null
                     ? CombatEventHpSource.NoPreHitSample
                     : CombatEventHpSource.LatestPriorSample;
-            var statusSource = target.TargetSnapshot is not null
-                ? directTargetStatuses
-                : priorHp is null
-                    ? member.Statuses
-                    : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+            var statusSource = target.TargetSnapshot is not null ? directTargetStatuses : [];
             var playerStatuses = GetRelevantDeathStatuses(statusSource);
             var eventCurrentHp = hasDirectTargetHp ? targetSnapshot!.CurrentHp : priorHp?.CurrentHp ?? 0;
             var eventShieldHp = hasDirectTargetHp ? targetSnapshot!.ShieldHp : priorHp?.ShieldHp ?? 0;
@@ -577,17 +578,17 @@ public sealed partial class Plugin
                     ? GetEntityDisplayName(packet.CasterEntityId)
                     : packet.CasterName;
                 var shouldTrackSourceStatuses = kind.Value != DeathEventKind.Heal;
-                var resolvedSourceStatuses = shouldTrackSourceStatuses
-                    ? sourceStatuses ??= GetBossMitigationStatuses(packet.SourceSnapshot is null
-                        ? BuildSourceStatusSnapshots(packet.CasterEntityId)
-                        : BuildStatusSnapshots(packet.SourceSnapshot))
-                    : [];
-                if (shouldTrackSourceStatuses && !trackedSourceStatuses)
+                if (shouldTrackSourceStatuses && sourceStatuses is null)
                 {
-                    TrackRecentSourceMitigationSnapshot(packet.CasterEntityId, resolvedSourceName, packet.SeenAtUtc, resolvedSourceStatuses);
-                    trackedSourceStatuses = true;
+                    sourceStatusSnapshotAvailable = packet.SourceSnapshot is not null;
+                    IReadOnlyList<StatusSnapshot> observed;
+                    if (sourceStatusSnapshotAvailable)
+                        observed = BuildStatusSnapshots(packet.SourceSnapshot);
+                    else
+                        observed = [];
+                    sourceStatuses = GetBossMitigationStatuses(observed);
                 }
-
+                var resolvedSourceStatuses = shouldTrackSourceStatuses ? sourceStatuses! : [];
                 var amount = CalculateRawActionEffectAmount(effect);
 
                 var eventOrdinal = GetNextResolvedCombatEventOrdinal();
@@ -620,6 +621,8 @@ public sealed partial class Plugin
                     EventOrdinal = eventOrdinal,
                     ActionSequence = packet.ActionSequence,
                     HpSource = hpSource,
+                    HasPlayerStatusSnapshot = targetSnapshot is not null,
+                    HasSourceStatusSnapshot = shouldTrackSourceStatuses && sourceStatusSnapshotAvailable,
                 };
                 record = AttachPendingEffectResult(record);
                 AddRecentEvent(record);
@@ -1005,10 +1008,6 @@ public sealed partial class Plugin
             CaptureActorControlHotEvent(packet, member);
             CaptureActorControlDotEvent(packet, member);
         }
-        else
-        {
-            CaptureActorControlSourceMitigationStatusChange(packet);
-        }
 
         if (packet.Category == ActorControlDeathCategory && member is not null &&
             packet.DeathTargetIdentity is { } identity &&
@@ -1369,11 +1368,7 @@ public sealed partial class Plugin
             ? GetStatusName(packet.Param1)
             : "HoT tick";
         var actionIconId = packet.Param1 != 0 ? GetStatusIconId(packet.Param1) : 0;
-        var statusSource = packet.TargetSnapshot is not null
-            ? directTargetStatuses
-            : priorHp is null
-                ? GetBestKnownStatuses(member, packet.SeenAtUtc)
-                : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+        var statusSource = packet.TargetSnapshot is not null ? directTargetStatuses : [];
         var eventOrdinal = GetNextResolvedCombatEventOrdinal();
         var record = new CombatEventRecord(
             packet.SeenAtUtc,
@@ -1432,17 +1427,14 @@ public sealed partial class Plugin
         var sourceName = sourceEntityId == 0
             ? "Damage over time"
             : GetEntityDisplayName(sourceEntityId);
-        var sourceStatuses = sourceEntityId == 0
-            ? []
-            : GetBossMitigationStatuses(packet.SourceSnapshot is null
-                ? BuildSourceStatusSnapshots(sourceEntityId)
-                : BuildStatusSnapshots(packet.SourceSnapshot));
-        TrackRecentSourceMitigationSnapshot(sourceEntityId, sourceName, packet.SeenAtUtc, sourceStatuses);
-        var statusSource = packet.TargetSnapshot is not null
-            ? directTargetStatuses
-            : priorHp is null
-                ? GetBestKnownStatuses(member, packet.SeenAtUtc)
-                : DeduplicateStatusSnapshots(member.Statuses.Concat(priorHp.Statuses));
+        var sourceAvailable = packet.SourceSnapshot is not null;
+        IReadOnlyList<StatusSnapshot> observedSourceStatuses;
+        if (sourceAvailable)
+            observedSourceStatuses = BuildStatusSnapshots(packet.SourceSnapshot);
+        else
+            observedSourceStatuses = [];
+        var sourceStatuses = sourceEntityId == 0 ? [] : GetBossMitigationStatuses(observedSourceStatuses);
+        var statusSource = packet.TargetSnapshot is not null ? directTargetStatuses : [];
         var eventOrdinal = GetNextResolvedCombatEventOrdinal();
         var record = new CombatEventRecord(
             packet.SeenAtUtc,
@@ -1472,6 +1464,8 @@ public sealed partial class Plugin
             EventIdentity = $"actor:{packet.Sequence}:dot:{member.MemberKey}:{packet.Param2}",
             EventOrdinal = eventOrdinal,
             HpSource = hpSource,
+            HasPlayerStatusSnapshot = targetSnapshot is not null,
+            HasSourceStatusSnapshot = sourceEntityId != 0 && sourceAvailable,
         };
         AddRecentEvent(record);
         BackfillCombatEventToCapturedDeaths(record);
@@ -1518,28 +1512,27 @@ public sealed partial class Plugin
 
     private void CaptureActorControlSourceMitigationStatusChange(RawActorControlPacket packet)
     {
-        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlUpdateEffectCategory)
+        if (packet.Category is not ActorControlGainEffectCategory and not ActorControlUpdateEffectCategory and not ActorControlLoseEffectCategory)
         {
             return;
         }
 
-        if (!TryGetSourceMitigationActor(packet.EntityId, out var sourceName))
-        {
-            return;
-        }
-
-        var sourceStatuses = BuildSourceStatusSnapshots(packet.EntityId);
+        var sourceStatuses = BuildStatusSnapshots(packet.TargetSnapshot);
         if (!TryCreateActorControlStatusSnapshot(packet, sourceStatuses, out var status) ||
             !IsBossMitigationStatus(status))
         {
             return;
         }
+        var sourceName = TryGetSourceMitigationActor(packet.EntityId, out var knownName)
+            ? knownName : GetEntityDisplayName(packet.EntityId);
 
         TrackRecentSourceMitigationSnapshot(
             packet.EntityId,
             sourceName,
             packet.SeenAtUtc,
-            sourceStatuses.Append(status));
+            packet.Category == ActorControlLoseEffectCategory ? [] : [status],
+            removed: packet.Category == ActorControlLoseEffectCategory ? [status] : [],
+            isUpdateOnly: packet.Category == ActorControlUpdateEffectCategory);
     }
 
     private void CaptureReplayOverheadStatus(RawActorControlPacket packet, PartyMemberSnapshot member, StatusSnapshot status)
@@ -1755,6 +1748,7 @@ public sealed partial class Plugin
                     HasWorldObject = true,
                     WorldObjectIsDead = player.IsDead,
                     Statuses = statuses,
+                    ClassJobLevel = player.Level,
                 };
             }
         }
@@ -1952,7 +1946,7 @@ public sealed partial class Plugin
         var events = GetRecentEvents(member.MemberKey, deathSeenAtUtc, Math.Max(Configuration.RecentEventSeconds, LeadUpTimingPolicy.CaptureSeconds));
         var hpHistory = GetRecentHpHistory(member.MemberKey, deathSeenAtUtc, LeadUpTimingPolicy.CaptureSeconds);
         var enemyHpAtDeath = CaptureEnemyHpSnapshotsAtDeath(deathSeenAtUtc);
-        CaptureSourceMitigationSnapshotsForActiveEnemies(enemyHpAtDeath, deathSeenAtUtc);
+        CaptureSourceMitigationSnapshotsForActiveEnemies(enemyHpAtDeath, DateTime.UtcNow);
         var sourceMitigationHistory = GetRecentSourceMitigationHistory(
             events
                 .Select(combatEvent => combatEvent.SourceEntityId)
@@ -1994,7 +1988,7 @@ public sealed partial class Plugin
             replayPositions,
             environmentSourceDeath);
 
-        return new PartyDeathRecord(
+        var record = new PartyDeathRecord(
             deathSeenAtUtc,
             CalculatePullElapsed(deathSeenAtUtc),
             member.MemberKey,
@@ -2010,13 +2004,15 @@ public sealed partial class Plugin
             hpHistory,
             GetRelevantDeathStatuses(member.Statuses))
         {
+            EntityId = member.EntityId,
             DetectionCode = diagnosticCode,
             FatalSequence = fatalSequence,
             SourceMitigationHistory = sourceMitigationHistory,
+            PlayerStatusHistory = GetPlayerStatusHistory(member.MemberKey, deathSeenAtUtc),
             EnemyHpAtDeath = enemyHpAtDeath,
-            PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(member, deathSeenAtUtc),
             EnvironmentalAssessment = environmentalAssessment,
         };
+        return record with { PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(record) };
     }
 
     private IReadOnlyList<EnemyHpSnapshot> CaptureEnemyHpSnapshotsAtDeath(DateTime deathSeenAtUtc)
@@ -2152,11 +2148,15 @@ public sealed partial class Plugin
                 ? record
                 : death.LikelyCause;
 
-            deaths[index] = death with
+            var updated = death with
             {
                 LikelyCause = likelyCause,
                 RecentEvents = recentEvents,
                 FatalSequence = fatalSequence,
+            };
+            deaths[index] = updated.EntityId == 0 ? updated : updated with
+            {
+                PossibleMitigations = BuildPossibleMitigationSnapshotsForDeath(updated),
             };
         }
     }
@@ -2274,7 +2274,10 @@ public sealed partial class Plugin
             false,
             "Doom-like status was seen shortly before KO.",
             GetRelevantDeathStatuses(observation.Statuses),
-            GetBossMitigationStatuses(BuildSourceStatusSnapshots(status.SourceId)));
+            [])
+        {
+            HasPlayerStatusSnapshot = true,
+        };
     }
 
     private void AddRecentEvent(CombatEventRecord record)
@@ -2703,37 +2706,32 @@ public sealed partial class Plugin
         uint sourceEntityId,
         string sourceName,
         DateTime seenAtUtc,
-        IEnumerable<StatusSnapshot> statuses)
+        IEnumerable<StatusSnapshot> statuses,
+        bool isComplete = false,
+        IReadOnlyList<StatusSnapshot>? removed = null,
+        bool isUpdateOnly = false)
     {
         if (sourceEntityId == 0)
         {
             return;
         }
 
-        var sourceStatuses = GetBossMitigationStatuses(statuses)
-            .Where(status => status.RemainingTime > 0.0f)
-            .ToList();
-        if (sourceStatuses.Count == 0)
-        {
-            return;
-        }
-
-        if (!recentSourceMitigationHistoryBySource.TryGetValue(sourceEntityId, out var history))
-        {
-            history = [];
-            recentSourceMitigationHistoryBySource[sourceEntityId] = history;
-        }
-
-        history.Add(new SourceMitigationSnapshot(
+        var sourceStatuses = GetBossMitigationStatuses(statuses);
+        var removedStatuses = GetBossMitigationStatuses(removed ?? []);
+        var observation = new SourceMitigationSnapshot(
             seenAtUtc,
             CalculatePullElapsed(seenAtUtc),
             sourceEntityId,
             sourceName,
-            sourceStatuses));
-        while (history.Count > MaxSourceMitigationHistoryPerSource)
+            sourceStatuses)
         {
-            history.RemoveAt(0);
-        }
+            IsComplete = isComplete,
+            IsUpdateOnly = isUpdateOnly,
+            IsAuthoritative = !isComplete,
+            RemovedStatuses = removedStatuses,
+            Sources = CaptureStatusSources(sourceStatuses),
+        };
+        sourceMitigationHistory.Observe(observation);
     }
 
     private void TrackActiveSourceMitigationHistory(DateTime seenAtUtc)
@@ -2755,7 +2753,7 @@ public sealed partial class Plugin
                 battleNpc.EntityId,
                 battleNpc.Name.TextValue,
                 seenAtUtc,
-                BuildStatusSnapshots(battleNpc.StatusList));
+                BuildStatusSnapshots(battleNpc.StatusList), isComplete: true);
         }
     }
 
@@ -2782,7 +2780,7 @@ public sealed partial class Plugin
                     battleNpc.EntityId,
                     battleNpc.Name.TextValue,
                     seenAtUtc,
-                    BuildStatusSnapshots(battleNpc.StatusList));
+                    BuildStatusSnapshots(battleNpc.StatusList), isComplete: true);
             }
             catch (Exception ex)
             {
@@ -2796,9 +2794,6 @@ public sealed partial class Plugin
         return battleNpc.BattleNpcKind == Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind.Combatant &&
             battleNpc.EntityId != 0 &&
             battleNpc.EntityId != InvalidActorEntityId &&
-            battleNpc.MaxHp > 0 &&
-            battleNpc.CurrentHp > 0 &&
-            battleNpc.IsTargetable &&
             !string.IsNullOrWhiteSpace(battleNpc.Name.TextValue);
     }
 
@@ -2837,16 +2832,15 @@ public sealed partial class Plugin
             .Where(sourceEntityId => sourceEntityId != 0)
             .Distinct()
             .ToList();
-        if (sourceIds.Count == 0 || recentSourceMitigationHistoryBySource.Count == 0)
+        if (sourceIds.Count == 0)
         {
             return [];
         }
 
         var cutoff = seenAtUtc - TimeSpan.FromSeconds(seconds);
         var endAtUtc = seenAtUtc + FatalSequenceEndBuffer;
-        return sourceIds
-            .Where(recentSourceMitigationHistoryBySource.ContainsKey)
-            .SelectMany(sourceEntityId => recentSourceMitigationHistoryBySource[sourceEntityId])
+        return sourceMitigationHistory.Between(cutoff, endAtUtc)
+            .Where(snapshot => sourceIds.Contains(snapshot.SourceEntityId))
             .Where(snapshot => snapshot.SeenAtUtc >= cutoff && snapshot.SeenAtUtc <= endAtUtc)
             .OrderBy(snapshot => snapshot.SeenAtUtc)
             .ThenBy(snapshot => snapshot.SourceName, StringComparer.OrdinalIgnoreCase)
@@ -2922,8 +2916,9 @@ public sealed partial class Plugin
         PruneRecentReplayAnalyzerEvents(now);
         PruneRecentReplayWorldMarkers(now);
         PruneRecentReplayMitigations(now);
+        playerStatusHistory.Prune(GetCurrentPullReplayStartAtUtc(now));
+        sourceMitigationHistory.Prune(GetCurrentPullReplayStartAtUtc(now));
         PruneRecentReplayDebuffs(now);
-        PruneRecentSourceMitigationHistory(now);
         PrunePendingEffectResults(now);
     }
 
@@ -2961,24 +2956,6 @@ public sealed partial class Plugin
             {
                 recentHpHistoryByMember.Remove(key);
                 lastHpHistorySampleByMember.Remove(key);
-            }
-        }
-    }
-
-    private void PruneRecentSourceMitigationHistory(DateTime now)
-    {
-        if (recentSourceMitigationHistoryBySource.Count == 0)
-        {
-            return;
-        }
-
-        var cutoff = now - TimeSpan.FromSeconds(SourceMitigationHistoryRetentionSeconds);
-        foreach (var sourceEntityId in recentSourceMitigationHistoryBySource.Keys.ToList())
-        {
-            recentSourceMitigationHistoryBySource[sourceEntityId].RemoveAll(snapshot => snapshot.SeenAtUtc < cutoff);
-            if (recentSourceMitigationHistoryBySource[sourceEntityId].Count == 0)
-            {
-                recentSourceMitigationHistoryBySource.Remove(sourceEntityId);
             }
         }
     }
@@ -3099,29 +3076,6 @@ public sealed partial class Plugin
         return snapshot is null ? [] : BuildStatusSnapshots(snapshot.Statuses);
     }
 
-    private IReadOnlyList<StatusSnapshot> BuildSourceStatusSnapshots(uint sourceEntityId)
-    {
-        if (sourceEntityId == 0)
-        {
-            return [];
-        }
-
-        try
-        {
-            var sourceObject = ObjectTable.SearchByEntityId(sourceEntityId);
-            if (sourceObject is Dalamud.Game.ClientState.Objects.Types.IBattleChara battleChara)
-            {
-                return BuildStatusSnapshots(battleChara.StatusList);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Debug(ex, "Could not snapshot source statuses for {SourceEntityId:X8}.", sourceEntityId);
-        }
-
-        return [];
-    }
-
     private static IReadOnlyList<StatusSnapshot> GetRelevantDeathStatuses(IEnumerable<StatusSnapshot> statuses)
     {
         return DeduplicateStatusSnapshots(statuses
@@ -3192,20 +3146,10 @@ public sealed partial class Plugin
         return ContainsAny(status.Name, DoomStatusNameFragments);
     }
 
-    private static bool IsDefensiveStatus(StatusSnapshot status)
-    {
-        return TryGetDefensiveStatusDefinition(status, out _);
-    }
-
     private static bool IsPlayerDebuffStatus(StatusSnapshot status)
     {
         return !IsDefensiveStatus(status) &&
             ContainsAny(status.Name, EncounterDebuffNameFragments);
-    }
-
-    private static bool IsBossMitigationStatus(StatusSnapshot status)
-    {
-        return BossMitigationStatusIds.Contains(status.Id);
     }
 
     private static bool ContainsAny(string value, IEnumerable<string> fragments)

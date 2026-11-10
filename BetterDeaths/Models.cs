@@ -92,6 +92,8 @@ public sealed record PartyMemberSnapshot(
     public bool HasWorldObject { get; init; }
 
     public bool WorldObjectIsDead { get; init; }
+
+    public byte ClassJobLevel { get; init; }
 }
 
 public sealed record ReplayPositionSnapshot(
@@ -191,7 +193,56 @@ public sealed record ReplayMitigationSnapshot(
     uint ActionIconId,
     PossibleMitigationScope Scope,
     float DurationSeconds,
-    IReadOnlyList<StatusSnapshot> Statuses);
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool ObservedEffect { get; init; }
+
+    public IReadOnlyList<string> TargetMemberNames { get; init; } = [];
+}
+
+public sealed record StatusSetSnapshot(DateTime SeenAtUtc, IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool IsUpdateOnly { get; init; }
+
+    public bool IsComplete { get; init; }
+
+    public bool IsAuthoritative { get; init; }
+
+    public IReadOnlyList<StatusSnapshot> RemovedStatuses { get; init; } = [];
+}
+
+public sealed record StatusSourceSnapshot(
+    uint EntityId, string MemberKey, string MemberName, int PartyIndex, uint ClassJobId, string ClassJobName);
+
+public sealed record PlayerStatusSnapshot(
+    DateTime SeenAtUtc,
+    float PullElapsedSeconds,
+    string MemberKey,
+    string MemberName,
+    int PartyIndex,
+    uint ClassJobId,
+    string ClassJobName,
+    uint EntityId,
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool IsUpdateOnly { get; init; }
+
+    public bool IsComplete { get; init; }
+
+    public bool IsAuthoritative { get; init; }
+
+    public IReadOnlyList<StatusSnapshot> RemovedStatuses { get; init; } = [];
+
+    public IReadOnlyList<StatusSourceSnapshot> Sources { get; init; } = [];
+
+    public StatusSetSnapshot ToStatusSet() => new(SeenAtUtc, Statuses)
+    {
+        IsUpdateOnly = IsUpdateOnly,
+        IsComplete = IsComplete,
+        IsAuthoritative = IsAuthoritative,
+        RemovedStatuses = RemovedStatuses,
+    };
+}
 
 public sealed record ReplayDebuffSnapshot(
     DateTime SeenAtUtc,
@@ -247,11 +298,18 @@ public sealed record CombatEventRecord(
     IReadOnlyList<StatusSnapshot> Statuses,
     IReadOnlyList<StatusSnapshot> SourceStatuses)
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<CombatEventRecord> ConstituentEvents { get; init; } = [];
+
     public string? EventIdentity { get; init; }
 
     public uint EventOrdinal { get; init; }
 
     public CombatEventHpSource HpSource { get; init; }
+
+    public bool HasPlayerStatusSnapshot { get; init; }
+
+    public bool HasSourceStatusSnapshot { get; init; }
 
     public uint ActionSequence { get; init; }
 
@@ -291,7 +349,26 @@ public sealed record SourceMitigationSnapshot(
     float PullElapsedSeconds,
     uint SourceEntityId,
     string SourceName,
-    IReadOnlyList<StatusSnapshot> Statuses);
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public bool IsUpdateOnly { get; init; }
+
+    public bool IsComplete { get; init; }
+
+    public bool IsAuthoritative { get; init; }
+
+    public IReadOnlyList<StatusSnapshot> RemovedStatuses { get; init; } = [];
+
+    public IReadOnlyList<StatusSourceSnapshot> Sources { get; init; } = [];
+
+    public StatusSetSnapshot ToStatusSet() => new(SeenAtUtc, Statuses)
+    {
+        IsUpdateOnly = IsUpdateOnly,
+        IsComplete = IsComplete,
+        IsAuthoritative = IsAuthoritative,
+        RemovedStatuses = RemovedStatuses,
+    };
+}
 
 public sealed record EnemyHpSnapshot(
     DateTime SeenAtUtc,
@@ -310,6 +387,9 @@ public enum PossibleMitigationScope
     Boss,
 }
 
+public readonly record struct MitigationSimulationHit(DateTime SeenAtUtc, uint SourceEntityId, uint ActionId,
+    uint ActionSequence, long EventOrdinal, string? EventIdentity);
+
 public sealed record PossibleMitigationSnapshot(
     string Key,
     string MemberKey,
@@ -325,7 +405,20 @@ public sealed record PossibleMitigationSnapshot(
     DateTime? LastUsedAtUtc,
     float? LastUsedPullElapsedSeconds,
     string Availability,
-    IReadOnlyList<StatusSnapshot> Statuses);
+    IReadOnlyList<StatusSnapshot> Statuses)
+{
+    public byte CooldownGroup { get; init; }
+
+    public int MaxCharges { get; init; } = 1;
+
+    public bool WasUsedTooLate { get; init; }
+
+    public IReadOnlyList<uint> EffectStatusIds { get; init; } = [];
+
+    public IReadOnlyList<uint> SimulationSourceEntityIds { get; init; } = [];
+
+    public IReadOnlyList<MitigationSimulationHit> SimulationHits { get; init; } = [];
+}
 
 public sealed record FatalSequenceRecord(
     DateTime StartAtUtc,
@@ -350,9 +443,13 @@ public sealed record PartyDeathRecord(
     IReadOnlyList<HpHistorySnapshot> HpHistory,
     IReadOnlyList<StatusSnapshot> StatusesAtDeath)
 {
+    public uint EntityId { get; init; }
+
     public FatalSequenceRecord? FatalSequence { get; init; }
 
     public IReadOnlyList<SourceMitigationSnapshot> SourceMitigationHistory { get; init; } = [];
+
+    public IReadOnlyList<PlayerStatusSnapshot> PlayerStatusHistory { get; init; } = [];
 
     public IReadOnlyList<EnemyHpSnapshot> EnemyHpAtDeath { get; init; } = [];
 
@@ -398,6 +495,12 @@ public sealed record PullDeathSnapshot(
     public IReadOnlyList<ReplayWorldMarkerSnapshot> ReplayWorldMarkers { get; init; } = [];
 
     public IReadOnlyList<ReplayMitigationSnapshot> ReplayMitigations { get; init; } = [];
+
+    public IReadOnlyList<PlayerStatusSnapshot> ReplayStatusHistory { get; init; } = [];
+
+    public IReadOnlyList<SourceMitigationSnapshot> ReplaySourceStatusHistory { get; init; } = [];
+
+    public bool ReplayStatusHistoryCaptured { get; init; }
 
     public IReadOnlyList<ReplayDebuffSnapshot> ReplayDebuffs { get; init; } = [];
 

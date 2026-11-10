@@ -35,9 +35,12 @@ public sealed record FatalEventGroup(IReadOnlyList<CombatEventRecord> Events)
         var total = orderedEvents.Aggregate(0UL, (sum, combatEvent) => sum + combatEvent.Amount);
         return first with
         {
+            ConstituentEvents = CombatEventComponents.Expand(orderedEvents).ToArray(),
+            SourceEntityId = orderedEvents.All(value => value.SourceEntityId == first.SourceEntityId) ? first.SourceEntityId : 0,
             Amount = total > uint.MaxValue ? uint.MaxValue : (uint)total,
             Statuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.Statuses)),
-            SourceStatuses = MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.SourceStatuses)),
+            SourceStatuses = orderedEvents.All(value => value.SourceEntityId == first.SourceEntityId)
+                ? MergeStatuses(orderedEvents.SelectMany(combatEvent => combatEvent.SourceStatuses)) : [],
             ResultSeenAtUtc = last.ResultSeenAtUtc,
             ResultCurrentHp = last.ResultCurrentHp,
             ResultShieldHp = last.ResultShieldHp,

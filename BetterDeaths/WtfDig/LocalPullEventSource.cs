@@ -444,26 +444,17 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
 
         private void AddMarkers()
         {
-            var lastRealityTell = new Dictionary<int, (uint Param, double Time)>();
             foreach (var marker in pull.ReplayMarkers.OrderBy(marker => marker.PullElapsedSeconds))
             {
                 var actorId = actors.GetMarkerActor(marker);
                 var timestamp = ToMilliseconds(marker.PullElapsedSeconds);
                 if (marker.ActorKind == ReplayActorKind.Enemy && marker.MarkerId == RealFakeStatusId)
                 {
-                    if (lastRealityTell.TryGetValue(actorId, out var previous) &&
-                        previous.Param == marker.RawMarkerId &&
-                        timestamp - previous.Time < 10_000)
-                    {
-                        continue;
-                    }
-
-                    lastRealityTell[actorId] = (marker.RawMarkerId, timestamp);
                     output.Add(new LocalEvent(
                         new FflogsEvent
                         {
                             Timestamp = timestamp,
-                            Type = "applydebuff",
+                            Type = "statussnapshot",
                             TargetID = actorId,
                             AbilityGameID = ToFflogsStatusId(RealFakeStatusId),
                             ExtraInfo = marker.RawMarkerId,
@@ -604,7 +595,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     actors.GetMechanicSource(cast) == sourceId &&
                     cast.PullElapsedSeconds <= mechanic.PullElapsedSeconds + 1 &&
                     mechanic.PullElapsedSeconds - cast.PullElapsedSeconds <= 20);
-                if (!hasNearbyCast)
+                if (!hasNearbyCast || P4Analyzer.IsFloodResolutionAction(mechanic.RawEventId))
                 {
                     AddCast(mechanic, castKeys, predicted: false);
                 }
@@ -773,16 +764,19 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             {
                 var sourceId = actors.GetCombatSource(analyzerEvent.SourceEntityId, analyzerEvent.SourceName);
                 var timestamp = ToMilliseconds(analyzerEvent.PullElapsedSeconds);
-                if (output.Any(entry =>
+                var duplicate = output.FindIndex(entry =>
                     IsCastEvent(entry.Event.Type) &&
                     entry.Event.SourceID == sourceId &&
                     entry.Event.AbilityGameID == analyzerEvent.AbilityId &&
-                    Math.Abs(entry.Event.Timestamp - timestamp) <= 100))
+                    Math.Abs(entry.Event.Timestamp - timestamp) <= 100);
+                var replacePrediction = duplicate >= 0 && output[duplicate].Event.IsEstimated &&
+                    P4Analyzer.IsFloodResolutionAction(analyzerEvent.AbilityId);
+                if (duplicate >= 0 && !replacePrediction)
                 {
                     continue;
                 }
 
-                output.Add(new LocalEvent(
+                var captured = new LocalEvent(
                     new FflogsEvent
                     {
                         Timestamp = timestamp,
@@ -795,7 +789,11 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                             : ResourceAt(sourceId, analyzerEvent.PullElapsedSeconds),
                     },
                     FflogsEventDataType.Casts,
-                    FflogsHostilityType.Enemies));
+                    FflogsHostilityType.Enemies);
+                if (replacePrediction)
+                    output[duplicate] = captured;
+                else
+                    output.Add(captured);
             }
         }
 
@@ -832,12 +830,15 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             var timestamp = ToMilliseconds(eventSeconds);
             var roundedTime = (long)Math.Round(timestamp / 100.0);
             var key = $"{sourceId}:{mechanic.RawEventId}:{roundedTime}";
-            if (!castKeys.Add(key))
-            {
+            var duplicate = !castKeys.Add(key);
+            var replacement = duplicate && !predicted && P4Analyzer.IsFloodResolutionAction(mechanic.RawEventId)
+                ? output.FindLastIndex(entry => entry.Event.Type == "cast" && entry.Event.IsEstimated &&
+                    entry.Event.SourceID == sourceId && entry.Event.AbilityGameID == mechanic.RawEventId &&
+                    (long)Math.Round(entry.Event.Timestamp / 100.0) == roundedTime) : -1;
+            if (duplicate && replacement < 0)
                 return;
-            }
 
-            output.Add(new LocalEvent(
+            var captured = new LocalEvent(
                 new FflogsEvent
                 {
                     Timestamp = timestamp,
@@ -846,9 +847,14 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     AbilityGameID = mechanic.RawEventId,
                     SourceInstance = sourceId,
                     SourceResources = ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
+                    IsEstimated = predicted,
                 },
                 FflogsEventDataType.Casts,
-                FflogsHostilityType.Enemies));
+                FflogsHostilityType.Enemies);
+            if (replacement >= 0)
+                output[replacement] = captured;
+            else
+                output.Add(captured);
         }
 
         private void AddMechanicDamage(ReplayMechanicSnapshot mechanic)
@@ -938,6 +944,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     AbilityGameID = mechanic.RawEventId,
                     SourceInstance = sourceId,
                     SourceResources = ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
+                    IsEstimated = true,
                 },
                 FflogsEventDataType.DamageTaken,
                 FflogsHostilityType.Friendlies));
@@ -962,7 +969,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     Math.Max(1, amount),
                     ResourceAt(sourceId, eventSeconds) ?? MechanicSourceResources(mechanic),
                     ResourceAt(targetId, eventSeconds),
-                    sourceId);
+                    sourceId,
+                    estimated: true);
             }
         }
 
@@ -1013,7 +1021,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             long amount,
             FflogsResources? sourceResources,
             FflogsResources? targetResources,
-            int sourceInstance)
+            int sourceInstance,
+            bool estimated = false)
         {
             foreach (var type in new[] { "calculateddamage", "damage" })
             {
@@ -1028,6 +1037,7 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                         Amount = amount,
                         UnmitigatedAmount = amount,
                         SourceInstance = sourceInstance,
+                        IsEstimated = estimated,
                         SourceResources = sourceResources,
                         TargetResources = targetResources,
                     },

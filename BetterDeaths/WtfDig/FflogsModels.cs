@@ -79,6 +79,10 @@ internal sealed class FflogsResources
 
 internal sealed class FflogsEvent
 {
+    // Local geometry/HP estimates are not evidence of an observed hit.
+    [JsonIgnore]
+    public bool IsEstimated { get; init; }
+
     public double Timestamp { get; init; }
     public string Type { get; init; } = string.Empty;
     public int? SourceID { get; init; }

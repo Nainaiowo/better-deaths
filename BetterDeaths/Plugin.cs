@@ -216,7 +216,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private const float DmuP2PathOfLightTowerResolveMatchDistance = 7.0f;
     private const uint DmuP4RealityTellStatusId = 2056;
     private const int HpHistoryRetentionSeconds = LeadUpTimingPolicy.LiveRetentionSeconds;
-    private const int SourceMitigationHistoryRetentionSeconds = LeadUpTimingPolicy.LiveRetentionSeconds;
     private const int CombatLogEventRetentionSeconds = LeadUpTimingPolicy.LiveRetentionSeconds;
     private const int RawActionEffectRetentionSeconds = 5;
     private const int RawCombatLogRetentionSeconds = 10;
@@ -233,7 +232,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private const int MaxAddonInspectorAtkValues = 128;
     private const int AddonInspectorDuplicateSuppressSeconds = 3;
     private const int MaxRecentHpHistoryPerMember = 240;
-    private const int MaxSourceMitigationHistoryPerSource = 80;
     private const int MaxEnemyHpSnapshotsAtDeath = 5;
     private const int MaxReplayEnemyActors = 12;
     private const int MaxActionEffectTargets = 32;
@@ -358,8 +356,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly List<ReplayDebuffSnapshot> recentReplayDebuffs = [];
     private readonly Dictionary<ReplayDebuffTrackingKey, TrackedReplayDebuff> activeReplayDebuffs = [];
     private readonly Dictionary<(string MemberKey, uint ActionSequence), PendingEffectResult> pendingEffectResultsByMemberSequence = [];
-    private readonly Dictionary<uint, List<SourceMitigationSnapshot>> recentSourceMitigationHistoryBySource = [];
-    private readonly Dictionary<string, Dictionary<string, TrackedPossibleMitigationUse>> possibleMitigationUsesByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> lastHpHistorySampleByMember = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PartyMemberSnapshot> knownAliveMembersByKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingDeathCandidate> pendingDeathCandidatesByMember = new(StringComparer.Ordinal);

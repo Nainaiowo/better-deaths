@@ -22,11 +22,16 @@ public sealed partial class Plugin
 
     private sealed record RawStatusTimingUpdate(long DamageCaptureOrder, DateTime SeenAtUtc,
         ServerFrameTimestampCapture Timing, uint TargetId, byte Slot, uint StatusId,
-        uint SourceId, ushort Parameter, float Duration, bool MissingInformation);
+        uint SourceId, ushort Parameter, float Duration, bool MissingInformation)
+    {
+        public bool CaptureForReview { get; init; }
+        public bool CaptureForDamageParsing { get; init; }
+        public RawStatusSnapshot? PreviousStatus { get; init; }
+    }
 
     private unsafe void TryInitializeStatusTiming()
     {
-        // These optional hooks serve the damage parser's packet clock, not Tempera.
+        // Share the existing server-update hooks; Tempera keeps its independent shield-result capture.
         if (serverFrameHook is null)
             return;
         try
@@ -93,25 +98,38 @@ public sealed partial class Plugin
             lock (rawCombatQueueLock)
             {
                 var key = (targetId, index);
+                var before = manager->Status[index];
                 var relevant = DamageStatusCapturePolicy.IsRelevant(statusId);
-                if (!relevant && !DamageStatusCapturePolicy.IsRelevant(manager->Status[index].StatusId) &&
-                    !capturedTimingSlots.Contains(key))
+                var damageRelevant = relevant || DamageStatusCapturePolicy.IsRelevant(before.StatusId) || capturedTimingSlots.Contains(key);
+                var reviewRelevant = IsDefensiveStatusId(statusId) ||
+                    BossMitigationStatusIds.Contains(statusId) || IsDefensiveStatusId(before.StatusId) || BossMitigationStatusIds.Contains(before.StatusId);
+                if (!damageRelevant && !reviewRelevant)
                     return;
                 var now = DateTime.UtcNow;
-                if (!ShouldAcceptDamageParserCapture(now))
+                var captureDamage = damageRelevant && ShouldAcceptDamageParserCapture(now);
+                var captureReview = reviewRelevant && ShouldCaptureReviewStatusHistory();
+                if (!captureDamage && !captureReview)
                     return;
                 if (rawStatusTimingUpdates.Count >= 16384)
                 {
                     droppedStatusTimingUpdates++;
                     return;
                 }
-                if (relevant)
-                    capturedTimingSlots.Add(key);
-                else
-                    capturedTimingSlots.Remove(key);
+                if (captureDamage)
+                {
+                    if (relevant)
+                        capturedTimingSlots.Add(key);
+                    else
+                        capturedTimingSlots.Remove(key);
+                }
                 rawStatusTimingUpdates.Enqueue(new(nextDamageCaptureOrder++, now, timing,
                     targetId, (byte)index, statusId, sourceId, parameter, duration,
-                    statusId != 0 && statusTimingMissingInformation));
+                    statusId != 0 && statusTimingMissingInformation)
+                {
+                    CaptureForReview = captureReview,
+                    CaptureForDamageParsing = captureDamage,
+                    PreviousStatus = before.StatusId == 0 ? null : new(before.StatusId, before.SourceObject.ObjectId, before.Param, before.RemainingTime),
+                });
             }
         }
         catch (Exception ex)

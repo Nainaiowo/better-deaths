@@ -37,6 +37,18 @@ public sealed class CaptureTimingPolicyTests
         Assert.False(accepted);
     }
 
+    [Theory]
+    [InlineData(true, false, true, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, false, false, false)]
+    public void PrepullStatusCaptureDoesNotEnableIdleDeathCapture(bool duty, bool pvp, bool enabled, bool expected)
+    {
+        Assert.Equal(expected, CaptureTimingPolicy.ShouldCaptureReviewStatusHistory(duty, pvp, enabled));
+        Assert.False(CaptureTimingPolicy.ShouldAcceptRawCombatCapture(duty, pvp, enabled,
+            false, null, CombatAtUtc, Grace));
+    }
+
     [Fact]
     public void DamageParserCanStageDutyPacketsBeforeCombatIsReported()
     {

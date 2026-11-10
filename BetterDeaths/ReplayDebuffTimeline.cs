@@ -53,6 +53,8 @@ public static class ReplayDebuffTimeline
                     0.0f,
                     change.Status.RemainingTime -
                         MathF.Max(0.0f, pullElapsedSeconds - change.PullElapsedSeconds));
+                if (remainingSeconds <= 0)
+                    continue;
             }
 
             active.Add(new ReplayDebuffActiveState(change, remainingSeconds));
