@@ -24,7 +24,9 @@ public sealed partial class Plugin
         if (sheet is null)
             return [];
         groups = PossibleMitigationDefinitions.Where(definition => DefinitionMatchesJob(definition, jobId))
-            .Select(definition => sheet.GetRowOrDefault(definition.ActionId)?.CooldownGroup ?? 0)
+            .SelectMany(definition => new[] { definition.ActionId, definition.GrantedByActionId })
+            .Where(actionId => actionId != 0)
+            .Select(actionId => sheet.GetRowOrDefault(actionId)?.CooldownGroup ?? 0)
             .Where(group => group is > 0 and not 58).ToHashSet();
         possibleMitigationCooldownGroups[jobId] = groups;
         return groups;
@@ -129,7 +131,7 @@ public sealed partial class Plugin
                     continue;
                 }
 
-                if (CreatePossibleMitigationSnapshot(member, definition) is { } snapshot)
+                if (CreatePossibleMitigationSnapshot(member, definition, death.SeenAtUtc) is { } snapshot)
                     snapshots.Add(snapshot);
             }
         }
@@ -140,11 +142,28 @@ public sealed partial class Plugin
 
     private PossibleMitigationSnapshot? CreatePossibleMitigationSnapshot(
         PartyMemberSnapshot member,
-        PossibleMitigationDefinition definition)
+        PossibleMitigationDefinition definition,
+        DateTime deathSeenAtUtc)
     {
         var actionId = definition.ActionId;
         if (GetPossibleMitigationCooldownProfile(actionId, member.ClassJobLevel) is not { } cooldown)
             return null;
+        MitigationPrerequisite? prerequisite = null;
+        if (definition.GrantedByActionId != 0)
+        {
+            if (DataManager.GetExcelSheet<LuminaAction>()?.GetRowOrDefault(actionId) is not { } action ||
+                action.ClassJobLevel > member.ClassJobLevel ||
+                GetPossibleMitigationCooldownProfile(definition.GrantedByActionId, member.ClassJobLevel) is not { } parent)
+                return null;
+            var history = playerStatusHistory.Between(deathSeenAtUtc.AddSeconds(-LeadUpTimingPolicy.CaptureSeconds),
+                deathSeenAtUtc + FatalSequenceEndBuffer, member.MemberKey).Select(value => value.ToStatusSet() with
+                {
+                    Statuses = value.Statuses.Where(status => status.Id == definition.ReadyStatusId).ToArray(),
+                    RemovedStatuses = value.RemovedStatuses.Where(status => status.Id == definition.ReadyStatusId).ToArray(),
+                }).ToArray();
+            prerequisite = new(definition.GrantedByActionId, parent.Group, (float)parent.RecastSeconds,
+                parent.MaxCharges, definition.ReadyStatusId, history);
+        }
         var actionName = definition.ActionName;
         var actionIconId = actionId == 0 ? 0 : GetActionIconId(actionId);
         var statuses = definition.Statuses
@@ -169,6 +188,7 @@ public sealed partial class Plugin
         {
             CooldownGroup = cooldown.Group,
             MaxCharges = cooldown.MaxCharges,
+            Prerequisite = prerequisite,
             EffectStatusIds = GetPossibleMitigationEffectStatusIds(definition.Key),
         };
     }

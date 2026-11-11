@@ -102,7 +102,8 @@ public sealed partial class Plugin
                 var relevant = DamageStatusCapturePolicy.IsRelevant(statusId);
                 var damageRelevant = relevant || DamageStatusCapturePolicy.IsRelevant(before.StatusId) || capturedTimingSlots.Contains(key);
                 var reviewRelevant = IsDefensiveStatusId(statusId) ||
-                    BossMitigationStatusIds.Contains(statusId) || IsDefensiveStatusId(before.StatusId) || BossMitigationStatusIds.Contains(before.StatusId);
+                    BossMitigationStatusIds.Contains(statusId) || IsDefensiveStatusId(before.StatusId) || BossMitigationStatusIds.Contains(before.StatusId) ||
+                    IsPossibleMitigationReadyStatusId(statusId) || IsPossibleMitigationReadyStatusId(before.StatusId);
                 if (!damageRelevant && !reviewRelevant)
                     return;
                 var now = DateTime.UtcNow;

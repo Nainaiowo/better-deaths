@@ -14,6 +14,9 @@ public sealed partial class Plugin
     private bool ShouldCaptureReviewStatusHistory() => CaptureTimingPolicy.ShouldCaptureReviewStatusHistory(
         IsDutyCaptureActive(), IsPvPCaptureBlocked(), Configuration.CapturePartyDeaths || Configuration.CaptureOtherDeaths);
 
+    private static IReadOnlyList<StatusSnapshot> GetRelevantMitigationHistoryStatuses(IEnumerable<StatusSnapshot> statuses) =>
+        DeduplicateStatusSnapshots(statuses.Where(status => IsRelevantDeathStatus(status) || IsPossibleMitigationReadyStatusId(status.Id)));
+
     private void CaptureReviewStatusHistory(IReadOnlyList<RawActionEffectPacket> actions,
         IReadOnlyList<RawEffectResultPacket> results, IReadOnlyList<RawActorControlPacket> controls, IReadOnlyList<RawStatusTimingUpdate> timing)
     {
@@ -34,7 +37,7 @@ public sealed partial class Plugin
                         break;
                     var caster = FindCurrentMemberByEntityId(action.CasterEntityId);
                     if (caster is not null && action.SourceSnapshot is not null)
-                        ObservePlayerStatusSnapshot(caster, action.SeenAtUtc, GetRelevantDeathStatuses(BuildStatusSnapshots(action.SourceSnapshot)), true);
+                        ObservePlayerStatusSnapshot(caster, action.SeenAtUtc, GetRelevantMitigationHistoryStatuses(BuildStatusSnapshots(action.SourceSnapshot)), true);
                     else if (action.SourceSnapshot is not null)
                         TrackRecentSourceMitigationSnapshot(action.CasterEntityId, action.CasterName, action.SeenAtUtc,
                             BuildStatusSnapshots(action.SourceSnapshot), true);
@@ -42,7 +45,7 @@ public sealed partial class Plugin
                     {
                         var member = FindCurrentMemberByTargetId(target.TargetId);
                         if (member is not null && target.TargetSnapshot is not null)
-                            ObservePlayerStatusSnapshot(member, action.SeenAtUtc, GetRelevantDeathStatuses(BuildStatusSnapshots(target.TargetSnapshot)), true);
+                            ObservePlayerStatusSnapshot(member, action.SeenAtUtc, GetRelevantMitigationHistoryStatuses(BuildStatusSnapshots(target.TargetSnapshot)), true);
                     }
                     break;
                 case RawEffectResultPacket result:
@@ -51,7 +54,7 @@ public sealed partial class Plugin
                     TrackPossibleMitigationApplications(result, gained);
                     if (recipient is not null)
                     {
-                        var relevant = GetRelevantDeathStatuses(gained);
+                        var relevant = GetRelevantMitigationHistoryStatuses(gained);
                         if (relevant.Count > 0)
                             ObservePlayerStatusSnapshot(recipient, result.SeenAtUtc, relevant, false);
                     }
@@ -71,13 +74,14 @@ public sealed partial class Plugin
                         break;
                     }
                     var lookup = BuildStatusSnapshots(control.TargetSnapshot);
-                    if (TryCreateActorControlStatusSnapshot(control, lookup, out var status) && IsRelevantDeathStatus(status))
+                    if (TryCreateActorControlStatusSnapshot(control, lookup, out var status) &&
+                        (IsRelevantDeathStatus(status) || IsPossibleMitigationReadyStatusId(status.Id)))
                         ObservePlayerStatusSnapshot(player, control.SeenAtUtc,
                             control.Category == ActorControlLoseEffectCategory ? [] : [status], false,
                             control.Category == ActorControlLoseEffectCategory ? [status] : [],
                             control.Category == ActorControlUpdateEffectCategory);
                     else if (control.TargetSnapshot is not null && control.Category is ActorControlDotCategory or ActorControlHotCategory)
-                        ObservePlayerStatusSnapshot(player, control.SeenAtUtc, GetRelevantDeathStatuses(lookup), true);
+                        ObservePlayerStatusSnapshot(player, control.SeenAtUtc, GetRelevantMitigationHistoryStatuses(lookup), true);
                     break;
                 case RawStatusTimingUpdate update:
                     var gainedStatus = update.StatusId == 0 ? null : new StatusSnapshot(update.StatusId, GetStatusName(update.StatusId),
@@ -88,8 +92,8 @@ public sealed partial class Plugin
                     var statusTarget = FindCurrentMemberByEntityId(update.TargetId);
                     if (statusTarget is not null)
                         ObservePlayerStatusSnapshot(statusTarget, update.SeenAtUtc,
-                            GetRelevantDeathStatuses(change.Statuses), false,
-                            GetRelevantDeathStatuses(change.RemovedStatuses));
+                            GetRelevantMitigationHistoryStatuses(change.Statuses), false,
+                            GetRelevantMitigationHistoryStatuses(change.RemovedStatuses));
                     else
                         TrackRecentSourceMitigationSnapshot(update.TargetId, GetEntityDisplayName(update.TargetId), update.SeenAtUtc,
                             change.Statuses, removed: change.RemovedStatuses);
@@ -105,7 +109,7 @@ public sealed partial class Plugin
         lastMitigationStatusPollAtUtc = observedAtUtc;
         foreach (var member in currentMembers)
             if (member.HasWorldObject)
-                ObservePlayerStatusSnapshot(member, observedAtUtc, GetRelevantDeathStatuses(member.Statuses), true);
+                ObservePlayerStatusSnapshot(member, observedAtUtc, GetRelevantMitigationHistoryStatuses(member.Statuses), true);
         playerStatusHistory.Prune(GetCurrentPullReplayStartAtUtc(observedAtUtc));
     }
 

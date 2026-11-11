@@ -10,6 +10,8 @@ public sealed partial class Plugin
 
     internal static bool IsPossibleMitigationEffectStatusId(uint id) => PossibleMitigationEffectIdSet.Value.Contains(id);
 
+    internal static bool IsPossibleMitigationReadyStatusId(uint id) => id != 0 && PossibleMitigationReadyStatusIds.Value.Contains(id);
+
     private static readonly uint[] TankJobIds = [19, 21, 32, 37];
 
     private static readonly uint[] MeleeJobIds = [20, 22, 30, 34, 39, 41];
@@ -27,7 +29,9 @@ public sealed partial class Plugin
         float DurationSeconds,
         IReadOnlyList<PossibleMitigationStatusTemplate> Statuses,
         IReadOnlyList<PossibleMitigationActionTemplate>? AlternateActions = null,
-        IReadOnlyList<uint>? AdditionalEffectStatusIds = null);
+        IReadOnlyList<uint>? AdditionalEffectStatusIds = null,
+        uint GrantedByActionId = 0,
+        uint ReadyStatusId = 0);
 
 
     private sealed record PossibleMitigationActionTemplate(
@@ -72,6 +76,8 @@ public sealed partial class Plugin
         new("sacred-soil", "Sacred Soil", 188, [28], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(299, "Sacred Soil")]),
         new("expedient", "Expedient", 25868, [28], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(2711, "Desperate Measures")]),
         new("collective-unconscious", "Collective Unconscious", 3613, [33], PossibleMitigationScope.Party, 60.0f, 18.0f, [new(1206, "Wheel of Fortune")]),
+        new("sun-sign", "Sun Sign", 37031, [33], PossibleMitigationScope.Party, 120.0f, 15.0f,
+            [new(3896, "Sun Sign")], GrantedByActionId: 16559, ReadyStatusId: 3895),
         new("kerachole", "Kerachole", 24298, [40], PossibleMitigationScope.Party, 30.0f, 15.0f, [new(0, "Kerachole")]),
         new("holos", "Holos", 24310, [40], PossibleMitigationScope.Party, 120.0f, 20.0f, [new(0, "Holos")]),
         new("troubadour", "Troubadour", 7405, [23], PossibleMitigationScope.Party, 90.0f, 15.0f, [new(1934, "Troubadour")]),
@@ -86,5 +92,7 @@ public sealed partial class Plugin
             .Concat(value.AdditionalEffectStatusIds ?? []).Distinct().ToArray()));
     private static readonly Lazy<HashSet<uint>> PossibleMitigationEffectIdSet = new(() =>
         PossibleMitigationEffectIds.Value.Values.SelectMany(value => value).ToHashSet());
+    private static readonly Lazy<HashSet<uint>> PossibleMitigationReadyStatusIds = new(() =>
+        PossibleMitigationDefinitions.Select(value => value.ReadyStatusId).Where(id => id != 0).ToHashSet());
 
 }

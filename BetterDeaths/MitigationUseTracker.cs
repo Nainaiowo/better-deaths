@@ -67,13 +67,36 @@ internal sealed class MitigationUseTracker
 
     public bool IsReadyAt(PossibleMitigationSnapshot candidate, DateTime time, long? excludingCaptureId = null)
     {
-        var history = candidate.CooldownGroup > 0
-            ? cooldownUses.GetValueOrDefault((candidate.MemberKey, candidate.CooldownGroup)) ?? []
-            : UsesFor(candidate.Key);
+        var uses = UsesFor(candidate.Key);
+        if (!IsCooldownReady(candidate.MemberKey, candidate.ActionId, candidate.CooldownGroup,
+                candidate.CooldownSeconds, candidate.MaxCharges, uses, time, excludingCaptureId))
+            return false;
+        if (candidate.Prerequisite is not { } prerequisite)
+            return true;
+        // A delayed application is judged just before its use consumed the enabling buff.
+        var excluded = excludingCaptureId is { } id ? uses.FirstOrDefault(use => use.CaptureId == id) : null;
+        var checkAt = excluded is not null && excluded.SeenAtUtc <= time && excluded.SeenAtUtc > DateTime.MinValue
+            ? excluded.SeenAtUtc.AddTicks(-1) : time;
+        if (IsCooldownReady(candidate.MemberKey, prerequisite.ActionId, prerequisite.CooldownGroup,
+                prerequisite.CooldownSeconds, prerequisite.MaxCharges, [], checkAt))
+            return true;
+        var spent = uses.Where(use => use.SeenAtUtc <= checkAt && use.CaptureId != excludingCaptureId)
+            .Select(use => new StatusSetSnapshot(use.SeenAtUtc, [])
+            {
+                IsAuthoritative = true,
+                RemovedStatuses = [new(prerequisite.ReadyStatusId, "", 0, 0, 0, 0)],
+            });
+        return new StatusTimeline(prerequisite.StatusHistory.Concat(spent)).At(checkAt)
+            .Any(status => status.Id == prerequisite.ReadyStatusId);
+    }
+
+    private bool IsCooldownReady(string memberKey, uint actionId, byte group, double cooldownSeconds,
+        int maxCharges, IReadOnlyList<MitigationUseEvidence> fallback, DateTime time, long? excludingCaptureId = null)
+    {
+        var history = group > 0 ? cooldownUses.GetValueOrDefault((memberKey, group)) ?? [] : fallback;
         var prior = history.Where(use => use.SeenAtUtc <= time && use.CaptureId != excludingCaptureId).ToArray();
         var origin = prior.Length == 0 ? time : prior[0].SeenAtUtc;
-        var profile = new PartyCooldownProfile(candidate.ActionId, candidate.CooldownGroup == 0 ? (byte)1 : candidate.CooldownGroup,
-            candidate.CooldownSeconds, candidate.MaxCharges);
+        var profile = new PartyCooldownProfile(actionId, group == 0 ? (byte)1 : group, cooldownSeconds, maxCharges);
         var tracker = new PartyCooldownTracker();
         // Preserve What-ifs' initial-ready assumption; replay actual uses with the HUD's recharge rules.
         tracker.ConfirmReady(1, profile, 0);

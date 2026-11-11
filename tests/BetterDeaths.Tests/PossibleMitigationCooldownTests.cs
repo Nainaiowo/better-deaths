@@ -150,16 +150,17 @@ public sealed class PossibleMitigationCooldownTests
         Assert.Equal(1, legacy.MaxCharges);
     }
 
-    public static IEnumerable<object[]> CurrentWhatIfActions()
+    public static IEnumerable<object[]> IndependentWhatIfActions()
     {
         var definitions = (Array)typeof(Plugin).GetField("PossibleMitigationDefinitions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
         foreach (var definition in definitions)
-            yield return [(uint)definition!.GetType().GetProperty("ActionId")!.GetValue(definition)!];
+            if ((uint)definition!.GetType().GetProperty("GrantedByActionId")!.GetValue(definition)! == 0)
+                yield return [(uint)definition.GetType().GetProperty("ActionId")!.GetValue(definition)!];
     }
 
     [Theory]
-    [MemberData(nameof(CurrentWhatIfActions))]
-    public void EveryCurrentWhatIfActionUsesChargesAndExactRechargeBoundaries(uint actionId)
+    [MemberData(nameof(IndependentWhatIfActions))]
+    public void EveryIndependentWhatIfActionUsesChargesAndExactRechargeBoundaries(uint actionId)
     {
         var candidate = Candidate(actionId);
         Assert.NotEqual(0, candidate.CooldownGroup);

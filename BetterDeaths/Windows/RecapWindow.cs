@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.62";
+    private const string CurrentChangelogVersion = "1.0.0.63";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19798,6 +19798,16 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("What-ifs");
+        DrawHighlightedChangelogBullet("Added Sun Sign as a selectable Astrologian mitigation, with its own name and icon.");
+        DrawWrappedBullet("Checks Neutral Sect and Suntouched to determine whether Sun Sign was available.");
+        DrawWrappedBullet("Sun Sign used too late appears red and remains selectable for simulation, with a short 'used late' note when shared to chat.");
+        DrawWrappedBullet("Simulates its 10% damage reduction without counting it twice if it was already active.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.62");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Review and What-ifs");
         DrawHighlightedChangelogBullet("Mitigation used too late can now be tested in What-ifs. These abilities appear red, explain why when hovered, and include 'used late' when shared to chat.");

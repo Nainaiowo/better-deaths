@@ -390,6 +390,9 @@ public enum PossibleMitigationScope
 public readonly record struct MitigationSimulationHit(DateTime SeenAtUtc, uint SourceEntityId, uint ActionId,
     uint ActionSequence, long EventOrdinal, string? EventIdentity);
 
+internal sealed record MitigationPrerequisite(uint ActionId, byte CooldownGroup, float CooldownSeconds,
+    int MaxCharges, uint ReadyStatusId, IReadOnlyList<StatusSetSnapshot> StatusHistory);
+
 public sealed record PossibleMitigationSnapshot(
     string Key,
     string MemberKey,
@@ -410,6 +413,9 @@ public sealed record PossibleMitigationSnapshot(
     public byte CooldownGroup { get; init; }
 
     public int MaxCharges { get; init; } = 1;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal MitigationPrerequisite? Prerequisite { get; init; }
 
     public bool WasUsedTooLate { get; init; }
 
