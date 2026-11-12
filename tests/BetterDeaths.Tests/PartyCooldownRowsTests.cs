@@ -72,11 +72,12 @@ public sealed class PartyCooldownRowsTests
     [Fact]
     public void NormalizationCapsTotalAbilitiesButNotEachIndividualRow()
     {
-        var selected = Enumerable.Range(1, 13).Select(id => (uint)id).ToArray();
+        var limit = PartyCooldownRows.MaximumAbilities;
+        var selected = Enumerable.Range(1, limit + 1).Select(id => (uint)id).ToArray();
         var rows = new PartyCooldownRows { Rows = [[], [], selected.ToList()] };
         rows.Normalize(selected);
-        Assert.Equal(selected[..12], rows.Rows[2]);
-        Assert.Equal(12, rows.Flatten().Count);
+        Assert.Equal(selected[..limit], rows.Rows[2]);
+        Assert.Equal(limit, rows.Flatten().Count);
         Assert.Equal(3, rows.Rows.Count);
     }
 
@@ -118,19 +119,22 @@ public sealed class PartyCooldownRowsTests
     }
 
     [Fact]
-    public void MovingAnExistingAbilityAtCapacityWorksButAddingAThirteenthDoesNot()
+    public void MovingAnExistingAbilityAtCapacityWorksButAddingAnotherDoesNot()
     {
-        var rows = new PartyCooldownRows { Rows = [Enumerable.Range(1, 12).Select(id => (uint)id).ToList(), []] };
-        Assert.False(rows.Place(13, 0));
-        Assert.False(rows.Place(13, 1));
-        Assert.True(rows.Place(12, 1));
-        Assert.True(rows.Place(1, 1, 12, after: true));
-        Assert.Equal([12u, 1], rows.Rows[1]);
-        Assert.Equal(12, rows.Flatten().Count);
+        var limit = PartyCooldownRows.MaximumAbilities;
+        var last = (uint)limit;
+        var next = last + 1;
+        var rows = new PartyCooldownRows { Rows = [Enumerable.Range(1, limit).Select(id => (uint)id).ToList(), []] };
+        Assert.False(rows.Place(next, 0));
+        Assert.False(rows.Place(next, 1));
+        Assert.True(rows.Place(last, 1));
+        Assert.True(rows.Place(1, 1, last, after: true));
+        Assert.Equal([last, 1], rows.Rows[1]);
+        Assert.Equal(limit, rows.Flatten().Count);
         Assert.True(rows.Remove(5));
         Assert.False(rows.Remove(5));
-        Assert.True(rows.Place(13, 0));
-        Assert.Equal(12, rows.Flatten().Count);
+        Assert.True(rows.Place(next, 0));
+        Assert.Equal(limit, rows.Flatten().Count);
     }
 
     [Fact]

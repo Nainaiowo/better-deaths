@@ -99,12 +99,13 @@ public sealed class PartyCooldownCatalogTests
     [Fact]
     public void InvalidDropDoesNotLoseTheSourceOrExceedTheLimit()
     {
-        List<uint> selection = Enumerable.Range(1, 12).Select(value => (uint)value).ToList();
+        var limit = PartyCooldownRows.MaximumAbilities;
+        List<uint> selection = Enumerable.Range(1, limit).Select(value => (uint)value).ToList();
         Assert.False(PartyCooldownCatalog.PlaceBefore(selection, 2, 999));
-        Assert.False(PartyCooldownCatalog.PlaceBefore(selection, 13, 1));
+        Assert.False(PartyCooldownCatalog.PlaceBefore(selection, (uint)limit + 1, 1));
         Assert.False(PartyCooldownCatalog.PlaceBefore(selection, 0, null));
         Assert.True(PartyCooldownCatalog.PlaceBefore(selection, 12, 1));
-        Assert.Equal(12, selection.Count);
+        Assert.Equal(limit, selection.Count);
     }
 
     [Fact]
@@ -220,15 +221,16 @@ public sealed class PartyCooldownCatalogTests
     [Fact]
     public void AfterDropsRespectCapacityAndRejectInvalidTargetsWithoutLosingAnything()
     {
-        List<uint> selected = Enumerable.Range(1, 12).Select(value => (uint)value).ToList();
+        var limit = PartyCooldownRows.MaximumAbilities;
+        List<uint> selected = Enumerable.Range(1, limit).Select(value => (uint)value).ToList();
         var original = selected.ToArray();
-        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 13, 12));
+        Assert.False(PartyCooldownCatalog.PlaceAfter(selected, (uint)limit + 1, 12));
         Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 1, 999));
         Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 0, 12));
         Assert.False(PartyCooldownCatalog.PlaceAfter(selected, 12, 12));
         Assert.Equal(original, selected);
-        Assert.True(PartyCooldownCatalog.PlaceAfter(selected, 1, 12));
-        Assert.Equal(12, selected.Count);
+        Assert.True(PartyCooldownCatalog.PlaceAfter(selected, 1, (uint)limit));
+        Assert.Equal(limit, selected.Count);
         Assert.Equal(1u, selected[^1]);
     }
 

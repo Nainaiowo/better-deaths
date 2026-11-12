@@ -6,6 +6,69 @@ namespace BetterDeaths.Tests;
 public sealed class PartyCooldownPlacementsTests
 {
     [Fact]
+    public void NewInstallUsesLeftSideWithTheCapturedLayoutDefaults()
+    {
+        var placements = PartyCooldownPlacements.CreateDefault();
+        Assert.Equal(PartyCooldownSide.Left, PartyCooldownPlacements.DefaultSide);
+        Assert.Equal(new PartyCooldownPlacement { IconSize = 48, Spacing = 3, OffsetX = -77, OffsetY = 9 },
+            placements.Left);
+        Assert.Equal(new PartyCooldownPlacement(), placements.Right);
+        Assert.False(placements.Normalize(new()));
+    }
+
+    [Fact]
+    public void DefaultProfilesAreIndependentOfEachOtherAndOfOtherInstallations()
+    {
+        var first = PartyCooldownPlacements.CreateDefault();
+        var second = PartyCooldownPlacements.CreateDefault();
+        Assert.NotSame(first.Left, first.Right);
+        Assert.NotSame(first.Left, second.Left);
+        Assert.NotSame(first.Right, second.Right);
+        first.Left!.IconSize = 72;
+        first.Left.OffsetX = -200;
+        first.Right!.Spacing = 10;
+        Assert.Equal(48, second.Left!.IconSize);
+        Assert.Equal(-77, second.Left.OffsetX);
+        Assert.Equal(3, second.Right!.Spacing);
+        Assert.Equal(24, first.Right.IconSize);
+    }
+
+    [Fact]
+    public void SavingAndReloadingTheNewDefaultsKeepsBothSides()
+    {
+        var placements = PartyCooldownPlacements.CreateDefault();
+        var restored = JsonSerializer.Deserialize<PartyCooldownPlacements>(JsonSerializer.Serialize(placements))!;
+        Assert.False(restored.Normalize(new()));
+        Assert.Equal(placements.Left, restored.Left);
+        Assert.Equal(placements.Right, restored.Right);
+    }
+
+    [Fact]
+    public void PreviouslySavedOldDefaultsAreNotReplacedWithTheNewDefaults()
+    {
+        var saved = JsonSerializer.Deserialize<PartyCooldownPlacements>(
+            """{"Left":{"IconSize":24,"Spacing":3,"OffsetX":0,"OffsetY":0},"Right":{"IconSize":24,"Spacing":3,"OffsetX":0,"OffsetY":0}}""")!;
+        var left = saved.Left;
+        var right = saved.Right;
+        Assert.False(saved.Normalize(new()));
+        Assert.Same(left, saved.Left);
+        Assert.Same(right, saved.Right);
+        Assert.Equal(new PartyCooldownPlacement(), saved.Left);
+        Assert.NotEqual(PartyCooldownPlacements.CreateDefault().Left, saved.Left);
+    }
+
+    [Fact]
+    public void LegacySharedDefaultsStillMigrateWithoutRepositioningEitherSide()
+    {
+        var legacy = new PartyCooldownPlacement();
+        var placements = new PartyCooldownPlacements();
+        Assert.True(placements.Normalize(legacy));
+        Assert.Equal(legacy, placements.Left);
+        Assert.Equal(legacy, placements.Right);
+        Assert.NotEqual(PartyCooldownPlacements.CreateDefault().Left, placements.Left);
+    }
+
+    [Fact]
     public void ExistingSharedLayoutMigratesToTwoIndependentProfiles()
     {
         var legacy = new PartyCooldownPlacement { IconSize = 48, Spacing = 7, OffsetX = -42, OffsetY = 18 };
@@ -22,6 +85,42 @@ public sealed class PartyCooldownPlacementsTests
         Assert.Equal(legacy, placements.Get(PartyCooldownSide.Right));
         Assert.False(placements.Normalize(legacy));
         Assert.Equal(72, placements.Get(PartyCooldownSide.Left).IconSize);
+    }
+
+    [Theory]
+    [InlineData(PartyCooldownSide.Left)]
+    [InlineData(PartyCooldownSide.Right)]
+    public void ApplyingDefaultsOnlyChangesTheSelectedSidesLayout(PartyCooldownSide side)
+    {
+        var placements = new PartyCooldownPlacements
+        {
+            Left = new() { IconSize = 72, Spacing = 10, OffsetX = -200, OffsetY = 25 },
+            Right = new() { IconSize = 36, Spacing = 6, OffsetX = 63, OffsetY = 16 },
+        };
+        var otherSide = side == PartyCooldownSide.Left ? PartyCooldownSide.Right : PartyCooldownSide.Left;
+        var selected = placements.Get(side);
+        var other = placements.Get(otherSide);
+        var originalOther = other with { };
+        placements.ApplyDefault(side);
+        Assert.Same(selected, placements.Get(side));
+        Assert.Equal(PartyCooldownPlacements.CreateDefault().Get(side), selected);
+        Assert.Same(other, placements.Get(otherSide));
+        Assert.Equal(originalOther, other);
+    }
+
+    [Fact]
+    public void AppliedDefaultsCanBeRepeatedAndSavedWithoutRepositioningTheOtherSide()
+    {
+        var placements = new PartyCooldownPlacements();
+        placements.Normalize(new() { IconSize = 40, Spacing = 7, OffsetX = 33, OffsetY = -12 });
+        var right = placements.Right! with { };
+        placements.ApplyDefault(PartyCooldownSide.Left);
+        placements.Left!.IconSize = 64;
+        placements.Left.OffsetY = 100;
+        placements.ApplyDefault(PartyCooldownSide.Left);
+        var restored = JsonSerializer.Deserialize<PartyCooldownPlacements>(JsonSerializer.Serialize(placements))!;
+        Assert.Equal(PartyCooldownPlacements.CreateDefault().Left, restored.Left);
+        Assert.Equal(right, restored.Right);
     }
 
     [Fact]

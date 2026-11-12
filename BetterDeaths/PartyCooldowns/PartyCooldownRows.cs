@@ -6,7 +6,7 @@ namespace BetterDeaths.PartyCooldowns;
 public sealed class PartyCooldownRows
 {
     internal const int MaximumRows = 3;
-    internal const int MaximumAbilities = 12;
+    internal const int MaximumAbilities = 24;
 
     public bool Enabled { get; set; }
     public List<List<uint>> Rows { get; set; } = [[]];

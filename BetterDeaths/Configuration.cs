@@ -225,6 +225,9 @@ public sealed class Configuration : IPluginConfiguration
     internal PartyCooldownPlacement GetPartyCooldownPlacement() => PartyCooldownPlacements!.Get(PartyCooldownSide);
 
     public Dictionary<uint, List<uint>> PartyCooldownActions { get; set; } = [];
+
+    public int PartyCooldownDefaultLoadoutsVersion { get; set; }
+
     public Dictionary<uint, PartyCooldownRows> PartyCooldownRowLayouts { get; set; } = [];
 
     // Missing in older configurations: inherit the previously shared opacity once on load.

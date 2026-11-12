@@ -21,6 +21,14 @@ public sealed record PartyCooldownPlacement
 
 public sealed class PartyCooldownPlacements
 {
+    internal const PartyCooldownSide DefaultSide = PartyCooldownSide.Left;
+
+    internal static PartyCooldownPlacements CreateDefault() => new()
+    {
+        Left = new() { IconSize = 48, Spacing = 3, OffsetX = -77, OffsetY = 9 },
+        Right = new(),
+    };
+
     public PartyCooldownPlacement? Left { get; set; }
     public PartyCooldownPlacement? Right { get; set; }
 
@@ -43,4 +51,12 @@ public sealed class PartyCooldownPlacements
     }
 
     internal PartyCooldownPlacement Get(PartyCooldownSide side) => side == PartyCooldownSide.Left ? Left! : Right!;
+
+    internal void ApplyDefault(PartyCooldownSide side)
+    {
+        var defaults = CreateDefault().Get(side);
+        var placement = Get(side);
+        (placement.IconSize, placement.Spacing, placement.OffsetX, placement.OffsetY) =
+            (defaults.IconSize, defaults.Spacing, defaults.OffsetX, defaults.OffsetY);
+    }
 }

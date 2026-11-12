@@ -1,4 +1,5 @@
 using BetterDeaths.DamageParsing;
+using BetterDeaths.PartyCooldowns;
 using BetterDeaths.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -588,7 +589,13 @@ public sealed partial class Plugin : IDalamudPlugin
     public unsafe Plugin()
     {
         var savedConfiguration = PluginInterface.GetPluginConfig() as Configuration;
-        Configuration = savedConfiguration ?? new Configuration();
+        // Fresh installations get the new layout; saved and legacy settings keep their own defaults.
+        Configuration = savedConfiguration ?? new Configuration
+        {
+            PartyCooldownSide = PartyCooldownPlacements.DefaultSide,
+            PartyCooldownPlacements = PartyCooldownPlacements.CreateDefault(),
+            PartyCooldownDefaultLoadoutsVersion = PartyCooldownDefaultLoadouts.Version,
+        };
         NormalizeUserConfiguration();
         LoadRecordedDamageEncounters();
         damageParsingModule.LiveSnapshotFailed = error => Log.Warning(error, "Could not refresh Better Deaths live meter.");

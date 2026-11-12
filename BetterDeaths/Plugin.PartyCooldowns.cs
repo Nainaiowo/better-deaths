@@ -48,6 +48,13 @@ public sealed partial class Plugin
             if (Volatile.Read(ref loadedPartyCooldownCatalog) is null)
             {
                 var changed = false;
+                if (Configuration.PartyCooldownDefaultLoadoutsVersion < PartyCooldownDefaultLoadouts.Version)
+                {
+                    // Older settings cannot prove prior use, including users who later disabled the overlay.
+                    partyCooldownCatalogTask.Result.PreserveLegacyDefaults(Configuration.PartyCooldownActions);
+                    Configuration.PartyCooldownDefaultLoadoutsVersion = PartyCooldownDefaultLoadouts.Version;
+                    changed = true;
+                }
                 foreach (var entry in Configuration.PartyCooldownActions.ToArray())
                 {
                     var selection = partyCooldownCatalogTask.Result.NormalizeSelection(entry.Key, entry.Value);
@@ -104,7 +111,7 @@ public sealed partial class Plugin
         }
         foreach (var entry in Configuration.PartyCooldownActions.ToArray())
         {
-            var normalized = entry.Value?.Where(id => id != 0).Distinct().Take(12).ToList() ?? [];
+            var normalized = entry.Value?.Where(id => id != 0).Distinct().Take(PartyCooldownRows.MaximumAbilities).ToList() ?? [];
             if (entry.Value is null || !entry.Value.SequenceEqual(normalized))
             {
                 Configuration.PartyCooldownActions[entry.Key] = normalized;
@@ -144,7 +151,6 @@ public sealed partial class Plugin
     private PartyCooldownCatalog BuildPartyCooldownCatalog()
     {
         _ = PartyCooldownLabels.Timer(default);
-        var defaults = PossibleMitigationDefinitions.Select(definition => definition.ActionId).ToHashSet();
         var actions = new List<PartyCooldownAction>();
         var sheet = DataManager.GetExcelSheet<LuminaAction>();
         if (sheet is null)
@@ -169,7 +175,7 @@ public sealed partial class Plugin
                 continue;
             actions.Add(new PartyCooldownAction(action.RowId, name, display.Icon, action.ClassJobLevel,
                 action.CooldownGroup, action.Recast100ms / 10f, action.MaxCharges, jobs,
-                defaults.Contains(action.RowId), action.CanTargetParty, PartyCooldownSelectionPolicy.UnsupportedReason(action.RowId),
+                PartyCooldownDefaultLoadouts.WasLegacyDefault(action.RowId), action.CanTargetParty, PartyCooldownSelectionPolicy.UnsupportedReason(action.RowId),
                 !PartyCooldownSelectionPolicy.Includes(action.RowId) || PartyCooldownSelectionPolicy.IsExecutionVariant(action.RowId)));
         }
         return new PartyCooldownCatalog(actions);

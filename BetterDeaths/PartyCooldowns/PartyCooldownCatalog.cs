@@ -37,6 +37,7 @@ internal sealed class PartyCooldownCatalog
     private readonly Dictionary<uint, IReadOnlyList<PartyCooldownAction>> actionsByJob;
     private readonly Dictionary<uint, IReadOnlyList<PartyCooldownAction>> captureActionsByJob;
     private readonly Dictionary<uint, IReadOnlyList<uint>> defaultsByJob;
+    private readonly Dictionary<uint, IReadOnlyList<uint>> legacyDefaultsByJob;
 
     public PartyCooldownCatalog(IEnumerable<PartyCooldownAction> source)
     {
@@ -54,8 +55,9 @@ internal sealed class PartyCooldownCatalog
         actionsByJob = Jobs.ToDictionary(job => job.Id, job => (IReadOnlyList<PartyCooldownAction>)captureActionsByJob[job.Id]
             .Where(action => !action.CaptureOnly && !PartyCooldownSelectionPolicy.IsExecutionVariant(action.Id))
             .DistinctBy(action => (action.Name, action.Group, action.Level)).ToArray());
-        defaultsByJob = Jobs.ToDictionary(job => job.Id, job => (IReadOnlyList<uint>)actionsByJob[job.Id]
+        legacyDefaultsByJob = Jobs.ToDictionary(job => job.Id, job => (IReadOnlyList<uint>)actionsByJob[job.Id]
             .Where(action => action.DefaultSelected && action.UnsupportedReason is null).Select(action => action.Id).ToArray());
+        defaultsByJob = Jobs.ToDictionary(job => job.Id, job => PartyCooldownDefaultLoadouts.Create(job.Id, actionsByJob[job.Id]));
     }
 
     public PartyCooldownAction? Find(uint actionId) => actions.GetValueOrDefault(actionId);
@@ -65,10 +67,18 @@ internal sealed class PartyCooldownCatalog
     public IReadOnlyList<uint> DefaultSelection(uint jobId) => defaultsByJob.GetValueOrDefault(NormalizeJob(jobId)) ?? [];
     public List<uint> Defaults(uint jobId) => DefaultSelection(jobId).ToList();
 
+    internal bool PreserveLegacyDefaults(Dictionary<uint, List<uint>> selections)
+    {
+        var changed = false;
+        foreach (var job in Jobs)
+            changed |= selections.TryAdd(job.Id, legacyDefaultsByJob[job.Id].ToList());
+        return changed;
+    }
+
     public List<uint> NormalizeSelection(uint jobId, IEnumerable<uint>? selected) =>
         selected is null ? Defaults(jobId) : selected.Select(PartyCooldownSelectionPolicy.CanonicalAction).Distinct()
             .Where(id => Find(id) is { UnsupportedReason: null, CaptureOnly: false } action &&
-            action.Jobs.Contains(NormalizeJob(jobId))).Take(12).ToList();
+            action.Jobs.Contains(NormalizeJob(jobId))).Take(PartyCooldownRows.MaximumAbilities).ToList();
 
     public PartyCooldownAction? AtLevel(uint jobId, uint actionId, byte level)
     {
@@ -76,9 +86,14 @@ internal sealed class PartyCooldownCatalog
             return null;
         if (action.Level <= level)
             return action;
-        return ForJob(jobId).Where(candidate => candidate.Level <= level && candidate.Group == action.Group &&
+        var predecessor = ForJob(jobId).Where(candidate => candidate.Level <= level && candidate.Group == action.Group &&
             candidate.TargetsOtherPlayers == action.TargetsOtherPlayers && candidate.UnsupportedReason is null)
             .OrderByDescending(candidate => candidate.Level).FirstOrDefault();
+        if (predecessor is not null)
+            return predecessor;
+        var fallback = Find(PartyCooldownDefaultLoadouts.SyncedPredecessor(actionId));
+        return fallback is { UnsupportedReason: null } && fallback.Level <= level &&
+            fallback.Jobs.Contains(NormalizeJob(jobId)) ? fallback : null;
     }
 
     public static bool PlaceBefore(List<uint> selection, uint source, uint? target) => Place(selection, source, target, false);
@@ -88,7 +103,7 @@ internal sealed class PartyCooldownCatalog
     private static bool Place(List<uint> selection, uint source, uint? target, bool after)
     {
         if (source == 0 || source == target || target is { } id && !selection.Contains(id) ||
-            !selection.Contains(source) && selection.Count >= 12)
+            !selection.Contains(source) && selection.Count >= PartyCooldownRows.MaximumAbilities)
             return false;
         return TileOrderPolicy.Place(selection, source, target, after);
     }

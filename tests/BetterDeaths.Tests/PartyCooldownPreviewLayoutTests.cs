@@ -37,7 +37,7 @@ public sealed class PartyCooldownPreviewLayoutTests
                 foreach (var offset in new[] { new Vector2(-300, -300), new(300, 300) })
                 {
                     var row = new PartyCooldownRow(1, 0, new(44, 0), new(244, 20), scale);
-                    int[] counts = [1, 9, 2];
+                    int[] counts = [1, 9, 14];
                     var frameMin = new Vector2(-15, -5);
                     var frameMax = new Vector2(244, 44);
                     var preview = PartyCooldownPreviewLayout.Create(row, counts, side, 72, 12, offset, frameMin, frameMax, screen);
@@ -70,7 +70,7 @@ public sealed class PartyCooldownPreviewLayoutTests
     public void FittingKeepsShrinkingBelowOnePercentAndRestoresFullSizeWhenSpaceReturns()
     {
         var row = new PartyCooldownRow(1, 0, new(44, 0), new(164, 20), 4);
-        int[] counts = [12];
+        int[] counts = [PartyCooldownRows.MaximumAbilities];
         var large = PartyCooldownPreviewLayout.Create(row, counts, PartyCooldownSide.Left, 72, 12, new(-300, 300),
             Vector2.Zero, new(224, 40), new(float.PositiveInfinity));
         Assert.Equal(1, large.Zoom);

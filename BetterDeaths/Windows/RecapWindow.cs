@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.63";
+    private const string CurrentChangelogVersion = "1.0.0.64";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19798,6 +19798,27 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Party Cooldowns");
+        DrawHighlightedChangelogBullet("Increased the limit from 12 to 24 abilities per job, with up to three custom rows.");
+        DrawHighlightedChangelogBullet("Updated every job's default ability list: defensives first, then 2-minute cooldowns, then 1-minute cooldowns.");
+        DrawWrappedBullet("Defaults focus on protection rather than pure healing or unrelated utility. Other supported abilities remain available to add manually.");
+        DrawWrappedBullet("Moved Recitation, Seraphism, and Philosophia into the defensive choices.");
+        DrawWrappedBullet("Existing ability selections and custom rows are preserved. Use Reset [job] to load that job's new defaults.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Layout");
+        DrawHighlightedChangelogBullet("Added a Default button beside the layout Reset. It restores the selected side's default size, spacing, and position without changing ability selections or cooldown timers.");
+        DrawWrappedBullet("New installations start on the left using the updated layout.");
+        DrawWrappedBullet("Existing users keep their saved side and layout settings.");
+        DrawWrappedBullet("Reset remains offsets-only.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Fixes and Help");
+        DrawWrappedBullet("Fixed Ninja's default Dream Within a Dream selection not showing Assassinate when level-synced below its upgrade.");
+        DrawWrappedBullet("Updated the Walkthrough, Help Center, and documentation for the 24-ability limit and new defaults.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.63");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("What-ifs");
         DrawHighlightedChangelogBullet("Added Sun Sign as a selectable Astrologian mitigation, with its own name and icon.");

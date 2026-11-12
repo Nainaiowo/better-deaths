@@ -22,7 +22,7 @@ public sealed partial class RecapWindow
     private readonly Dictionary<uint, ISharedImmediateTexture> partyCooldownTextures = [];
     private readonly Dictionary<uint, int> partyCooldownPreviewCharges = [];
     private readonly Dictionary<uint, int> partyCooldownTargetRows = [];
-    private readonly PartyCooldownDisplayEntry[] partyCooldownDrawEntries = new PartyCooldownDisplayEntry[12];
+    private readonly PartyCooldownDisplayEntry[] partyCooldownDrawEntries = new PartyCooldownDisplayEntry[PartyCooldownRows.MaximumAbilities];
     private readonly PartyCooldownNameMeasurement?[] partyCooldownNameMeasurements = new PartyCooldownNameMeasurement?[8];
     private readonly Dictionary<string, Vector2> partyCooldownTextMeasurements = new(StringComparer.Ordinal);
     private ImFontPtr partyCooldownDrawFont;
@@ -134,14 +134,26 @@ public sealed partial class RecapWindow
         var offsetY = placement.OffsetY;
         DrawCooldownSlider("Vertical offset", "PartyCooldownOffsetY", ref offsetY, -300, 300, "%.0f px");
         placement.OffsetY = offsetY;
+        var layoutButtonsWidth = ImGui.GetContentRegionAvail().X;
         if (DrawTransparentIconButton("ResetPartyCooldownPlacement", FontAwesomeIcon.Undo))
         {
             placement.OffsetX = 0;
             placement.OffsetY = 0;
             plugin.SaveConfiguration();
         }
+        var resetButtonWidth = ImGui.GetItemRectSize().X;
         if (ImGui.IsItemHovered())
             SetThemedTooltip("Reset this side's offsets. Keeps icon size, spacing, and per-job abilities and custom rows.");
+        if (layoutButtonsWidth >= resetButtonWidth + ImGui.GetStyle().ItemSpacing.X +
+            GetThemedIconButtonWidth(FontAwesomeIcon.Home, "Default"))
+            ImGui.SameLine();
+        if (DrawThemedActionButton(FontAwesomeIcon.Home, "Default", "DefaultPartyCooldownPlacement"))
+        {
+            configuration.PartyCooldownPlacements!.ApplyDefault(configuration.PartyCooldownSide);
+            plugin.SaveConfiguration();
+        }
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip("Restore this side's default icon size, spacing, and position. Keeps the other side, per-job abilities, and custom rows.");
         RegisterGuideTarget(GuideTarget.PartyCooldownLayout, start,
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
     }
@@ -182,7 +194,7 @@ public sealed partial class RecapWindow
                 ImGui.SetNextItemOpen(wasOpen, ImGuiCond.Always);
                 var flags = ImGuiTreeNodeFlags.SpanAvailWidth |
                     (job.Id == cooldownPreviewJob ? ImGuiTreeNodeFlags.Selected : ImGuiTreeNodeFlags.None);
-                var jobOpen = ImGui.TreeNodeEx($"{job.Name}  ({selected.Count}/12)###CooldownJob{job.Id}", flags);
+                var jobOpen = ImGui.TreeNodeEx($"{job.Name}  ({selected.Count}/{PartyCooldownRows.MaximumAbilities})###CooldownJob{job.Id}", flags);
                 if (jobOpen != wasOpen)
                 {
                     cooldownEditor.SetJobOpen(job.Id, jobOpen, configuration.PartyCooldownAutoCollapseJobs);
@@ -336,7 +348,7 @@ public sealed partial class RecapWindow
                 {
                     if (active)
                         selected.Remove(id);
-                    else if (selected.Count < 12)
+                    else if (selected.Count < PartyCooldownRows.MaximumAbilities)
                         selected.Add(id);
                     plugin.SetPartyCooldownSelection(jobId, selected);
                     FocusPartyCooldownJob(jobId);
@@ -351,7 +363,7 @@ public sealed partial class RecapWindow
     private unsafe bool DrawPartyCooldownTile(uint jobId, PartyCooldownAction action, List<uint> selected, bool active,
         float width, PartyCooldownRows? rows, int targetRow)
     {
-        var enabled = action.UnsupportedReason is null && (active || selected.Count < 12);
+        var enabled = action.UnsupportedReason is null && (active || selected.Count < PartyCooldownRows.MaximumAbilities);
         var start = ImGui.GetCursorScreenPos();
         var height = MathF.Max(30, ImGui.GetFrameHeight() + 6);
         var size = new Vector2(MathF.Max(1, width), height);
@@ -377,8 +389,8 @@ public sealed partial class RecapWindow
                 ImGui.GetColorU32(color), glyph);
         }
         if (hovered)
-            SetThemedTooltip(action.UnsupportedReason ?? (!active && selected.Count >= 12
-                ? "Up to 12 abilities can be shown for each job."
+            SetThemedTooltip(action.UnsupportedReason ?? (!active && selected.Count >= PartyCooldownRows.MaximumAbilities
+                ? $"Up to {PartyCooldownRows.MaximumAbilities} abilities can be shown for each job."
                 : $"{action.Name}\n{action.RecastSeconds:0.#}s base recast | Level {action.Level}"));
         if (enabled && ImGui.BeginDragDropSource())
         {
@@ -431,7 +443,7 @@ public sealed partial class RecapWindow
             return;
         var data = (uint*)payload.Data;
         if (data[0] != jobId || plugin.GetPartyCooldownCatalog()?.Find(data[1]) is not { UnsupportedReason: null } action ||
-            !action.Jobs.Contains(jobId) || data[1] == target || selected.Count >= 12 && !selected.Contains(data[1]))
+            !action.Jobs.Contains(jobId) || data[1] == target || selected.Count >= PartyCooldownRows.MaximumAbilities && !selected.Contains(data[1]))
             return;
         if (target is null)
             ImGui.GetWindowDrawList().AddRectFilled(start, start + size, ImGui.GetColorU32(ModernAccentColor with { W = .12f }), 2);

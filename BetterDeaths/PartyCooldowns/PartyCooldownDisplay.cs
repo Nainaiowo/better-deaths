@@ -51,7 +51,7 @@ internal sealed class PartyCooldownDisplayRow
 
     public void Invalidate()
     {
-        // A configured row contains at most twelve actions.
+        // The 24-action selection limit fits in this 32-bit refresh mask.
         lock (sync)
             timerRefreshMask = (1u << entries.Length) - 1;
     }
