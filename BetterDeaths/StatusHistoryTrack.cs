@@ -28,6 +28,8 @@ internal sealed class StatusHistoryTrack<T> where T : class
         }
     }
 
+    public bool NeedsAbsenceConfirmation(StatusSetSnapshot statuses) => timeline.NeedsAbsenceConfirmation(statuses);
+
     public (T? Previous, IReadOnlyList<StatusSetSnapshot> Seeds, IReadOnlyList<StatusSourceSnapshot> Sources,
         IReadOnlyList<T> Observations) Between(DateTime start, DateTime end)
     {

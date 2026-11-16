@@ -68,13 +68,15 @@ internal sealed class DeathMitigationResolver
     {
         this.death = death;
         var events = CombatEventComponents.Expand(DeathDisplaySelector.GetLeadUpEvents(death, LeadUpTimingPolicy.CaptureSeconds));
-        var history = death.SourceMitigationHistory.Concat(events
+        var history = death.SourceMitigationHistory.Select(value => (Snapshot: value, CanConfirmAbsence: true)).Concat(events
             .Where(value => value.SourceEntityId != 0 && value.Kind != DeathEventKind.Heal)
-            .Select(value => new SourceMitigationSnapshot(value.SeenAtUtc, value.PullElapsedSeconds,
+            .Select(value => (Snapshot: new SourceMitigationSnapshot(value.SeenAtUtc, value.PullElapsedSeconds,
                 value.SourceEntityId, value.SourceName, value.SourceStatuses)
-            { IsComplete = value.HasSourceStatusSnapshot }));
-        sources = history.GroupBy(value => value.SourceEntityId)
-            .ToDictionary(group => group.Key, group => (group.Last().SourceName, new StatusTimeline(group.Select(value => value.ToStatusSet()))));
+            { IsComplete = value.HasSourceStatusSnapshot }, CanConfirmAbsence: false)));
+        sources = history.GroupBy(value => value.Snapshot.SourceEntityId)
+            .ToDictionary(group => group.Key, group => (group.Last().Snapshot.SourceName,
+                new StatusTimeline(group.Select(value => value.Snapshot.ToStatusSet() with
+                { CanConfirmAbsence = value.CanConfirmAbsence }))));
         if (death.PlayerStatusHistory.Count > 0)
             player = new(death.PlayerStatusHistory.Select(value => value.ToStatusSet()));
         context = new(() => BuildContext(DeathDisplaySelector.Select(death)));

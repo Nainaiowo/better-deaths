@@ -55,6 +55,80 @@ public sealed class MitigationStatusTests
     }
 
     [Fact]
+    public void ConfirmedStatusEndsAfterTwoIndependentFullAbsencesAndRepeatedEmptyReadIsRetained()
+    {
+        var capture = new PlayerStatusHistory();
+        var status = Status(duration: 180);
+        capture.Observe(Player(1, false, status) with { IsAuthoritative = true });
+        capture.Observe(Player(2, true));
+
+        var firstMiss = new StatusTimeline(capture.Between(At(0), At(2)).Select(value => value.ToStatusSet()));
+        Assert.Single(firstMiss.At(At(2.2)));
+
+        capture.Observe(Player(2.1, true));
+        capture.Observe(Player(2.3, true));
+        var observations = capture.Between(At(0), At(3));
+        Assert.Contains(observations, value => value.SeenAtUtc == At(2.3));
+        Assert.Empty(new StatusTimeline(observations.Select(value => value.ToStatusSet())).At(At(2.3)));
+    }
+
+    [Fact]
+    public void PartialAbsenceDoesNotCountAndAReappearanceCancelsPendingEnd()
+    {
+        var status = Status(duration: 180);
+        var timeline = new StatusTimeline([
+            Set(1, false, status) with { IsAuthoritative = true },
+            Set(2, true),
+            Set(2.2, false),
+            Set(2.4, true, status with { RemainingTime = 178.6f }),
+            Set(3, true),
+        ]);
+
+        Assert.Single(timeline.At(At(2.3)));
+        Assert.Single(timeline.At(At(3)));
+
+        timeline.Add(Set(3.5, true));
+        Assert.Empty(timeline.At(At(3.5)));
+    }
+
+    [Fact]
+    public void PendingAbsenceSurvivesPruningAndSavedPullRoundTrip()
+    {
+        var capture = new PlayerStatusHistory();
+        capture.Observe(Player(1, false, Status(duration: 180)) with { IsAuthoritative = true });
+        capture.Observe(Player(2, true));
+        capture.Prune(At(2.1));
+        capture.Observe(Player(2.5, true));
+
+        var json = JsonSerializer.Serialize(capture.Between(At(2.1), At(3)));
+        var reloaded = JsonSerializer.Deserialize<PlayerStatusSnapshot[]>(json)!;
+        var timeline = new StatusTimeline(reloaded.Select(value => value.ToStatusSet()));
+        Assert.Empty(timeline.At(At(2.5)));
+    }
+
+    [Fact]
+    public void Pull2448DamageDownIsAbsentFromSecondDeathStatusResolutionAfterRepeatedSnapshots()
+    {
+        var capture = new PlayerStatusHistory();
+        var damageDown = Status(2911, 180, name: "Damage Down");
+        var rampart = Status(1191, 180, name: "Rampart");
+        capture.Observe(Player(370.1, false, damageDown, rampart) with { IsAuthoritative = true });
+        capture.Observe(Player(380.613, true,
+            damageDown with { RemainingTime = 149.59f }, rampart with { RemainingTime = 149.59f }));
+        capture.Observe(Player(424.469, true));
+        capture.Observe(Player(424.977, true));
+
+        var playerHistory = capture.Between(At(360), At(471), "player");
+        Assert.Contains(playerHistory, value => value.SeenAtUtc == At(424.977));
+        var hit = Hit(469.988) with { HasPlayerStatusSnapshot = true };
+        var death = Death(hit) with { PlayerStatusHistory = playerHistory };
+
+        Assert.DoesNotContain(2911u, DeathMitigationResolver.For(death).PlayerForHit(hit).Select(value => value.Id));
+        Assert.DoesNotContain(2911u, DeathMitigationResolver.For(death).Resolve().PlayerStatuses.Select(value => value.Id));
+        Assert.Empty(new ReplayMitigationTimeline(playerHistory, []).At(hit.SeenAtUtc, hit.PullElapsedSeconds));
+    }
+
+    [Fact]
     public void ShortenedLatestObservationExpiresWithoutRevivingEarlierLongerDuration()
     {
         var timeline = new StatusTimeline([Set(1, true, Status(duration: 15)), Set(2, true, Status(duration: 1))]);
@@ -267,6 +341,32 @@ public sealed class MitigationStatusTests
         Assert.Single(new ReplayMitigationTimeline([], death.SourceMitigationHistory).At(At(3), 3));
         capture.Observe(Enemy(4, false) with { IsAuthoritative = true, RemovedStatuses = [Status()] });
         Assert.Empty(new ReplayMitigationTimeline([], capture.Between(At(0), At(5))).At(At(5), 5));
+    }
+
+    [Fact]
+    public void ConfirmedBossDebuffEndsAfterRepeatedFullSourceSnapshots()
+    {
+        var capture = new SourceMitigationHistory();
+        capture.Observe(Enemy(1, false, Status()) with { IsAuthoritative = true });
+        capture.Observe(Enemy(2, true));
+        Assert.Single(new ReplayMitigationTimeline([], capture.Between(At(0), At(3))).At(At(2.2), 2.2f));
+
+        capture.Observe(Enemy(2.5, true));
+        Assert.Empty(new ReplayMitigationTimeline([], capture.Between(At(0), At(3))).At(At(2.5), 2.5f));
+    }
+
+    [Fact]
+    public void PendingBossDebuffAbsenceSurvivesPruningAndSavedPullRoundTrip()
+    {
+        var capture = new SourceMitigationHistory();
+        capture.Observe(Enemy(1, false, Status(duration: 180)) with { IsAuthoritative = true });
+        capture.Observe(Enemy(2, true));
+        capture.Prune(At(2.1));
+        capture.Observe(Enemy(2.5, true));
+
+        var json = JsonSerializer.Serialize(capture.Between(At(2.1), At(3)));
+        var reloaded = JsonSerializer.Deserialize<SourceMitigationSnapshot[]>(json)!;
+        Assert.Empty(new ReplayMitigationTimeline([], reloaded).At(At(2.5), 2.5f));
     }
 
     [Fact]

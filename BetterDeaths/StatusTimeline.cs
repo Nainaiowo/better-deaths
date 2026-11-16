@@ -8,11 +8,14 @@ internal sealed class StatusTimeline
 {
     private sealed record ObservedStatus(DateTime SeenAtUtc, StatusSnapshot Status, bool Authoritative);
     private sealed record RemovedStatus(uint Id, uint SourceId, DateTime? PreviousExpiry);
-    private sealed record Point(DateTime SeenAtUtc, ObservedStatus[] Statuses, RemovedStatus[] Removed);
+    private sealed record Point(DateTime SeenAtUtc, ObservedStatus[] Statuses, RemovedStatus[] Removed,
+        StatusAbsenceEvidence[] PendingAbsences);
+    private static readonly TimeSpan MinimumIndependentAbsenceInterval = TimeSpan.FromMilliseconds(250);
     private readonly List<StatusSetSnapshot> observations = [];
     private readonly List<Point> points = [];
     private Dictionary<(uint Id, uint SourceId), ObservedStatus> state = [];
     private Dictionary<(uint Id, uint SourceId), RemovedStatus> removed = [];
+    private Dictionary<(uint Id, uint SourceId), StatusAbsenceEvidence> pendingAbsences = [];
 
     public StatusTimeline(IEnumerable<StatusSetSnapshot> observations)
     {
@@ -29,15 +32,38 @@ internal sealed class StatusTimeline
         {
             state = index == 0 ? [] : points[index - 1].Statuses.ToDictionary(value => (value.Status.Id, value.Status.SourceId));
             removed = index == 0 ? [] : points[index - 1].Removed.ToDictionary(value => (value.Id, value.SourceId));
+            pendingAbsences = index == 0 ? [] : points[index - 1].PendingAbsences.ToDictionary(value => (value.Id, value.SourceId));
             points.RemoveRange(index, points.Count - index);
         }
         for (var current = index; current < observations.Count; current++)
         {
             var next = observations[current];
-            Apply(state, removed, next);
-            points.Add(new(next.SeenAtUtc, state.Values.ToArray(), removed.Values.ToArray()));
+            Apply(state, removed, pendingAbsences, next);
+            points.Add(new(next.SeenAtUtc, state.Values.ToArray(), removed.Values.ToArray(), pendingAbsences.Values.ToArray()));
         }
         return index;
+    }
+
+    public bool NeedsAbsenceConfirmation(StatusSetSnapshot observation)
+    {
+        if (!observation.IsComplete || observation.IsAuthoritative || !observation.CanConfirmAbsence)
+            return false;
+        var found = FindPoint(observation.SeenAtUtc);
+        if (found < 0)
+            return false;
+        var point = points[found];
+        foreach (var observed in point.Statuses)
+        {
+            var status = observed.Status;
+            if (!observed.Authoritative || Expiry(observed) <= observation.SeenAtUtc ||
+                observation.Statuses.Any(value => value.Id == status.Id && value.SourceId == status.SourceId))
+                continue;
+            var key = (status.Id, status.SourceId);
+            var pending = point.PendingAbsences.FirstOrDefault(value => value.Id == key.Id && value.SourceId == key.SourceId);
+            if (pending is null || observation.SeenAtUtc - pending.LastSeenAtUtc >= MinimumIndependentAbsenceInterval)
+                return true;
+        }
+        return false;
     }
 
     public int ObservationCountAt(DateTime time, bool inclusive = true) => FindPoint(time, inclusive) + 1;
@@ -69,7 +95,8 @@ internal sealed class StatusTimeline
         {
             var state = statuses.ToDictionary(value => (value.Status.Id, value.Status.SourceId));
             var removed = found < 0 ? [] : points[found].Removed.ToDictionary(value => (value.Id, value.SourceId));
-            Apply(state, removed, overlay);
+            var pending = found < 0 ? [] : points[found].PendingAbsences.ToDictionary(value => (value.Id, value.SourceId));
+            Apply(state, removed, pending, overlay, countConfirmedAbsence: false);
             statuses = state.Values.ToArray();
         }
         return Active(statuses, seenAtUtc);
@@ -106,19 +133,41 @@ internal sealed class StatusTimeline
         observed.SeenAtUtc.AddSeconds(Math.Min(observed.Status.RemainingTime, (DateTime.MaxValue - observed.SeenAtUtc).TotalSeconds));
 
     private static void Apply(Dictionary<(uint Id, uint SourceId), ObservedStatus> state,
-        Dictionary<(uint Id, uint SourceId), RemovedStatus> removed, StatusSetSnapshot observation)
+        Dictionary<(uint Id, uint SourceId), RemovedStatus> removed,
+        Dictionary<(uint Id, uint SourceId), StatusAbsenceEvidence> pendingAbsences,
+        StatusSetSnapshot observation, bool countConfirmedAbsence = true)
     {
         if (observation.IsComplete)
         {
             foreach (var pair in state.ToArray())
             {
                 if (observation.Statuses.Any(value => value.Id == pair.Key.Id && value.SourceId == pair.Key.SourceId))
+                {
+                    pendingAbsences.Remove(pair.Key);
                     continue;
+                }
                 if (observation.IsAuthoritative || !pair.Value.Authoritative || Expiry(pair.Value) <= observation.SeenAtUtc)
                 {
                     state.Remove(pair.Key);
+                    pendingAbsences.Remove(pair.Key);
                     if (observation.IsAuthoritative || Expiry(pair.Value) <= observation.SeenAtUtc)
                         removed[pair.Key] = new(pair.Key.Id, pair.Key.SourceId, Expiry(pair.Value));
+                }
+                else if (pair.Value.Authoritative && countConfirmedAbsence && observation.CanConfirmAbsence)
+                {
+                    if (!pendingAbsences.TryGetValue(pair.Key, out var previous) ||
+                        observation.SeenAtUtc - previous.LastSeenAtUtc >= MinimumIndependentAbsenceInterval)
+                    {
+                        var count = previous is null ? 1 : previous.ConsecutiveObservations + 1;
+                        if (count >= 2)
+                        {
+                            state.Remove(pair.Key);
+                            removed[pair.Key] = new(pair.Key.Id, pair.Key.SourceId, Expiry(pair.Value));
+                            pendingAbsences.Remove(pair.Key);
+                        }
+                        else
+                            pendingAbsences[pair.Key] = new(pair.Key.Id, pair.Key.SourceId, count, observation.SeenAtUtc);
+                    }
                 }
             }
         }
@@ -129,6 +178,7 @@ internal sealed class StatusTimeline
             foreach (var pair in matching)
             {
                 state.Remove(pair.Key);
+                pendingAbsences.Remove(pair.Key);
                 var previous = Expiry(pair.Value);
                 removed[pair.Key] = new(pair.Key.Id, pair.Key.SourceId, previous);
                 if (previous is not null && (expiry is null || previous > expiry))
@@ -153,6 +203,9 @@ internal sealed class StatusTimeline
                     status = status with { SourceId = matches[0].Status.SourceId };
             }
             var key = (status.Id, status.SourceId);
+            pendingAbsences.Remove(key);
+            if (status.SourceId != 0 && state.ContainsKey((status.Id, 0)))
+                pendingAbsences.Remove((status.Id, 0));
             // A timerless update can modify an existing buff, but cannot establish a new lifetime.
             if (observation.IsUpdateOnly && status.RemainingTime <= 0 && !state.ContainsKey(key))
                 continue;
@@ -195,6 +248,12 @@ internal sealed class StatusTimeline
             }
             state[key] = new(observation.SeenAtUtc, status, confirmed);
         }
+        foreach (var pending in observation.PendingAbsences)
+        {
+            var key = (pending.Id, pending.SourceId);
+            if (state.ContainsKey(key) && pending.ConsecutiveObservations > 0)
+                pendingAbsences[key] = pending;
+        }
     }
 
     public IReadOnlyList<StatusSetSnapshot> SeedAt(DateTime time, bool inclusive = true)
@@ -204,6 +263,8 @@ internal sealed class StatusTimeline
             return [];
         var point = points[found];
         var active = Active(point.Statuses, time);
+        var activeKeys = active.Select(status => (status.Id, status.SourceId)).ToHashSet();
+        var pending = point.PendingAbsences.Where(value => activeKeys.Contains((value.Id, value.SourceId))).ToArray();
         var result = new List<StatusSetSnapshot> { new(time, active) { IsComplete = true } };
         var confirmed = Active(point.Statuses.Where(value => value.Authoritative), time);
         if (confirmed.Count > 0)
@@ -213,6 +274,12 @@ internal sealed class StatusTimeline
                 value.PreviousExpiry is { } expiry ? (float)(expiry - time).TotalSeconds : 0)).ToArray();
         if (removals.Length > 0)
             result.Add(new(time, []) { RemovedStatuses = removals, IsAuthoritative = true });
+        if (pending.Length > 0)
+        {
+            var activeSeed = result.FindLastIndex(value => value.Statuses.Count > 0);
+            if (activeSeed >= 0)
+                result[activeSeed] = result[activeSeed] with { PendingAbsences = pending };
+        }
         return active.Count == 0 && removals.Length == 0 ? [] : result;
     }
 

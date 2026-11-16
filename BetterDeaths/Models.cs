@@ -3,6 +3,7 @@ namespace BetterDeaths;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Text.Json.Serialization;
 
 public enum DeathEventKind
 {
@@ -209,7 +210,13 @@ public sealed record StatusSetSnapshot(DateTime SeenAtUtc, IReadOnlyList<StatusS
     public bool IsAuthoritative { get; init; }
 
     public IReadOnlyList<StatusSnapshot> RemovedStatuses { get; init; } = [];
+
+    internal bool CanConfirmAbsence { get; init; } = true;
+
+    internal IReadOnlyList<StatusAbsenceEvidence> PendingAbsences { get; init; } = [];
 }
+
+public sealed record StatusAbsenceEvidence(uint Id, uint SourceId, int ConsecutiveObservations, DateTime LastSeenAtUtc);
 
 public sealed record StatusSourceSnapshot(
     uint EntityId, string MemberKey, string MemberName, int PartyIndex, uint ClassJobId, string ClassJobName);
@@ -235,12 +242,16 @@ public sealed record PlayerStatusSnapshot(
 
     public IReadOnlyList<StatusSourceSnapshot> Sources { get; init; } = [];
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StatusAbsenceEvidence>? PendingAbsences { get; init; }
+
     public StatusSetSnapshot ToStatusSet() => new(SeenAtUtc, Statuses)
     {
         IsUpdateOnly = IsUpdateOnly,
         IsComplete = IsComplete,
         IsAuthoritative = IsAuthoritative,
         RemovedStatuses = RemovedStatuses,
+        PendingAbsences = PendingAbsences ?? [],
     };
 }
 
@@ -361,12 +372,16 @@ public sealed record SourceMitigationSnapshot(
 
     public IReadOnlyList<StatusSourceSnapshot> Sources { get; init; } = [];
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StatusAbsenceEvidence>? PendingAbsences { get; init; }
+
     public StatusSetSnapshot ToStatusSet() => new(SeenAtUtc, Statuses)
     {
         IsUpdateOnly = IsUpdateOnly,
         IsComplete = IsComplete,
         IsAuthoritative = IsAuthoritative,
         RemovedStatuses = RemovedStatuses,
+        PendingAbsences = PendingAbsences ?? [],
     };
 }
 

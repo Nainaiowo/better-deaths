@@ -14,7 +14,8 @@ internal sealed class PlayerStatusHistory
         if (!available)
             return false;
         if (latest.TryGetValue(observation.MemberKey, out var previous) &&
-            StatusTimeline.Equivalent(previous.ToStatusSet(), observation.ToStatusSet()) && previous.Sources.SequenceEqual(observation.Sources))
+            StatusTimeline.Equivalent(previous.ToStatusSet(), observation.ToStatusSet()) && previous.Sources.SequenceEqual(observation.Sources) &&
+            (!tracks.TryGetValue(observation.MemberKey, out var track) || !track.NeedsAbsenceConfirmation(observation.ToStatusSet())))
             return false;
         AddToTrack(observation);
         if (previous is null || observation.SeenAtUtc >= previous.SeenAtUtc)
@@ -48,6 +49,7 @@ internal sealed class PlayerStatusHistory
                         IsComplete = seed.IsComplete,
                         IsUpdateOnly = seed.IsUpdateOnly,
                         IsAuthoritative = seed.IsAuthoritative,
+                        PendingAbsences = seed.PendingAbsences,
                         Sources = range.Sources,
                     });
             }

@@ -18,7 +18,8 @@ internal sealed class SourceMitigationHistory
             (!observation.IsComplete || previous is null))
             return false;
         if (previous is not null && StatusTimeline.Equivalent(previous.ToStatusSet(), observation.ToStatusSet()) &&
-            previous.Sources.SequenceEqual(observation.Sources))
+            previous.Sources.SequenceEqual(observation.Sources) &&
+            (!tracks.TryGetValue(observation.SourceEntityId, out var track) || !track.NeedsAbsenceConfirmation(observation.ToStatusSet())))
             return false;
         AddToTrack(observation);
         if (previous is null || observation.SeenAtUtc >= previous.SeenAtUtc)
@@ -50,6 +51,7 @@ internal sealed class SourceMitigationHistory
                         IsUpdateOnly = seed.IsUpdateOnly,
                         RemovedStatuses = seed.RemovedStatuses,
                         IsAuthoritative = seed.IsAuthoritative,
+                        PendingAbsences = seed.PendingAbsences,
                         Sources = range.Sources,
                     });
             }

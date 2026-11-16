@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.64";
+    private const string CurrentChangelogVersion = "1.0.0.65";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19798,6 +19798,14 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Fixes");
+        DrawHighlightedChangelogBullet("Fixed a regression introduced in the previous update that could carry an ended status, such as Damage Down, into a later death's details.");
+        DrawWrappedBullet("Statuses now clear after multiple complete captures confirm they have ended, while one missed capture will not clear them prematurely.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.64");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Party Cooldowns");
         DrawHighlightedChangelogBullet("Increased the limit from 12 to 24 abilities per job, with up to three custom rows.");
