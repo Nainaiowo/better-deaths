@@ -288,12 +288,12 @@ public sealed class MitigationStatusTests
         capture.Observe(Enemy(1, true, effect));
         Assert.False(capture.Observe(Enemy(2, true), available: false));
         var before = Death(Hit(3), capture.Between(At(0), At(3)).ToArray());
-        Assert.Contains(name, DeathMitigationChatFormatter.ActiveMitigations(
+        Assert.Contains(name, DeathMitigationChatFormatter.EnemyDamageDowns(
             DeathMitigationResolver.For(before).Resolve()));
         capture.Observe(Enemy(4, false) with { RemovedStatuses = [effect] });
         var after = Death(Hit(5), capture.Between(At(0), At(5)).ToArray());
         Assert.Empty(DeathMitigationResolver.For(after).ForHit(after.LikelyCause!));
-        Assert.Equal("none captured", DeathMitigationChatFormatter.ActiveMitigations(
+        Assert.Equal("none captured", DeathMitigationChatFormatter.EnemyDamageDowns(
             DeathMitigationResolver.For(after).Resolve()));
         Assert.Empty(new ReplayMitigationTimeline([], capture.Between(At(0), At(6))).At(At(5), 5));
     }
@@ -337,7 +337,7 @@ public sealed class MitigationStatusTests
         var hit = Hit(3) with { HasSourceStatusSnapshot = true };
         var death = Death(hit, capture.Between(At(0), At(3)).ToArray());
         Assert.Equal("Addle", Assert.Single(DeathMitigationResolver.For(death).ForHit(hit)).Status.Name);
-        Assert.Contains("Addle", DeathMitigationChatFormatter.ActiveMitigations(DeathMitigationResolver.For(death).Resolve()));
+        Assert.Contains("Addle", DeathMitigationChatFormatter.EnemyDamageDowns(DeathMitigationResolver.For(death).Resolve()));
         Assert.Single(new ReplayMitigationTimeline([], death.SourceMitigationHistory).At(At(3), 3));
         capture.Observe(Enemy(4, false) with { IsAuthoritative = true, RemovedStatuses = [Status()] });
         Assert.Empty(new ReplayMitigationTimeline([], capture.Between(At(0), At(5))).At(At(5), 5));
@@ -419,7 +419,7 @@ public sealed class MitigationStatusTests
         capture.Observe(Enemy(1, false, Status()) with { IsAuthoritative = true });
         capture.Observe(Enemy(5.1, false) with { IsAuthoritative = true, RemovedStatuses = [Status()] });
         var death = Death(Hit(5) with { HasSourceStatusSnapshot = true }, capture.Between(At(0), At(5.5)).ToArray());
-        Assert.Contains("Addle", DeathMitigationChatFormatter.ActiveMitigations(DeathMitigationResolver.For(death).Resolve()));
+        Assert.Contains("Addle", DeathMitigationChatFormatter.EnemyDamageDowns(DeathMitigationResolver.For(death).Resolve()));
         Assert.Empty(new ReplayMitigationTimeline([], death.SourceMitigationHistory).At(At(5.2), 5.2f));
     }
 
@@ -464,14 +464,18 @@ public sealed class MitigationStatusTests
 
     [Theory]
     [MemberData(nameof(BossDebuffs))]
-    public void ReviewAndChatRecoverTheSameCapturedEnemyEvidence(uint id, string name)
+    public void ReviewDisplaysAndChatRecoverTheSameCapturedEnemyEvidence(uint id, string name)
     {
         var hit = Hit();
         var death = Death(hit, Enemy(1, true, Status(id, name: name)));
         var resolver = DeathMitigationResolver.For(death);
         var context = resolver.Resolve();
         Assert.Equal(name, Assert.Single(resolver.ForHit(hit)).Status.Name);
-        Assert.Contains(name, DeathMitigationChatFormatter.ActiveMitigations(context));
+        var atDeathStatuses = DeathMitigationDisplayFormatter.Combine(
+            context.PlayerStatuses,
+            context.BossStatuses.Select(value => value.Status));
+        Assert.Contains(name, atDeathStatuses.Select(status => status.Name));
+        Assert.Contains(name, DeathMitigationChatFormatter.EnemyDamageDowns(context));
     }
 
     [Fact]
@@ -483,7 +487,7 @@ public sealed class MitigationStatusTests
         var context = resolver.Resolve();
         Assert.Empty(resolver.ForHit(hit));
         Assert.Empty(context.BossStatuses);
-        Assert.Equal("none captured", DeathMitigationChatFormatter.ActiveMitigations(context));
+        Assert.Equal("none captured", DeathMitigationChatFormatter.EnemyDamageDowns(context));
     }
 
     [Fact]
@@ -511,7 +515,18 @@ public sealed class MitigationStatusTests
     {
         var context = new DeathMitigationContext([], [new(Boss, "Kefka", Status()),
             new(Boss + 1, "Kefka", Status(1195, name: "Feint"))]);
-        Assert.Equal("Kefka #1: Addle | Kefka #2: Feint", DeathMitigationChatFormatter.ActiveMitigations(context));
+        Assert.Equal("Kefka #1: Addle | Kefka #2: Feint", DeathMitigationChatFormatter.EnemyDamageDowns(context));
+    }
+
+    [Fact]
+    public void ChatKeepsPlayerMitigationsSeparateFromEnemyDamageDowns()
+    {
+        var rampart = Status(1191, name: "Rampart");
+        var addle = Status(1203, name: "Addle");
+        var context = new DeathMitigationContext([rampart], [new(Boss, "Kefka", addle)]);
+
+        Assert.Equal("Rampart", DeathMitigationChatFormatter.PlayerMitigations(context));
+        Assert.Equal("Kefka: Addle", DeathMitigationChatFormatter.EnemyDamageDowns(context));
     }
 
     [Fact]

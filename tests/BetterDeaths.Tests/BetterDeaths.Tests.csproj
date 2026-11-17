@@ -88,6 +88,7 @@
     <Compile Include="../../BetterDeaths/SourceMitigationHistory.cs" Link="SourceMitigationHistory.cs" />
     <Compile Include="../../BetterDeaths/DeathMitigationResolver.cs" Link="DeathMitigationResolver.cs" />
     <Compile Include="../../BetterDeaths/DeathMitigationChatFormatter.cs" Link="DeathMitigationChatFormatter.cs" />
+    <Compile Include="../../BetterDeaths/DeathMitigationDisplayFormatter.cs" Link="DeathMitigationDisplayFormatter.cs" />
     <Compile Include="../../BetterDeaths/ReplayMitigationTimeline.cs" Link="ReplayMitigationTimeline.cs" />
     <Compile Include="../../BetterDeaths/Plugin.StatusDefinitions.cs" Link="Plugin.StatusDefinitions.cs" />
     <Compile Include="../../BetterDeaths/Plugin.MitigationActionDefinitions.cs" Link="Plugin.MitigationActionDefinitions.cs" />

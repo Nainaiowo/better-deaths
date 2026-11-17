@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.65";
+    private const string CurrentChangelogVersion = "1.0.0.66";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -16418,14 +16418,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         bossStatusKeys = bossStatuses
             .Select(GetStatusKey)
             .ToHashSet();
-        return playerStatuses
-            .Concat(bossStatuses)
-            .GroupBy(GetStatusKey)
-            .Select(group => group
-                .OrderBy(status => status.RemainingTime <= 0.0f ? float.MaxValue : status.RemainingTime)
-                .ThenBy(status => status.StackCount)
-                .First())
-            .ToList();
+        return DeathMitigationDisplayFormatter.Combine(playerStatuses, bossStatuses);
     }
 
     private static StatusDisplayKey GetStatusKey(StatusSnapshot status)
@@ -19798,6 +19791,14 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Death information");
+        DrawHighlightedChangelogBullet("Chat summaries now list player mits separately from enemy damage-downs, making their source clear.");
+        DrawWrappedBullet("Boss damage-downs appear in the captured mitigations/debuffs summary and active-at-death details, with highlighted icons and hover details identifying the enemy.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.65");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Fixes");
         DrawHighlightedChangelogBullet("Fixed a regression introduced in the previous update that could carry an ended status, such as Damage Down, into a later death's details.");

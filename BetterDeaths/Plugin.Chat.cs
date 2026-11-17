@@ -151,7 +151,9 @@ public sealed partial class Plugin
                 : $"Fatal: {FormatDeathChatCauseLine(causeEvents[0], selection.Snapshot)}");
         }
 
-        lines.Add($"Active mits: {FormatDeathStatusList(death, selection)}.");
+        var mitigationContext = DeathMitigationResolver.For(death).Resolve();
+        lines.Add($"Player mits: {DeathMitigationChatFormatter.PlayerMitigations(mitigationContext)}.");
+        lines.Add($"Enemy damage downs: {DeathMitigationChatFormatter.EnemyDamageDowns(mitigationContext)}.");
         lines.Add($"Player debuffs: {FormatPlayerDebuffStatusList(death, selection)}.");
 
         return lines
@@ -211,11 +213,6 @@ public sealed partial class Plugin
     public static DeathRecapLinkChannel GetEffectiveDeathRecapLinkChannel(DeathRecapLinkChannel channel)
     {
         return GetDeathRecapLinkChannelOption(channel).Channel;
-    }
-
-    private static string FormatDeathStatusList(PartyDeathRecord death, DeathDisplaySelection selection)
-    {
-        return DeathMitigationChatFormatter.ActiveMitigations(DeathMitigationResolver.For(death).Resolve());
     }
 
     private static string FormatPlayerDebuffStatusList(PartyDeathRecord death, DeathDisplaySelection selection)

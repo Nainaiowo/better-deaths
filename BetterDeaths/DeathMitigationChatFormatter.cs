@@ -6,15 +6,18 @@ namespace BetterDeaths;
 
 internal static class DeathMitigationChatFormatter
 {
-    public static string ActiveMitigations(DeathMitigationContext context)
+    public static string PlayerMitigations(DeathMitigationContext context)
     {
-        var parts = new List<string>();
         var defenses = context.PlayerStatuses.Where(Plugin.IsDefensiveStatus).ToArray();
-        if (defenses.Length > 0)
-            parts.Add(Names(defenses));
+        return defenses.Length == 0 ? "none captured" : Names(defenses);
+    }
+
+    public static string EnemyDamageDowns(DeathMitigationContext context)
+    {
         var groups = context.BossStatuses.Where(value => Plugin.IsBossMitigationStatus(value.Status))
             .GroupBy(value => (value.EntityId, value.Name)).OrderBy(group => group.Key.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(group => group.Key.EntityId).ToArray();
+        var parts = new List<string>();
         foreach (var group in groups)
         {
             var label = group.Key.Name;
