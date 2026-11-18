@@ -419,7 +419,10 @@ public sealed class MitigationStatusTests
         capture.Observe(Enemy(1, false, Status()) with { IsAuthoritative = true });
         capture.Observe(Enemy(5.1, false) with { IsAuthoritative = true, RemovedStatuses = [Status()] });
         var death = Death(Hit(5) with { HasSourceStatusSnapshot = true }, capture.Between(At(0), At(5.5)).ToArray());
-        Assert.Contains("Addle", DeathMitigationChatFormatter.EnemyDamageDowns(DeathMitigationResolver.For(death).Resolve()));
+        var resolver = DeathMitigationResolver.For(death);
+        Assert.Contains("Addle", resolver.ForHit(death.LikelyCause!).Select(value => value.Status.Name));
+        Assert.Empty(resolver.Resolve().BossStatusesAtDeath);
+        Assert.Equal("none captured", DeathMitigationChatFormatter.EnemyDamageDowns(resolver.Resolve()));
         Assert.Empty(new ReplayMitigationTimeline([], death.SourceMitigationHistory).At(At(5.2), 5.2f));
     }
 
@@ -473,9 +476,53 @@ public sealed class MitigationStatusTests
         Assert.Equal(name, Assert.Single(resolver.ForHit(hit)).Status.Name);
         var atDeathStatuses = DeathMitigationDisplayFormatter.Combine(
             context.PlayerStatuses,
-            context.BossStatuses.Select(value => value.Status));
+            context.BossStatusesAtDeath.Select(value => value.Status));
         Assert.Contains(name, atDeathStatuses.Select(status => status.Name));
         Assert.Contains(name, DeathMitigationChatFormatter.EnemyDamageDowns(context));
+    }
+
+    [Fact]
+    public void Pull2488KefkaReprisalIsShownAtDeathWithoutBorrowingItForChaosHit()
+    {
+        const uint kefka = 0x4000341A;
+        const uint chaos = 0x400033C9;
+        const uint mars = 0x10000002;
+        var reprisal = Status(1193, duration: 15, source: mars, name: "Reprisal");
+        var hit = Hit(779.5953, chaos) with
+        {
+            SourceName = "Chaos",
+            HasSourceStatusSnapshot = true,
+        };
+        var death = Death(hit,
+            new SourceMitigationSnapshot(At(766.3714), 766.3714f, kefka, "Kefka", [reprisal])
+            { IsAuthoritative = true },
+            new SourceMitigationSnapshot(At(767.088), 767.088f, kefka, "Kefka", [reprisal with { RemainingTime = 14.292866f }])
+            { IsComplete = true },
+            new SourceMitigationSnapshot(At(781.32), 781.32f, kefka, "Kefka", [])
+            { IsComplete = true, IsAuthoritative = true, RemovedStatuses = [reprisal] }) with
+        {
+            SeenAtUtc = At(780.2107),
+            PullElapsedSeconds = 780.2107f,
+            EnemyHpAtDeath = [new(At(780.2107), 780.2107f, kefka, "Kefka", 24161520, 24161520, true)],
+        };
+
+        var resolver = DeathMitigationResolver.For(death);
+        var context = resolver.Resolve();
+        Assert.Empty(resolver.ForHit(hit));
+        Assert.Empty(context.BossStatuses);
+        Assert.Equal("Kefka", Assert.Single(context.BossStatusesAtDeath).Name);
+        Assert.Equal("Reprisal", Assert.Single(context.BossStatusesAtDeath).Status.Name);
+        Assert.Equal("Kefka: Reprisal", DeathMitigationChatFormatter.EnemyDamageDowns(context));
+        Assert.Contains("Reprisal", DeathMitigationDisplayFormatter.Combine(
+            context.PlayerStatuses,
+            context.BossStatusesAtDeath.Select(value => value.Status)).Select(status => status.Name));
+        Assert.Empty(resolver.BossAt(At(781.4), kefka));
+
+        var withoutEnemyHpSnapshot = death with { EnemyHpAtDeath = [] };
+        var sourceWithoutHp = Assert.Single(DeathMitigationResolver.For(withoutEnemyHpSnapshot)
+            .Resolve().BossStatusesAtDeath);
+        Assert.Equal(kefka, sourceWithoutHp.EntityId);
+        Assert.Equal("Kefka", sourceWithoutHp.Name);
     }
 
     [Fact]

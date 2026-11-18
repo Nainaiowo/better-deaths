@@ -53,6 +53,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string DamageMeterWidgetCommandName = "/bdm";
     private const string DamageMeterResetCommandName = "/bdr";
     private const string ReadyCheckCommandName = "/rc";
+    private const string FoodCheckCommandName = "/foodcheck";
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
@@ -325,6 +326,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("BetterDeaths");
     private readonly bool readyCheckCommandRegistered;
+    private readonly bool foodCheckCommandRegistered;
     private readonly RecapWindow recapWindow;
     private readonly CurrentPullWidgetWindow currentPullWidgetWindow;
     private readonly DamageMeterWidgetWindow damageMeterWidgetWindow;
@@ -652,6 +654,12 @@ public sealed partial class Plugin : IDalamudPlugin
         });
         if (!readyCheckCommandRegistered)
             Log.Warning("Better Deaths could not register /rc because another command handler already uses it.");
+        foodCheckCommandRegistered = CommandManager.AddHandler(FoodCheckCommandName, new CommandInfo(OnFoodCheckCommand)
+        {
+            HelpMessage = "Show the remaining Well Fed time for you and your party.",
+        });
+        if (!foodCheckCommandRegistered)
+            Log.Warning("Better Deaths could not register /foodcheck because another command handler already uses it.");
 
         actionEffectHook = GameInteropProvider.HookFromAddress<ActionEffectHandler.Delegates.Receive>(
             ActionEffectHandler.MemberFunctionPointers.Receive,
@@ -725,11 +733,13 @@ public sealed partial class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += OpenMainUi;
         BeginPuniRepositoryMigration();
         InitializeInstalledUpdateNotice(savedConfiguration is not null);
+        InitializePartyFoodStatusPolling();
     }
 
     public void Dispose()
     {
         disposing = true;
+        DisposePartyFoodStatusPolling();
         DisposeInstalledUpdateNotice();
         CaptureCurrentPullSnapshot("Plugin unloaded");
         EndDamageEncounter(DateTime.UtcNow, "Plugin unloaded");
@@ -793,6 +803,8 @@ public sealed partial class Plugin : IDalamudPlugin
         ChatGui.RemoveChatLinkHandler(InstalledUpdateChatLinkHandlerId);
         if (readyCheckCommandRegistered)
             CommandManager.RemoveHandler(ReadyCheckCommandName);
+        if (foodCheckCommandRegistered)
+            CommandManager.RemoveHandler(FoodCheckCommandName);
         CommandManager.RemoveHandler(DamageMeterResetCommandName);
         CommandManager.RemoveHandler(DamageMeterWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);
@@ -829,6 +841,42 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         ExecuteChatCommand("/readycheck");
         ChatGui.Print(BuildSystemMessageEntry("ready check, sponsored by BD"));
+    }
+
+    private void OnFoodCheckCommand(string command, string args)
+    {
+        var results = new List<(string Name, string Remaining)>();
+        var seenEntityIds = new HashSet<uint>();
+
+        foreach (var member in PartyList)
+        {
+            var name = member.Name.TextValue;
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            if (member.EntityId != 0 && !seenEntityIds.Add(member.EntityId))
+                continue;
+
+            var statuses = BuildCharacterStatusSnapshots(member.GameObject, member.Statuses);
+            results.Add((name, FoodCheckFormatter.FormatRemaining(FoodCheckFormatter.FindWellFedStatus(statuses))));
+        }
+
+        var localPlayer = ObjectTable.LocalPlayer;
+        if (localPlayer is not null && (localPlayer.EntityId == 0 || seenEntityIds.Add(localPlayer.EntityId)))
+        {
+            var statuses = BuildCharacterStatusSnapshots(localPlayer, []);
+            results.Add((localPlayer.Name.TextValue, FoodCheckFormatter.FormatRemaining(
+                FoodCheckFormatter.FindWellFedStatus(statuses))));
+        }
+
+        if (results.Count == 0)
+        {
+            ChatGui.Print(BuildSystemMessageEntry("[Better Deaths] No party members are available for a food check."));
+            return;
+        }
+
+        ChatGui.Print(BuildSystemMessageEntry("[Better Deaths] Well Fed remaining:"));
+        foreach (var result in results)
+            ChatGui.Print(BuildSystemMessageEntry($"[Better Deaths] {result.Name}: {result.Remaining}"));
     }
 
     private void OpenMainUi()

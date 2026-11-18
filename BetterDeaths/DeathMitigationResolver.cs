@@ -11,6 +11,8 @@ internal sealed record BossStatusEvidence(uint EntityId, string Name, StatusSnap
 internal sealed record DeathMitigationContext(
     IReadOnlyList<StatusSnapshot> PlayerStatuses, IReadOnlyList<BossStatusEvidence> BossStatuses)
 {
+    public IReadOnlyList<BossStatusEvidence> BossStatusesAtDeath { get; init; } = BossStatuses;
+
     public static readonly DeathMitigationContext Empty = new([], []);
 }
 
@@ -148,7 +150,22 @@ internal sealed class DeathMitigationResolver
                 : selection.Snapshot is { } snapshot ? Age(snapshot.Statuses, snapshot.SeenAtUtc, selection.AnchorSeenAtUtc).ToArray() : death.StatusesAtDeath;
         var boss = hits.SelectMany(ForHit).GroupBy(value => (value.EntityId, value.Status.Id, value.Status.SourceId))
             .Select(group => group.OrderBy(value => value.Status.RemainingTime <= 0 ? float.MaxValue : value.Status.RemainingTime).First()).ToArray();
-        return new(playerStatuses, boss);
+        var enemyNamesAtDeath = death.EnemyHpAtDeath
+            .Where(enemy => enemy.EntityId != 0 && !string.IsNullOrWhiteSpace(enemy.Name))
+            .GroupBy(enemy => enemy.EntityId)
+            .ToDictionary(group => group.Key, group => group.First().Name);
+        var bossStatusesAtDeath = BossAt(death.SeenAtUtc)
+            .Where(value => Plugin.IsBossMitigationStatus(value.Status))
+            .Select(value => string.IsNullOrWhiteSpace(value.Name) && enemyNamesAtDeath.TryGetValue(value.EntityId, out var name)
+                ? value with { Name = name }
+                : value)
+            .GroupBy(value => (value.EntityId, value.Status.Id, value.Status.SourceId))
+            .Select(group => group.First())
+            .ToArray();
+        return new DeathMitigationContext(playerStatuses, boss)
+        {
+            BossStatusesAtDeath = bossStatusesAtDeath,
+        };
     }
 
     private static IEnumerable<StatusSnapshot> Age(IEnumerable<StatusSnapshot> statuses, DateTime observed, DateTime at)

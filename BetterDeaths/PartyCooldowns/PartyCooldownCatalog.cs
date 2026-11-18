@@ -75,6 +75,16 @@ internal sealed class PartyCooldownCatalog
         return changed;
     }
 
+    internal void RestoreDefaultSelections(Dictionary<uint, List<uint>> selections,
+        Dictionary<uint, PartyCooldownRows> rowLayouts)
+    {
+        foreach (var job in Jobs)
+        {
+            selections[job.Id] = Defaults(job.Id);
+            rowLayouts.Remove(job.Id);
+        }
+    }
+
     public List<uint> NormalizeSelection(uint jobId, IEnumerable<uint>? selected) =>
         selected is null ? Defaults(jobId) : selected.Select(PartyCooldownSelectionPolicy.CanonicalAction).Distinct()
             .Where(id => Find(id) is { UnsupportedReason: null, CaptureOnly: false } action &&

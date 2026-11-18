@@ -100,6 +100,100 @@ public sealed class PartyCooldownDefaultLoadoutsTests
         Assert.Empty(catalog.NormalizeSelection(19, []));
     }
 
+    [Theory]
+    [MemberData(nameof(Jobs))]
+    public void ConfirmedAllJobDefaultsReplaceSavedSelectionsAndRemoveCustomRows(uint job)
+    {
+        var catalog = Catalog();
+        var previous = catalog.Defaults(job);
+        previous.Reverse();
+        var rows = new PartyCooldownRows
+        {
+            Enabled = true,
+            Rows = [previous.Take(1).ToList(), previous.Skip(1).ToList(), []]
+        };
+        var selections = new Dictionary<uint, List<uint>> { [job] = previous };
+        var layouts = new Dictionary<uint, PartyCooldownRows> { [job] = rows };
+
+        catalog.RestoreDefaultSelections(selections, layouts);
+
+        Assert.Equal(PartyCooldownCatalog.Jobs.Count, selections.Count);
+        Assert.Equal(PartyCooldownDefaultLoadouts.Jobs[job].Actions, selections[job]);
+        Assert.NotSame(previous, selections[job]);
+        Assert.Empty(layouts);
+        var defaultRows = new PartyCooldownRows();
+        defaultRows.Normalize(selections[job]);
+        Assert.False(defaultRows.Enabled);
+        Assert.Equal(selections[job], Assert.Single(defaultRows.Rows));
+    }
+
+    [Fact]
+    public void ConfirmedAllJobDefaultsUpgradeLegacyAndExplicitlyEmptySelectionsTogether()
+    {
+        var catalog = Catalog();
+        var selections = new Dictionary<uint, List<uint>> { [19] = [], [40] = [7561, 24303] };
+        catalog.PreserveLegacyDefaults(selections);
+        var layouts = selections.ToDictionary(pair => pair.Key, pair => new PartyCooldownRows
+        {
+            Enabled = true,
+            Rows = [[], [], pair.Value.ToList()]
+        });
+
+        catalog.RestoreDefaultSelections(selections, layouts);
+
+        foreach (var job in PartyCooldownCatalog.Jobs)
+            Assert.Equal(PartyCooldownDefaultLoadouts.Jobs[job.Id].Actions, selections[job.Id]);
+        Assert.Empty(layouts);
+        Assert.True(selections[19].Count > 12);
+        Assert.Equal(selections[40], catalog.NormalizeSelection(40, selections[40]));
+        Assert.False(catalog.PreserveLegacyDefaults(selections));
+        Assert.Equal(PartyCooldownDefaultLoadouts.Jobs[33].Actions, selections[33]);
+    }
+
+    [Fact]
+    public void ConfirmedAllJobDefaultsSaveReloadAndReapplyWithoutSharingMutableDefaultLists()
+    {
+        var catalog = Catalog();
+        var selections = new Dictionary<uint, List<uint>>();
+        var layouts = new Dictionary<uint, PartyCooldownRows>();
+        catalog.RestoreDefaultSelections(selections, layouts);
+        var restored = JsonSerializer.Deserialize<Dictionary<uint, List<uint>>>(JsonSerializer.Serialize(selections))!;
+        foreach (var job in PartyCooldownCatalog.Jobs)
+            Assert.Equal(catalog.DefaultSelection(job.Id), catalog.NormalizeSelection(job.Id, restored[job.Id]));
+
+        restored[19].Clear();
+        var original = selections[19];
+        catalog.RestoreDefaultSelections(restored, layouts);
+        Assert.Equal(catalog.DefaultSelection(19), restored[19]);
+        Assert.Equal(catalog.DefaultSelection(19), original);
+        Assert.NotSame(original, restored[19]);
+        var firstApply = restored[19];
+        catalog.RestoreDefaultSelections(restored, layouts);
+        Assert.Equal(firstApply, restored[19]);
+        Assert.NotSame(firstApply, restored[19]);
+    }
+
+    [Fact]
+    public void ConfirmedAllJobDefaultsDoNotChangeUnrecognizedJobsOrLiveCooldownHistory()
+    {
+        var catalog = Catalog();
+        var unrelatedSelection = new List<uint> { 999999 };
+        var unrelatedRows = new PartyCooldownRows { Enabled = true, Rows = [unrelatedSelection] };
+        var selections = new Dictionary<uint, List<uint>> { [999] = unrelatedSelection };
+        var layouts = new Dictionary<uint, PartyCooldownRows> { [999] = unrelatedRows };
+        var tracker = new PartyCooldownTracker();
+        var profile = new PartyCooldownProfile(7531, 47, 90, 1);
+        Assert.True(tracker.Observe(1, profile, 100, 1));
+        var before = tracker.Get(1, profile, 110);
+
+        catalog.RestoreDefaultSelections(selections, layouts);
+
+        Assert.Same(unrelatedSelection, selections[999]);
+        Assert.Same(unrelatedRows, layouts[999]);
+        Assert.Equal(before, tracker.Get(1, profile, 110));
+        Assert.Equal(80, before.RemainingSeconds);
+    }
+
     [Fact]
     public void HistoricalDefaultCountsAreFrozenForEveryJobRatherThanFollowingWhatIfChanges()
     {

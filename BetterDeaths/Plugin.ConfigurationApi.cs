@@ -702,6 +702,7 @@ public sealed partial class Plugin
         }
 
         changed |= NormalizePartyCooldownConfiguration();
+        changed |= NormalizePartyFoodConfiguration();
 
         var replayActiveEffectsSplitRatio = Math.Clamp(Configuration.ReplayActiveEffectsSplitRatio, 0.2f, 0.8f);
         if (!float.IsFinite(Configuration.ReplayActiveEffectsSplitRatio) ||

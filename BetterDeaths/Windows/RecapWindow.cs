@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.66";
+    private const string CurrentChangelogVersion = "1.0.0.67";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -6159,7 +6159,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         var playerStatuses = plugin
             .GetRelevantPlayerStatusesForDisplay(context.PlayerStatuses)
             .Select(status => new WidgetMitStatus(status, "Player", string.Empty));
-        var bossStatuses = context.BossStatuses.Where(value => Plugin.IsBossMitigationStatus(value.Status))
+        var bossStatuses = context.BossStatusesAtDeath.Where(value => Plugin.IsBossMitigationStatus(value.Status))
             .Select(value => new WidgetMitStatus(value.Status, "Boss", value.Name));
 
         return playerStatuses
@@ -6525,14 +6525,14 @@ public sealed partial class RecapWindow : Window, IDisposable
         var summaryRow = GetLeadUpSummaryRow(death, selection, leadUpEvents, timelineRows);
         var context = DeathMitigationResolver.For(death).Resolve();
         var summaryMitigationDebuffStatuses = GetCombinedMitigationDebuffStatuses(context.PlayerStatuses,
-            context.BossStatuses.Select(value => value.Status), out _);
-        var summaryMitigationDebuffStatusSources = BuildBossStatusSourceNames(context.BossStatuses
+            context.BossStatusesAtDeath.Select(value => value.Status), out _);
+        var summaryMitigationDebuffStatusSources = BuildBossStatusSourceNames(context.BossStatusesAtDeath
             .Select(value => new BossStatusDisplayEntry(value.Status, value.Name, value.EntityId)));
         if (summaryRow is not null)
             summaryRow = summaryRow with
             {
                 Mitigations = context,
-                SourceStatuses = context.BossStatuses.Select(value => value.Status).ToArray(),
+                SourceStatuses = context.BossStatusesAtDeath.Select(value => value.Status).ToArray(),
                 SourceStatusNames = summaryMitigationDebuffStatusSources,
             };
         var selectedMitigationDebuffStatuses = summaryMitigationDebuffStatuses;
@@ -15061,13 +15061,14 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         var iconSize = Math.Clamp(configuration.StatusIconSize, 14.0f, 22.0f);
         var bossSourceNames = GetBossSourceNamesForStatus(status, bossSourceNamesByStatus);
+        var isBossMitigation = Plugin.IsBossMitigationStatus(status);
         DrawIconTextWrapped(
             status.IconId,
             iconSize,
-            FormatStatusSourceTooltip(status.Name, bossSourceNames),
+            FormatStatusSourceTooltip(status.Name, bossSourceNames, isBossMitigation),
             status.Name,
             MathF.Max(24.0f, width),
-            bossSourceNames is { Count: > 0 } ? ModernAccentColor : null);
+            isBossMitigation ? ModernAccentColor : null);
     }
 
     private void DrawFocusedStatusSnapshotList(
@@ -15100,11 +15101,12 @@ public sealed partial class RecapWindow : Window, IDisposable
             var rowStart = ImGui.GetCursorScreenPos();
             DrawFocusedDataRowBackground(rowStart, availableWidth, rowHeight, rowIndex);
             var bossSourceNames = GetBossSourceNamesForStatus(status, bossSourceNamesByStatus);
+            var isBossMitigation = Plugin.IsBossMitigationStatus(status);
 
             var contentY = rowStart.Y + FocusedDataRowPaddingY;
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX, contentY));
-            DrawGameIcon(status.IconId, iconSize, FormatStatusSourceTooltip(status.Name, bossSourceNames));
-            DrawBossStatusIconBorderIfNeeded(bossSourceNames);
+            DrawGameIcon(status.IconId, iconSize, FormatStatusSourceTooltip(status.Name, bossSourceNames, isBossMitigation));
+            DrawBossStatusIconBorderIfNeeded(bossSourceNames, isBossMitigation);
 
             ImGui.SetCursorScreenPos(new Vector2(rowStart.X + FocusedDataRowPaddingX + iconColumnWidth + spacing, contentY));
             DrawWrappedTextLines(status.Name, abilityColumnWidth);
@@ -15677,9 +15679,11 @@ public sealed partial class RecapWindow : Window, IDisposable
             SetThemedTooltip(tooltip);
     }
 
-    private static void DrawBossStatusIconBorderIfNeeded(IReadOnlyList<string>? bossSourceNames)
+    private static void DrawBossStatusIconBorderIfNeeded(
+        IReadOnlyList<string>? bossSourceNames,
+        bool isBossMitigation)
     {
-        DrawIconBorderIfNeeded(bossSourceNames is { Count: > 0 } ? ModernAccentColor : null);
+        DrawIconBorderIfNeeded(isBossMitigation || bossSourceNames is { Count: > 0 } ? ModernAccentColor : null);
     }
 
     private static void DrawIconBorderIfNeeded(Vector4? borderColor)
@@ -16230,7 +16234,7 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static IEnumerable<StatusSnapshot> GetLeadUpSummaryBossStatusSource(LeadUpSummaryRow summary)
     {
-        return summary.Mitigations.BossStatuses.Select(value => value.Status);
+        return summary.Mitigations.BossStatusesAtDeath.Select(value => value.Status);
     }
 
     private static IReadOnlyList<StatusSnapshot> GetEventSourceMitigationStatuses(
@@ -16321,12 +16325,16 @@ public sealed partial class RecapWindow : Window, IDisposable
         IEnumerable<BossStatusDisplayEntry> entries)
     {
         return entries
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.SourceName))
+            .Where(entry => entry.EntityId != 0 || !string.IsNullOrWhiteSpace(entry.SourceName))
             .GroupBy(entry => GetStatusKey(entry.Status))
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyList<string>)group
-                    .Select(entry => entry.EntityId == 0 ? entry.SourceName : $"{entry.SourceName} [{entry.EntityId:X8}]")
+                    .Select(entry => entry.EntityId == 0
+                        ? entry.SourceName
+                        : string.IsNullOrWhiteSpace(entry.SourceName)
+                            ? $"Unknown enemy [{entry.EntityId:X8}]"
+                            : $"{entry.SourceName} [{entry.EntityId:X8}]")
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(sourceName => sourceName, StringComparer.OrdinalIgnoreCase)
                     .ToList());
@@ -16399,7 +16407,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         return GetCombinedMitigationDebuffStatuses(
             DeathMitigationResolver.For(death).Resolve().PlayerStatuses,
-            DeathMitigationResolver.For(death).Resolve().BossStatuses.Select(value => value.Status),
+            DeathMitigationResolver.For(death).Resolve().BossStatusesAtDeath.Select(value => value.Status),
             out _);
     }
 
@@ -16551,9 +16559,11 @@ public sealed partial class RecapWindow : Window, IDisposable
         var groupWidth = GetStatusIconStackWidth(status, configuredIconSize, showTenthsOverTenSeconds, showTimer);
         var startX = ImGui.GetCursorPosX();
         var hasBossSourceNames = bossSourceNames is { Count: > 0 };
+        var isBossMitigation = Plugin.IsBossMitigationStatus(status);
         var tooltip = FormatStatusSourceTooltip(
             FormatStatusCompact(status, showTenthsOverTenSeconds, showTimer),
-            bossSourceNames);
+            bossSourceNames,
+            isBossMitigation);
         var hovered = false;
 
         ImGui.BeginGroup();
@@ -16580,7 +16590,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             }
         }
 
-        if (hasBossSourceNames)
+        if (isBossMitigation || hasBossSourceNames)
         {
             ImGui.GetWindowDrawList().AddRect(
                 iconStart - new Vector2(1.0f),
@@ -16622,10 +16632,16 @@ public sealed partial class RecapWindow : Window, IDisposable
             : null;
     }
 
-    private static string FormatStatusSourceTooltip(string statusTooltip, IReadOnlyList<string>? bossSourceNames)
+    private static string FormatStatusSourceTooltip(
+        string statusTooltip,
+        IReadOnlyList<string>? bossSourceNames,
+        bool isBossMitigation = false)
     {
-        return bossSourceNames is { Count: > 0 }
-            ? $"{statusTooltip}\n{FormatBossStatusSourceTooltip(bossSourceNames)}"
+        if (bossSourceNames is { Count: > 0 })
+            return $"{statusTooltip}\n{FormatBossStatusSourceTooltip(bossSourceNames)}";
+
+        return isBossMitigation
+            ? $"{statusTooltip}\nCaptured on: Enemy source not identified in the saved data."
             : statusTooltip;
     }
 
@@ -19791,6 +19807,23 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("Party food status");
+        DrawHighlightedChangelogBullet("Added an optional Well Fed marker beside visible party members, with a remaining-time tooltip and configurable warning threshold.");
+        DrawWrappedBullet("Live status updates once per second only while you are out of combat inside an instance.");
+        DrawWrappedBullet("Use /foodcheck to print each current party member's remaining Well Fed time in system chat.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Party cooldowns");
+        DrawHighlightedChangelogBullet("Default now asks before restoring the selected side's layout and every job's default ability list and one-row layout.");
+        DrawWrappedBullet("The other side's placement and live cooldown timers are preserved.");
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Death information");
+        DrawHighlightedChangelogBullet("Enemy damage-downs active at death now appear in summaries even when they are missing from the captured killing-hit snapshot.");
+        DrawWrappedBullet("Enemy mitigation icons keep their border and identify the source on hover when available.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.66");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Death information");
         DrawHighlightedChangelogBullet("Chat summaries now list player mits separately from enemy damage-downs, making their source clear.");

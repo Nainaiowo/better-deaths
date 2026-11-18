@@ -35,7 +35,10 @@ The old default action IDs and per-job counts are frozen independently of
 What-ifs. A one-time configuration migration preserves existing users'
 implicit selections as well as explicitly saved or empty selections. New
 configurations receive the new lists. Resetting a job deliberately opts it
-into the new list. Layout Default affects only that side's geometry.
+into the new list. Default asks before restoring the selected side's geometry
+and every job's new ability list and one-row layout. The opposite placement
+and live cooldown timers are preserved. Existing custom choices are never
+silently replaced on update.
 
 The [Ninja guide](https://na.finalfantasyxiv.com/jobguide/ninja/) confirms
 Adept Assassination upgrades Assassinate at level 56. Their native cooldown

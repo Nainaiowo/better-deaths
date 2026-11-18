@@ -14,7 +14,7 @@ internal static class DeathMitigationChatFormatter
 
     public static string EnemyDamageDowns(DeathMitigationContext context)
     {
-        var groups = context.BossStatuses.Where(value => Plugin.IsBossMitigationStatus(value.Status))
+        var groups = context.BossStatusesAtDeath.Where(value => Plugin.IsBossMitigationStatus(value.Status))
             .GroupBy(value => (value.EntityId, value.Name)).OrderBy(group => group.Key.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(group => group.Key.EntityId).ToArray();
         var parts = new List<string>();

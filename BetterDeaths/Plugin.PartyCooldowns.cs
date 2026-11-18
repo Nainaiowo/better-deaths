@@ -259,6 +259,17 @@ public sealed partial class Plugin
         SavePartyCooldownLayout();
     }
 
+    internal bool ApplyPartyCooldownDefaults()
+    {
+        if (GetPartyCooldownCatalog() is not { } catalog)
+            return false;
+        catalog.RestoreDefaultSelections(Configuration.PartyCooldownActions, Configuration.PartyCooldownRowLayouts);
+        Configuration.PartyCooldownPlacements!.ApplyDefault(Configuration.PartyCooldownSide);
+        Configuration.PartyCooldownDefaultLoadoutsVersion = PartyCooldownDefaultLoadouts.Version;
+        SavePartyCooldownLayout();
+        return true;
+    }
+
     private void SavePartyCooldownLayout()
     {
         partyCooldownLayoutRevision++;

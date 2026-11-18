@@ -19,6 +19,7 @@ public sealed partial class RecapWindow
     private bool cooldownPreviewInitialized;
     private uint? cooldownRequestedJob;
     private const string PartyCooldownDragPayload = "BETTER_DEATHS_PARTY_COOLDOWN";
+    private const string PartyCooldownDefaultsPopup = "Restore party cooldown defaults?##PartyCooldownDefaults";
     private readonly Dictionary<uint, ISharedImmediateTexture> partyCooldownTextures = [];
     private readonly Dictionary<uint, int> partyCooldownPreviewCharges = [];
     private readonly Dictionary<uint, int> partyCooldownTargetRows = [];
@@ -27,6 +28,8 @@ public sealed partial class RecapWindow
     private readonly Dictionary<string, Vector2> partyCooldownTextMeasurements = new(StringComparer.Ordinal);
     private ImFontPtr partyCooldownDrawFont;
     private float partyCooldownDrawFontSize;
+    private uint partyFoodStatusIconId;
+    private bool partyFoodStatusIconLookupComplete;
 
     private void DrawPartyCooldownSettings()
     {
@@ -49,6 +52,23 @@ public sealed partial class RecapWindow
             plugin.SaveConfiguration();
         }
         DrawSettingsTooltip("Focusing a job closes the other job and role sections. Applies to job headers and the preview dropdown. Turn off to keep multiple jobs expanded.");
+        ImGui.Spacing();
+        DrawSubtleSeparator();
+        ImGui.Spacing();
+        ImGui.TextColored(ModernAccentColor, "Food status");
+        var showFoodStatus = configuration.ShowPartyFoodStatus;
+        if (DrawThemedCheckbox("Show Well Fed status", ref showFoodStatus))
+            plugin.SetPartyFoodStatusVisibility(showFoodStatus);
+        DrawSettingsTooltip("Show a small food marker beside each visible party member. Live statuses refresh once per second while you are out of combat inside an instance. Hover for remaining time; /foodcheck remains an on-demand system-chat report.");
+        if (showFoodStatus)
+        {
+            var warningMinutes = configuration.PartyFoodWarningMinutes;
+            if (ImGui.SliderInt("Warn when under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min"))
+                configuration.PartyFoodWarningMinutes = warningMinutes;
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                cooldownAppearanceSavePending = true;
+            DrawSettingsTooltip("Use an amber marker when Well Fed has less time remaining than this threshold.");
+        }
         ImGui.Spacing();
         if (!cooldownPreviewInitialized)
         {
@@ -148,14 +168,49 @@ public sealed partial class RecapWindow
             GetThemedIconButtonWidth(FontAwesomeIcon.Home, "Default"))
             ImGui.SameLine();
         if (DrawThemedActionButton(FontAwesomeIcon.Home, "Default", "DefaultPartyCooldownPlacement"))
-        {
-            configuration.PartyCooldownPlacements!.ApplyDefault(configuration.PartyCooldownSide);
-            plugin.SaveConfiguration();
-        }
+            ImGui.OpenPopup(PartyCooldownDefaultsPopup);
         if (ImGui.IsItemHovered())
-            SetThemedTooltip("Restore this side's default icon size, spacing, and position. Keeps the other side, per-job abilities, and custom rows.");
+            SetThemedTooltip("Restore this side's layout and every job's default abilities and one-row layout. Asks before replacing custom choices. Keeps live cooldown timers and the other side's placement.");
+        DrawPartyCooldownDefaultsConfirmation();
         RegisterGuideTarget(GuideTarget.PartyCooldownLayout, start,
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
+    }
+
+    private void DrawPartyCooldownDefaultsConfirmation()
+    {
+        var width = MathF.Min(460, ImGui.GetMainViewport().WorkSize.X - 24);
+        ImGui.SetNextWindowSize(new Vector2(width, 0), ImGuiCond.Appearing);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8, 8));
+        ImGui.PushStyleColor(ImGuiCol.PopupBg, ModernPopupBgColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, ModernPanelBorderColor);
+        if (ImGui.BeginPopup(PartyCooldownDefaultsPopup, ImGuiWindowFlags.NoMove))
+        {
+            ImGui.PushTextWrapPos();
+            ImGui.TextColored(ModernAccentColor, "Restore defaults for every job?");
+            ImGui.PopTextWrapPos();
+            ImGui.TextWrapped("Replace every job's selected abilities with defensives, then 2-minute cooldowns, then 1-minute cooldowns. Custom rows will return to one row.");
+            var side = configuration.PartyCooldownSide == PartyCooldownSide.Left ? "left" : "right";
+            ImGui.TextWrapped($"Also restore the {side}-side icon size, spacing, and position. The other side's placement and live cooldown timers will not change.");
+            ImGui.Separator();
+            var buttonsWidth = ImGui.GetContentRegionAvail().X;
+            ImGui.BeginDisabled(plugin.GetPartyCooldownCatalog() is null);
+            if (DrawThemedActionButton(FontAwesomeIcon.Home, "Apply defaults", "ConfirmPartyCooldownDefaults") &&
+                plugin.ApplyPartyCooldownDefaults())
+            {
+                partyCooldownTargetRows.Clear();
+                ImGui.CloseCurrentPopup();
+            }
+            var applyButtonWidth = ImGui.GetItemRectSize().X;
+            ImGui.EndDisabled();
+            if (buttonsWidth >= applyButtonWidth + ImGui.GetStyle().ItemSpacing.X + GetThemedActionButtonWidth("Cancel"))
+                ImGui.SameLine();
+            if (DrawThemedActionButton("Cancel", "CancelPartyCooldownDefaults"))
+                ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+        }
+        ImGui.PopStyleColor(2);
+        ImGui.PopStyleVar(2);
     }
 
     private void DrawPartyCooldownAbilities()
@@ -531,7 +586,7 @@ public sealed partial class RecapWindow
 
     private unsafe void DrawNativePartyCooldownOverlay()
     {
-        if (!configuration.ShowPartyCooldowns || Plugin.GameGui.GameUiHidden || Plugin.ClientState.IsPvP ||
+        if ((!configuration.ShowPartyCooldowns && !configuration.ShowPartyFoodStatus) || Plugin.GameGui.GameUiHidden || Plugin.ClientState.IsPvP ||
             !Plugin.ClientState.IsLoggedIn || Plugin.PluginInterface.UiBuilder.CutsceneActive)
         {
             ResetPartyCooldownOverlayWarning();
@@ -570,6 +625,7 @@ public sealed partial class RecapWindow
         var selectedIcons = 0;
         var drawnIcons = 0;
         var placement = configuration.GetPartyCooldownPlacement();
+        var foodStatusCacheAvailable = configuration.ShowPartyFoodStatus && plugin.PartyFoodStatusCacheAvailable;
         Span<int> rowCounts = stackalloc int[PartyCooldownLayout.MaximumRows];
         Span<int> columns = stackalloc int[PartyCooldownLayout.MaximumRows];
         PreparePartyCooldownFont();
@@ -593,12 +649,20 @@ public sealed partial class RecapWindow
                 matchedRows++;
                 var actionCount = plugin.CopyPartyCooldownDisplay(entityId, partyCooldownDrawEntries);
                 selectedIcons += actionCount;
-                if (actionCount == 0)
+                var foodStatus = default(PartyFoodStatusSample);
+                var hasFoodStatus = foodStatusCacheAvailable &&
+                    plugin.TryGetPartyFoodStatus(entityId, out foodStatus);
+                var foodState = FoodCheckIndicatorPolicy.Classify(hasFoodStatus, foodStatus.HasWellFed,
+                    foodStatus.RemainingSeconds, configuration.PartyFoodWarningMinutes * 60);
+                hasFoodStatus = foodState != FoodCheckIndicatorState.Hidden;
+                if (actionCount == 0 && !hasFoodStatus)
                     continue;
                 rowCounts.Clear();
                 columns.Clear();
                 for (var index = 0; index < actionCount; index++)
                     rowCounts[partyCooldownDrawEntries[index].Row]++;
+                if (hasFoodStatus)
+                    rowCounts[0]++;
                 var scale = node->GetScaleX();
                 if (!float.IsFinite(scale) || scale <= 0)
                     continue;
@@ -625,6 +689,13 @@ public sealed partial class RecapWindow
                 var origin = PartyCooldownLayout.GetOrigin(row, rowCounts, configuration.PartyCooldownSide,
                     placement.IconSize, placement.Spacing, new(placement.OffsetX, placement.OffsetY));
                 var size = PartyCooldownLayout.IconSize(placement.IconSize) * scale;
+                if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Right)
+                {
+                    var position = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
+                        configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * scale;
+                    DrawPartyFoodStatus(draw, position, size, foodState, foodStatus);
+                    drawnIcons++;
+                }
                 for (var actionIndex = 0; actionIndex < actionCount; actionIndex++)
                 {
                     ref var entry = ref partyCooldownDrawEntries[actionIndex];
@@ -636,6 +707,13 @@ public sealed partial class RecapWindow
                     DrawPartyCooldownStatus(draw, position, size, entry.Action, entry.Status, entry.TimerLabel, entry.ChargeLabel);
                     drawnIcons++;
                 }
+                if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Left)
+                {
+                    var position = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
+                        configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * scale;
+                    DrawPartyFoodStatus(draw, position, size, foodState, foodStatus);
+                    drawnIcons++;
+                }
             }
         }
         finally
@@ -645,7 +723,7 @@ public sealed partial class RecapWindow
         if (drawnIcons > 0 || matchedRows > 0 && selectedIcons == 0 && plugin.PartyCooldownActorCount > 0)
             ResetPartyCooldownOverlayWarning();
         else
-            ReportPartyCooldownOverlayBlocked("no on-screen cooldowns", memberCount, matchedRows, selectedIcons);
+            ReportPartyCooldownOverlayBlocked("no on-screen party indicators", memberCount, matchedRows, selectedIcons);
     }
 
     private void ResetPartyCooldownOverlayWarning()
@@ -678,6 +756,56 @@ public sealed partial class RecapWindow
         if (status.MaxCharges > 1 && status.IsKnown)
             DrawPartyCooldownText(draw, position + new Vector2(size - 5 * textScale), chargeLabel ?? PartyCooldownLabels.Charges(status),
                 PartyCooldownLayout.ChargeTextSize(size, textScale), textScale);
+    }
+
+    private void DrawPartyFoodStatus(ImDrawListPtr draw, Vector2 position, float size, FoodCheckIndicatorState state,
+        PartyFoodStatusSample status)
+    {
+        if (!partyFoodStatusIconLookupComplete)
+        {
+            partyFoodStatusIconId = GetStatusIconId(FoodCheckFormatter.WellFedStatusId);
+            partyFoodStatusIconLookupComplete = true;
+        }
+
+        var tint = state switch
+        {
+            FoodCheckIndicatorState.Expiring => new Vector4(1, .82f, .42f, 1),
+            FoodCheckIndicatorState.Missing => new Vector4(1, .48f, .48f, 1),
+            _ => Vector4.One,
+        };
+        if (partyFoodStatusIconId != 0)
+            DrawPartyCooldownIcon(draw, position, size, partyFoodStatusIconId, tint);
+
+        var border = state switch
+        {
+            FoodCheckIndicatorState.Expiring => new Vector4(1, .66f, .22f, 1),
+            FoodCheckIndicatorState.Missing => new Vector4(.98f, .25f, .30f, 1),
+            _ => new Vector4(.40f, .88f, .73f, .95f),
+        };
+        draw.AddRect(position, position + new Vector2(size), ImGui.GetColorU32(border), size * .14f,
+            ImDrawFlags.None, MathF.Max(1, size * .055f));
+
+        if (state == FoodCheckIndicatorState.Missing)
+        {
+            var badgeCenter = position + new Vector2(size * .82f, size * .2f);
+            draw.AddCircleFilled(badgeCenter, size * .19f, ImGui.GetColorU32(new Vector4(.92f, .20f, .26f, 1)));
+            DrawPartyCooldownText(draw, badgeCenter, "!", MathF.Max(7, size * .29f));
+        }
+        else if (state == FoodCheckIndicatorState.Expiring)
+        {
+            var badgeCenter = position + new Vector2(size * .82f, size * .2f);
+            draw.AddCircleFilled(badgeCenter, size * .13f, ImGui.GetColorU32(new Vector4(1, .67f, .20f, 1)));
+        }
+
+        if (ImGui.IsMouseHoveringRect(position, position + new Vector2(size)))
+        {
+            var remaining = FoodCheckFormatter.FormatRemainingSeconds(status.RemainingSeconds);
+            ImGui.SetTooltip(state == FoodCheckIndicatorState.Missing
+                ? "Well Fed: No food detected"
+                : state == FoodCheckIndicatorState.Expiring
+                    ? $"Well Fed: {remaining} remaining (refresh soon)"
+                    : $"Well Fed: {remaining} remaining");
+        }
     }
 
     private void DrawPartyCooldownIcon(ImDrawListPtr draw, Vector2 position, float size, uint iconId, Vector4 tint)

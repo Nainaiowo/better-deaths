@@ -42,7 +42,7 @@ Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** 
 
 - Expand Tanks, Healers, Melee, or Ranged, then a job. Choose up to 24 damage, defensive, healing, and support cooldowns for each job.
 - New ability defaults are ordered as protection, 2-minute cooldowns, then 1-minute cooldowns. Existing selections are preserved; Reset for a job loads its new defaults. Pure healing and unrelated utility remain optional.
-- Default beside the layout Reset restores only the selected side's size, spacing, and position. It does not change abilities or cooldown timers.
+- Default beside the layout Reset asks before restoring the selected side's size, spacing, and position, plus every job's default abilities and one-row layout. Live cooldown timers and the opposite side's placement are unchanged.
 - **Auto-collapse other jobs**, beside the visibility checkbox, keeps only the focused job and role open. It applies to job headers and the preview dropdown; turn it off to keep multiple sections expanded.
 - Click `+` or drag available abilities into the selection. Drag to reorder; use `X` to remove. Existing selections are not replaced when more choices are added.
 - Place the icons left or right of names. Each side saves its own 16-72 px icon size, spacing, and offsets; ability selections remain per job.
@@ -99,11 +99,14 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 /bdw
 /bdm
 /bdr
+/foodcheck
 ```
 
 `/bdw` toggles the Death Window. `/bdm` toggles the DPS Meter widget without stopping capture or resetting the encounter.
 
 `/bdr` resets the active DPS meter encounter in the overworld, saving the result before starting fresh on the next damage. It is unavailable inside duties and does not delete saved encounters.
+
+`/foodcheck` reports the remaining Well Fed time for each current party member in local system chat.
 
 ## Dalamud Repository
 
