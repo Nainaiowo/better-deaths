@@ -46,7 +46,7 @@ Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** 
 - **Auto-collapse other jobs**, beside the visibility checkbox, keeps only the focused job and role open. It applies to job headers and the preview dropdown; turn it off to keep multiple sections expanded.
 - Click `+` or drag available abilities into the selection. Drag to reorder; use `X` to remove. Existing selections are not replaced when more choices are added.
 - Place the icons left or right of names. Each side saves its own 16-72 px icon size, spacing, and offsets; ability selections remain per job.
-- Enable **Custom rows** inside a job, above **Selected cooldowns**, to assign its abilities to up to three rows. Use the small `+` to add a row, then drag abilities into it. Select a row to make it the destination for clicked `+` abilities. The 12-ability limit is shared across all rows.
+- Enable **Custom rows** inside a job, above **Selected cooldowns**, to assign its abilities to up to three rows. Use the small `+` to add a row, then drag abilities into it. Select a row to make it the destination for clicked `+` abilities. The 24-ability limit is shared across all rows.
 - Custom rows are shared between left/right placement. Turning the checkbox off shows one row and remembers the arrangement for next time; empty additional rows can be removed.
 - Use the non-scrolling preview outside combat. Its sample party frame and selected icons shrink together only when needed to fit; the preview percentage does not change your live settings. HP/MP and timers are examples, not live party readings.
 - Countdown and charge numbers have black outlines for readability over ability icons.
@@ -54,6 +54,12 @@ Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** 
 - Timers continue through ordinary combat endings and follow confirmed duty resets. Tempera Coat and Grassa use confirmed shield breaks for their 60- and 30-second reductions.
 
 Teammate timers depend on captured uses and level-aware recharge rules. Abilities with unhandled proc reductions or resets remain greyed out with an explanation. Routine shared-GCD attacks, resource-only spenders, and consumed follow-ups are not separate cooldown choices. The overlay follows the native party list, not separate alliance-party panels, and does not change What-if or damage capture.
+
+## HUD: Food Check
+
+Open `/bd` and select **HUD > Food Check** to enable the optional Well Fed marker. Choose a warning threshold, hide healthy markers if you only want alerts, and optionally tint party plates with a status color adjustable from 4-40% (10% by default). The preview shows healthy, expiring, missing, and unavailable states. Live status updates once per second only while out of combat inside an instance; marker position and size follow the Party Cooldowns layout.
+
+Use `/foodcheck` at any time to print each current party member's remaining Well Fed time in system chat. See the [Food Check help page](https://nainaiowo.github.io/better-deaths/help/foodcheck.html#food-check) for visual examples and settings details.
 
 **HUD** also contains **DPS Meter** and **Death Window**. Select **Walkthrough** in the main header for an in-game tour, or read the [Party Cooldowns help page](https://nainaiowo.github.io/better-deaths/help/cooldowns.html#party-cooldowns).
 

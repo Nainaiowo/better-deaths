@@ -5,6 +5,7 @@ using Dalamud.Interface.Textures;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -53,22 +54,6 @@ public sealed partial class RecapWindow
         }
         DrawSettingsTooltip("Focusing a job closes the other job and role sections. Applies to job headers and the preview dropdown. Turn off to keep multiple jobs expanded.");
         ImGui.Spacing();
-        DrawSubtleSeparator();
-        ImGui.Spacing();
-        ImGui.TextColored(ModernAccentColor, "Food status");
-        var showFoodStatus = configuration.ShowPartyFoodStatus;
-        if (DrawThemedCheckbox("Show Well Fed status", ref showFoodStatus))
-            plugin.SetPartyFoodStatusVisibility(showFoodStatus);
-        DrawSettingsTooltip("Show a small food marker beside each visible party member. Live statuses refresh once per second while you are out of combat inside an instance. Hover for remaining time; /foodcheck remains an on-demand system-chat report.");
-        if (showFoodStatus)
-        {
-            var warningMinutes = configuration.PartyFoodWarningMinutes;
-            if (ImGui.SliderInt("Warn when under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min"))
-                configuration.PartyFoodWarningMinutes = warningMinutes;
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                cooldownAppearanceSavePending = true;
-            DrawSettingsTooltip("Use an amber marker when Well Fed has less time remaining than this threshold.");
-        }
         ImGui.Spacing();
         if (!cooldownPreviewInitialized)
         {
@@ -652,8 +637,10 @@ public sealed partial class RecapWindow
                 var foodStatus = default(PartyFoodStatusSample);
                 var hasFoodStatus = foodStatusCacheAvailable &&
                     plugin.TryGetPartyFoodStatus(entityId, out foodStatus);
-                var foodState = FoodCheckIndicatorPolicy.Classify(hasFoodStatus, foodStatus.HasWellFed,
-                    foodStatus.RemainingSeconds, configuration.PartyFoodWarningMinutes * 60);
+                var foodState = FoodCheckIndicatorPolicy.ForDisplay(
+                    FoodCheckIndicatorPolicy.Classify(hasFoodStatus, foodStatus.HasWellFed,
+                        foodStatus.RemainingSeconds, configuration.PartyFoodWarningMinutes * 60),
+                    configuration.PartyFoodWarningsOnly);
                 hasFoodStatus = foodState != FoodCheckIndicatorState.Hidden;
                 if (actionCount == 0 && !hasFoodStatus)
                     continue;
@@ -689,6 +676,8 @@ public sealed partial class RecapWindow
                 var origin = PartyCooldownLayout.GetOrigin(row, rowCounts, configuration.PartyCooldownSide,
                     placement.IconSize, placement.Spacing, new(placement.OffsetX, placement.OffsetY));
                 var size = PartyCooldownLayout.IconSize(placement.IconSize) * scale;
+                if (hasFoodStatus && configuration.PartyFoodTintPartyPlate)
+                    DrawFoodCheckPlateTint(draw, (AtkResNode*)component->OwnerNode, viewport.Pos, scale, foodState);
                 if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Right)
                 {
                     var position = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,

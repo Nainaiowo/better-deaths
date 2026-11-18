@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.67";
+    private const string CurrentChangelogVersion = "1.0.0.68";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -1220,6 +1220,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             MainPage.Replay => $"{HelpCenterUrl}replay.html#replay",
             MainPage.Widgets when hudSettingsView == HudSettingsView.DeathWidget => $"{HelpCenterUrl}widget.html#current-pull",
             MainPage.Widgets when hudSettingsView == HudSettingsView.PartyCooldowns => $"{HelpCenterUrl}cooldowns.html#party-cooldowns",
+            MainPage.Widgets when hudSettingsView == HudSettingsView.FoodCheck => $"{HelpCenterUrl}foodcheck.html#food-check",
             MainPage.Widgets => $"{HelpCenterUrl}meter.html#meter",
             MainPage.Analyzer => $"{HelpCenterUrl}analyzer.html#analyzer",
             MainPage.Example => $"{HelpCenterUrl}index.html#first-review",
@@ -19808,10 +19809,11 @@ public sealed partial class RecapWindow : Window, IDisposable
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
         ImGui.TextDisabled("Testing update.");
-        ImGui.TextUnformatted("Party food status");
-        DrawHighlightedChangelogBullet("Added an optional Well Fed marker beside visible party members, with a remaining-time tooltip and configurable warning threshold.");
-        DrawWrappedBullet("Live status updates once per second only while you are out of combat inside an instance.");
-        DrawWrappedBullet("Use /foodcheck to print each current party member's remaining Well Fed time in system chat.");
+        ImGui.TextUnformatted("Food Check");
+        DrawHighlightedChangelogBullet("Moved food status controls into their own Food Check section, separate from Party Cooldowns.");
+        DrawWrappedBullet("Choose a warning threshold, show warnings only, or optionally tint party plates by food status. Tint strength is adjustable from 4% to 40% and starts disabled.");
+        DrawWrappedBullet("The preview now distinguishes healthy, expiring, missing, and unavailable status so unavailable data is not mistaken for missing food.");
+        DrawWrappedBullet("Live status still updates once per second only while you are out of combat inside an instance; /foodcheck remains available for a system-chat report.");
         ImGui.Spacing();
         ImGui.TextUnformatted("Party cooldowns");
         DrawHighlightedChangelogBullet("Default now asks before restoring the selected side's layout and every job's default ability list and one-row layout.");

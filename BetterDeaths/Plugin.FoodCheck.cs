@@ -18,10 +18,14 @@ public sealed partial class Plugin
     private bool NormalizePartyFoodConfiguration()
     {
         var warningMinutes = Math.Clamp(Configuration.PartyFoodWarningMinutes, 1, 60);
-        if (warningMinutes == Configuration.PartyFoodWarningMinutes)
-            return false;
+        var tintOpacity = float.IsFinite(Configuration.PartyFoodPlateTintOpacity)
+            ? Math.Clamp(Configuration.PartyFoodPlateTintOpacity, 0.04f, 0.40f)
+            : 0.10f;
+        var changed = warningMinutes != Configuration.PartyFoodWarningMinutes ||
+            !tintOpacity.Equals(Configuration.PartyFoodPlateTintOpacity);
         Configuration.PartyFoodWarningMinutes = warningMinutes;
-        return true;
+        Configuration.PartyFoodPlateTintOpacity = tintOpacity;
+        return changed;
     }
 
     internal void SetPartyFoodStatusVisibility(bool visible)

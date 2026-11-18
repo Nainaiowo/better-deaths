@@ -45,6 +45,9 @@ internal readonly record struct PartyFoodStatusSample(bool HasWellFed, float Rem
 
 internal static class FoodCheckIndicatorPolicy
 {
+    public static FoodCheckIndicatorState ForDisplay(FoodCheckIndicatorState state, bool warningsOnly) =>
+        warningsOnly && state == FoodCheckIndicatorState.Active ? FoodCheckIndicatorState.Hidden : state;
+
     public static FoodCheckIndicatorState Classify(bool statusDataAvailable, bool hasWellFed, float remainingSeconds,
         int warningThresholdSeconds)
     {

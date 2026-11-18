@@ -41,9 +41,6 @@ public sealed partial class RecapWindow
         columns.Clear();
         foreach (var id in actions)
             rowCounts[rows?.RowFor(id) ?? 0]++;
-        var showFoodStatus = configuration.ShowPartyFoodStatus;
-        if (showFoodStatus)
-            rowCounts[0]++;
         var maximum = Vector2.Max(Vector2.One, ImGui.GetContentRegionAvail() - new Vector2(0, ImGui.GetTextLineHeightWithSpacing()));
         var layout = PartyCooldownPreviewLayout.Create(frame.Name, rowCounts, configuration.PartyCooldownSide,
             placement.IconSize, placement.Spacing, new(placement.OffsetX, placement.OffsetY),
@@ -62,18 +59,6 @@ public sealed partial class RecapWindow
         DrawPartyCooldownPreviewGauge(draw, start, frame.Hp, layout.Zoom, .86f, new(.55f, .84f, .43f, 1));
         DrawPartyCooldownPreviewGauge(draw, start, frame.Mp, layout.Zoom, .72f, new(.68f, .61f, .88f, 1));
         PartyCooldownAction? hovered = null;
-        var previewFoodStatus = new PartyFoodStatusSample(true,
-            MathF.Max(5400, configuration.PartyFoodWarningMinutes * 60 + 1));
-        var previewFoodState = FoodCheckIndicatorPolicy.Classify(true, previewFoodStatus.HasWellFed,
-            previewFoodStatus.RemainingSeconds, configuration.PartyFoodWarningMinutes * 60);
-        if (showFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Right)
-        {
-            var offset = PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
-                configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * frame.Name.Scale;
-            var position = start + (layout.IconOrigin + offset) * layout.Zoom;
-            var size = PartyCooldownLayout.IconSize(placement.IconSize) * frame.Name.Scale * layout.Zoom;
-            DrawPartyFoodStatus(draw, position, size, previewFoodState, previewFoodStatus);
-        }
         for (var index = 0; index < actions.Count; index++)
             if (catalog?.Find(actions[index]) is { } action)
             {
@@ -93,14 +78,6 @@ public sealed partial class RecapWindow
                 if (ImGui.IsMouseHoveringRect(position, position + new Vector2(size)))
                     hovered = action;
             }
-        if (showFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Left)
-        {
-            var offset = PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
-                configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * frame.Name.Scale;
-            var position = start + (layout.IconOrigin + offset) * layout.Zoom;
-            var size = PartyCooldownLayout.IconSize(placement.IconSize) * frame.Name.Scale * layout.Zoom;
-            DrawPartyFoodStatus(draw, position, size, previewFoodState, previewFoodStatus);
-        }
         ImGui.Dummy(maximum);
         return hovered;
     }

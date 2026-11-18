@@ -8,7 +8,7 @@ namespace BetterDeaths.Windows;
 
 public sealed partial class RecapWindow
 {
-    private enum HudSettingsView { DamageMeter, DeathWidget, PartyCooldowns }
+    private enum HudSettingsView { DamageMeter, DeathWidget, PartyCooldowns, FoodCheck }
     private HudSettingsView hudSettingsView;
     private GuideTarget? hudGuideTarget;
 
@@ -26,6 +26,8 @@ public sealed partial class RecapWindow
                 if (target == GuideTarget.PartyCooldowns)
                     cooldownRequestedJob = cooldownPreviewJob;
             }
+            else if (target == GuideTarget.FoodCheck)
+                hudSettingsView = HudSettingsView.FoodCheck;
             else if (target is GuideTarget.MeterWidget or GuideTarget.MeterColumns or GuideTarget.MeterEncounters or GuideTarget.MeterPreview)
                 hudSettingsView = HudSettingsView.DamageMeter;
             hudGuideTarget = target;
@@ -53,7 +55,8 @@ public sealed partial class RecapWindow
             {
                 HudSettingsView.DamageMeter => "DPS",
                 HudSettingsView.DeathWidget => "Deaths",
-                _ => "Cooldowns",
+                HudSettingsView.PartyCooldowns => "Cooldowns",
+                _ => "Food",
             };
             bool clicked;
             if (GetThemedActionButtonWidth(label) > width)
@@ -63,7 +66,8 @@ public sealed partial class RecapWindow
                 {
                     HudSettingsView.DamageMeter => FontAwesomeIcon.ChartBar,
                     HudSettingsView.DeathWidget => FontAwesomeIcon.Skull,
-                    _ => FontAwesomeIcon.Clock,
+                    HudSettingsView.PartyCooldowns => FontAwesomeIcon.Clock,
+                    _ => FontAwesomeIcon.Utensils,
                 };
                 clicked = DrawSegmentedButton(icon.ToIconString(), $"HudSettings{views[index]}", selected, width, height);
             }
@@ -88,6 +92,9 @@ public sealed partial class RecapWindow
             case HudSettingsView.PartyCooldowns:
                 DrawReviewPanel("##HudPartyCooldowns", Vector2.Zero, DrawPartyCooldownSettings);
                 break;
+            case HudSettingsView.FoodCheck:
+                DrawReviewPanel("##HudFoodCheck", Vector2.Zero, DrawFoodCheckSettings);
+                break;
         }
     }
 
@@ -95,7 +102,8 @@ public sealed partial class RecapWindow
     {
         HudSettingsView.DamageMeter => "DPS Meter",
         HudSettingsView.DeathWidget => "Death Window",
-        _ => "Party Cooldowns",
+        HudSettingsView.PartyCooldowns => "Party Cooldowns",
+        _ => "Food Check",
     };
 
     private static void DrawHudAppearanceSettings(string id, Action drawOpacity, Action drawIconSize)

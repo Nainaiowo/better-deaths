@@ -58,6 +58,19 @@ public sealed class FoodCheckFormatterTests
             FoodCheckIndicatorPolicy.Classify(true, false, 0, 600));
     }
 
+    [Fact]
+    public void WarningsOnlyHidesHealthyFoodButKeepsWarningsAndUnavailableDistinct()
+    {
+        Assert.Equal(FoodCheckIndicatorState.Hidden,
+            FoodCheckIndicatorPolicy.ForDisplay(FoodCheckIndicatorState.Active, true));
+        Assert.Equal(FoodCheckIndicatorState.Expiring,
+            FoodCheckIndicatorPolicy.ForDisplay(FoodCheckIndicatorState.Expiring, true));
+        Assert.Equal(FoodCheckIndicatorState.Missing,
+            FoodCheckIndicatorPolicy.ForDisplay(FoodCheckIndicatorState.Missing, true));
+        Assert.Equal(FoodCheckIndicatorState.Hidden,
+            FoodCheckIndicatorPolicy.ForDisplay(FoodCheckIndicatorState.Hidden, true));
+    }
+
     [Theory]
     [InlineData(601, (int)FoodCheckIndicatorState.Active)]
     [InlineData(600, (int)FoodCheckIndicatorState.Expiring)]

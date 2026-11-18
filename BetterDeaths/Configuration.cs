@@ -211,6 +211,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public int PartyFoodWarningMinutes { get; set; } = 10;
 
+    public bool PartyFoodWarningsOnly { get; set; }
+
+    public bool PartyFoodTintPartyPlate { get; set; }
+
+    public float PartyFoodPlateTintOpacity { get; set; } = 0.10f;
+
     public bool PartyCooldownAutoCollapseJobs { get; set; } = true;
 
     public PartyCooldownSide PartyCooldownSide { get; set; } = PartyCooldownSide.Right;

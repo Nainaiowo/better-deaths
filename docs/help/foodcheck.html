@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Food Check | Better Deaths Help</title>
+  <meta name="description" content="Check party Well Fed status with a party-list indicator, a warning threshold, and an optional plate tint.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nainaiowo.github.io/better-deaths/help/foodcheck.html">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="help.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Food Check | Better Deaths Help">
+  <meta property="og:description" content="Check party Well Fed status with a party-list indicator, a warning threshold, and an optional plate tint.">
+  <meta property="og:url" content="https://nainaiowo.github.io/better-deaths/help/foodcheck.html">
+  <meta property="og:image" content="https://nainaiowo.github.io/better-deaths/assets/food-check-states.svg">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to help content</a>
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Better Deaths home">
+      <img src="../assets/icon.png" alt="">
+      <span><strong>Better Deaths</strong><small>Help Center</small></span>
+    </a>
+    <div class="header-search" role="search" aria-label="Help search">
+      <label class="sr-only" for="help-search">Search Better Deaths help</label>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="search-results" aria-expanded="false">
+      <kbd>/</kbd>
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+    <nav class="header-links" aria-label="Site links">
+      <a href="../#install">Install</a>
+      <a href="https://github.com/Nainaiowo/better-deaths">GitHub</a>
+    </nav>
+    <button class="menu-button" type="button" aria-label="Open help navigation" aria-expanded="false" aria-controls="help-sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+  <div class="help-layout">
+    <aside id="help-sidebar" class="sidebar" aria-label="Help topics">
+      <nav aria-label="Help topic links">
+        <p class="nav-label">Get started</p>
+        <a href="index.html#start">Start here</a>
+        <a href="index.html#first-review">Your first review</a>
+        <p class="nav-label">Features</p>
+        <a href="review.html#review">Review</a>
+        <a href="review.html#what-if">What-if</a>
+        <a href="replay.html#replay">Replay <span class="nav-badge">Beta</span></a>
+        <a href="analyzer.html#analyzer">WTF.DIG Analyzer</a>
+        <a href="widget.html#current-pull">Death Window</a>
+        <a href="meter.html#meter">DPS Meter</a>
+        <a href="cooldowns.html#party-cooldowns">Party Cooldowns</a>
+        <a href="foodcheck.html#food-check" aria-current="page">Food Check</a>
+        <p class="nav-label">Setup</p>
+        <a href="settings.html#options">Options</a>
+        <a href="settings.html#customize">Customize</a>
+        <a href="settings.html#data">Data &amp; privacy</a>
+        <p class="nav-label">Support</p>
+        <a href="troubleshooting.html#troubleshooting">Troubleshooting</a>
+        <a href="troubleshooting.html#commands">Commands</a>
+        <a href="troubleshooting.html#glossary">Glossary</a>
+      </nav>
+      <div class="sidebar-support">
+        <strong>Still stuck?</strong>
+        <p>Report the pull number and what you expected to see.</p>
+        <a href="https://github.com/Nainaiowo/better-deaths/issues">Open an issue</a>
+      </div>
+    </aside>
+    <main id="main-content">
+      <section id="food-check" class="guide-section searchable" data-search-title="Food Check" data-search-keywords="food well fed party list plate tint overlay warning threshold /foodcheck instance out of combat">
+        <div class="section-heading">
+          <p class="eyebrow">HUD</p>
+          <h1 class="page-title">See party food status at a glance</h1>
+          <p>Food Check adds a small Well Fed marker beside the game's party list. It separates healthy food, food that is nearly out, and missing food without confusing unavailable status data for a missing buff.</p>
+        </div>
+        <div class="scope-note" role="note">
+          <strong>Optional and off by default</strong>
+          <span>Open <code>/bd</code>, choose <strong>HUD &gt; Food Check</strong>, and enable <strong>Show Well Fed status</strong>.</span>
+        </div>
+        <figure class="guide-figure">
+          <img src="../assets/food-check-states.svg" alt="Food Check settings and party rows showing active, expiring, missing, and unavailable food states">
+          <figcaption>Green is active, amber is below the warning threshold, red is missing, and gray means no status data was captured.</figcaption>
+        </figure>
+        <div class="setting-table labeled">
+          <div class="setting-row"><strong>Warning threshold</strong><span>Choose 1 to 60 minutes. Food below the selected remaining time uses the amber state.</span></div>
+          <div class="setting-row"><strong>Only show warnings</strong><span>Hide healthy markers. Missing food and food below the threshold remain visible.</span></div>
+          <div class="setting-row"><strong>Tint party plates</strong><span>Optionally add a 4-40% status tint to each party row. It starts off at a 10% default, so the normal party list remains unchanged unless you enable it. Adjust the strength to suit your background and contrast.</span></div>
+          <div class="setting-row"><strong>Preview</strong><span>The in-plugin preview shows active, expiring, missing, and unavailable examples. It uses sample values, not your current party's food timers.</span></div>
+          <div class="setting-row"><strong>Placement</strong><span>The marker follows the left/right side, icon size, and spacing selected in <strong>HUD &gt; Party Cooldowns &gt; Layout</strong>.</span></div>
+        </div>
+        <p>Live status checks run once per second only while you are out of combat inside an instance. The marker hides when status data is unavailable, and no party message is sent automatically.</p>
+        <p>Use <code>/foodcheck</code> at any time to print the exact remaining Well Fed time for your current party in system chat. Players without the buff are shown as not active.</p>
+      </section>
+    </main>
+  </div>
+  <script src="help.js"></script>
+</body>
+</html>
