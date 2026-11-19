@@ -46,6 +46,42 @@ public sealed partial class RecapWindow
             }
             DrawSettingsTooltip("Hide the marker for healthy food. Missing food and food below the warning threshold remain visible.");
 
+            ImGui.Spacing();
+            ImGui.TextColored(ModernAccentColor, "Food marker layout");
+            var placementIconSize = configuration.GetPartyCooldownPlacement().IconSize;
+            var markerIconSize = configuration.PartyFoodStatusIconSize ?? placementIconSize;
+            if (ImGui.SliderFloat("Food icon size##PartyFoodMarkerSize", ref markerIconSize,
+                    FoodCheckMarkerPolicy.MinimumIconSize, FoodCheckMarkerPolicy.MaximumIconSize, "%.0f px"))
+            {
+                configuration.PartyFoodStatusIconSize = markerIconSize;
+                foodCheckSavePending = true;
+            }
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                foodCheckSavePending = true;
+            DrawSettingsTooltip("Set the Well Fed marker size independently from cooldown icons.");
+
+            var markerOffsetX = configuration.PartyFoodStatusIconOffsetX;
+            if (ImGui.SliderFloat("Food icon X offset##PartyFoodMarkerOffsetX", ref markerOffsetX,
+                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px"))
+            {
+                configuration.PartyFoodStatusIconOffsetX = markerOffsetX;
+                foodCheckSavePending = true;
+            }
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                foodCheckSavePending = true;
+            DrawSettingsTooltip("Move the Well Fed marker horizontally from its cooldown-layout slot. Negative values move left; positive values move right.");
+
+            var markerOffsetY = configuration.PartyFoodStatusIconOffsetY;
+            if (ImGui.SliderFloat("Food icon Y offset##PartyFoodMarkerOffsetY", ref markerOffsetY,
+                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px"))
+            {
+                configuration.PartyFoodStatusIconOffsetY = markerOffsetY;
+                foodCheckSavePending = true;
+            }
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                foodCheckSavePending = true;
+            DrawSettingsTooltip("Move the Well Fed marker vertically from its cooldown-layout slot. Negative values move up; positive values move down.");
+
             var tintPlate = configuration.PartyFoodTintPartyPlate;
             if (DrawThemedCheckbox("Tint party plates", ref tintPlate))
             {
@@ -73,11 +109,22 @@ public sealed partial class RecapWindow
                 }
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     foodCheckSavePending = true;
-                DrawSettingsTooltip("Set how much of the party row's height is tinted. The tint stays vertically centered; its width and position are unchanged.");
+                DrawSettingsTooltip("Set how much of the party row's height is tinted. Use the Y offset below to move the tint without changing its size.");
+
+                var offsetY = configuration.PartyFoodPlateTintOffsetY;
+                if (ImGui.SliderFloat("Plate tint Y offset##PartyFoodTintOffsetY", ref offsetY,
+                        -FoodCheckTintPolicy.MaximumOffsetY, FoodCheckTintPolicy.MaximumOffsetY, "%.0f px"))
+                {
+                    configuration.PartyFoodPlateTintOffsetY = offsetY;
+                    foodCheckSavePending = true;
+                }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    foodCheckSavePending = true;
+                DrawSettingsTooltip("Negative values move the tint up; positive values move it down. Zero centers it on the party row.");
             }
 
             ImGui.Spacing();
-            ImGui.TextDisabled("Marker position and size follow Party Cooldowns > Layout.");
+            ImGui.TextDisabled("Marker side follows Party Cooldowns > Layout; size and X/Y offsets are independent.");
             ImGui.TextDisabled("Green means active, amber means refresh soon, and red means no food was detected.");
         }
 
@@ -141,8 +188,8 @@ public sealed partial class RecapWindow
         if (configuration.PartyFoodTintPartyPlate && stateVisible)
         {
             var opacity = Math.Clamp(configuration.PartyFoodPlateTintOpacity, .04f, .40f);
-            var (topInset, tintHeight) = FoodCheckTintPolicy.GetCenteredVerticalBounds(
-                max.Y - min.Y, configuration.PartyFoodPlateTintHeight);
+            var (topInset, tintHeight) = FoodCheckTintPolicy.GetVerticalBounds(
+                max.Y - min.Y, configuration.PartyFoodPlateTintHeight, configuration.PartyFoodPlateTintOffsetY);
             var tintMin = new Vector2(min.X, min.Y + topInset);
             var tintMax = new Vector2(max.X, tintMin.Y + tintHeight);
             draw.AddRectFilled(tintMin, tintMax, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with
@@ -155,13 +202,17 @@ public sealed partial class RecapWindow
         else
             draw.AddRect(min, max, ImGui.GetColorU32(new Vector4(.24f, .27f, .32f, .9f)), 4);
 
-        var markerSize = 25.0f;
+        var markerSize = FoodCheckMarkerPolicy.NormalizeIconSize(
+            configuration.PartyFoodStatusIconSize ?? configuration.GetPartyCooldownPlacement().IconSize,
+            configuration.GetPartyCooldownPlacement().IconSize);
         var markerLeft = configuration.PartyCooldownSide == PartyCooldownSide.Left;
-        var markerPosition = markerLeft
+        var markerPosition = (markerLeft
             ? new Vector2(min.X + 8, min.Y + (height - markerSize) * .5f)
-            : new Vector2(max.X - markerSize - 8, min.Y + (height - markerSize) * .5f);
+            : new Vector2(max.X - markerSize - 8, min.Y + (height - markerSize) * .5f)) +
+            new Vector2(FoodCheckMarkerPolicy.NormalizeOffset(configuration.PartyFoodStatusIconOffsetX),
+                FoodCheckMarkerPolicy.NormalizeOffset(configuration.PartyFoodStatusIconOffsetY));
         var jobPosition = markerLeft
-            ? new Vector2(min.X + 42, min.Y + (height - 20) * .5f)
+            ? new Vector2(min.X + markerSize + 18, min.Y + (height - 20) * .5f)
             : new Vector2(min.X + 10, min.Y + (height - 20) * .5f);
         DrawPartyCooldownIcon(draw, jobPosition, 20, GetClassJobIconId(row.ClassJobId), Vector4.One);
 
@@ -182,7 +233,8 @@ public sealed partial class RecapWindow
             _ => "Status not available",
         };
         var detailWidth = ImGui.CalcTextSize(detail).X;
-        var detailPosition = new Vector2(MathF.Max(namePosition.X + 105, max.X - detailWidth - (stateVisible ? 43 : 10)), min.Y + 12);
+        var markerReserve = !stateVisible ? 10 : markerLeft ? 43 : MathF.Max(43, markerSize + 16);
+        var detailPosition = new Vector2(MathF.Max(namePosition.X + 105, max.X - detailWidth - markerReserve), min.Y + 12);
         draw.AddText(detailPosition, ImGui.GetColorU32(row.State == FoodCheckIndicatorState.Hidden
             ? ModernMutedTextColor
             : GetFoodCheckStateColor(row.State)), detail);
@@ -214,8 +266,8 @@ public sealed partial class RecapWindow
             return;
 
         var rowMin = viewportOffset + new Vector2(rowNode->ScreenX, rowNode->ScreenY);
-        var (topInset, tintHeight) = FoodCheckTintPolicy.GetCenteredVerticalBounds(
-            rowHeight, configuration.PartyFoodPlateTintHeight);
+        var (topInset, tintHeight) = FoodCheckTintPolicy.GetVerticalBounds(
+            rowHeight, configuration.PartyFoodPlateTintHeight, configuration.PartyFoodPlateTintOffsetY);
         var min = rowMin + new Vector2(0, topInset);
         var max = new Vector2(rowMin.X + rowWidth, min.Y + tintHeight);
         var color = GetFoodCheckStateColor(state);

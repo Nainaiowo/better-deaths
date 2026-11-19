@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace BetterDeaths;
 
@@ -66,15 +67,45 @@ internal static class FoodCheckIndicatorPolicy
 internal static class FoodCheckTintPolicy
 {
     public const float DefaultHeightFraction = 0.65f;
+    public const float MaximumOffsetY = 50.0f;
 
     public static float NormalizeHeightFraction(float value) => float.IsFinite(value)
         ? Math.Clamp(value, 0.20f, 1.0f)
         : DefaultHeightFraction;
 
-    public static (float TopInset, float Height) GetCenteredVerticalBounds(float rowHeight, float heightFraction)
+    public static float NormalizeOffsetY(float value) => float.IsFinite(value)
+        ? Math.Clamp(value, -MaximumOffsetY, MaximumOffsetY)
+        : 0.0f;
+
+    public static (float TopInset, float Height) GetVerticalBounds(float rowHeight, float heightFraction, float offsetY = 0)
     {
         var safeRowHeight = float.IsFinite(rowHeight) ? MathF.Max(0, rowHeight) : 0;
         var tintHeight = safeRowHeight * NormalizeHeightFraction(heightFraction);
-        return ((safeRowHeight - tintHeight) * 0.5f, tintHeight);
+        return ((safeRowHeight - tintHeight) * 0.5f + NormalizeOffsetY(offsetY), tintHeight);
+    }
+}
+
+internal static class FoodCheckMarkerPolicy
+{
+    public const float MinimumIconSize = 16.0f;
+    public const float MaximumIconSize = 72.0f;
+    public const float MaximumOffset = 300.0f;
+
+    public static float NormalizeIconSize(float value, float fallback) => float.IsFinite(value)
+        ? Math.Clamp(value, MinimumIconSize, MaximumIconSize)
+        : float.IsFinite(fallback) ? Math.Clamp(fallback, MinimumIconSize, MaximumIconSize) : 24.0f;
+
+    public static float NormalizeOffset(float value) => float.IsFinite(value)
+        ? Math.Clamp(value, -MaximumOffset, MaximumOffset)
+        : 0.0f;
+
+    public static Vector2 PositionInCooldownSlot(Vector2 slotPosition, float slotSize, float iconSize, float scale,
+        float offsetX, float offsetY)
+    {
+        var safeScale = float.IsFinite(scale) && scale > 0 ? scale : 1.0f;
+        var slotSizePx = NormalizeIconSize(slotSize, 24.0f) * safeScale;
+        var iconSizePx = NormalizeIconSize(iconSize, slotSize) * safeScale;
+        var offset = new Vector2(NormalizeOffset(offsetX), NormalizeOffset(offsetY)) * safeScale;
+        return slotPosition + new Vector2((slotSizePx - iconSizePx) * 0.5f) + offset;
     }
 }

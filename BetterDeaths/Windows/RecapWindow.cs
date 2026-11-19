@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.69";
+    private const string CurrentChangelogVersion = "1.0.0.70";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19808,6 +19808,15 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("Food Check");
+        DrawHighlightedChangelogBullet("Added independent size and X/Y offset controls for the Well Fed marker.");
+        DrawWrappedBullet("The marker keeps its current size by default and can be moved independently within the cooldown layout.");
+        DrawWrappedBullet("Added a Y offset control for the party plate tint. The preview follows the icon and tint settings.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.69");
         ImGui.TextDisabled("Testing update.");
         ImGui.TextUnformatted("Food Check");
         DrawHighlightedChangelogBullet("Added a height slider for party plate tints, from 20% to 100% of the row.");

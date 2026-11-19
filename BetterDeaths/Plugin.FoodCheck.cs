@@ -18,16 +18,31 @@ public sealed partial class Plugin
     private bool NormalizePartyFoodConfiguration()
     {
         var warningMinutes = Math.Clamp(Configuration.PartyFoodWarningMinutes, 1, 60);
+        var placementIconSize = Configuration.GetPartyCooldownPlacement().IconSize;
+        var markerIconSize = FoodCheckMarkerPolicy.NormalizeIconSize(
+            Configuration.PartyFoodStatusIconSize ?? placementIconSize, placementIconSize);
+        var markerOffsetX = FoodCheckMarkerPolicy.NormalizeOffset(Configuration.PartyFoodStatusIconOffsetX);
+        var markerOffsetY = FoodCheckMarkerPolicy.NormalizeOffset(Configuration.PartyFoodStatusIconOffsetY);
         var tintOpacity = float.IsFinite(Configuration.PartyFoodPlateTintOpacity)
             ? Math.Clamp(Configuration.PartyFoodPlateTintOpacity, 0.04f, 0.40f)
             : 0.10f;
         var tintHeight = FoodCheckTintPolicy.NormalizeHeightFraction(Configuration.PartyFoodPlateTintHeight);
+        var tintOffsetY = FoodCheckTintPolicy.NormalizeOffsetY(Configuration.PartyFoodPlateTintOffsetY);
         var changed = warningMinutes != Configuration.PartyFoodWarningMinutes ||
+            Configuration.PartyFoodStatusIconSize is null ||
+            !markerIconSize.Equals(Configuration.PartyFoodStatusIconSize) ||
+            !markerOffsetX.Equals(Configuration.PartyFoodStatusIconOffsetX) ||
+            !markerOffsetY.Equals(Configuration.PartyFoodStatusIconOffsetY) ||
             !tintOpacity.Equals(Configuration.PartyFoodPlateTintOpacity) ||
-            !tintHeight.Equals(Configuration.PartyFoodPlateTintHeight);
+            !tintHeight.Equals(Configuration.PartyFoodPlateTintHeight) ||
+            !tintOffsetY.Equals(Configuration.PartyFoodPlateTintOffsetY);
         Configuration.PartyFoodWarningMinutes = warningMinutes;
+        Configuration.PartyFoodStatusIconSize = markerIconSize;
+        Configuration.PartyFoodStatusIconOffsetX = markerOffsetX;
+        Configuration.PartyFoodStatusIconOffsetY = markerOffsetY;
         Configuration.PartyFoodPlateTintOpacity = tintOpacity;
         Configuration.PartyFoodPlateTintHeight = tintHeight;
+        Configuration.PartyFoodPlateTintOffsetY = tintOffsetY;
         return changed;
     }
 

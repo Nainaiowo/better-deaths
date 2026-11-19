@@ -209,6 +209,12 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowPartyFoodStatus { get; set; }
 
+    public float? PartyFoodStatusIconSize { get; set; }
+
+    public float PartyFoodStatusIconOffsetX { get; set; }
+
+    public float PartyFoodStatusIconOffsetY { get; set; }
+
     public int PartyFoodWarningMinutes { get; set; } = 10;
 
     public bool PartyFoodWarningsOnly { get; set; }
@@ -218,6 +224,8 @@ public sealed class Configuration : IPluginConfiguration
     public float PartyFoodPlateTintOpacity { get; set; } = 0.10f;
 
     public float PartyFoodPlateTintHeight { get; set; } = 0.65f;
+
+    public float PartyFoodPlateTintOffsetY { get; set; }
 
     public bool PartyCooldownAutoCollapseJobs { get; set; } = true;
 

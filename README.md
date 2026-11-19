@@ -57,7 +57,7 @@ Teammate timers depend on captured uses and level-aware recharge rules. Abilitie
 
 ## HUD: Food Check
 
-Open `/bd` and select **HUD > Food Check** to enable the optional Well Fed marker. Choose a warning threshold, hide healthy markers if you only want alerts, and optionally tint party plates with a status color adjustable from 4-40% (10% by default). The preview shows healthy, expiring, missing, and unavailable states. Live status updates once per second only while out of combat inside an instance; marker position and size follow the Party Cooldowns layout.
+Open `/bd` and select **HUD > Food Check** to enable the optional Well Fed marker. Choose a warning threshold, hide healthy markers if you only want alerts, and set the food icon's size and X/Y offsets independently. You can also tint party plates with a status color adjustable from 4-40% strength, 20-100% height, and a vertical offset. The preview shows healthy, expiring, missing, and unavailable states. Live status updates once per second only while out of combat inside an instance; the marker's side and starting slot follow Party Cooldowns layout.
 
 Use `/foodcheck` at any time to print each current party member's remaining Well Fed time in system chat. See the [Food Check help page](https://nainaiowo.github.io/better-deaths/help/foodcheck.html#food-check) for visual examples and settings details.
 

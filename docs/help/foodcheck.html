@@ -68,7 +68,7 @@
       </div>
     </aside>
     <main id="main-content">
-      <section id="food-check" class="guide-section searchable" data-search-title="Food Check" data-search-keywords="food well fed party list plate tint overlay warning threshold /foodcheck instance out of combat">
+      <section id="food-check" class="guide-section searchable" data-search-title="Food Check" data-search-keywords="food well fed party list icon size icon offset x offset y offset plate tint overlay warning threshold /foodcheck instance out of combat">
         <div class="section-heading">
           <p class="eyebrow">HUD</p>
           <h1 class="page-title">See party food status at a glance</h1>
@@ -79,16 +79,19 @@
           <span>Open <code>/bd</code>, choose <strong>HUD &gt; Food Check</strong>, and enable <strong>Show Well Fed status</strong>.</span>
         </div>
         <figure class="guide-figure">
-          <img src="../assets/food-check-states.svg" alt="Food Check settings and party rows showing active, expiring, missing, and unavailable food states">
+          <img src="../assets/food-check-states.svg" alt="Food Check settings with independent food icon size and X/Y offsets, tint height and Y offset controls, alongside party rows showing active, expiring, missing, and unavailable food states">
           <figcaption>Green is active, amber is below the warning threshold, red is missing, and gray means no status data was captured.</figcaption>
         </figure>
         <div class="setting-table labeled">
           <div class="setting-row"><strong>Warning threshold</strong><span>Choose 1 to 60 minutes. Food below the selected remaining time uses the amber state.</span></div>
           <div class="setting-row"><strong>Only show warnings</strong><span>Hide healthy markers. Missing food and food below the threshold remain visible.</span></div>
+          <div class="setting-row"><strong>Food icon size</strong><span>Set the Well Fed icon from 16 to 72 px. Its starting size inherits your current Party Cooldowns icon size.</span></div>
+          <div class="setting-row"><strong>Food icon X/Y offsets</strong><span>Move the icon up to 300 px from its cooldown-layout slot. Negative X/Y move left/up; positive X/Y move right/down.</span></div>
           <div class="setting-row"><strong>Tint party plates</strong><span>Optionally add a status tint to each party row. Adjust its 4-40% strength to suit your background and contrast. Tint starts off disabled.</span></div>
-          <div class="setting-row"><strong>Plate tint height</strong><span>Set the tint to cover 20-100% of the party row's height. It stays vertically centered, while the tint's width and position remain unchanged.</span></div>
+          <div class="setting-row"><strong>Plate tint height</strong><span>Set the tint to cover 20-100% of the party row's height without changing its width. Use the Y offset to move it vertically.</span></div>
+          <div class="setting-row"><strong>Plate tint Y offset</strong><span>Move the tint up or down by up to 50 px without changing its size. Negative values move it up; positive values move it down.</span></div>
           <div class="setting-row"><strong>Preview</strong><span>The in-plugin preview shows active, expiring, missing, and unavailable examples. It uses sample values, not your current party's food timers.</span></div>
-          <div class="setting-row"><strong>Placement</strong><span>The marker follows the left/right side, icon size, and spacing selected in <strong>HUD &gt; Party Cooldowns &gt; Layout</strong>.</span></div>
+          <div class="setting-row"><strong>Placement</strong><span>The marker's side and starting slot follow <strong>HUD &gt; Party Cooldowns &gt; Layout</strong>; its size and X/Y offsets can be customized here.</span></div>
         </div>
         <p>Live status checks run once per second only while you are out of combat inside an instance. The marker hides when status data is unavailable, and no party message is sent automatically.</p>
         <p>Use <code>/foodcheck</code> at any time to print the exact remaining Well Fed time for your current party in system chat. Players without the buff are shown as not active.</p>

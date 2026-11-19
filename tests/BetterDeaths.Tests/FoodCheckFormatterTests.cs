@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace BetterDeaths.Tests;
 
 public sealed class FoodCheckFormatterTests
@@ -130,11 +132,72 @@ public sealed class FoodCheckTintPolicyTests
     }
 
     [Fact]
-    public void CentersTintVerticallyWithoutChangingItsWidth()
+    public void CentersTintVerticallyWithoutChangingItsHeightOrWidth()
     {
-        var (topInset, height) = FoodCheckTintPolicy.GetCenteredVerticalBounds(40, 0.5f);
+        var (topInset, height) = FoodCheckTintPolicy.GetVerticalBounds(40, 0.5f);
 
         Assert.Equal(10, topInset);
         Assert.Equal(20, height);
+    }
+
+    [Theory]
+    [InlineData(-10.0f, 0.0f)]
+    [InlineData(0.0f, 10.0f)]
+    [InlineData(10.0f, 20.0f)]
+    public void AppliesYOffsetWithoutChangingTintHeight(float offsetY, float expectedTopInset)
+    {
+        var (topInset, height) = FoodCheckTintPolicy.GetVerticalBounds(40, 0.5f, offsetY);
+
+        Assert.Equal(expectedTopInset, topInset);
+        Assert.Equal(20, height);
+    }
+
+    [Theory]
+    [InlineData(-100.0f, -50.0f)]
+    [InlineData(0.0f, 0.0f)]
+    [InlineData(100.0f, 50.0f)]
+    [InlineData(float.NaN, 0.0f)]
+    public void ClampsOrResetsYOffset(float value, float expected)
+    {
+        Assert.Equal(expected, FoodCheckTintPolicy.NormalizeOffsetY(value));
+    }
+}
+
+public sealed class FoodCheckMarkerPolicyTests
+{
+    [Theory]
+    [InlineData(8.0f, 24.0f, 16.0f)]
+    [InlineData(48.0f, 24.0f, 48.0f)]
+    [InlineData(80.0f, 24.0f, 72.0f)]
+    [InlineData(float.NaN, 48.0f, 48.0f)]
+    public void NormalizesIconSizeAndUsesCurrentLayoutAsFallback(float value, float fallback, float expected)
+    {
+        Assert.Equal(expected, FoodCheckMarkerPolicy.NormalizeIconSize(value, fallback));
+    }
+
+    [Theory]
+    [InlineData(-400.0f, -300.0f)]
+    [InlineData(0.0f, 0.0f)]
+    [InlineData(400.0f, 300.0f)]
+    [InlineData(float.NaN, 0.0f)]
+    public void ClampsIconOffsets(float value, float expected)
+    {
+        Assert.Equal(expected, FoodCheckMarkerPolicy.NormalizeOffset(value));
+    }
+
+    [Fact]
+    public void KeepsExistingIconSlotPositionWhenSizeAndOffsetsMatch()
+    {
+        var position = FoodCheckMarkerPolicy.PositionInCooldownSlot(new(100, 200), 48, 48, 1, 0, 0);
+
+        Assert.Equal(new Vector2(100, 200), position);
+    }
+
+    [Fact]
+    public void CentersCustomIconInSlotThenAppliesScaledOffsets()
+    {
+        var position = FoodCheckMarkerPolicy.PositionInCooldownSlot(new(100, 200), 48, 24, 2, 3, -2);
+
+        Assert.Equal(new Vector2(130, 220), position);
     }
 }

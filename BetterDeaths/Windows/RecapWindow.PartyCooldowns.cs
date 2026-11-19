@@ -680,9 +680,14 @@ public sealed partial class RecapWindow
                     DrawFoodCheckPlateTint(draw, (AtkResNode*)component->OwnerNode, viewport.Pos, scale, foodState);
                 if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Right)
                 {
-                    var position = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
+                    var slotPosition = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
                         configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * scale;
-                    DrawPartyFoodStatus(draw, position, size, foodState, foodStatus);
+                    var markerSize = FoodCheckMarkerPolicy.NormalizeIconSize(
+                        configuration.PartyFoodStatusIconSize ?? placement.IconSize, placement.IconSize) * scale;
+                    var position = FoodCheckMarkerPolicy.PositionInCooldownSlot(slotPosition, placement.IconSize,
+                        configuration.PartyFoodStatusIconSize ?? placement.IconSize, scale,
+                        configuration.PartyFoodStatusIconOffsetX, configuration.PartyFoodStatusIconOffsetY);
+                    DrawPartyFoodStatus(draw, position, markerSize, foodState, foodStatus);
                     drawnIcons++;
                 }
                 for (var actionIndex = 0; actionIndex < actionCount; actionIndex++)
@@ -698,9 +703,14 @@ public sealed partial class RecapWindow
                 }
                 if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Left)
                 {
-                    var position = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
+                    var slotPosition = origin + PartyCooldownLayout.GetIconOffset(0, columns[0]++, rowCounts,
                         configuration.PartyCooldownSide, placement.IconSize, placement.Spacing) * scale;
-                    DrawPartyFoodStatus(draw, position, size, foodState, foodStatus);
+                    var markerSize = FoodCheckMarkerPolicy.NormalizeIconSize(
+                        configuration.PartyFoodStatusIconSize ?? placement.IconSize, placement.IconSize) * scale;
+                    var position = FoodCheckMarkerPolicy.PositionInCooldownSlot(slotPosition, placement.IconSize,
+                        configuration.PartyFoodStatusIconSize ?? placement.IconSize, scale,
+                        configuration.PartyFoodStatusIconOffsetX, configuration.PartyFoodStatusIconOffsetY);
+                    DrawPartyFoodStatus(draw, position, markerSize, foodState, foodStatus);
                     drawnIcons++;
                 }
             }
