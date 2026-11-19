@@ -105,3 +105,36 @@ public sealed class FoodCheckPollingPolicyTests
         Assert.Equal(expected, FoodCheckPollingPolicy.ShouldPoll(enabled, loggedIn, inInstance, inCombat, isPvP));
     }
 }
+
+public sealed class FoodCheckTintPolicyTests
+{
+    [Theory]
+    [InlineData(0.0f, 0.20f)]
+    [InlineData(0.65f, 0.65f)]
+    [InlineData(1.0f, 1.0f)]
+    [InlineData(1.5f, 1.0f)]
+    [InlineData(-0.5f, 0.20f)]
+    public void ClampsHeightToTheSupportedRange(float value, float expected)
+    {
+        Assert.Equal(expected, FoodCheckTintPolicy.NormalizeHeightFraction(value));
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void UsesDefaultHeightForInvalidValues(float value)
+    {
+        Assert.Equal(FoodCheckTintPolicy.DefaultHeightFraction,
+            FoodCheckTintPolicy.NormalizeHeightFraction(value));
+    }
+
+    [Fact]
+    public void CentersTintVerticallyWithoutChangingItsWidth()
+    {
+        var (topInset, height) = FoodCheckTintPolicy.GetCenteredVerticalBounds(40, 0.5f);
+
+        Assert.Equal(10, topInset);
+        Assert.Equal(20, height);
+    }
+}

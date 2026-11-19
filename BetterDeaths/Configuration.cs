@@ -217,6 +217,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float PartyFoodPlateTintOpacity { get; set; } = 0.10f;
 
+    public float PartyFoodPlateTintHeight { get; set; } = 0.65f;
+
     public bool PartyCooldownAutoCollapseJobs { get; set; } = true;
 
     public PartyCooldownSide PartyCooldownSide { get; set; } = PartyCooldownSide.Right;

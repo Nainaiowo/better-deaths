@@ -62,3 +62,19 @@ internal static class FoodCheckIndicatorPolicy
             : FoodCheckIndicatorState.Active;
     }
 }
+
+internal static class FoodCheckTintPolicy
+{
+    public const float DefaultHeightFraction = 0.65f;
+
+    public static float NormalizeHeightFraction(float value) => float.IsFinite(value)
+        ? Math.Clamp(value, 0.20f, 1.0f)
+        : DefaultHeightFraction;
+
+    public static (float TopInset, float Height) GetCenteredVerticalBounds(float rowHeight, float heightFraction)
+    {
+        var safeRowHeight = float.IsFinite(rowHeight) ? MathF.Max(0, rowHeight) : 0;
+        var tintHeight = safeRowHeight * NormalizeHeightFraction(heightFraction);
+        return ((safeRowHeight - tintHeight) * 0.5f, tintHeight);
+    }
+}

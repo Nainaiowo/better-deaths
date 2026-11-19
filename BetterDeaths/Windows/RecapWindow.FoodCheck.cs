@@ -64,6 +64,16 @@ public sealed partial class RecapWindow
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     foodCheckSavePending = true;
                 DrawSettingsTooltip("Keep the tint subtle so party names, HP bars, and status icons stay readable.");
+
+                var heightPercent = configuration.PartyFoodPlateTintHeight * 100.0f;
+                if (ImGui.SliderFloat("Plate tint height##PartyFoodTint", ref heightPercent, 20, 100, "%.0f%%"))
+                {
+                    configuration.PartyFoodPlateTintHeight = heightPercent / 100.0f;
+                    foodCheckSavePending = true;
+                }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    foodCheckSavePending = true;
+                DrawSettingsTooltip("Set how much of the party row's height is tinted. The tint stays vertically centered; its width and position are unchanged.");
             }
 
             ImGui.Spacing();
@@ -131,11 +141,15 @@ public sealed partial class RecapWindow
         if (configuration.PartyFoodTintPartyPlate && stateVisible)
         {
             var opacity = Math.Clamp(configuration.PartyFoodPlateTintOpacity, .04f, .40f);
-            draw.AddRectFilled(min, max, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with
+            var (topInset, tintHeight) = FoodCheckTintPolicy.GetCenteredVerticalBounds(
+                max.Y - min.Y, configuration.PartyFoodPlateTintHeight);
+            var tintMin = new Vector2(min.X, min.Y + topInset);
+            var tintMax = new Vector2(max.X, tintMin.Y + tintHeight);
+            draw.AddRectFilled(tintMin, tintMax, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with
             {
                 W = opacity,
             }), 4);
-            draw.AddRect(min, max, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with { W = opacity }), 4,
+            draw.AddRect(tintMin, tintMax, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with { W = opacity }), 4,
                 ImDrawFlags.None, 1);
         }
         else
@@ -199,8 +213,11 @@ public sealed partial class RecapWindow
         if (!float.IsFinite(rowWidth) || !float.IsFinite(rowHeight) || rowWidth is < 100 or > 1400 || rowHeight is < 20 or > 120)
             return;
 
-        var min = viewportOffset + new Vector2(rowNode->ScreenX, rowNode->ScreenY);
-        var max = min + new Vector2(rowWidth, rowHeight);
+        var rowMin = viewportOffset + new Vector2(rowNode->ScreenX, rowNode->ScreenY);
+        var (topInset, tintHeight) = FoodCheckTintPolicy.GetCenteredVerticalBounds(
+            rowHeight, configuration.PartyFoodPlateTintHeight);
+        var min = rowMin + new Vector2(0, topInset);
+        var max = new Vector2(rowMin.X + rowWidth, min.Y + tintHeight);
         var color = GetFoodCheckStateColor(state);
         draw.AddRectFilled(min, max, ImGui.GetColorU32(color with
         {

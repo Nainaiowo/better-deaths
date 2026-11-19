@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.68";
+    private const string CurrentChangelogVersion = "1.0.0.69";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19808,6 +19808,14 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Testing update.");
+        ImGui.TextUnformatted("Food Check");
+        DrawHighlightedChangelogBullet("Added a height slider for party plate tints, from 20% to 100% of the row.");
+        DrawWrappedBullet("The tint stays vertically centered, and the preview reflects its height. Width and opacity remain independently controlled.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.68");
         ImGui.TextDisabled("Testing update.");
         ImGui.TextUnformatted("Food Check");
         DrawHighlightedChangelogBullet("Moved food status controls into their own Food Check section, separate from Party Cooldowns.");

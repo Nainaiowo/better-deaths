@@ -21,10 +21,13 @@ public sealed partial class Plugin
         var tintOpacity = float.IsFinite(Configuration.PartyFoodPlateTintOpacity)
             ? Math.Clamp(Configuration.PartyFoodPlateTintOpacity, 0.04f, 0.40f)
             : 0.10f;
+        var tintHeight = FoodCheckTintPolicy.NormalizeHeightFraction(Configuration.PartyFoodPlateTintHeight);
         var changed = warningMinutes != Configuration.PartyFoodWarningMinutes ||
-            !tintOpacity.Equals(Configuration.PartyFoodPlateTintOpacity);
+            !tintOpacity.Equals(Configuration.PartyFoodPlateTintOpacity) ||
+            !tintHeight.Equals(Configuration.PartyFoodPlateTintHeight);
         Configuration.PartyFoodWarningMinutes = warningMinutes;
         Configuration.PartyFoodPlateTintOpacity = tintOpacity;
+        Configuration.PartyFoodPlateTintHeight = tintHeight;
         return changed;
     }
 
