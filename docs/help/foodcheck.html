@@ -68,7 +68,7 @@
       </div>
     </aside>
     <main id="main-content">
-      <section id="food-check" class="guide-section searchable" data-search-title="Food Check" data-search-keywords="food well fed party list icon size icon offset x offset y offset plate tint overlay warning threshold /foodcheck instance out of combat">
+      <section id="food-check" class="guide-section searchable" data-search-title="Food Check" data-search-keywords="food well fed party list icon size icon offset x offset y offset plate tint overlay warning threshold overworld outside instances /foodcheck out of combat">
         <div class="section-heading">
           <p class="eyebrow">HUD</p>
           <h1 class="page-title">See party food status at a glance</h1>
@@ -84,6 +84,7 @@
         </figure>
         <div class="setting-table labeled">
           <div class="setting-row"><strong>Warning threshold</strong><span>Choose 1 to 60 minutes. Food below the selected remaining time uses the amber state.</span></div>
+          <div class="setting-row"><strong>Show outside instances</strong><span>Off by default. When enabled, food status also appears in overworld areas. Sampling remains once per second and only out of combat.</span></div>
           <div class="setting-row"><strong>Only show warnings</strong><span>Hide healthy markers. Missing food and food below the threshold remain visible.</span></div>
           <div class="setting-row"><strong>Food icon size</strong><span>Set the Well Fed icon from 16 to 72 px. Its starting size inherits your current Party Cooldowns icon size.</span></div>
           <div class="setting-row"><strong>Food icon X/Y offsets</strong><span>Move the icon up to 300 px from its cooldown-layout slot. Negative X/Y move left/up; positive X/Y move right/down.</span></div>
@@ -93,7 +94,7 @@
           <div class="setting-row"><strong>Preview</strong><span>The in-plugin preview shows active, expiring, missing, and unavailable examples. It uses sample values, not your current party's food timers.</span></div>
           <div class="setting-row"><strong>Placement</strong><span>The marker's side and starting slot follow <strong>HUD &gt; Party Cooldowns &gt; Layout</strong>; its size and X/Y offsets can be customized here.</span></div>
         </div>
-        <p>Live status checks run once per second only while you are out of combat inside an instance. The marker hides when status data is unavailable, and no party message is sent automatically.</p>
+        <p>By default, live status checks run once per second only while you are out of combat inside an instance. Enable <strong>Show outside instances</strong> to include overworld areas; checks still pause in combat. The marker hides when status data is unavailable, and no party message is sent automatically.</p>
         <p>Use <code>/foodcheck</code> at any time to print the exact remaining Well Fed time for your current party in system chat. Players without the buff are shown as not active.</p>
       </section>
     </main>

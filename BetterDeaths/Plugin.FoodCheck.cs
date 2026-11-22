@@ -56,6 +56,13 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
+    internal void SetPartyFoodOutsideInstances(bool enabled)
+    {
+        Configuration.PartyFoodShowOutsideInstances = enabled;
+        RefreshPartyFoodStatusPolling();
+        SaveConfiguration();
+    }
+
     internal bool TryGetPartyFoodStatus(uint entityId, out PartyFoodStatusSample status) =>
         Volatile.Read(ref partyFoodStatusByEntity).TryGetValue(entityId, out status);
 
@@ -65,6 +72,7 @@ public sealed partial class Plugin
         Configuration.ShowPartyFoodStatus,
         ClientState.IsLoggedIn,
         IsDutyCaptureActive() || IsBoundByDutyForDamageMeter(),
+        Configuration.PartyFoodShowOutsideInstances,
         Condition[ConditionFlag.InCombat],
         ClientState.IsPvP);
 

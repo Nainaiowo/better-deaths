@@ -21,6 +21,15 @@ public sealed partial class RecapWindow
     private uint? cooldownRequestedJob;
     private const string PartyCooldownDragPayload = "BETTER_DEATHS_PARTY_COOLDOWN";
     private const string PartyCooldownDefaultsPopup = "Restore party cooldown defaults?##PartyCooldownDefaults";
+    private const string PartyCooldownExportPopup = "Export party cooldown selections##PartyCooldownExport";
+    private const string PartyCooldownImportPopup = "Import party cooldown selections##PartyCooldownImport";
+    private uint? partyCooldownExportTargetJob;
+    private uint? partyCooldownImportTargetJob;
+    private string partyCooldownExportCode = string.Empty;
+    private string partyCooldownImportCode = string.Empty;
+    private string partyCooldownShareStatus = string.Empty;
+    private PartyCooldownLoadoutShareDocument? pendingPartyCooldownImport;
+    private string partyCooldownImportError = string.Empty;
     private readonly Dictionary<uint, ISharedImmediateTexture> partyCooldownTextures = [];
     private readonly Dictionary<uint, int> partyCooldownPreviewCharges = [];
     private readonly Dictionary<uint, int> partyCooldownTargetRows = [];
@@ -209,6 +218,32 @@ public sealed partial class RecapWindow
             ImGui.TextDisabled(plugin.PartyCooldownCatalogFailed ? "Ability data could not be loaded." : "Loading abilities...");
             return;
         }
+        if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Export", "ExportPartyCooldownSelections"))
+        {
+            partyCooldownExportTargetJob = null;
+            partyCooldownExportCode = plugin.ExportPartyCooldownLoadout() ?? string.Empty;
+            partyCooldownShareStatus = partyCooldownExportCode.Length == 0
+                ? "Cooldown ability data is still loading."
+                : string.Empty;
+            ImGui.OpenPopup(PartyCooldownExportPopup);
+        }
+        var importButtonWidth = GetThemedIconButtonWidth(FontAwesomeIcon.Paste, "Import");
+        if (ImGui.GetContentRegionAvail().X >= importButtonWidth + ImGui.GetStyle().ItemSpacing.X + 8)
+            ImGui.SameLine();
+        if (DrawThemedActionButton(FontAwesomeIcon.Paste, "Import", "ImportPartyCooldownSelections"))
+        {
+            partyCooldownImportTargetJob = null;
+            partyCooldownImportCode = string.Empty;
+            partyCooldownImportError = string.Empty;
+            pendingPartyCooldownImport = null;
+            ImGui.OpenPopup(PartyCooldownImportPopup);
+        }
+        if (!string.IsNullOrEmpty(partyCooldownShareStatus))
+        {
+            ImGui.TextWrapped(partyCooldownShareStatus);
+            ImGui.Spacing();
+        }
+        DrawPartyCooldownLoadoutSharePopups();
         var requested = cooldownRequestedJob;
         cooldownRequestedJob = null;
         if (requested is { } requestedId)
@@ -252,6 +287,98 @@ public sealed partial class RecapWindow
         RegisterGuideTarget(GuideTarget.PartyCooldowns, start,
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
         DrawReviewPaneBottomPadding();
+    }
+
+    private void DrawPartyCooldownLoadoutSharePopups()
+    {
+        var popupWidth = MathF.Max(260, MathF.Min(600, ImGui.GetMainViewport().WorkSize.X - 32));
+        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0), ImGuiCond.Appearing);
+        if (ImGui.BeginPopup(PartyCooldownExportPopup, ImGuiWindowFlags.NoMove))
+        {
+            var exportScope = partyCooldownExportTargetJob is { } exportJobId
+                ? PartyCooldownCatalog.Jobs.First(job => job.Id == exportJobId).Name
+                : "every job";
+            ImGui.TextWrapped($"Share only which cooldowns are selected for {exportScope}. Ordering, custom rows, visibility, side, position, size, spacing, and live timers are not included.");
+            ImGui.Spacing();
+            ImGui.InputTextMultiline("##PartyCooldownExportCode", ref partyCooldownExportCode,
+                PartyCooldownLoadoutShareCodec.MaximumCodeLength, new Vector2(0, 120), ImGuiInputTextFlags.ReadOnly);
+            if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Copy code", "CopyPartyCooldownShareCode") &&
+                !string.IsNullOrEmpty(partyCooldownExportCode))
+            {
+                ImGui.SetClipboardText(partyCooldownExportCode);
+                partyCooldownShareStatus = "Cooldown selections copied. Share the code with the other player.";
+            }
+            if (ImGui.IsItemHovered())
+                SetThemedTooltip("Copy a share code containing only the selected cooldowns for this export scope.");
+            ImGui.EndPopup();
+        }
+
+        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0), ImGuiCond.Appearing);
+        if (ImGui.BeginPopup(PartyCooldownImportPopup, ImGuiWindowFlags.NoMove))
+        {
+            var importScope = partyCooldownImportTargetJob is { } importJobId
+                ? PartyCooldownCatalog.Jobs.First(job => job.Id == importJobId).Name
+                : "every job";
+            ImGui.TextWrapped($"Paste a cooldown share code for {importScope}. Import changes only which cooldowns are selected; your own ordering, custom rows, widget visibility, placement, icon sizes, spacing, and live timers stay local.");
+            ImGui.Spacing();
+            if (ImGui.InputTextMultiline("##PartyCooldownImportCode", ref partyCooldownImportCode,
+                    PartyCooldownLoadoutShareCodec.MaximumCodeLength, new Vector2(0, 120)))
+            {
+                pendingPartyCooldownImport = null;
+                partyCooldownImportError = string.Empty;
+            }
+            if (DrawThemedActionButton(FontAwesomeIcon.CheckCircle, "Validate code", "ValidatePartyCooldownShareCode"))
+            {
+                if (PartyCooldownLoadoutShareCodec.TryDecode(partyCooldownImportCode,
+                        out var document, out partyCooldownImportError))
+                {
+                    var matchesScope = partyCooldownImportTargetJob is { } targetJob
+                        ? PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, targetJob)
+                        : PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document);
+                    if (matchesScope)
+                    {
+                        pendingPartyCooldownImport = document;
+                        partyCooldownImportError = partyCooldownImportTargetJob is { } selectedJob
+                            ? $"Valid code for {PartyCooldownCatalog.Jobs.First(job => job.Id == selectedJob).Name}. Review the note above before importing."
+                            : "Valid code for every job. Review the note above before importing.";
+                    }
+                    else
+                    {
+                        pendingPartyCooldownImport = null;
+                        partyCooldownImportError = partyCooldownImportTargetJob is { } expectedJob
+                            ? $"This import requires a code containing only {PartyCooldownCatalog.Jobs.First(job => job.Id == expectedJob).Name}."
+                            : "This import requires a code containing every supported job.";
+                    }
+                }
+                else
+                    pendingPartyCooldownImport = null;
+            }
+            if (!string.IsNullOrEmpty(partyCooldownImportError))
+            {
+                ImGui.Spacing();
+                ImGui.TextWrapped(partyCooldownImportError);
+            }
+            ImGui.Spacing();
+            ImGui.BeginDisabled(pendingPartyCooldownImport is null || plugin.GetPartyCooldownCatalog() is null);
+            var importActionLabel = partyCooldownImportTargetJob is { } actionJob
+                ? $"Import {PartyCooldownCatalog.Jobs.First(job => job.Id == actionJob).Abbreviation}"
+                : "Import all jobs";
+            if (DrawThemedActionButton(FontAwesomeIcon.Paste, importActionLabel, "ApplyPartyCooldownShare") &&
+                pendingPartyCooldownImport is { } pending &&
+                plugin.ApplyPartyCooldownLoadoutShare(pending, partyCooldownImportTargetJob, out var skippedActions))
+            {
+                partyCooldownTargetRows.Clear();
+                var importedScope = partyCooldownImportTargetJob is { } selectedJob
+                    ? PartyCooldownCatalog.Jobs.First(job => job.Id == selectedJob).Name
+                    : "every job";
+                partyCooldownShareStatus = skippedActions == 0
+                    ? $"Imported selected cooldowns for {importedScope}. Your ordering, rows, layout, and live timers were kept."
+                    : $"Imported selections for {importedScope}. {skippedActions} cooldowns unavailable in this plugin version were skipped; your ordering, rows, layout, and live timers were kept.";
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.EndDisabled();
+            ImGui.EndPopup();
+        }
     }
 
     private void FocusPartyCooldownJob(uint jobId)
@@ -348,6 +475,23 @@ public sealed partial class RecapWindow
             FocusPartyCooldownJob(job.Id);
         }
         DrawSettingsTooltip("Restore this job's default abilities and one-row layout. Does not reset cooldown timers or placement settings.");
+        ImGui.Spacing();
+        if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Export", $"ExportPartyCooldownJob{job.Id}"))
+        {
+            partyCooldownExportTargetJob = job.Id;
+            partyCooldownExportCode = plugin.ExportPartyCooldownLoadout(job.Id) ?? string.Empty;
+            partyCooldownShareStatus = string.Empty;
+            ImGui.OpenPopup(PartyCooldownExportPopup);
+        }
+        ImGui.SameLine();
+        if (DrawThemedActionButton(FontAwesomeIcon.Paste, "Import", $"ImportPartyCooldownJob{job.Id}"))
+        {
+            partyCooldownImportTargetJob = job.Id;
+            partyCooldownImportCode = string.Empty;
+            partyCooldownImportError = string.Empty;
+            pendingPartyCooldownImport = null;
+            ImGui.OpenPopup(PartyCooldownImportPopup);
+        }
         ImGui.Spacing();
     }
 
@@ -774,15 +918,6 @@ public sealed partial class RecapWindow
         };
         if (partyFoodStatusIconId != 0)
             DrawPartyCooldownIcon(draw, position, size, partyFoodStatusIconId, tint);
-
-        var border = state switch
-        {
-            FoodCheckIndicatorState.Expiring => new Vector4(1, .66f, .22f, 1),
-            FoodCheckIndicatorState.Missing => new Vector4(.98f, .25f, .30f, 1),
-            _ => new Vector4(.40f, .88f, .73f, .95f),
-        };
-        draw.AddRect(position, position + new Vector2(size), ImGui.GetColorU32(border), size * .14f,
-            ImDrawFlags.None, MathF.Max(1, size * .055f));
 
         if (state == FoodCheckIndicatorState.Missing)
         {

@@ -84,7 +84,7 @@
     <text x="97" y="646" fill="#f0f1f3" font-size="15" font-weight="600">A. D.</text>
     <rect x="151" y="647" width="89" height="4" rx="2" fill="#353a42"/>
     <rect x="151" y="647" width="74" height="4" rx="2" fill="#59bd7a"/>
-    <text x="981" y="645" text-anchor="end" fill="#87e1cc" font-size="14">Well Fed · 42:18</text>
+    <text x="610" y="645" text-anchor="middle" fill="#87e1cc" font-size="14">Well Fed · 42:18</text>
     <rect x="1017" y="628" width="25" height="25" rx="4" fill="#332b1d" stroke="#e8a847" stroke-width="1.5"/>
     <path d="M1023 640h13" stroke="#e8a847" stroke-width="2" stroke-linecap="round"/>
 
@@ -96,7 +96,7 @@
     <text x="97" y="688" fill="#f0f1f3" font-size="15" font-weight="600">M. C.</text>
     <rect x="151" y="689" width="89" height="4" rx="2" fill="#353a42"/>
     <rect x="151" y="689" width="74" height="4" rx="2" fill="#59bd7a"/>
-    <text x="981" y="687" text-anchor="end" fill="#f0c16e" font-size="14">Refresh soon · 4:27</text>
+    <text x="610" y="687" text-anchor="middle" fill="#f0c16e" font-size="14">Refresh soon · 4:27</text>
     <rect x="1017" y="670" width="25" height="25" rx="4" fill="#382c1c" stroke="#e8a847" stroke-width="1.5"/>
     <circle cx="1029.5" cy="682.5" r="7" fill="none" stroke="#e8a847" stroke-width="2"/>
     <path d="M1029.5 678v5l3 2" fill="none" stroke="#e8a847" stroke-width="1.5" stroke-linecap="round"/>
@@ -109,7 +109,7 @@
     <text x="97" y="730" fill="#f0f1f3" font-size="15" font-weight="600">R. T.</text>
     <rect x="151" y="731" width="89" height="4" rx="2" fill="#353a42"/>
     <rect x="151" y="731" width="74" height="4" rx="2" fill="#59bd7a"/>
-    <text x="981" y="729" text-anchor="end" fill="#ee8587" font-size="14">No food detected</text>
+    <text x="610" y="729" text-anchor="middle" fill="#ee8587" font-size="14">No food detected</text>
     <rect x="1017" y="712" width="25" height="25" rx="4" fill="#3b2328" stroke="#df6266" stroke-width="1.5"/>
     <circle cx="1029.5" cy="724.5" r="7" fill="none" stroke="#df6266" stroke-width="2"/>
     <path d="M1025 720l9 9m0-9-9 9" stroke="#df6266" stroke-width="1.5" stroke-linecap="round"/>
@@ -122,7 +122,7 @@
     <text x="97" y="772" fill="#f0f1f3" font-size="15" font-weight="600">D. R.</text>
     <rect x="151" y="773" width="89" height="4" rx="2" fill="#353a42"/>
     <rect x="151" y="773" width="74" height="4" rx="2" fill="#59bd7a"/>
-    <text x="1044" y="771" text-anchor="end" fill="#9ca1ac" font-size="14">Status unavailable</text>
+    <text x="610" y="771" text-anchor="middle" fill="#9ca1ac" font-size="14">Status unavailable</text>
   </g>
   <text x="48" y="814" fill="#8e94a0" font-family="Segoe UI, Arial, sans-serif" font-size="12">Healthy food remains calm. Amber and red states stand out. Unavailable data is never presented as missing food.</text>
 </svg>

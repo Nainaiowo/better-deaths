@@ -259,6 +259,59 @@ public sealed partial class Plugin
         SavePartyCooldownLayout();
     }
 
+    internal string? ExportPartyCooldownLoadout(uint? targetJobId = null)
+    {
+        if (GetPartyCooldownCatalog() is not { } catalog)
+            return null;
+
+        var document = new PartyCooldownLoadoutShareDocument
+        {
+            Jobs = PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId).Select(job =>
+            {
+                return new PartyCooldownLoadoutShareJob
+                {
+                    JobId = job.Id,
+                    SelectedActionIds = catalog.NormalizeSelection(job.Id, GetPartyCooldownSelection(job.Id)).Order().ToList(),
+                };
+            }).ToList(),
+        };
+
+        return PartyCooldownLoadoutShareCodec.Encode(document);
+    }
+
+    internal bool ApplyPartyCooldownLoadoutShare(PartyCooldownLoadoutShareDocument document, uint? targetJobId,
+        out int skippedActions)
+    {
+        skippedActions = 0;
+        if (GetPartyCooldownCatalog() is not { } catalog ||
+            (targetJobId is { } jobId
+                ? !PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, jobId)
+                : !PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document)))
+            return false;
+
+        var selections = document.Jobs.ToDictionary(job => job.JobId);
+        foreach (var job in PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId))
+        {
+            var shared = selections[job.Id];
+            var incoming = catalog.NormalizeSelection(job.Id, shared.SelectedActionIds);
+            skippedActions += shared.SelectedActionIds.Count - incoming.Count;
+            var selected = PartyCooldownLoadoutShareCodec.MergeSelectionPreservingLocalOrder(
+                GetPartyCooldownSelection(job.Id), incoming);
+
+            if (Configuration.PartyCooldownRowLayouts.TryGetValue(job.Id, out var rows))
+            {
+                rows.Normalize(selected);
+                if (rows.Enabled)
+                    selected = rows.Flatten();
+            }
+
+            Configuration.PartyCooldownActions[job.Id] = selected;
+        }
+
+        SavePartyCooldownLayout();
+        return true;
+    }
+
     internal bool ApplyPartyCooldownDefaults()
     {
         if (GetPartyCooldownCatalog() is not { } catalog)

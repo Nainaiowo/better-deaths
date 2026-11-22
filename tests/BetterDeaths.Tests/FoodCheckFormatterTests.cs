@@ -95,16 +95,19 @@ public sealed class FoodCheckPollingPolicyTests
     }
 
     [Theory]
-    [InlineData(true, true, true, false, false, true)]
-    [InlineData(false, true, true, false, false, false)]
-    [InlineData(true, false, true, false, false, false)]
-    [InlineData(true, true, false, false, false, false)]
-    [InlineData(true, true, true, true, false, false)]
-    [InlineData(true, true, true, false, true, false)]
-    public void PollsOnlyWhenEnabledInAnInstanceAndOutOfCombat(bool enabled, bool loggedIn, bool inInstance,
-        bool inCombat, bool isPvP, bool expected)
+    [InlineData(true, true, true, false, false, false, true)]
+    [InlineData(true, true, false, false, false, false, false)]
+    [InlineData(true, true, false, true, false, false, true)]
+    [InlineData(false, true, true, true, false, false, false)]
+    [InlineData(true, false, true, true, false, false, false)]
+    [InlineData(true, true, true, false, true, false, false)]
+    [InlineData(true, true, false, true, true, false, false)]
+    [InlineData(true, true, true, true, false, true, false)]
+    public void PollsInInstancesOrWhenOverworldIsEnabledAndOnlyOutOfCombat(bool enabled, bool loggedIn,
+        bool inInstance, bool showOutsideInstances, bool inCombat, bool isPvP, bool expected)
     {
-        Assert.Equal(expected, FoodCheckPollingPolicy.ShouldPoll(enabled, loggedIn, inInstance, inCombat, isPvP));
+        Assert.Equal(expected, FoodCheckPollingPolicy.ShouldPoll(enabled, loggedIn, inInstance,
+            showOutsideInstances, inCombat, isPvP));
     }
 }
 

@@ -209,6 +209,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowPartyFoodStatus { get; set; }
 
+    public bool PartyFoodShowOutsideInstances { get; set; }
+
     public float? PartyFoodStatusIconSize { get; set; }
 
     public float PartyFoodStatusIconOffsetX { get; set; }

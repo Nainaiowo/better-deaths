@@ -23,10 +23,15 @@ public sealed partial class RecapWindow
         var visible = configuration.ShowPartyFoodStatus;
         if (DrawThemedCheckbox("Show Well Fed status", ref visible))
             plugin.SetPartyFoodStatusVisibility(visible);
-        DrawSettingsTooltip("Add a food status marker beside visible party members. Status is sampled once per second only while you are out of combat inside an instance.");
+        DrawSettingsTooltip("Add a food status marker beside visible party members. By default, status is sampled once per second only while you are out of combat inside an instance.");
 
         if (visible)
         {
+            var showOutsideInstances = configuration.PartyFoodShowOutsideInstances;
+            if (DrawThemedCheckbox("Show outside instances", ref showOutsideInstances))
+                plugin.SetPartyFoodOutsideInstances(showOutsideInstances);
+            DrawSettingsTooltip("Also show food status in overworld areas. Checks still run only once per second and only while you are out of combat. Off keeps the default instance-only behavior.");
+
             ImGui.Spacing();
             var warningMinutes = configuration.PartyFoodWarningMinutes;
             if (ImGui.SliderInt("Warn when under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min"))
@@ -185,35 +190,11 @@ public sealed partial class RecapWindow
 
         var displayState = FoodCheckIndicatorPolicy.ForDisplay(row.State, configuration.PartyFoodWarningsOnly);
         var stateVisible = displayState != FoodCheckIndicatorState.Hidden;
-        if (configuration.PartyFoodTintPartyPlate && stateVisible)
-        {
-            var opacity = Math.Clamp(configuration.PartyFoodPlateTintOpacity, .04f, .40f);
-            var (topInset, tintHeight) = FoodCheckTintPolicy.GetVerticalBounds(
-                max.Y - min.Y, configuration.PartyFoodPlateTintHeight, configuration.PartyFoodPlateTintOffsetY);
-            var tintMin = new Vector2(min.X, min.Y + topInset);
-            var tintMax = new Vector2(max.X, tintMin.Y + tintHeight);
-            draw.AddRectFilled(tintMin, tintMax, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with
-            {
-                W = opacity,
-            }), 4);
-            draw.AddRect(tintMin, tintMax, ImGui.GetColorU32(GetFoodCheckStateColor(displayState) with { W = opacity }), 4,
-                ImDrawFlags.None, 1);
-        }
-        else
-            draw.AddRect(min, max, ImGui.GetColorU32(new Vector4(.24f, .27f, .32f, .9f)), 4);
+        draw.AddRect(min, max, ImGui.GetColorU32(new Vector4(.24f, .27f, .32f, .9f)), 4);
 
-        var markerSize = FoodCheckMarkerPolicy.NormalizeIconSize(
-            configuration.PartyFoodStatusIconSize ?? configuration.GetPartyCooldownPlacement().IconSize,
-            configuration.GetPartyCooldownPlacement().IconSize);
-        var markerLeft = configuration.PartyCooldownSide == PartyCooldownSide.Left;
-        var markerPosition = (markerLeft
-            ? new Vector2(min.X + 8, min.Y + (height - markerSize) * .5f)
-            : new Vector2(max.X - markerSize - 8, min.Y + (height - markerSize) * .5f)) +
-            new Vector2(FoodCheckMarkerPolicy.NormalizeOffset(configuration.PartyFoodStatusIconOffsetX),
-                FoodCheckMarkerPolicy.NormalizeOffset(configuration.PartyFoodStatusIconOffsetY));
-        var jobPosition = markerLeft
-            ? new Vector2(min.X + markerSize + 18, min.Y + (height - 20) * .5f)
-            : new Vector2(min.X + 10, min.Y + (height - 20) * .5f);
+        const float markerSize = 25.0f;
+        var markerPosition = new Vector2(max.X - markerSize - 8, min.Y + (height - markerSize) * .5f);
+        var jobPosition = new Vector2(min.X + 10, min.Y + (height - 20) * .5f);
         DrawPartyCooldownIcon(draw, jobPosition, 20, GetClassJobIconId(row.ClassJobId), Vector4.One);
 
         var namePosition = jobPosition + new Vector2(27, 2);
@@ -233,8 +214,13 @@ public sealed partial class RecapWindow
             _ => "Status not available",
         };
         var detailWidth = ImGui.CalcTextSize(detail).X;
-        var markerReserve = !stateVisible ? 10 : markerLeft ? 43 : MathF.Max(43, markerSize + 16);
-        var detailPosition = new Vector2(MathF.Max(namePosition.X + 105, max.X - detailWidth - markerReserve), min.Y + 12);
+        var markerReserve = stateVisible ? markerSize + 16 : 10;
+        var detailCellStart = namePosition.X + 105;
+        var detailCellEnd = max.X - markerReserve;
+        var detailCellWidth = MathF.Max(0, detailCellEnd - detailCellStart);
+        var detailY = min.Y + MathF.Max(0, (max.Y - min.Y - ImGui.GetTextLineHeight()) * .5f);
+        var detailPosition = new Vector2(
+            detailCellStart + MathF.Max(0, (detailCellWidth - detailWidth) * .5f), detailY);
         draw.AddText(detailPosition, ImGui.GetColorU32(row.State == FoodCheckIndicatorState.Hidden
             ? ModernMutedTextColor
             : GetFoodCheckStateColor(row.State)), detail);
