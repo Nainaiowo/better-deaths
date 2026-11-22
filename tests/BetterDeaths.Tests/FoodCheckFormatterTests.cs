@@ -4,34 +4,12 @@ namespace BetterDeaths.Tests;
 
 public sealed class FoodCheckFormatterTests
 {
-    [Fact]
-    public void FindsWellFedAmongOtherStatuses()
-    {
-        var statuses = new[]
-        {
-            new StatusSnapshot(1203, "Addle", 1203, 1, 0, 12),
-            new StatusSnapshot(FoodCheckFormatter.WellFedStatusId, "Well Fed", 48, 1, 0, 901),
-        };
-
-        Assert.Equal(48u, FoodCheckFormatter.FindWellFedStatus(statuses)?.Id);
-        Assert.Equal("15:01", FoodCheckFormatter.FormatRemaining(FoodCheckFormatter.FindWellFedStatus(statuses)));
-    }
-
-    [Fact]
-    public void ReportsWhenFoodIsNotActive()
-    {
-        Assert.Null(FoodCheckFormatter.FindWellFedStatus([]));
-        Assert.Equal("Not active", FoodCheckFormatter.FormatRemaining(null));
-    }
-
     [Theory]
     [InlineData(89.2f, "1:30")]
     [InlineData(3660.1f, "1:01:01")]
     public void RoundsRemainingTimeUpWithoutDroppingHours(float remaining, string expected)
     {
-        var status = new StatusSnapshot(FoodCheckFormatter.WellFedStatusId, "Well Fed", 48, 1, 0, remaining);
-
-        Assert.Equal(expected, FoodCheckFormatter.FormatRemaining(status));
+        Assert.Equal(expected, FoodCheckFormatter.FormatRemainingSeconds(remaining));
     }
 
     [Theory]
@@ -41,9 +19,7 @@ public sealed class FoodCheckFormatterTests
     [InlineData(float.PositiveInfinity)]
     public void DoesNotInventATimerForInvalidDurations(float remaining)
     {
-        var status = new StatusSnapshot(FoodCheckFormatter.WellFedStatusId, "Well Fed", 48, 1, 0, remaining);
-
-        Assert.Equal("Time unavailable", FoodCheckFormatter.FormatRemaining(status));
+        Assert.Equal("Time unavailable", FoodCheckFormatter.FormatRemainingSeconds(remaining));
     }
 
     [Fact]

@@ -21,15 +21,9 @@ public sealed partial class RecapWindow
     private uint? cooldownRequestedJob;
     private const string PartyCooldownDragPayload = "BETTER_DEATHS_PARTY_COOLDOWN";
     private const string PartyCooldownDefaultsPopup = "Restore party cooldown defaults?##PartyCooldownDefaults";
-    private const string PartyCooldownExportPopup = "Export party cooldown selections##PartyCooldownExport";
-    private const string PartyCooldownImportPopup = "Import party cooldown selections##PartyCooldownImport";
-    private uint? partyCooldownExportTargetJob;
-    private uint? partyCooldownImportTargetJob;
-    private string partyCooldownExportCode = string.Empty;
-    private string partyCooldownImportCode = string.Empty;
-    private string partyCooldownShareStatus = string.Empty;
-    private PartyCooldownLoadoutShareDocument? pendingPartyCooldownImport;
-    private string partyCooldownImportError = string.Empty;
+    private string partyCooldownShareToastMessage = string.Empty;
+    private DateTime partyCooldownShareToastUntilUtc;
+    private Vector2 partyCooldownShareToastPosition;
     private readonly Dictionary<uint, ISharedImmediateTexture> partyCooldownTextures = [];
     private readonly Dictionary<uint, int> partyCooldownPreviewCharges = [];
     private readonly Dictionary<uint, int> partyCooldownTargetRows = [];
@@ -219,31 +213,16 @@ public sealed partial class RecapWindow
             return;
         }
         if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Export", "ExportPartyCooldownSelections"))
-        {
-            partyCooldownExportTargetJob = null;
-            partyCooldownExportCode = plugin.ExportPartyCooldownLoadout() ?? string.Empty;
-            partyCooldownShareStatus = partyCooldownExportCode.Length == 0
-                ? "Cooldown ability data is still loading."
-                : string.Empty;
-            ImGui.OpenPopup(PartyCooldownExportPopup);
-        }
+            ExportPartyCooldownSelections(null);
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip("Copy every job's cooldown selections and custom rows, plus the active side and both side layouts.");
         var importButtonWidth = GetThemedIconButtonWidth(FontAwesomeIcon.Paste, "Import");
         if (ImGui.GetContentRegionAvail().X >= importButtonWidth + ImGui.GetStyle().ItemSpacing.X + 8)
             ImGui.SameLine();
         if (DrawThemedActionButton(FontAwesomeIcon.Paste, "Import", "ImportPartyCooldownSelections"))
-        {
-            partyCooldownImportTargetJob = null;
-            partyCooldownImportCode = string.Empty;
-            partyCooldownImportError = string.Empty;
-            pendingPartyCooldownImport = null;
-            ImGui.OpenPopup(PartyCooldownImportPopup);
-        }
-        if (!string.IsNullOrEmpty(partyCooldownShareStatus))
-        {
-            ImGui.TextWrapped(partyCooldownShareStatus);
-            ImGui.Spacing();
-        }
-        DrawPartyCooldownLoadoutSharePopups();
+            ImportPartyCooldownSelections(null);
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip("Import every job's selections and custom rows, plus the active side and both side layouts. Visibility and live cooldown timers stay local.");
         var requested = cooldownRequestedJob;
         cooldownRequestedJob = null;
         if (requested is { } requestedId)
@@ -287,98 +266,80 @@ public sealed partial class RecapWindow
         RegisterGuideTarget(GuideTarget.PartyCooldowns, start,
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
         DrawReviewPaneBottomPadding();
+        DrawPartyCooldownShareToast();
     }
 
-    private void DrawPartyCooldownLoadoutSharePopups()
+    private void ExportPartyCooldownSelections(uint? targetJobId)
     {
-        var popupWidth = MathF.Max(260, MathF.Min(600, ImGui.GetMainViewport().WorkSize.X - 32));
-        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0), ImGuiCond.Appearing);
-        if (ImGui.BeginPopup(PartyCooldownExportPopup, ImGuiWindowFlags.NoMove))
+        var code = plugin.ExportPartyCooldownLoadout(targetJobId);
+        if (string.IsNullOrEmpty(code))
         {
-            var exportScope = partyCooldownExportTargetJob is { } exportJobId
-                ? PartyCooldownCatalog.Jobs.First(job => job.Id == exportJobId).Name
-                : "every job";
-            ImGui.TextWrapped($"Share only which cooldowns are selected for {exportScope}. Ordering, custom rows, visibility, side, position, size, spacing, and live timers are not included.");
-            ImGui.Spacing();
-            ImGui.InputTextMultiline("##PartyCooldownExportCode", ref partyCooldownExportCode,
-                PartyCooldownLoadoutShareCodec.MaximumCodeLength, new Vector2(0, 120), ImGuiInputTextFlags.ReadOnly);
-            if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Copy code", "CopyPartyCooldownShareCode") &&
-                !string.IsNullOrEmpty(partyCooldownExportCode))
-            {
-                ImGui.SetClipboardText(partyCooldownExportCode);
-                partyCooldownShareStatus = "Cooldown selections copied. Share the code with the other player.";
-            }
-            if (ImGui.IsItemHovered())
-                SetThemedTooltip("Copy a share code containing only the selected cooldowns for this export scope.");
-            ImGui.EndPopup();
+            ShowPartyCooldownShareToast("Cooldown data is not ready to export.");
+            return;
         }
 
-        ImGui.SetNextWindowSize(new Vector2(popupWidth, 0), ImGuiCond.Appearing);
-        if (ImGui.BeginPopup(PartyCooldownImportPopup, ImGuiWindowFlags.NoMove))
+        ImGui.SetClipboardText(code);
+        ShowPartyCooldownShareToast("Copied to clipboard!");
+    }
+
+    private void ImportPartyCooldownSelections(uint? targetJobId)
+    {
+        if (!PartyCooldownLoadoutShareCodec.TryDecode(ImGui.GetClipboardText(), out var document, out _))
         {
-            var importScope = partyCooldownImportTargetJob is { } importJobId
-                ? PartyCooldownCatalog.Jobs.First(job => job.Id == importJobId).Name
-                : "every job";
-            ImGui.TextWrapped($"Paste a cooldown share code for {importScope}. Import changes only which cooldowns are selected; your own ordering, custom rows, widget visibility, placement, icon sizes, spacing, and live timers stay local.");
-            ImGui.Spacing();
-            if (ImGui.InputTextMultiline("##PartyCooldownImportCode", ref partyCooldownImportCode,
-                    PartyCooldownLoadoutShareCodec.MaximumCodeLength, new Vector2(0, 120)))
-            {
-                pendingPartyCooldownImport = null;
-                partyCooldownImportError = string.Empty;
-            }
-            if (DrawThemedActionButton(FontAwesomeIcon.CheckCircle, "Validate code", "ValidatePartyCooldownShareCode"))
-            {
-                if (PartyCooldownLoadoutShareCodec.TryDecode(partyCooldownImportCode,
-                        out var document, out partyCooldownImportError))
-                {
-                    var matchesScope = partyCooldownImportTargetJob is { } targetJob
-                        ? PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, targetJob)
-                        : PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document);
-                    if (matchesScope)
-                    {
-                        pendingPartyCooldownImport = document;
-                        partyCooldownImportError = partyCooldownImportTargetJob is { } selectedJob
-                            ? $"Valid code for {PartyCooldownCatalog.Jobs.First(job => job.Id == selectedJob).Name}. Review the note above before importing."
-                            : "Valid code for every job. Review the note above before importing.";
-                    }
-                    else
-                    {
-                        pendingPartyCooldownImport = null;
-                        partyCooldownImportError = partyCooldownImportTargetJob is { } expectedJob
-                            ? $"This import requires a code containing only {PartyCooldownCatalog.Jobs.First(job => job.Id == expectedJob).Name}."
-                            : "This import requires a code containing every supported job.";
-                    }
-                }
-                else
-                    pendingPartyCooldownImport = null;
-            }
-            if (!string.IsNullOrEmpty(partyCooldownImportError))
-            {
-                ImGui.Spacing();
-                ImGui.TextWrapped(partyCooldownImportError);
-            }
-            ImGui.Spacing();
-            ImGui.BeginDisabled(pendingPartyCooldownImport is null || plugin.GetPartyCooldownCatalog() is null);
-            var importActionLabel = partyCooldownImportTargetJob is { } actionJob
-                ? $"Import {PartyCooldownCatalog.Jobs.First(job => job.Id == actionJob).Abbreviation}"
-                : "Import all jobs";
-            if (DrawThemedActionButton(FontAwesomeIcon.Paste, importActionLabel, "ApplyPartyCooldownShare") &&
-                pendingPartyCooldownImport is { } pending &&
-                plugin.ApplyPartyCooldownLoadoutShare(pending, partyCooldownImportTargetJob, out var skippedActions))
-            {
-                partyCooldownTargetRows.Clear();
-                var importedScope = partyCooldownImportTargetJob is { } selectedJob
-                    ? PartyCooldownCatalog.Jobs.First(job => job.Id == selectedJob).Name
-                    : "every job";
-                partyCooldownShareStatus = skippedActions == 0
-                    ? $"Imported selected cooldowns for {importedScope}. Your ordering, rows, layout, and live timers were kept."
-                    : $"Imported selections for {importedScope}. {skippedActions} cooldowns unavailable in this plugin version were skipped; your ordering, rows, layout, and live timers were kept.";
-                ImGui.CloseCurrentPopup();
-            }
-            ImGui.EndDisabled();
-            ImGui.EndPopup();
+            ShowPartyCooldownShareToast("Clipboard does not contain a supported cooldown code.");
+            return;
         }
+
+        var matchesScope = targetJobId is { } jobId
+            ? PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, jobId)
+            : PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document);
+        if (!matchesScope)
+        {
+            ShowPartyCooldownShareToast(targetJobId is null
+                ? "Code must include selections for every job."
+                : "Code is not for the selected job.");
+            return;
+        }
+
+        if (!plugin.ApplyPartyCooldownLoadoutShare(document, targetJobId, out var skippedActions))
+        {
+            ShowPartyCooldownShareToast("Cooldown selections could not be imported.");
+            return;
+        }
+
+        partyCooldownTargetRows.Clear();
+        var includedLayout = document.Version == PartyCooldownLoadoutShareCodec.Version;
+        ShowPartyCooldownShareToast((skippedActions == 0
+            ? includedLayout ? "Cooldown loadout and layout imported." : "Cooldown selections imported; local layout kept."
+            : includedLayout
+                ? $"Imported loadout and layout; skipped {skippedActions} unavailable cooldowns."
+                : $"Imported selections; skipped {skippedActions} unavailable cooldowns. Local layout kept."));
+    }
+
+    private void ShowPartyCooldownShareToast(string message)
+    {
+        var viewport = ImGui.GetMainViewport();
+        var toastSize = ImGui.CalcTextSize(message) + new Vector2(20, 14);
+        var minimum = viewport.WorkPos + new Vector2(8);
+        var maximum = Vector2.Max(minimum, viewport.WorkPos + viewport.WorkSize - toastSize - new Vector2(8));
+        partyCooldownShareToastPosition = Vector2.Clamp(ImGui.GetMousePos() + new Vector2(16, 20), minimum, maximum);
+        partyCooldownShareToastMessage = message;
+        partyCooldownShareToastUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
+    }
+
+    private void DrawPartyCooldownShareToast()
+    {
+        if (string.IsNullOrEmpty(partyCooldownShareToastMessage) || DateTime.UtcNow >= partyCooldownShareToastUntilUtc)
+            return;
+
+        var textSize = ImGui.CalcTextSize(partyCooldownShareToastMessage);
+        var size = textSize + new Vector2(20, 14);
+        var min = partyCooldownShareToastPosition;
+        var max = min + size;
+        var draw = ImGui.GetForegroundDrawList();
+        draw.AddRectFilled(min, max, ImGui.GetColorU32(ModernPopupBgColor), 5);
+        draw.AddRect(min, max, ImGui.GetColorU32(ModernPanelBorderColor), 5, ImDrawFlags.None, 1);
+        draw.AddText(min + new Vector2(10, 7), ImGui.GetColorU32(ImGuiCol.Text), partyCooldownShareToastMessage);
     }
 
     private void FocusPartyCooldownJob(uint jobId)
@@ -477,21 +438,14 @@ public sealed partial class RecapWindow
         DrawSettingsTooltip("Restore this job's default abilities and one-row layout. Does not reset cooldown timers or placement settings.");
         ImGui.Spacing();
         if (DrawThemedActionButton(FontAwesomeIcon.Copy, "Export", $"ExportPartyCooldownJob{job.Id}"))
-        {
-            partyCooldownExportTargetJob = job.Id;
-            partyCooldownExportCode = plugin.ExportPartyCooldownLoadout(job.Id) ?? string.Empty;
-            partyCooldownShareStatus = string.Empty;
-            ImGui.OpenPopup(PartyCooldownExportPopup);
-        }
+            ExportPartyCooldownSelections(job.Id);
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip($"Copy {job.Name}'s cooldown selection and custom rows, plus the shared side and both side layouts.");
         ImGui.SameLine();
         if (DrawThemedActionButton(FontAwesomeIcon.Paste, "Import", $"ImportPartyCooldownJob{job.Id}"))
-        {
-            partyCooldownImportTargetJob = job.Id;
-            partyCooldownImportCode = string.Empty;
-            partyCooldownImportError = string.Empty;
-            pendingPartyCooldownImport = null;
-            ImGui.OpenPopup(PartyCooldownImportPopup);
-        }
+            ImportPartyCooldownSelections(job.Id);
+        if (ImGui.IsItemHovered())
+            SetThemedTooltip($"Import {job.Name}'s selection and custom rows, plus the shared side and both side layouts. Visibility and live cooldown timers stay local.");
         ImGui.Spacing();
     }
 

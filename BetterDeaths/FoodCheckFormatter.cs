@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 
 namespace BetterDeaths;
@@ -8,18 +6,6 @@ namespace BetterDeaths;
 internal static class FoodCheckFormatter
 {
     public const uint WellFedStatusId = 48;
-
-    public static StatusSnapshot? FindWellFedStatus(IEnumerable<StatusSnapshot> statuses) => statuses
-        .Where(status => status.Id == WellFedStatusId)
-        .OrderByDescending(status => float.IsFinite(status.RemainingTime) ? status.RemainingTime : float.NegativeInfinity)
-        .FirstOrDefault();
-
-    public static string FormatRemaining(StatusSnapshot? status)
-    {
-        if (status is null)
-            return "Not active";
-        return FormatRemainingSeconds(status.RemainingTime);
-    }
 
     public static string FormatRemainingSeconds(float remainingTime)
     {

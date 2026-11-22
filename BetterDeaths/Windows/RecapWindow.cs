@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.70";
+    private const string CurrentChangelogVersion = "1.0.0.71";
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19808,6 +19808,24 @@ public sealed partial class RecapWindow : Window, IDisposable
     private static void DrawChangelogTab()
     {
         ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        ImGui.TextDisabled("Stable update.");
+        ImGui.TextUnformatted("Party Cooldowns");
+        DrawHighlightedChangelogBullet("Added clipboard export and import for all jobs or a single job.");
+        DrawWrappedBullet("Shared setups include selected abilities, custom rows, the active side, and both sides' position, icon size, and spacing. Widget visibility and live cooldown timers remain local.");
+
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Food Check");
+        DrawHighlightedChangelogBullet("Added party Well Fed status checks with warning thresholds, optional plate tint, and out-of-combat overworld support.");
+        DrawWrappedBullet("Adjust the marker's size and position, plus tint strength, height, and vertical position. The preview follows the settings.");
+
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Death information");
+        DrawHighlightedChangelogBullet("Enemy damage-downs active at a death now appear separately from the player's own mitigations.");
+        DrawWrappedBullet("Hover the enemy mitigation icon to identify its source when available.");
+
+        ImGui.Separator();
+
+        ImGui.TextUnformatted("v1.0.0.70");
         ImGui.TextDisabled("Testing update.");
         ImGui.TextUnformatted("Food Check");
         DrawHighlightedChangelogBullet("Added independent size and X/Y offset controls for the Well Fed marker.");
@@ -19830,7 +19848,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DrawHighlightedChangelogBullet("Moved food status controls into their own Food Check section, separate from Party Cooldowns.");
         DrawWrappedBullet("Choose a warning threshold, show warnings only, or optionally tint party plates by food status. Tint strength is adjustable from 4% to 40% and starts disabled.");
         DrawWrappedBullet("The preview now distinguishes healthy, expiring, missing, and unavailable status so unavailable data is not mistaken for missing food.");
-        DrawWrappedBullet("Live status still updates once per second only while you are out of combat inside an instance; /foodcheck remains available for a system-chat report.");
+        DrawWrappedBullet("Live status updates once per second while you are out of combat; overworld checks are optional.");
         ImGui.Spacing();
         ImGui.TextUnformatted("Party cooldowns");
         DrawHighlightedChangelogBullet("Default now asks before restoring the selected side's layout and every job's default ability list and one-row layout.");

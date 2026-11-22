@@ -41,7 +41,7 @@ It also includes:
 Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** to place ability icons beside the game's party-list names. It is optional and starts disabled.
 
 - Expand Tanks, Healers, Melee, or Ranged, then a job. Choose up to 24 damage, defensive, healing, and support cooldowns for each job.
-- Use **Export** and **Import** above Abilities by job to share selections for every job, or the buttons inside a job to share only that job. Codes exclude ordering and layout; importing keeps your own arrangement and live timers.
+- Use **Export** and **Import** above Abilities by job to share selections and custom rows for every job, or the buttons inside a job to share only that job's abilities. Both kinds of code also include the active side and the saved position, size, and spacing for the left and right layouts. Visibility and live cooldown timers stay local.
 - New ability defaults are ordered as protection, 2-minute cooldowns, then 1-minute cooldowns. Existing selections are preserved; Reset for a job loads its new defaults. Pure healing and unrelated utility remain optional.
 - Default beside the layout Reset asks before restoring the selected side's size, spacing, and position, plus every job's default abilities and one-row layout. Live cooldown timers and the opposite side's placement are unchanged.
 - **Auto-collapse other jobs**, beside the visibility checkbox, keeps only the focused job and role open. It applies to job headers and the preview dropdown; turn it off to keep multiple sections expanded.
@@ -60,7 +60,7 @@ Teammate timers depend on captured uses and level-aware recharge rules. Abilitie
 
 Open `/bd` and select **HUD > Food Check** to enable the optional Well Fed marker. Choose a warning threshold, hide healthy markers if you only want alerts, and set the food icon's size and X/Y offsets independently. You can also tint party plates with a status color adjustable from 4-40% strength, 20-100% height, and a vertical offset. The preview shows healthy, expiring, missing, and unavailable states. By default, live status updates once per second only while out of combat inside an instance. Enable **Show outside instances** to include overworld areas; it still checks only out of combat. The marker's side and starting slot follow Party Cooldowns layout.
 
-Use `/foodcheck` at any time to print each current party member's remaining Well Fed time in system chat. See the [Food Check help page](https://nainaiowo.github.io/better-deaths/help/foodcheck.html#food-check) for visual examples and settings details.
+See the [Food Check help page](https://nainaiowo.github.io/better-deaths/help/foodcheck.html#food-check) for visual examples and settings details.
 
 **HUD** also contains **DPS Meter** and **Death Window**. Select **Walkthrough** in the main header for an in-game tour, or read the [Party Cooldowns help page](https://nainaiowo.github.io/better-deaths/help/cooldowns.html#party-cooldowns).
 
@@ -106,14 +106,11 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 /bdw
 /bdm
 /bdr
-/foodcheck
 ```
 
 `/bdw` toggles the Death Window. `/bdm` toggles the DPS Meter widget without stopping capture or resetting the encounter.
 
 `/bdr` resets the active DPS meter encounter in the overworld, saving the result before starting fresh on the next damage. It is unavailable inside duties and does not delete saved encounters.
-
-`/foodcheck` reports the remaining Well Fed time for each current party member in local system chat.
 
 ## Dalamud Repository
 

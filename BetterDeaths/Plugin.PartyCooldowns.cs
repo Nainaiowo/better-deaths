@@ -266,12 +266,28 @@ public sealed partial class Plugin
 
         var document = new PartyCooldownLoadoutShareDocument
         {
+            Layout = new PartyCooldownLoadoutShareLayout
+            {
+                Side = Configuration.PartyCooldownSide,
+                Left = ToSharePlacement(Configuration.PartyCooldownPlacements!.Left!),
+                Right = ToSharePlacement(Configuration.PartyCooldownPlacements.Right!),
+            },
             Jobs = PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId).Select(job =>
             {
+                var selected = catalog.NormalizeSelection(job.Id, GetPartyCooldownSelection(job.Id));
+                var configuredRows = Configuration.PartyCooldownRowLayouts.GetValueOrDefault(job.Id);
+                var rows = new PartyCooldownRows
+                {
+                    Enabled = configuredRows?.Enabled ?? false,
+                    Rows = configuredRows?.Rows?.Select(row => row?.ToList() ?? []).ToList() ?? [[]],
+                };
+                rows.Normalize(selected);
                 return new PartyCooldownLoadoutShareJob
                 {
                     JobId = job.Id,
-                    SelectedActionIds = catalog.NormalizeSelection(job.Id, GetPartyCooldownSelection(job.Id)).Order().ToList(),
+                    SelectedActionIds = selected,
+                    RowsEnabled = rows.Enabled,
+                    Rows = rows.Rows.Select(row => row.ToList()).ToList(),
                 };
             }).ToList(),
         };
@@ -284,33 +300,91 @@ public sealed partial class Plugin
     {
         skippedActions = 0;
         if (GetPartyCooldownCatalog() is not { } catalog ||
-            (targetJobId is { } jobId
-                ? !PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, jobId)
+            (targetJobId is { } expectedJobId
+                ? !PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, expectedJobId)
                 : !PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document)))
             return false;
 
         var selections = document.Jobs.ToDictionary(job => job.JobId);
+        var importedJobs = new List<(uint JobId, List<uint> Selection, PartyCooldownRows? Rows)>();
         foreach (var job in PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId))
         {
             var shared = selections[job.Id];
             var incoming = catalog.NormalizeSelection(job.Id, shared.SelectedActionIds);
             skippedActions += shared.SelectedActionIds.Count - incoming.Count;
-            var selected = PartyCooldownLoadoutShareCodec.MergeSelectionPreservingLocalOrder(
-                GetPartyCooldownSelection(job.Id), incoming);
-
-            if (Configuration.PartyCooldownRowLayouts.TryGetValue(job.Id, out var rows))
+            if (document.Version == PartyCooldownLoadoutShareCodec.Version)
             {
-                rows.Normalize(selected);
-                if (rows.Enabled)
-                    selected = rows.Flatten();
+                var allowed = incoming.ToHashSet();
+                var rows = new PartyCooldownRows
+                {
+                    Enabled = shared.RowsEnabled,
+                    Rows = shared.Rows.Select(row => row.Where(allowed.Contains).ToList()).ToList(),
+                };
+                rows.Normalize(incoming);
+                var selected = rows.Enabled ? rows.Flatten() : incoming;
+                importedJobs.Add((job.Id, selected, rows));
             }
+            else
+            {
+                var selected = PartyCooldownLoadoutShareCodec.MergeSelectionPreservingLocalOrder(
+                    GetPartyCooldownSelection(job.Id), incoming);
+                PartyCooldownRows? rows = null;
+                if (Configuration.PartyCooldownRowLayouts.TryGetValue(job.Id, out var localRows))
+                {
+                    rows = localRows;
+                    rows.Normalize(selected);
+                    if (rows.Enabled)
+                        selected = rows.Flatten();
+                }
+                importedJobs.Add((job.Id, selected, rows));
+            }
+        }
 
-            Configuration.PartyCooldownActions[job.Id] = selected;
+        if (document.Version == PartyCooldownLoadoutShareCodec.Version)
+            ApplyPartyCooldownShareLayout(document.Layout!);
+        foreach (var (jobId, selection, rows) in importedJobs)
+        {
+            Configuration.PartyCooldownActions[jobId] = selection;
+            if (document.Version == PartyCooldownLoadoutShareCodec.Version)
+                Configuration.PartyCooldownRowLayouts[jobId] = rows!;
+            else if (rows is not null)
+                Configuration.PartyCooldownRowLayouts[jobId] = rows;
         }
 
         SavePartyCooldownLayout();
         return true;
     }
+
+    private static PartyCooldownLoadoutSharePlacement ToSharePlacement(PartyCooldownPlacement placement) => new()
+    {
+        IconSize = placement.IconSize,
+        Spacing = placement.Spacing,
+        OffsetX = placement.OffsetX,
+        OffsetY = placement.OffsetY,
+    };
+
+    private void ApplyPartyCooldownShareLayout(PartyCooldownLoadoutShareLayout layout)
+    {
+        Configuration.PartyCooldownSide = layout.Side;
+        Configuration.PartyCooldownPlacements = new PartyCooldownPlacements
+        {
+            Left = FromSharePlacement(layout.Left!),
+            Right = FromSharePlacement(layout.Right!),
+        };
+        var active = Configuration.GetPartyCooldownPlacement();
+        Configuration.PartyCooldownIconSize = active.IconSize;
+        Configuration.PartyCooldownIconGap = active.Spacing;
+        Configuration.PartyCooldownOffsetX = active.OffsetX;
+        Configuration.PartyCooldownOffsetY = active.OffsetY;
+    }
+
+    private static PartyCooldownPlacement FromSharePlacement(PartyCooldownLoadoutSharePlacement placement) => new()
+    {
+        IconSize = placement.IconSize,
+        Spacing = placement.Spacing,
+        OffsetX = placement.OffsetX,
+        OffsetY = placement.OffsetY,
+    };
 
     internal bool ApplyPartyCooldownDefaults()
     {
