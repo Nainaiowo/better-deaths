@@ -176,8 +176,8 @@ public sealed class PartyCooldownCatalogTests
         Assert.Equal(24, PartyCooldownLayout.IconSize(float.NaN));
         Assert.Equal(3, PartyCooldownLayout.Gap(float.PositiveInfinity));
         Assert.Equal(0, PartyCooldownLayout.Offset(float.NegativeInfinity));
-        Assert.Equal(72, PartyCooldownLayout.IconSize(900));
-        Assert.Equal(-300, PartyCooldownLayout.Offset(-1000));
+        Assert.Equal(900, PartyCooldownLayout.IconSize(900));
+        Assert.Equal(-1000, PartyCooldownLayout.Offset(-1000));
     }
 
     [Fact]
@@ -191,7 +191,9 @@ public sealed class PartyCooldownCatalogTests
     [InlineData(36, 36)]
     [InlineData(48, 48)]
     [InlineData(72, 72)]
-    [InlineData(73, 72)]
+    [InlineData(73, 73)]
+    [InlineData(1440, 1440)]
+    [InlineData(1441, 1440)]
     [InlineData(8, 16)]
     public void CooldownIconsAcceptTheExpandedRangeWithoutChangingTheMinimum(float requested, float expected)
     {
@@ -202,8 +204,8 @@ public sealed class PartyCooldownCatalogTests
     public void MaximumIconSizeUsesTheSameGeometryForPreviewAndOverlay()
     {
         var row = new PartyCooldownRow(1, 0, new(200, 100), new(300, 120), 1);
-        Assert.Equal(new Vector2(-103, 74), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Left, 72, 3, Vector2.Zero));
-        Assert.Equal(new Vector2(306, 74), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Right, 72, 3, Vector2.Zero));
+        Assert.Equal(new Vector2(-5575, -610), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Left, 1440, 3, Vector2.Zero));
+        Assert.Equal(new Vector2(306, -610), PartyCooldownLayout.GetOrigin(row, 4, PartyCooldownSide.Right, 1440, 3, Vector2.Zero));
     }
 
     [Fact]

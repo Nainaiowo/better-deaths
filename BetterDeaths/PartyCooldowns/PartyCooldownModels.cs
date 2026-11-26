@@ -67,10 +67,10 @@ internal readonly record struct PartyCooldownHudMember(uint EntityId, int Index)
 
 internal static class PartyCooldownLayout
 {
-    public const float MinimumIconSize = 16, MaximumIconSize = 72;
+    public const float MinimumIconSize = 16, MaximumIconSize = 1440, MaximumOffset = 6000;
     public const int MaximumRows = PartyCooldownRows.MaximumRows;
     public static float IconSize(float value) => float.IsFinite(value) ? Math.Clamp(value, MinimumIconSize, MaximumIconSize) : 24;
-    public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -300, 300) : 0;
+    public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -MaximumOffset, MaximumOffset) : 0;
     public static float Gap(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 12) : 3;
     public static float TimerTextSize(float iconSize, float previewScale = 1) => MathF.Max(11 * previewScale, iconSize * .48f);
     public static float ChargeTextSize(float iconSize, float previewScale = 1) => MathF.Max(10 * previewScale, iconSize * .36f);

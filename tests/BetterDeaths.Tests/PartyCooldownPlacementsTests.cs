@@ -167,20 +167,38 @@ public sealed class PartyCooldownPlacementsTests
     [Fact]
     public void EachSideIsNormalizedAndSharedReferencesAreSeparated()
     {
-        var shared = new PartyCooldownPlacement { IconSize = 99, Spacing = -1, OffsetX = 500, OffsetY = -500 };
+        var shared = new PartyCooldownPlacement { IconSize = 2000, Spacing = -1, OffsetX = 8000, OffsetY = -8000 };
         var placements = new PartyCooldownPlacements { Left = shared, Right = shared };
         Assert.True(placements.Normalize(new()));
         Assert.NotSame(placements.Left, placements.Right);
         foreach (var side in new[] { PartyCooldownSide.Left, PartyCooldownSide.Right })
         {
             var layout = placements.Get(side);
-            Assert.Equal(72, layout.IconSize);
+            Assert.Equal(1440, layout.IconSize);
             Assert.Equal(0, layout.Spacing);
-            Assert.Equal(300, layout.OffsetX);
-            Assert.Equal(-300, layout.OffsetY);
+            Assert.Equal(6000, layout.OffsetX);
+            Assert.Equal(-6000, layout.OffsetY);
         }
         placements.Left!.IconSize = 16;
-        Assert.Equal(72, placements.Right!.IconSize);
+        Assert.Equal(1440, placements.Right!.IconSize);
+    }
+
+    [Fact]
+    public void TwentyTimesMaximumPlacementSurvivesNormalizationAndSerialization()
+    {
+        var placement = new PartyCooldownPlacement
+        {
+            IconSize = 1440,
+            OffsetX = 6000,
+            OffsetY = -6000,
+        };
+
+        Assert.False(placement.Normalize());
+        var restored = JsonSerializer.Deserialize<PartyCooldownPlacement>(JsonSerializer.Serialize(placement))!;
+        Assert.False(restored.Normalize());
+        Assert.Equal(1440, restored.IconSize);
+        Assert.Equal(6000, restored.OffsetX);
+        Assert.Equal(-6000, restored.OffsetY);
     }
 
     [Fact]

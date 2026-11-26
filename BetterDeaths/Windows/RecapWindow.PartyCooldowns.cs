@@ -137,10 +137,12 @@ public sealed partial class RecapWindow
         DrawCooldownSlider("Spacing", "PartyCooldownGap", ref gap, 0, 12, "%.0f px");
         placement.Spacing = gap;
         var offsetX = placement.OffsetX;
-        DrawCooldownSlider("Horizontal offset", "PartyCooldownOffsetX", ref offsetX, -300, 300, "%.0f px");
+        DrawCooldownSlider("Horizontal offset", "PartyCooldownOffsetX", ref offsetX,
+            -PartyCooldownLayout.MaximumOffset, PartyCooldownLayout.MaximumOffset, "%.0f px");
         placement.OffsetX = offsetX;
         var offsetY = placement.OffsetY;
-        DrawCooldownSlider("Vertical offset", "PartyCooldownOffsetY", ref offsetY, -300, 300, "%.0f px");
+        DrawCooldownSlider("Vertical offset", "PartyCooldownOffsetY", ref offsetY,
+            -PartyCooldownLayout.MaximumOffset, PartyCooldownLayout.MaximumOffset, "%.0f px");
         placement.OffsetY = offsetY;
         var layoutButtonsWidth = ImGui.GetContentRegionAvail().X;
         if (DrawTransparentIconButton("ResetPartyCooldownPlacement", FontAwesomeIcon.Undo))

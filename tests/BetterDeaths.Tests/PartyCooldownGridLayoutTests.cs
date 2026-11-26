@@ -54,7 +54,7 @@ public sealed class PartyCooldownGridLayoutTests
     public void EveryTwelveAbilityDistributionFitsItsBoundsWithoutOverlap()
     {
         foreach (var side in Enum.GetValues<PartyCooldownSide>())
-            foreach (var size in new[] { 16f, 24, 72 })
+            foreach (var size in new[] { 16f, 24, 72, 1440 })
                 foreach (var gap in new[] { 0f, 3, 12 })
                     for (var first = 0; first <= 12; first++)
                         for (var second = 0; second <= 12 - first; second++)

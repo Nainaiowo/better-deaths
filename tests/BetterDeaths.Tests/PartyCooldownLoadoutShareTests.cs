@@ -54,6 +54,21 @@ public sealed class PartyCooldownLoadoutShareTests
     }
 
     [Fact]
+    public void ShareCodeAcceptsTwentyTimesMaximumPlacementValues()
+    {
+        var document = CreateDocument();
+        document.Layout!.Left!.IconSize = 1440;
+        document.Layout.Left.OffsetX = -6000;
+        document.Layout.Left.OffsetY = 6000;
+
+        Assert.True(PartyCooldownLoadoutShareCodec.TryDecode(
+            PartyCooldownLoadoutShareCodec.Encode(document), out var decoded, out var error), error);
+        Assert.Equal(1440, decoded.Layout!.Left!.IconSize);
+        Assert.Equal(-6000, decoded.Layout.Left.OffsetX);
+        Assert.Equal(6000, decoded.Layout.Left.OffsetY);
+    }
+
+    [Fact]
     public void ShareCodeContainsLayoutAndCustomRowsButNotVisibilityOrLiveTimers()
     {
         var document = CreateDocument();
@@ -92,7 +107,7 @@ public sealed class PartyCooldownLoadoutShareTests
     public void RejectsInvalidPlacementSettingsAndRowAssignments()
     {
         var invalidPlacement = CreateDocument();
-        invalidPlacement.Layout!.Left!.IconSize = 1000;
+        invalidPlacement.Layout!.Left!.IconSize = 2000;
         Assert.False(PartyCooldownLoadoutShareCodec.TryDecode(EncodeUnchecked(invalidPlacement), out _, out var layoutError));
         Assert.Contains("placement", layoutError);
 
