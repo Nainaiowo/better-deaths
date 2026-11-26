@@ -54,18 +54,18 @@ public sealed class PartyCooldownLoadoutShareTests
     }
 
     [Fact]
-    public void ShareCodeAcceptsTwentyTimesMaximumPlacementValues()
+    public void ShareCodeAcceptsMaximumIconSizeWithOriginalOffsetRange()
     {
         var document = CreateDocument();
         document.Layout!.Left!.IconSize = 1440;
-        document.Layout.Left.OffsetX = -6000;
-        document.Layout.Left.OffsetY = 6000;
+        document.Layout.Left.OffsetX = -300;
+        document.Layout.Left.OffsetY = 300;
 
         Assert.True(PartyCooldownLoadoutShareCodec.TryDecode(
             PartyCooldownLoadoutShareCodec.Encode(document), out var decoded, out var error), error);
         Assert.Equal(1440, decoded.Layout!.Left!.IconSize);
-        Assert.Equal(-6000, decoded.Layout.Left.OffsetX);
-        Assert.Equal(6000, decoded.Layout.Left.OffsetY);
+        Assert.Equal(-300, decoded.Layout.Left.OffsetX);
+        Assert.Equal(300, decoded.Layout.Left.OffsetY);
     }
 
     [Fact]

@@ -177,7 +177,7 @@ public sealed class PartyCooldownCatalogTests
         Assert.Equal(3, PartyCooldownLayout.Gap(float.PositiveInfinity));
         Assert.Equal(0, PartyCooldownLayout.Offset(float.NegativeInfinity));
         Assert.Equal(900, PartyCooldownLayout.IconSize(900));
-        Assert.Equal(-1000, PartyCooldownLayout.Offset(-1000));
+        Assert.Equal(-300, PartyCooldownLayout.Offset(-1000));
     }
 
     [Fact]

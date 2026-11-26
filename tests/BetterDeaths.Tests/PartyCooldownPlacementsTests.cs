@@ -176,29 +176,29 @@ public sealed class PartyCooldownPlacementsTests
             var layout = placements.Get(side);
             Assert.Equal(1440, layout.IconSize);
             Assert.Equal(0, layout.Spacing);
-            Assert.Equal(6000, layout.OffsetX);
-            Assert.Equal(-6000, layout.OffsetY);
+            Assert.Equal(300, layout.OffsetX);
+            Assert.Equal(-300, layout.OffsetY);
         }
         placements.Left!.IconSize = 16;
         Assert.Equal(1440, placements.Right!.IconSize);
     }
 
     [Fact]
-    public void TwentyTimesMaximumPlacementSurvivesNormalizationAndSerialization()
+    public void MaximumIconSizeAndOriginalOffsetLimitsSurviveSerialization()
     {
         var placement = new PartyCooldownPlacement
         {
             IconSize = 1440,
-            OffsetX = 6000,
-            OffsetY = -6000,
+            OffsetX = 300,
+            OffsetY = -300,
         };
 
         Assert.False(placement.Normalize());
         var restored = JsonSerializer.Deserialize<PartyCooldownPlacement>(JsonSerializer.Serialize(placement))!;
         Assert.False(restored.Normalize());
         Assert.Equal(1440, restored.IconSize);
-        Assert.Equal(6000, restored.OffsetX);
-        Assert.Equal(-6000, restored.OffsetY);
+        Assert.Equal(300, restored.OffsetX);
+        Assert.Equal(-300, restored.OffsetY);
     }
 
     [Fact]

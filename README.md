@@ -46,7 +46,7 @@ Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** 
 - Default beside the layout Reset asks before restoring the selected side's size, spacing, and position, plus every job's default abilities and one-row layout. Live cooldown timers and the opposite side's placement are unchanged.
 - **Auto-collapse other jobs**, beside the visibility checkbox, keeps only the focused job and role open. It applies to job headers and the preview dropdown; turn it off to keep multiple sections expanded.
 - Click `+` or drag available abilities into the selection. Drag to reorder; use `X` to remove. Existing selections are not replaced when more choices are added.
-- Place the icons left or right of names. Each side saves its own 16-72 px icon size, spacing, and offsets; ability selections remain per job.
+- Place the icons left or right of names. Each side saves its own 16-1440 px icon size, spacing, and offsets; ability selections remain per job.
 - Enable **Custom rows** inside a job, above **Selected cooldowns**, to assign its abilities to up to three rows. Use the small `+` to add a row, then drag abilities into it. Select a row to make it the destination for clicked `+` abilities. The 24-ability limit is shared across all rows.
 - Custom rows are shared between left/right placement. Turning the checkbox off shows one row and remembers the arrangement for next time; empty additional rows can be removed.
 - Use the non-scrolling preview outside combat. Its sample party frame and selected icons shrink together only when needed to fit; the preview percentage does not change your live settings. HP/MP and timers are examples, not live party readings.
