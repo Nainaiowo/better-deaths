@@ -42,6 +42,8 @@ Open `/bd` and select **HUD > Party Cooldowns**. Check **Show party cooldowns** 
 
 - Expand Tanks, Healers, Melee, or Ranged, then a job. Choose up to 24 damage, defensive, healing, and support cooldowns for each job.
 - Use **Export** and **Import** above Abilities by job to share selections and custom rows for every job, or the buttons inside a job to share only that job's abilities. Both kinds of code also include the active side and the saved position, size, and spacing for the left and right layouts. Visibility and live cooldown timers stay local.
+- New exports use shorter `BDPC3:` codes. Update Better Deaths before importing one. Older codes still work. If a code is incomplete, incompatible, or can't be saved, your settings stay as they were. A valid code can still intentionally clear a job's icons with an empty selection.
+- **Undo last import** brings back the affected job or jobs, including custom rows. If the import changed placement, it also restores the active side and both sides' size, spacing, and offsets. One undo is kept locally, even after restarting the plugin.
 - New ability defaults are ordered as protection, 2-minute cooldowns, then 1-minute cooldowns. Existing selections are preserved; Reset for a job loads its new defaults. Pure healing and unrelated utility remain optional.
 - Default beside the layout Reset asks before restoring the selected side's size, spacing, and position, plus every job's default abilities and one-row layout. Live cooldown timers and the opposite side's placement are unchanged.
 - **Auto-collapse other jobs**, beside the visibility checkbox, keeps only the focused job and role open. It applies to job headers and the preview dropdown; turn it off to keep multiple sections expanded.

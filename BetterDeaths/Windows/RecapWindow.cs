@@ -124,7 +124,7 @@ public sealed partial class RecapWindow : Window, IDisposable
     private const string LikelyAutoAttackTooltip = "Possible auto attack. Better Deaths could not resolve a named action here; named spells and abilities usually show their action name.";
     private const string AutoActionDisplayName = "Auto";
     private const uint AllRecordedPullDuties = uint.MaxValue;
-    private const string CurrentChangelogVersion = "1.0.0.72";
+    private static string CurrentChangelogVersion => StableReleaseNotes.History[0].Version;
     private const string HelpCenterUrl = "https://nainaiowo.github.io/better-deaths/help/";
     private const string FeedbackDiscordUrl = "https://discord.com/invite/Zzrcc8kmvy";
     private const string FeedbackConfirmPopupId = "Open Punish Discord?##BetterDeathsFeedbackConfirm";
@@ -19807,7 +19807,26 @@ public sealed partial class RecapWindow : Window, IDisposable
 
     private static void DrawChangelogTab()
     {
-        ImGui.TextUnformatted($"v{CurrentChangelogVersion}");
+        foreach (var release in StableReleaseNotes.History)
+        {
+            ImGui.TextUnformatted($"v{release.Version}");
+            ImGui.TextDisabled("Stable update.");
+            foreach (var section in release.Sections)
+            {
+                ImGui.TextUnformatted(section.Title);
+                foreach (var bullet in section.Bullets)
+                {
+                    if (bullet.Highlight)
+                        DrawHighlightedChangelogBullet(bullet.Text);
+                    else
+                        DrawWrappedBullet(bullet.Text);
+                }
+                ImGui.Spacing();
+            }
+            ImGui.Separator();
+        }
+
+        ImGui.TextUnformatted("v1.0.0.72");
         ImGui.TextDisabled("Stable update.");
         ImGui.TextUnformatted("Party Cooldowns");
         DrawHighlightedChangelogBullet("Added clipboard export and import for all jobs or a single job.");

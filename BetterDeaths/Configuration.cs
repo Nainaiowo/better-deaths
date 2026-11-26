@@ -1,7 +1,6 @@
 using Dalamud.Configuration;
 using System;
 using System.Collections.Generic;
-using BetterDeaths.PartyCooldowns;
 
 namespace BetterDeaths;
 
@@ -96,7 +95,7 @@ public enum DamageMeterDebugTraceCategory
 
 
 [Serializable]
-public sealed class Configuration : IPluginConfiguration
+public sealed partial class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 4;
 
@@ -205,8 +204,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ShowDamageMeterWidget { get; set; }
 
-    public bool ShowPartyCooldowns { get; set; }
-
     public bool ShowPartyFoodStatus { get; set; }
 
     public bool PartyFoodShowOutsideInstances { get; set; }
@@ -228,29 +225,6 @@ public sealed class Configuration : IPluginConfiguration
     public float PartyFoodPlateTintHeight { get; set; } = 0.65f;
 
     public float PartyFoodPlateTintOffsetY { get; set; }
-
-    public bool PartyCooldownAutoCollapseJobs { get; set; } = true;
-
-    public PartyCooldownSide PartyCooldownSide { get; set; } = PartyCooldownSide.Right;
-
-    // Legacy shared values are retained for migrating existing configurations.
-    public float PartyCooldownIconSize { get; set; } = 24;
-
-    public float PartyCooldownIconGap { get; set; } = 3;
-
-    public float PartyCooldownOffsetX { get; set; }
-
-    public float PartyCooldownOffsetY { get; set; }
-
-    public PartyCooldownPlacements? PartyCooldownPlacements { get; set; }
-
-    internal PartyCooldownPlacement GetPartyCooldownPlacement() => PartyCooldownPlacements!.Get(PartyCooldownSide);
-
-    public Dictionary<uint, List<uint>> PartyCooldownActions { get; set; } = [];
-
-    public int PartyCooldownDefaultLoadoutsVersion { get; set; }
-
-    public Dictionary<uint, PartyCooldownRows> PartyCooldownRowLayouts { get; set; } = [];
 
     // Missing in older configurations: inherit the previously shared opacity once on load.
     public float? DamageMeterWidgetBackgroundOpacity { get; set; }

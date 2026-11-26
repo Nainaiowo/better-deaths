@@ -20,11 +20,16 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     env:
+      BD_RELEASE_CHANNEL: ${{ inputs.release_type }}
       DALAMUD_HOME: /tmp/dalamud
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Verify published Help pages before a stable release
+        if: inputs.release_type == 'latest'
+        run: python3 scripts/check-help-links.py --live
 
       - name: Set up .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
@@ -48,6 +53,16 @@ jobs:
       - name: List build output
         run: find BetterDeaths/bin/Release -maxdepth 5 -type f | sort
 
+      - name: Keep the exact stable package for listing verification
+        if: inputs.release_type == 'latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: puni-stable-package
+          path: BetterDeaths/bin/Release/BetterDeaths/latest.zip
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
       - name: Publish to Dynamis
         uses: PunishXIV/dynamis-action@7c9806868190ae477a57ef74855aa0f4d38b5391 # v3.0.0
         with:
@@ -57,3 +72,25 @@ jobs:
           type: ${{ inputs.release_type }}
         env:
           PUBLISHER_KEY: ${{ secrets.PUBLISHER_KEY }}
+
+  verify-stable:
+    name: Verify Puni stable listing
+    needs: publish
+    if: inputs.release_type == 'latest'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout verification script
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Download the package used by the publisher
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: puni-stable-package
+          path: verification
+
+      - name: Check the version and notes served to players
+        shell: pwsh
+        run: ./scripts/verify-stable-listing.ps1 -PackagePath verification/latest.zip

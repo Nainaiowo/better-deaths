@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace BetterDeaths;
@@ -29,6 +30,37 @@ internal enum FoodCheckIndicatorState : byte
 }
 
 internal readonly record struct PartyFoodStatusSample(bool HasWellFed, float RemainingSeconds);
+
+internal sealed class PartyFoodStatusSnapshot
+{
+    public static readonly PartyFoodStatusSnapshot Empty = new([]);
+    private readonly Dictionary<uint, PartyFoodStatusSample> samples;
+    private readonly PartyFoodStatusSample mostUrgent;
+
+    public PartyFoodStatusSnapshot(Dictionary<uint, PartyFoodStatusSample> samples)
+    {
+        this.samples = samples;
+        mostUrgent = new(true, float.PositiveInfinity);
+        foreach (var sample in samples.Values)
+        {
+            if (!sample.HasWellFed)
+            {
+                mostUrgent = sample;
+                break;
+            }
+            if (float.IsFinite(sample.RemainingSeconds) && sample.RemainingSeconds < mostUrgent.RemainingSeconds)
+                mostUrgent = sample;
+        }
+    }
+
+    // This uses the same threshold as individual markers, without walking the party on every draw.
+    public bool HasVisibleMarkers(bool warningsOnly, int thresholdSeconds) =>
+        FoodCheckIndicatorPolicy.ForDisplay(
+            FoodCheckIndicatorPolicy.Classify(samples.Count != 0, mostUrgent.HasWellFed, mostUrgent.RemainingSeconds, thresholdSeconds),
+            warningsOnly) != FoodCheckIndicatorState.Hidden;
+
+    public bool TryGet(uint entityId, out PartyFoodStatusSample sample) => samples.TryGetValue(entityId, out sample);
+}
 
 internal static class FoodCheckIndicatorPolicy
 {

@@ -12,7 +12,7 @@ namespace BetterDeaths;
 public sealed partial class Plugin
 {
     private CancellationTokenSource? partyFoodStatusPollingSession;
-    private Dictionary<uint, PartyFoodStatusSample> partyFoodStatusByEntity = [];
+    private PartyFoodStatusSnapshot partyFoodSnapshot = PartyFoodStatusSnapshot.Empty;
     private bool foodCheckUpdateFailureReported;
 
     private bool NormalizePartyFoodConfiguration()
@@ -63,10 +63,7 @@ public sealed partial class Plugin
         SaveConfiguration();
     }
 
-    internal bool TryGetPartyFoodStatus(uint entityId, out PartyFoodStatusSample status) =>
-        Volatile.Read(ref partyFoodStatusByEntity).TryGetValue(entityId, out status);
-
-    internal bool PartyFoodStatusCacheAvailable => Volatile.Read(ref partyFoodStatusByEntity).Count > 0;
+    internal PartyFoodStatusSnapshot PartyFoodSnapshot => Volatile.Read(ref partyFoodSnapshot);
 
     private bool CanPollPartyFoodStatus() => FoodCheckPollingPolicy.ShouldPoll(
         Configuration.ShowPartyFoodStatus,
@@ -210,7 +207,7 @@ public sealed partial class Plugin
                 !includesLocalPlayer)
                 next[localPlayer.EntityId] = ReadPartyFoodStatus(localCharacter.StatusList);
 
-            PublishPartyFoodStatuses(next);
+            Volatile.Write(ref partyFoodSnapshot, next.Count == 0 ? PartyFoodStatusSnapshot.Empty : new(next));
             foodCheckUpdateFailureReported = false;
         }
         catch (Exception error)
@@ -232,12 +229,5 @@ public sealed partial class Plugin
         return new(false, 0);
     }
 
-    private void PublishPartyFoodStatuses(Dictionary<uint, PartyFoodStatusSample> statuses) =>
-        Volatile.Write(ref partyFoodStatusByEntity, statuses);
-
-    private void ClearPartyFoodStatusCache()
-    {
-        if (Volatile.Read(ref partyFoodStatusByEntity).Count > 0)
-            PublishPartyFoodStatuses([]);
-    }
+    private void ClearPartyFoodStatusCache() => Volatile.Write(ref partyFoodSnapshot, PartyFoodStatusSnapshot.Empty);
 }

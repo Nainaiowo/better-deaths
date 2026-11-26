@@ -130,6 +130,19 @@
             <summary>Party cooldown icons are missing or show ?</summary>
             <p>Open <strong>HUD &gt; Party Cooldowns</strong>, check Show party cooldowns, and confirm the current job has selected abilities. The native party list must be visible. Preview icons use sample timers and do not enable the overlay. A ? means captured cooldown history is unknown. See <a href="cooldowns.html#cooldown-limits">Party Cooldowns troubleshooting</a> for capture and unsupported-ability limits.</p>
           </details>
+          <details id="cooldown-import-errors">
+            <summary>My cooldown import failed. What does the support code mean?</summary>
+            <p>The code identifies the reason, not you or your loadout. Nothing is sent to Discord. If it keeps failing, you can share just the short code in the Better Deaths channel on the Punish Discord. The invite is under <a href="settings.html#data">Data &gt; Feedback</a>.</p>
+            <ul>
+              <li><code>BD-CI-01</code>: no code copied. <code>BD-CI-02</code>: too much text copied. <code>BD-CI-03</code>: not a recognized cooldown code.</li>
+              <li><code>BD-CI-04</code>: unreadable or incomplete; copy the full export again. <code>BD-CI-05</code>: unsupported format version; check for an update.</li>
+              <li><code>BD-CI-06</code>: invalid job list. <code>BD-CI-07</code>: wrong Import button or an incomplete all-jobs selection. Use the button named in the message.</li>
+              <li><code>BD-CI-08</code>: invalid ability selection. <code>BD-CI-09</code>: an ability is unavailable or repeated for that job.</li>
+              <li><code>BD-CI-10</code>: invalid custom rows. <code>BD-CI-11</code>: invalid left or right layout; check the setting named in the message.</li>
+              <li><code>BD-CI-12</code>: cooldown data not ready. <code>BD-CI-13</code>: an exact backup for Undo could not be made. <code>BD-CI-14</code>: the import could not be saved.</li>
+              <li><code>BD-CI-15</code>: unexpected error; check the current setup before retrying.</li>
+            </ul>
+          </details>
         </div>
       </section>
 

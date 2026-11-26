@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace BetterDeaths.PartyCooldowns;
 
@@ -9,6 +10,8 @@ public sealed class PartyCooldownRows
     internal const int MaximumAbilities = 24;
 
     public bool Enabled { get; set; }
+    // Load saved rows in place of the new-job starter row, not after it.
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<List<uint>> Rows { get; set; } = [[]];
 
     internal bool Normalize(IReadOnlyList<uint> selected)

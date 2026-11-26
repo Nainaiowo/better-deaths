@@ -60,6 +60,25 @@ public sealed class FoodCheckFormatterTests
             FoodCheckIndicatorPolicy.Classify(true, true, remaining, 600));
     }
 
+    [Fact]
+    public void SnapshotSkipsHiddenMarkersButRespondsImmediatelyToThresholdChanges()
+    {
+        var snapshot = new PartyFoodStatusSnapshot(new() { [1] = new(true, 600), [2] = new(true, 1600), [3] = new(true, float.NaN) });
+        Assert.False(PartyFoodStatusSnapshot.Empty.HasVisibleMarkers(false, 600));
+        Assert.False(PartyFoodStatusSnapshot.Empty.HasVisibleMarkers(true, 600));
+        Assert.False(snapshot.HasVisibleMarkers(true, 599));
+        Assert.True(snapshot.HasVisibleMarkers(true, 600));
+        Assert.True(snapshot.HasVisibleMarkers(false, 599));
+        Assert.False(snapshot.TryGet(4, out _));
+    }
+
+    [Fact]
+    public void MissingFoodKeepsWarningsVisibleButUnknownDurationsDoNotBecomeWarnings()
+    {
+        Assert.False(new PartyFoodStatusSnapshot(new() { [42] = new(true, float.NaN) }).HasVisibleMarkers(true, 3600));
+        Assert.True(new PartyFoodStatusSnapshot(new() { [1] = new(true, 1800), [2] = new(false, 0) }).HasVisibleMarkers(true, 60));
+    }
+
 }
 
 public sealed class FoodCheckPollingPolicyTests

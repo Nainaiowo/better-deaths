@@ -235,18 +235,6 @@ public sealed partial class Plugin
         SavePartyCooldownLayout();
     }
 
-    internal PartyCooldownRows GetPartyCooldownRows(uint jobId)
-    {
-        jobId = PartyCooldownCatalog.NormalizeJob(jobId);
-        if (!Configuration.PartyCooldownRowLayouts.TryGetValue(jobId, out var rows))
-        {
-            rows = new();
-            rows.Normalize(GetPartyCooldownSelection(jobId));
-            Configuration.PartyCooldownRowLayouts[jobId] = rows;
-        }
-        return rows;
-    }
-
     internal void SetPartyCooldownRows(uint jobId, PartyCooldownRows rows)
     {
         if (GetPartyCooldownCatalog() is not { } catalog)
@@ -259,10 +247,14 @@ public sealed partial class Plugin
         SavePartyCooldownLayout();
     }
 
-    internal string? ExportPartyCooldownLoadout(uint? targetJobId = null)
+    internal bool TryExportPartyCooldownLoadout(uint? targetJobId, out string code, out string error)
     {
         if (GetPartyCooldownCatalog() is not { } catalog)
-            return null;
+        {
+            code = string.Empty;
+            error = "Cooldown data is not ready to export.";
+            return false;
+        }
 
         var document = new PartyCooldownLoadoutShareDocument
         {
@@ -292,66 +284,21 @@ public sealed partial class Plugin
             }).ToList(),
         };
 
-        return PartyCooldownLoadoutShareCodec.Encode(document);
+        return PartyCooldownLoadoutShareCodec.TryEncode(document, out code, out error);
     }
 
-    internal bool ApplyPartyCooldownLoadoutShare(PartyCooldownLoadoutShareDocument document, uint? targetJobId,
-        out int skippedActions)
+    internal bool TryImportPartyCooldownLoadout(string? code, uint? targetJobId, out bool includedLayout, out CooldownImportError error)
     {
-        skippedActions = 0;
-        if (GetPartyCooldownCatalog() is not { } catalog ||
-            (targetJobId is { } expectedJobId
-                ? !PartyCooldownLoadoutShareCodec.ContainsOnlyJob(document, expectedJobId)
-                : !PartyCooldownLoadoutShareCodec.ContainsEverySupportedJob(document)))
+        includedLayout = false;
+        if (GetPartyCooldownCatalog() is not { } catalog)
+        {
+            error = new(CooldownImportProblem.CatalogNotReady);
             return false;
-
-        var selections = document.Jobs.ToDictionary(job => job.JobId);
-        var importedJobs = new List<(uint JobId, List<uint> Selection, PartyCooldownRows? Rows)>();
-        foreach (var job in PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId))
-        {
-            var shared = selections[job.Id];
-            var incoming = catalog.NormalizeSelection(job.Id, shared.SelectedActionIds);
-            skippedActions += shared.SelectedActionIds.Count - incoming.Count;
-            if (document.Version == PartyCooldownLoadoutShareCodec.Version)
-            {
-                var allowed = incoming.ToHashSet();
-                var rows = new PartyCooldownRows
-                {
-                    Enabled = shared.RowsEnabled,
-                    Rows = shared.Rows.Select(row => row.Where(allowed.Contains).ToList()).ToList(),
-                };
-                rows.Normalize(incoming);
-                var selected = rows.Enabled ? rows.Flatten() : incoming;
-                importedJobs.Add((job.Id, selected, rows));
-            }
-            else
-            {
-                var selected = PartyCooldownLoadoutShareCodec.MergeSelectionPreservingLocalOrder(
-                    GetPartyCooldownSelection(job.Id), incoming);
-                PartyCooldownRows? rows = null;
-                if (Configuration.PartyCooldownRowLayouts.TryGetValue(job.Id, out var localRows))
-                {
-                    rows = localRows;
-                    rows.Normalize(selected);
-                    if (rows.Enabled)
-                        selected = rows.Flatten();
-                }
-                importedJobs.Add((job.Id, selected, rows));
-            }
         }
-
-        if (document.Version == PartyCooldownLoadoutShareCodec.Version)
-            ApplyPartyCooldownShareLayout(document.Layout!);
-        foreach (var (jobId, selection, rows) in importedJobs)
-        {
-            Configuration.PartyCooldownActions[jobId] = selection;
-            if (document.Version == PartyCooldownLoadoutShareCodec.Version)
-                Configuration.PartyCooldownRowLayouts[jobId] = rows!;
-            else if (rows is not null)
-                Configuration.PartyCooldownRowLayouts[jobId] = rows;
-        }
-
-        SavePartyCooldownLayout();
+        if (!Configuration.TrySaveCooldownImport(code, targetJobId, catalog, static candidate => candidate.Save(),
+                exception => Log.Warning(exception, "Could not save the imported party cooldown settings."), out includedLayout, out error))
+            return false;
+        InvalidatePartyCooldownLayout();
         return true;
     }
 
@@ -363,28 +310,19 @@ public sealed partial class Plugin
         OffsetY = placement.OffsetY,
     };
 
-    private void ApplyPartyCooldownShareLayout(PartyCooldownLoadoutShareLayout layout)
+    internal bool TryUndoLastPartyCooldownImport(out string error)
     {
-        Configuration.PartyCooldownSide = layout.Side;
-        Configuration.PartyCooldownPlacements = new PartyCooldownPlacements
+        if (GetPartyCooldownCatalog() is not { } catalog)
         {
-            Left = FromSharePlacement(layout.Left!),
-            Right = FromSharePlacement(layout.Right!),
-        };
-        var active = Configuration.GetPartyCooldownPlacement();
-        Configuration.PartyCooldownIconSize = active.IconSize;
-        Configuration.PartyCooldownIconGap = active.Spacing;
-        Configuration.PartyCooldownOffsetX = active.OffsetX;
-        Configuration.PartyCooldownOffsetY = active.OffsetY;
+            error = "Cooldown data is not ready yet.";
+            return false;
+        }
+        if (!Configuration.TryUndoLastCooldownImport(catalog, static candidate => candidate.Save(),
+                exception => Log.Warning(exception, "Could not save a party cooldown import undo."), out error))
+            return false;
+        InvalidatePartyCooldownLayout();
+        return true;
     }
-
-    private static PartyCooldownPlacement FromSharePlacement(PartyCooldownLoadoutSharePlacement placement) => new()
-    {
-        IconSize = placement.IconSize,
-        Spacing = placement.Spacing,
-        OffsetX = placement.OffsetX,
-        OffsetY = placement.OffsetY,
-    };
 
     internal bool ApplyPartyCooldownDefaults()
     {
@@ -399,8 +337,13 @@ public sealed partial class Plugin
 
     private void SavePartyCooldownLayout()
     {
-        partyCooldownLayoutRevision++;
         SaveConfiguration();
+        InvalidatePartyCooldownLayout();
+    }
+
+    private void InvalidatePartyCooldownLayout()
+    {
+        partyCooldownLayoutRevision++;
         partyCooldownRosterInvalidated = true;
         nextPartyCooldownRosterAt = 0;
         InvalidatePartyCooldownDisplay();

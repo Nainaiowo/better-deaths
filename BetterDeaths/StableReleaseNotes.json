@@ -1,0 +1,13 @@
+[
+  {
+    "Version": "1.0.0.73",
+    "Sections": [
+      {
+        "Title": "Party Cooldowns",
+        "Bullets": [
+          { "Text": "Increased the maximum cooldown icon size to 1,440 px.", "Highlight": true }
+        ]
+      }
+    ]
+  }
+]

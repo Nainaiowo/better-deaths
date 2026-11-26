@@ -19,10 +19,16 @@
     <Compile Include="../../BetterDeaths/FoodCheckFormatter.cs" Link="FoodCheckFormatter.cs" />
     <Compile Include="../../BetterDeaths/FoodCheckPollingPolicy.cs" Link="FoodCheckPollingPolicy.cs" />
     <Compile Include="../../BetterDeaths/InstalledUpdateNotice.cs" Link="InstalledUpdateNotice.cs" />
+    <Compile Include="../../BetterDeaths/StableReleaseNotes.cs" Link="StableReleaseNotes.cs" />
+    <EmbeddedResource Include="../../BetterDeaths/StableReleaseNotes.json" LogicalName="BetterDeaths.StableReleaseNotes.json" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownModels.cs" Link="PartyCooldowns/PartyCooldownModels.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPlacements.cs" Link="PartyCooldowns/PartyCooldownPlacements.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownRows.cs" Link="PartyCooldowns/PartyCooldownRows.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownLoadoutShare.cs" Link="PartyCooldowns/PartyCooldownLoadoutShare.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownCompactShare.cs" Link="PartyCooldowns/PartyCooldownCompactShare.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownImportUndo.cs" Link="PartyCooldowns/PartyCooldownImportUndo.cs" />
+    <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownImportFeedback.cs" Link="PartyCooldowns/PartyCooldownImportFeedback.cs" />
+    <Compile Include="../../BetterDeaths/Configuration.PartyCooldowns.cs" Link="Configuration.PartyCooldowns.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownEditorState.cs" Link="PartyCooldowns/PartyCooldownEditorState.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownPreviewLayout.cs" Link="PartyCooldowns/PartyCooldownPreviewLayout.cs" />
     <Compile Include="../../BetterDeaths/PartyCooldowns/PartyCooldownDisplay.cs" Link="PartyCooldowns/PartyCooldownDisplay.cs" />

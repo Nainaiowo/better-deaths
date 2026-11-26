@@ -104,10 +104,11 @@ function Save-Json {
     [System.IO.File]::WriteAllText($ManifestPath, $json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Sync-DownloadCountSnapshot {
+function Sync-PackageMetadata {
     param(
         [string] $ManifestPath,
-        [object] $ExpectedSnapshot
+        [object] $ExpectedSnapshot,
+        [string] $Changelog
     )
 
     if (-not (Test-Path -LiteralPath $ManifestPath)) {
@@ -127,10 +128,7 @@ function Sync-DownloadCountSnapshot {
     elseif ($hasDownloadCount) {
         $manifest.PSObject.Properties.Remove("DownloadCount")
     }
-    else {
-        return
-    }
-
+    $manifest | Add-Member -Force -NotePropertyName Changelog -NotePropertyValue $Changelog
     Save-Json -ManifestPath $ManifestPath -Manifest $manifest
 }
 
@@ -247,6 +245,32 @@ if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerTe
 }
 
 $expectedVersion = $versionNode.InnerText.Trim()
+$notesPath = Join-Path $projectFullPath "StableReleaseNotes.json"
+[array] $history = Get-Content -Raw -Encoding UTF8 -LiteralPath $notesPath | ConvertFrom-Json
+$latest = $history[0]
+if ($null -eq $latest -or ([version] $latest.Version).Revision -lt 0 -or !$latest.Sections) {
+    throw "Invalid stable release notes: $notesPath"
+}
+if ($env:BD_RELEASE_CHANNEL -eq 'latest' -and $latest.Version -cne $expectedVersion) {
+    throw "Stable release $expectedVersion needs matching notes; newest entry is $($latest.Version)."
+}
+$lines = @("v$($latest.Version) Stable update")
+foreach ($section in $latest.Sections) {
+    if ([string]::IsNullOrWhiteSpace($section.Title) -or !$section.Bullets) {
+        throw "Empty stable release notes section in $notesPath"
+    }
+    $lines += "", $section.Title
+    foreach ($bullet in $section.Bullets) {
+        if ([string]::IsNullOrWhiteSpace($bullet.Text)) { throw "Empty stable release note in $notesPath" }
+        $lines += "- $($bullet.Text)"
+    }
+}
+$changelog = $lines -join "`n"
+# Testing may publish its own installer notes, but never replaces the stable history in-game.
+if ($env:BD_RELEASE_CHANNEL -eq 'testing') {
+    $testingNotes = (Get-Content -Raw -Encoding UTF8 -LiteralPath $sourceManifestPath | ConvertFrom-Json).Changelog
+    if (![string]::IsNullOrWhiteSpace($testingNotes)) { $changelog = $testingNotes }
+}
 $projectSdk = [string] $project.Project.Sdk
 if ($projectSdk -notmatch "^Dalamud\.NET\.Sdk/(?<ApiLevel>\d+)(?:\.|$)") {
     throw "Could not derive Dalamud API level from project SDK '$projectSdk': $projectFilePath"
@@ -261,8 +285,8 @@ $packagedDownloadCountSnapshot = [pscustomobject]@{
 Write-Host "Using live combined Puni DownloadCount $liveDownloadCount."
 Assert-JsonPropertyEquals -ManifestPath $sourceManifestPath -PropertyName "InternalName" -ExpectedValue $AssemblyName
 
-Sync-DownloadCountSnapshot -ManifestPath $generatedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot
-Sync-DownloadCountSnapshot -ManifestPath $packagedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot
+Sync-PackageMetadata -ManifestPath $generatedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot -Changelog $changelog
+Sync-PackageMetadata -ManifestPath $packagedManifestPath -ExpectedSnapshot $packagedDownloadCountSnapshot -Changelog $changelog
 
 Assert-PackageManifest `
     -ManifestPath $generatedManifestPath `
@@ -287,7 +311,8 @@ New-Item -ItemType Directory -Path $tempPath | Out-Null
 try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempPath -Force
     Copy-Item -LiteralPath $thirdPartyNoticeSourcePath -Destination (Join-Path $tempPath "THIRD_PARTY_NOTICES.md") -Force
-    Sync-DownloadCountSnapshot -ManifestPath (Join-Path $tempPath "$AssemblyName.json") -ExpectedSnapshot $packagedDownloadCountSnapshot
+    Sync-PackageMetadata -ManifestPath (Join-Path $tempPath "$AssemblyName.json") -ExpectedSnapshot $packagedDownloadCountSnapshot -Changelog $changelog
+    Assert-JsonPropertyEquals -ManifestPath (Join-Path $tempPath "$AssemblyName.json") -PropertyName "Changelog" -ExpectedValue $changelog
     Compress-Archive -Path (Join-Path $tempPath "*") -DestinationPath $zipPath -Force
     Assert-ExactPackageFiles -DirectoryPath $tempPath -ExpectedAssemblyName $AssemblyName
     Assert-PackageManifest `

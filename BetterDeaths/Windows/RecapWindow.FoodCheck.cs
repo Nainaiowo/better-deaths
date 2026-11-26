@@ -17,6 +17,7 @@ public sealed partial class RecapWindow
     private void DrawFoodCheckSettings()
     {
         var start = ImGui.GetCursorScreenPos();
+        var foodCheckSavePending = false;
         DrawModernSectionTitle("Food Check", "Party food status at a glance");
         DrawSubtleSeparator();
         ImGui.Spacing();
@@ -34,14 +35,11 @@ public sealed partial class RecapWindow
 
             ImGui.Spacing();
             var warningMinutes = configuration.PartyFoodWarningMinutes;
-            if (ImGui.SliderInt("Warn when under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min"))
-            {
+            if (ImGui.SliderInt("Warn when at or under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min", ImGuiSliderFlags.AlwaysClamp))
                 configuration.PartyFoodWarningMinutes = warningMinutes;
-                foodCheckSavePending = true;
-            }
             if (ImGui.IsItemDeactivatedAfterEdit())
                 foodCheckSavePending = true;
-            DrawSettingsTooltip("Food below this remaining time is marked amber. Food at or above it stays in the healthy state.");
+            DrawSettingsTooltip("Food at or below this remaining time is marked amber. Food above it stays healthy.");
 
             var warningsOnly = configuration.PartyFoodWarningsOnly;
             if (DrawThemedCheckbox("Only show warnings", ref warningsOnly))
@@ -56,33 +54,24 @@ public sealed partial class RecapWindow
             var placementIconSize = configuration.GetPartyCooldownPlacement().IconSize;
             var markerIconSize = configuration.PartyFoodStatusIconSize ?? placementIconSize;
             if (ImGui.SliderFloat("Food icon size##PartyFoodMarkerSize", ref markerIconSize,
-                    FoodCheckMarkerPolicy.MinimumIconSize, FoodCheckMarkerPolicy.MaximumIconSize, "%.0f px"))
-            {
+                    FoodCheckMarkerPolicy.MinimumIconSize, FoodCheckMarkerPolicy.MaximumIconSize, "%.0f px", ImGuiSliderFlags.AlwaysClamp))
                 configuration.PartyFoodStatusIconSize = markerIconSize;
-                foodCheckSavePending = true;
-            }
             if (ImGui.IsItemDeactivatedAfterEdit())
                 foodCheckSavePending = true;
             DrawSettingsTooltip("Set the Well Fed marker size independently from cooldown icons.");
 
             var markerOffsetX = configuration.PartyFoodStatusIconOffsetX;
             if (ImGui.SliderFloat("Food icon X offset##PartyFoodMarkerOffsetX", ref markerOffsetX,
-                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px"))
-            {
+                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px", ImGuiSliderFlags.AlwaysClamp))
                 configuration.PartyFoodStatusIconOffsetX = markerOffsetX;
-                foodCheckSavePending = true;
-            }
             if (ImGui.IsItemDeactivatedAfterEdit())
                 foodCheckSavePending = true;
             DrawSettingsTooltip("Move the Well Fed marker horizontally from its cooldown-layout slot. Negative values move left; positive values move right.");
 
             var markerOffsetY = configuration.PartyFoodStatusIconOffsetY;
             if (ImGui.SliderFloat("Food icon Y offset##PartyFoodMarkerOffsetY", ref markerOffsetY,
-                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px"))
-            {
+                    -FoodCheckMarkerPolicy.MaximumOffset, FoodCheckMarkerPolicy.MaximumOffset, "%.0f px", ImGuiSliderFlags.AlwaysClamp))
                 configuration.PartyFoodStatusIconOffsetY = markerOffsetY;
-                foodCheckSavePending = true;
-            }
             if (ImGui.IsItemDeactivatedAfterEdit())
                 foodCheckSavePending = true;
             DrawSettingsTooltip("Move the Well Fed marker vertically from its cooldown-layout slot. Negative values move up; positive values move down.");
@@ -97,32 +86,23 @@ public sealed partial class RecapWindow
             if (tintPlate)
             {
                 var opacityPercent = configuration.PartyFoodPlateTintOpacity * 100.0f;
-                if (ImGui.SliderFloat("Plate tint strength##PartyFoodTint", ref opacityPercent, 4, 40, "%.0f%%"))
-                {
+                if (ImGui.SliderFloat("Plate tint strength##PartyFoodTint", ref opacityPercent, 4, 40, "%.0f%%", ImGuiSliderFlags.AlwaysClamp))
                     configuration.PartyFoodPlateTintOpacity = opacityPercent / 100.0f;
-                    foodCheckSavePending = true;
-                }
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     foodCheckSavePending = true;
                 DrawSettingsTooltip("Keep the tint subtle so party names, HP bars, and status icons stay readable.");
 
                 var heightPercent = configuration.PartyFoodPlateTintHeight * 100.0f;
-                if (ImGui.SliderFloat("Plate tint height##PartyFoodTint", ref heightPercent, 20, 100, "%.0f%%"))
-                {
+                if (ImGui.SliderFloat("Plate tint height##PartyFoodTint", ref heightPercent, 20, 100, "%.0f%%", ImGuiSliderFlags.AlwaysClamp))
                     configuration.PartyFoodPlateTintHeight = heightPercent / 100.0f;
-                    foodCheckSavePending = true;
-                }
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     foodCheckSavePending = true;
                 DrawSettingsTooltip("Set how much of the party row's height is tinted. Use the Y offset below to move the tint without changing its size.");
 
                 var offsetY = configuration.PartyFoodPlateTintOffsetY;
                 if (ImGui.SliderFloat("Plate tint Y offset##PartyFoodTintOffsetY", ref offsetY,
-                        -FoodCheckTintPolicy.MaximumOffsetY, FoodCheckTintPolicy.MaximumOffsetY, "%.0f px"))
-                {
+                        -FoodCheckTintPolicy.MaximumOffsetY, FoodCheckTintPolicy.MaximumOffsetY, "%.0f px", ImGuiSliderFlags.AlwaysClamp))
                     configuration.PartyFoodPlateTintOffsetY = offsetY;
-                    foodCheckSavePending = true;
-                }
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     foodCheckSavePending = true;
                 DrawSettingsTooltip("Negative values move the tint up; positive values move it down. Zero centers it on the party row.");
@@ -139,16 +119,12 @@ public sealed partial class RecapWindow
             new Vector2(start.X + ImGui.GetContentRegionAvail().X, ImGui.GetCursorScreenPos().Y));
 
         if (foodCheckSavePending)
-        {
-            foodCheckSavePending = false;
             plugin.SaveConfiguration();
-        }
     }
-
-    private bool foodCheckSavePending;
 
     private void DrawFoodCheckPreview()
     {
+        PreparePartyCooldownFont();
         ImGui.TextColored(ModernAccentColor, "Preview");
         ImGui.TextDisabled("Example party rows show how each captured state appears.");
         var width = MathF.Max(220, ImGui.GetContentRegionAvail().X);

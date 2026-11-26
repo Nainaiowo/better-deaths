@@ -1422,12 +1422,17 @@ public sealed partial class Plugin
         };
     }
 
-    private static XivChatEntry BuildSystemMessageEntry(string message)
+    private const ushort CooldownImportErrorRed = 17;
+
+    internal static void PrintCooldownImportSystemError(string message) =>
+        ChatGui.Print(BuildSystemMessageEntry(message, CooldownImportErrorRed));
+
+    private static XivChatEntry BuildSystemMessageEntry(string message, ushort? color = null)
     {
         return new XivChatEntry
         {
             Type = XivChatType.SystemMessage,
-            Message = new SeString(new TextPayload(message)),
+            Message = color is { } key ? new SeStringBuilder().AddUiForeground(message, key).Build() : new SeString(new TextPayload(message)),
         };
     }
 

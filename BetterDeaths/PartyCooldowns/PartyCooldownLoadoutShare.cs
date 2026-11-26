@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
+using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace BetterDeaths.PartyCooldowns;
 
@@ -42,29 +45,64 @@ internal static class PartyCooldownLoadoutShareCodec
     public const int Version = 2;
     public const int MaximumCodeLength = 32 * 1024;
     private const int LegacyVersion = 1;
-    private const string CurrentPrefix = "BDPC2:";
+    private const string CompactPrefix = "BDPC3:";
+    private const string JsonPrefix = "BDPC2:";
     private const string LegacyPrefix = "BDPC1:";
     public const string Format = "better-deaths-party-cooldowns";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    private static readonly JsonSerializerOptions JsonOptions = CreateOptions(legacy: false);
+    private static readonly JsonSerializerOptions LegacyOptions = CreateOptions(legacy: true);
 
-    public static string Encode(PartyCooldownLoadoutShareDocument document)
+    private static JsonSerializerOptions CreateOptions(bool legacy)
     {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(type =>
+        {
+            if (type.Kind != JsonTypeInfoKind.Object)
+                return;
+            for (var i = type.Properties.Count - 1; i >= 0; i--)
+            {
+                var field = type.Properties[i];
+                // BDPC1 exported only format, version, jobs, jobId, and selectedActionIds.
+                if (legacy && field.Name is "layout" or "rows" or "rowsEnabled")
+                    type.Properties.RemoveAt(i);
+                else
+                    field.IsRequired = true;
+            }
+        });
+        return new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            TypeInfoResolver = resolver,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+            AllowDuplicateProperties = false,
+            MaxDepth = 12,
+        };
+    }
+
+    public static bool TryEncode(PartyCooldownLoadoutShareDocument document, out string code, out string error)
+    {
+        code = string.Empty;
         if (document.Version != Version)
-            throw new ArgumentException("Only the current cooldown share format can be exported.", nameof(document));
-        if (!TryValidateDocument(document, out var error))
-            throw new ArgumentException(string.IsNullOrEmpty(error)
-                ? "The cooldown share document is invalid."
-                : error, nameof(document));
+        {
+            error = "Only the current cooldown share format can be exported.";
+            return false;
+        }
+        if (!TryValidateDocument(document, out var invalid))
+        {
+            error = invalid.Reason;
+            return false;
+        }
 
-        var json = JsonSerializer.Serialize(document, JsonOptions);
-        var code = CurrentPrefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-        if (code.Length > MaximumCodeLength)
-            throw new ArgumentException("The cooldown selection is too large to share.", nameof(document));
-        return code;
+        var encoded = CompactPrefix + PartyCooldownCompactShare.Encode(document);
+        if (encoded.Length > MaximumCodeLength)
+        {
+            error = "The cooldown selection is too large to share.";
+            return false;
+        }
+        code = encoded;
+        error = string.Empty;
+        return true;
     }
 
     public static List<uint> MergeSelectionPreservingLocalOrder(IEnumerable<uint> localSelection,
@@ -77,56 +115,96 @@ internal static class PartyCooldownLoadoutShareCodec
         return merged;
     }
 
-    public static bool TryDecode(string? code, out PartyCooldownLoadoutShareDocument document, out string error)
+    public static bool TryDecode(string? code, out PartyCooldownLoadoutShareDocument document, out CooldownImportError error)
     {
         document = new();
-        error = string.Empty;
-        if (string.IsNullOrWhiteSpace(code) || code.Length > MaximumCodeLength)
+        if (code?.Length > MaximumCodeLength)
         {
-            error = "The share code is empty or too long.";
+            error = new(CooldownImportProblem.TooLong);
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            error = new(CooldownImportProblem.EmptyClipboard);
             return false;
         }
 
         code = code.Trim();
-        var (prefix, expectedVersion) = code.StartsWith(CurrentPrefix, StringComparison.Ordinal)
-            ? (CurrentPrefix, Version)
+        var compact = code.StartsWith(CompactPrefix, StringComparison.Ordinal);
+        var (prefix, expectedVersion) = compact ? (CompactPrefix, Version)
+            : code.StartsWith(JsonPrefix, StringComparison.Ordinal) ? (JsonPrefix, Version)
             : code.StartsWith(LegacyPrefix, StringComparison.Ordinal)
                 ? (LegacyPrefix, LegacyVersion)
                 : (string.Empty, 0);
         if (prefix.Length == 0)
         {
-            error = "This is not a Better Deaths cooldown share code.";
+            var colon = code.IndexOf(':');
+            var numbered = colon > 4 && code.StartsWith("BDPC", StringComparison.Ordinal) &&
+                code.AsSpan(4, colon - 4).IndexOfAnyExceptInRange('0', '9') < 0;
+            error = new(numbered ? CooldownImportProblem.UnsupportedVersion : CooldownImportProblem.NotCooldownCode);
             return false;
         }
 
         try
         {
-            var json = Encoding.UTF8.GetString(Convert.FromBase64String(code[prefix.Length..]));
-            var parsed = JsonSerializer.Deserialize<PartyCooldownLoadoutShareDocument>(json, JsonOptions);
-            if (parsed is null || parsed.Version != expectedVersion || !TryValidateDocument(parsed, out error))
+            var bytes = Convert.FromBase64String(code[prefix.Length..]);
+            PartyCooldownLoadoutShareDocument? parsed;
+            if (compact)
             {
-                if (string.IsNullOrEmpty(error))
-                    error = "The share code is incomplete or uses an unsupported format version.";
+                if (!PartyCooldownCompactShare.TryDecode(bytes, out parsed, out error))
+                    return false;
+            }
+            else
+                parsed = JsonSerializer.Deserialize<PartyCooldownLoadoutShareDocument>(bytes,
+                    expectedVersion == LegacyVersion ? LegacyOptions : JsonOptions);
+            if (parsed is null || parsed.Version != expectedVersion)
+            {
+                error = new(parsed is null || parsed.Version is LegacyVersion or Version
+                    ? CooldownImportProblem.Unreadable : CooldownImportProblem.UnsupportedVersion);
                 return false;
             }
+            if (!TryValidateDocument(parsed, out error))
+                return false;
 
             document = parsed;
             return true;
         }
-        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException)
+        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException or EndOfStreamException)
         {
-            error = "The share code could not be read. Check that it was copied completely.";
+            error = new(CooldownImportProblem.Unreadable);
             return false;
         }
     }
 
-    public static bool TryValidateDocument(PartyCooldownLoadoutShareDocument? document, out string error)
+    public static bool TryReadClipboardCode(nint clipboard, out string code, out CooldownImportError error)
     {
-        error = string.Empty;
-        if (document is null || document.Format != Format ||
-            document.Version is not (LegacyVersion or Version))
+        // ImGui owns a NUL-terminated UTF-8 string. Stop at the limit instead of measuring the entire clipboard.
+        var length = 0;
+        if (clipboard != 0)
+            while (length <= MaximumCodeLength && Marshal.ReadByte(clipboard, length) != 0)
+                length++;
+        if (length == 0 || length > MaximumCodeLength)
         {
-            error = "This cooldown share code uses an unsupported format version.";
+            code = string.Empty;
+            error = new(length == 0 ? CooldownImportProblem.EmptyClipboard : CooldownImportProblem.TooLong);
+            return false;
+        }
+        code = Marshal.PtrToStringUTF8(clipboard, length)!;
+        error = default;
+        return true;
+    }
+
+    public static bool TryValidateDocument(PartyCooldownLoadoutShareDocument? document, out CooldownImportError error)
+    {
+        error = default;
+        if (document is null || document.Format != Format)
+        {
+            error = new(document is null ? CooldownImportProblem.Unreadable : CooldownImportProblem.NotCooldownCode);
+            return false;
+        }
+        if (document.Version is not (LegacyVersion or Version))
+        {
+            error = new(CooldownImportProblem.UnsupportedVersion);
             return false;
         }
 
@@ -135,14 +213,19 @@ internal static class PartyCooldownLoadoutShareCodec
             document.Jobs.Any(job => job is null || !supportedJobs.Contains(job.JobId)) ||
             document.Jobs.Select(job => job.JobId).Distinct().Count() != document.Jobs.Count)
         {
-            error = "The code must include one or more unique, supported jobs.";
+            error = new(CooldownImportProblem.InvalidJobs);
             return false;
         }
 
-        if (document.Version == Version && !IsValidLayout(document.Layout))
+        if (document.Version == Version)
         {
-            error = "The code contains invalid party cooldown placement settings.";
-            return false;
+            if (document.Layout is not { Left: { } left, Right: { } right } layout || !Enum.IsDefined(layout.Side))
+            {
+                error = new(CooldownImportProblem.InvalidPlacement);
+                return false;
+            }
+            if (!ValidatePlacement(left, "Left", out error) || !ValidatePlacement(right, "Right", out error))
+                return false;
         }
 
         foreach (var job in document.Jobs)
@@ -151,7 +234,7 @@ internal static class PartyCooldownLoadoutShareCodec
             if (selected is null || selected.Count > PartyCooldownRows.MaximumAbilities ||
                 selected.Any(id => id == 0) || selected.Distinct().Count() != selected.Count)
             {
-                error = "One job in the code has an invalid cooldown selection.";
+                error = new(CooldownImportProblem.InvalidSelection);
                 return false;
             }
 
@@ -161,7 +244,7 @@ internal static class PartyCooldownLoadoutShareCodec
             if (job.Rows is null || job.Rows.Count == 0 || job.Rows.Count > PartyCooldownRows.MaximumRows ||
                 job.Rows.Any(row => row is null))
             {
-                error = "One job in the code has an invalid row layout.";
+                error = new(CooldownImportProblem.InvalidRows);
                 return false;
             }
 
@@ -169,7 +252,7 @@ internal static class PartyCooldownLoadoutShareCodec
             if (rowActions.Any(id => id == 0) || rowActions.Distinct().Count() != rowActions.Count ||
                 !rowActions.ToHashSet().SetEquals(selected))
             {
-                error = "One job's rows must contain each selected cooldown exactly once.";
+                error = new(CooldownImportProblem.InvalidRows, "A job's rows must contain each selected cooldown exactly once.");
                 return false;
             }
         }
@@ -183,14 +266,79 @@ internal static class PartyCooldownLoadoutShareCodec
     public static bool ContainsOnlyJob(PartyCooldownLoadoutShareDocument document, uint jobId) =>
         TryValidateDocument(document, out _) && document.Jobs.Count == 1 && document.Jobs[0].JobId == jobId;
 
-    private static bool IsValidLayout(PartyCooldownLoadoutShareLayout? layout) =>
-        layout is not null && Enum.IsDefined(layout.Side) &&
-        IsValidPlacement(layout.Left) && IsValidPlacement(layout.Right);
+    public static bool TryImport(string? code, uint? targetJobId, PartyCooldownCatalog catalog,
+        Dictionary<uint, List<uint>> selections, Dictionary<uint, PartyCooldownRows> rowLayouts,
+        out PartyCooldownLoadoutShareLayout? layout, out CooldownImportError error)
+    {
+        layout = null;
+        if (!TryDecode(code, out var document, out error))
+            return false;
+        if (targetJobId is { } jobId ? !ContainsOnlyJob(document, jobId) : !ContainsEverySupportedJob(document))
+        {
+            var instruction = document.Jobs.Count == 1
+                ? $"Use Import inside {PartyCooldownCatalog.Jobs.First(job => job.Id == document.Jobs[0].JobId).Name} for this code."
+                : document.Jobs.Count == PartyCooldownCatalog.Jobs.Count ? "This is an all-jobs code. Use Import above the job list."
+                : targetJobId is null ? "This code doesn't include every job. Ask for an all-jobs export." : "This button needs a code for this job only.";
+            error = new(CooldownImportProblem.WrongScope, instruction);
+            return false;
+        }
 
-    private static bool IsValidPlacement(PartyCooldownLoadoutSharePlacement? placement) =>
-        placement is not null &&
-        placement.IconSize == PartyCooldownLayout.IconSize(placement.IconSize) &&
-        placement.Spacing == PartyCooldownLayout.Gap(placement.Spacing) &&
-        placement.OffsetX == PartyCooldownLayout.Offset(placement.OffsetX) &&
-        placement.OffsetY == PartyCooldownLayout.Offset(placement.OffsetY);
+        // Stage every job, including copies of legacy local rows, before replacing any saved settings.
+        var staged = new List<(uint Job, List<uint> Actions, PartyCooldownRows? Rows)>();
+        foreach (var shared in document.Jobs)
+        {
+            var actions = catalog.NormalizeSelection(shared.JobId, shared.SelectedActionIds);
+            if (actions.Count != shared.SelectedActionIds.Count)
+            {
+                var name = PartyCooldownCatalog.Jobs.First(job => job.Id == shared.JobId).Name;
+                error = new(CooldownImportProblem.UnavailableAbility, $"{name}: the code contains unavailable or repeated cooldowns.");
+                return false;
+            }
+            PartyCooldownRows? rows = null;
+            if (document.Version == Version)
+            {
+                rows = new()
+                {
+                    Enabled = shared.RowsEnabled,
+                    Rows = shared.Rows.Select(row => row.Select(PartyCooldownSelectionPolicy.CanonicalAction).ToList()).ToList(),
+                };
+            }
+            else
+            {
+                actions = MergeSelectionPreservingLocalOrder(
+                    selections.TryGetValue(shared.JobId, out var local) ? local : catalog.DefaultSelection(shared.JobId), actions);
+                if (rowLayouts.TryGetValue(shared.JobId, out var existing))
+                {
+                    rows = new() { Enabled = existing.Enabled, Rows = existing.Rows.Select(row => row.ToList()).ToList() };
+                    rows.Normalize(actions);
+                }
+            }
+            staged.Add((shared.JobId, rows?.Enabled == true ? rows.Flatten() : actions, rows));
+        }
+        foreach (var item in staged)
+        {
+            selections[item.Job] = item.Actions;
+            if (item.Rows is not null)
+                rowLayouts[item.Job] = item.Rows;
+        }
+        layout = document.Layout;
+        return true;
+    }
+
+    private static bool ValidatePlacement(PartyCooldownLoadoutSharePlacement placement, string side, out CooldownImportError error)
+    {
+        return InRange(side, "icon size", placement.IconSize, PartyCooldownLayout.MinimumIconSize, PartyCooldownLayout.MaximumIconSize, out error)
+            && InRange(side, "spacing", placement.Spacing, 0, PartyCooldownLayout.MaximumGap, out error)
+            && InRange(side, "horizontal offset", placement.OffsetX, -PartyCooldownLayout.MaximumOffset, PartyCooldownLayout.MaximumOffset, out error)
+            && InRange(side, "vertical offset", placement.OffsetY, -PartyCooldownLayout.MaximumOffset, PartyCooldownLayout.MaximumOffset, out error);
+    }
+
+    private static bool InRange(string side, string setting, float value, float min, float max, out CooldownImportError error)
+    {
+        error = default;
+        if (float.IsFinite(value) && value >= min && value <= max)
+            return true;
+        error = new(CooldownImportProblem.InvalidPlacement, $"{side} {setting}: {value:G} px. Allowed: {min} to {max} px.");
+        return false;
+    }
 }
