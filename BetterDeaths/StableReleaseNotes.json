@@ -1,5 +1,33 @@
 [
   {
+    "Version": "1.0.0.74",
+    "Sections": [
+      {
+        "Title": "Party Cooldowns",
+        "Bullets": [
+          { "Text": "Undo last import. Restore the setup you had before importing one job or all jobs, even after restarting Better Deaths. Undo restores your abilities and custom rows. If the import changed your layout, it also restores the active side and each side's icon size, spacing, and position.", "Highlight": true },
+          { "Text": "Shorter share codes. Exporting every job now produces a much shorter code. Older codes still work; anyone receiving a new code needs v1.0.0.74 or newer.", "Highlight": true },
+          { "Text": "A bad code or failed save no longer leaves you with a partially changed setup. Your settings and your last undo are preserved." },
+          { "Text": "Failed imports now show an on-screen notice and one red System Message explaining what went wrong. It includes a short code you can share in the Better Deaths channel on the Punish Discord. Successful imports stay out of chat." },
+          { "Text": "Fixed an issue where reloading the plugin could add an unwanted empty first row to a job's custom layout." }
+        ]
+      },
+      {
+        "Title": "Food Check",
+        "Bullets": [
+          { "Text": "Reduced unnecessary work when there are no food warnings to display. Dragging a settings slider now saves once when you finish." },
+          { "Text": "Clarified when food turns amber: with a five-minute warning, 5:00 or less counts as a warning." }
+        ]
+      },
+      {
+        "Title": "Updates",
+        "Bullets": [
+          { "Text": "Fixed the in-game Updates tab missing the v1.0.0.73 release note about larger cooldown icons." }
+        ]
+      }
+    ]
+  },
+  {
     "Version": "1.0.0.73",
     "Sections": [
       {
