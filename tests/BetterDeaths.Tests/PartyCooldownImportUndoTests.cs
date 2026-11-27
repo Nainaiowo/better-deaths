@@ -13,6 +13,8 @@ public sealed class PartyCooldownImportUndoTests
     [InlineData(2, true)]
     [InlineData(3, false)]
     [InlineData(3, true)]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
     public void UndoRestoresExactStoredSetupAcrossReloads(int format, bool allJobs)
     {
         var live = DetailedOriginal(customRowsEnabled: allJobs);
@@ -40,6 +42,19 @@ public sealed class PartyCooldownImportUndoTests
         Assert.Equal(before, Json(live));
         Assert.Null(live.LastPartyCooldownImport);
         Assert.False(live.TryUndoLastCooldownImport(Catalog(), _ => Assert.Fail("Already undone"), NoLog, out _));
+    }
+
+    [Fact]
+    public void UndoOfAnOlderLayoutCodeLeavesLaterFontEditsUntouched()
+    {
+        var live = DetailedOriginal(false);
+        Import(live, 3, true);
+        live.PartyCooldownPlacements!.Left!.FontSizePercent = 69;
+        live.PartyCooldownPlacements.Right!.FontSizePercent = 168;
+        live = Reload(Json(live));
+        Undo(live);
+        Assert.Equal(69, live.PartyCooldownPlacements!.Left!.FontSizePercent);
+        Assert.Equal(168, live.PartyCooldownPlacements.Right!.FontSizePercent);
     }
 
     [Fact]
@@ -232,8 +247,8 @@ public sealed class PartyCooldownImportUndoTests
         var live = Original();
         live.PartyCooldownPlacements = new()
         {
-            Left = new() { IconSize = 58.25f, Spacing = 4.5f, OffsetX = -82.5f, OffsetY = 17.75f },
-            Right = new() { IconSize = 36.5f, Spacing = 9.75f, OffsetX = 19.5f, OffsetY = -28.25f },
+            Left = new() { IconSize = 58.25f, FontSizePercent = 121, Spacing = 4.5f, OffsetX = -82.5f, OffsetY = 17.75f },
+            Right = new() { IconSize = 36.5f, FontSizePercent = 72, Spacing = 9.75f, OffsetX = 19.5f, OffsetY = -28.25f },
         };
         live.PartyCooldownActions[19] = customRowsEnabled ? [7531, 17] : [17, 7531];
         live.PartyCooldownRowLayouts[19] = new() { Enabled = customRowsEnabled, Rows = [[7531], [], [17]] };

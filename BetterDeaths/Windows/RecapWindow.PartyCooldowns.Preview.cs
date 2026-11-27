@@ -74,7 +74,7 @@ public sealed partial class RecapWindow
                 var size = PartyCooldownLayout.IconSize(placement.IconSize) * frame.Name.Scale * layout.Zoom;
                 DrawPartyCooldownStatus(draw, position, size, action,
                     PartyCooldownStatus.Preview(charges, PartyCooldownCatalog.RecastAtLevel(action.Id, 100, action.RecastSeconds), index),
-                    textScale: layout.Zoom);
+                    placement.FontSizePercent, previewScale: layout.Zoom);
                 if (ImGui.IsMouseHoveringRect(position, position + new Vector2(size)))
                     hovered = action;
             }

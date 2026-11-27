@@ -30,6 +30,7 @@ public sealed partial class RecapWindow
     private readonly PartyCooldownDisplayEntry[] partyCooldownDrawEntries = new PartyCooldownDisplayEntry[PartyCooldownRows.MaximumAbilities];
     private readonly PartyCooldownNameMeasurement?[] partyCooldownNameMeasurements = new PartyCooldownNameMeasurement?[8];
     private readonly Dictionary<string, Vector2> partyCooldownTextMeasurements = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (Vector2 Min, Vector2 Max)> partyCooldownNumberInk = new(StringComparer.Ordinal);
     private ImFontPtr partyCooldownDrawFont;
     private float partyCooldownDrawFontSize;
     private uint partyFoodStatusIconId;
@@ -133,6 +134,11 @@ public sealed partial class RecapWindow
         DrawCooldownSlider("Icon size", "PartyCooldownSize", ref size,
             PartyCooldownLayout.MinimumIconSize, PartyCooldownLayout.MaximumIconSize, "%.0f px");
         placement.IconSize = PartyCooldownLayout.IconSize(size);
+        var fontSize = (float)placement.FontSizePercent;
+        DrawCooldownSlider("Font size", "PartyCooldownFontSize", ref fontSize,
+            PartyCooldownLayout.MinimumFontPercent, PartyCooldownLayout.MaximumFontPercent, "%.0f%%");
+        placement.FontSizePercent = PartyCooldownLayout.FontPercent((int)MathF.Round(fontSize));
+        DrawSettingsTooltip("Scales countdowns and charge counts for this side. Numbers stop growing when they fill the icon.");
         var gap = placement.Spacing;
         DrawCooldownSlider("Spacing", "PartyCooldownGap", ref gap, 0, PartyCooldownLayout.MaximumGap, "%.0f px");
         placement.Spacing = PartyCooldownLayout.Gap(gap);
@@ -153,7 +159,7 @@ public sealed partial class RecapWindow
         }
         var resetButtonWidth = ImGui.GetItemRectSize().X;
         if (ImGui.IsItemHovered())
-            SetThemedTooltip("Reset this side's offsets. Keeps icon size, spacing, and per-job abilities and custom rows.");
+            SetThemedTooltip("Reset this side's offsets. Keeps icon size, font size, spacing, and per-job abilities and custom rows.");
         if (layoutButtonsWidth >= resetButtonWidth + ImGui.GetStyle().ItemSpacing.X +
             GetThemedIconButtonWidth(FontAwesomeIcon.Home, "Default"))
             ImGui.SameLine();
@@ -181,7 +187,7 @@ public sealed partial class RecapWindow
             ImGui.PopTextWrapPos();
             ImGui.TextWrapped("Replace every job's selected abilities with defensives, then 2-minute cooldowns, then 1-minute cooldowns. Custom rows will return to one row.");
             var side = configuration.PartyCooldownSide == PartyCooldownSide.Left ? "left" : "right";
-            ImGui.TextWrapped($"Also restore the {side}-side icon size, spacing, and position. The other side's placement and live cooldown timers will not change.");
+            ImGui.TextWrapped($"Also restore the {side}-side icon size, font size, spacing, and position. The other side's placement and live cooldown timers will not change.");
             ImGui.Separator();
             var buttonsWidth = ImGui.GetContentRegionAvail().X;
             ImGui.BeginDisabled(plugin.GetPartyCooldownCatalog() is null);
@@ -730,8 +736,9 @@ public sealed partial class RecapWindow
         Span<int> rowCounts = stackalloc int[PartyCooldownLayout.MaximumRows];
         Span<int> columns = stackalloc int[PartyCooldownLayout.MaximumRows];
         PreparePartyCooldownFont();
-        var draw = ImGui.GetForegroundDrawList();
         var viewport = ImGui.GetMainViewport();
+        // The party list belongs to the game HUD; plugin windows should cover these indicators.
+        var draw = ImGui.GetBackgroundDrawList(viewport);
         draw.PushClipRect(viewport.Pos, viewport.Pos + viewport.Size, true);
         try
         {
@@ -813,7 +820,7 @@ public sealed partial class RecapWindow
                     if (position.X + size <= viewport.Pos.X || position.X >= viewport.Pos.X + viewport.Size.X ||
                         position.Y + size <= viewport.Pos.Y || position.Y >= viewport.Pos.Y + viewport.Size.Y)
                         continue;
-                    DrawPartyCooldownStatus(draw, position, size, entry.Action, entry.Status, entry.TimerLabel, entry.ChargeLabel);
+                    DrawPartyCooldownStatus(draw, position, size, entry.Action, entry.Status, placement.FontSizePercent, entry.TimerLabel, entry.ChargeLabel);
                     drawnIcons++;
                 }
                 if (hasFoodStatus && configuration.PartyCooldownSide == PartyCooldownSide.Left)
@@ -859,21 +866,51 @@ public sealed partial class RecapWindow
     }
 
     private void DrawPartyCooldownStatus(ImDrawListPtr draw, Vector2 position, float size, PartyCooldownAction action,
-        PartyCooldownStatus status, string? timerLabel = null, string? chargeLabel = null, float textScale = 1)
+        PartyCooldownStatus status, int fontSizePercent, string? timerLabel = null, string? chargeLabel = null, float previewScale = 1)
     {
-        var tint = new Vector4(1, 1, 1, status.IsOnCooldown ? .45f : 1);
+        var tint = status.IsOnCooldown ? new Vector4(.55f, .55f, .55f, 1) : Vector4.One;
         DrawPartyCooldownIcon(draw, position, size, action.IconId, tint);
-        var label = timerLabel ?? PartyCooldownLabels.Timer(status);
-        if (label.Length > 0)
-            DrawPartyCooldownText(draw, position + new Vector2(size * .5f, size * .5f), label,
-                PartyCooldownLayout.TimerTextSize(size, textScale), textScale);
-        if (status.MaxCharges > 1 && status.IsKnown)
-            DrawPartyCooldownText(draw, position + new Vector2(size - 5 * textScale), chargeLabel ?? PartyCooldownLabels.Charges(status),
-                PartyCooldownLayout.ChargeTextSize(size, textScale), textScale);
+        var timer = timerLabel ?? PartyCooldownLabels.Timer(status);
+        var charges = chargeLabel ?? PartyCooldownLabels.Charges(status);
+        if (timer.Length > 0)
+            DrawPartyCooldownNumber(draw, position, size, previewScale, fontSizePercent, timer, isCharge: false, paired: charges.Length > 0);
+        if (charges.Length > 0)
+            DrawPartyCooldownNumber(draw, position, size, previewScale, fontSizePercent, charges, isCharge: true, paired: timer.Length > 0);
+    }
+
+    private void DrawPartyCooldownNumber(ImDrawListPtr draw, Vector2 position, float size, float previewScale, int fontSizePercent,
+        string value, bool isCharge, bool paired)
+    {
+        var layout = PartyCooldownLayout.FitNumber(size, previewScale, GetPartyCooldownNumberInk(value), isCharge, paired, fontSizePercent);
+        draw.AddRectFilled(position + layout.Min, position + layout.Max, 0xE6101010);
+        DrawOutlinedPartyCooldownText(draw, position + layout.TextOrigin, value, layout.FontSize, layout.Outline, onDarkBacking: true);
+    }
+
+    private unsafe (Vector2 Min, Vector2 Max) GetPartyCooldownNumberInk(string value)
+    {
+        if (partyCooldownNumberInk.TryGetValue(value, out var ink))
+            return ink;
+        // Fit the visible digits, not the font's blank space above and below its baseline.
+        var min = new Vector2(float.PositiveInfinity);
+        var max = new Vector2(float.NegativeInfinity);
+        var x = 0f;
+        foreach (var c in value)
+        {
+            var glyph = partyCooldownDrawFont.FindGlyph(c);
+            if (glyph is null)
+                continue;
+            min = Vector2.Min(min, new Vector2(x + glyph->X0, glyph->Y0));
+            max = Vector2.Max(max, new Vector2(x + glyph->X1, glyph->Y1));
+            x += glyph->AdvanceX;
+        }
+        ink = max.X > min.X && max.Y > min.Y
+            ? (min / partyCooldownDrawFont.FontSize, max / partyCooldownDrawFont.FontSize)
+            : (Vector2.Zero, ImGui.CalcTextSize(value) / partyCooldownDrawFontSize);
+        return partyCooldownNumberInk[value] = ink;
     }
 
     private void DrawPartyFoodStatus(ImDrawListPtr draw, Vector2 position, float size, FoodCheckIndicatorState state,
-        PartyFoodStatusSample status)
+        PartyFoodStatusSample? liveStatus = null)
     {
         if (!partyFoodStatusIconLookupComplete)
         {
@@ -902,7 +939,8 @@ public sealed partial class RecapWindow
             draw.AddCircleFilled(badgeCenter, size * .13f, ImGui.GetColorU32(new Vector4(1, .67f, .20f, 1)));
         }
 
-        if (ImGui.IsMouseHoveringRect(position, position + new Vector2(size)))
+        if (liveStatus is { } status && ImGui.IsMouseHoveringRect(position, position + new Vector2(size), false) &&
+            !ImGui.GetIO().WantCaptureMouse)
         {
             var remaining = FoodCheckFormatter.FormatRemainingSeconds(status.RemainingSeconds);
             ImGui.SetTooltip(state == FoodCheckIndicatorState.Missing
@@ -929,7 +967,10 @@ public sealed partial class RecapWindow
         var font = ImGui.GetFont();
         var size = ImGui.GetFontSize();
         if (font.Handle != partyCooldownDrawFont.Handle || size != partyCooldownDrawFontSize)
+        {
             partyCooldownTextMeasurements.Clear();
+            partyCooldownNumberInk.Clear();
+        }
         partyCooldownDrawFont = font;
         partyCooldownDrawFontSize = size;
     }
@@ -942,12 +983,19 @@ public sealed partial class RecapWindow
             partyCooldownTextMeasurements[value] = baseSize;
         }
         var measured = baseSize * (fontSize / partyCooldownDrawFontSize);
-        var position = center - measured * .5f;
-        var outline = PartyCooldownLayout.TextOutlineWidth(fontSize, outlineScale);
+        DrawOutlinedPartyCooldownText(draw, center - measured * .5f, value, fontSize, PartyCooldownLayout.TextOutlineWidth(fontSize, outlineScale));
+    }
+
+    private void DrawOutlinedPartyCooldownText(ImDrawListPtr draw, Vector2 position, string value, float fontSize, float outline,
+        bool onDarkBacking = false)
+    {
         for (var y = -1; y <= 1; y++)
             for (var x = -1; x <= 1; x++)
-                if (x != 0 || y != 0)
+                if ((x != 0 || y != 0) && (!onDarkBacking || x == 0 || y == 0))
                     draw.AddText(partyCooldownDrawFont, fontSize, position + new Vector2(x, y) * outline, 0xFF000000, value);
         draw.AddText(partyCooldownDrawFont, fontSize, position, 0xFFFFFFFF, value);
+        // On a dark backing four outline strokes suffice. Reinforce the white edges without widening the glyph.
+        if (onDarkBacking)
+            draw.AddText(partyCooldownDrawFont, fontSize, position, 0xFFFFFFFF, value);
     }
 }

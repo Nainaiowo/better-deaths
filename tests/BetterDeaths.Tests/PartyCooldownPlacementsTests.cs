@@ -44,6 +44,26 @@ public sealed class PartyCooldownPlacementsTests
     }
 
     [Fact]
+    public void FontSizeDefaultsToOneHundredAndIsSavedAndResetIndependentlyPerSide()
+    {
+        var placements = JsonSerializer.Deserialize<PartyCooldownPlacements>("""{"Left":{"IconSize":55},"Right":{"IconSize":48}}""")!;
+        Assert.False(placements.Normalize(new()));
+        Assert.Equal(100, placements.Left!.FontSizePercent);
+        Assert.Equal(100, placements.Right!.FontSizePercent);
+        placements.Left.FontSizePercent = 35;
+        placements.Right.FontSizePercent = 250;
+        Assert.True(placements.Normalize(new()));
+        placements = JsonSerializer.Deserialize<PartyCooldownPlacements>(JsonSerializer.Serialize(placements))!;
+        Assert.Equal(50, placements.Left!.FontSizePercent);
+        Assert.Equal(200, placements.Right!.FontSizePercent);
+        Assert.Equal(55, placements.Left.IconSize);
+        Assert.Equal(48, placements.Right.IconSize);
+        placements.ApplyDefault(PartyCooldownSide.Left);
+        Assert.Equal(100, placements.Left.FontSizePercent);
+        Assert.Equal(200, placements.Right.FontSizePercent);
+    }
+
+    [Fact]
     public void PreviouslySavedOldDefaultsAreNotReplacedWithTheNewDefaults()
     {
         var saved = JsonSerializer.Deserialize<PartyCooldownPlacements>(

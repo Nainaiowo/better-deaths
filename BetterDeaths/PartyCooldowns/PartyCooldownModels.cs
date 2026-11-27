@@ -64,17 +64,37 @@ internal readonly record struct PartyCooldownObservation(uint EntityId, uint Act
 
 internal readonly record struct PartyCooldownRow(uint EntityId, int DisplayRow, Vector2 NameMin, Vector2 NameMax, float Scale);
 internal readonly record struct PartyCooldownHudMember(uint EntityId, int Index);
+internal readonly record struct PartyCooldownNumberLayout(Vector2 Min, Vector2 Max, Vector2 TextOrigin, float FontSize, float Outline);
 
 internal static class PartyCooldownLayout
 {
     public const float MinimumIconSize = 16, MaximumIconSize = 1440, MaximumOffset = 300, MaximumGap = 12;
+    public const int MinimumFontPercent = 50, DefaultFontPercent = 100, MaximumFontPercent = 200;
     public const int MaximumRows = PartyCooldownRows.MaximumRows;
     public static float IconSize(float value) => float.IsFinite(value) ? Math.Clamp(value, MinimumIconSize, MaximumIconSize) : 24;
     public static float Offset(float value) => float.IsFinite(value) ? Math.Clamp(value, -MaximumOffset, MaximumOffset) : 0;
     public static float Gap(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, MaximumGap) : 3;
-    public static float TimerTextSize(float iconSize, float previewScale = 1) => MathF.Max(11 * previewScale, iconSize * .48f);
-    public static float ChargeTextSize(float iconSize, float previewScale = 1) => MathF.Max(10 * previewScale, iconSize * .36f);
+    public static int FontPercent(int value) => Math.Clamp(value, MinimumFontPercent, MaximumFontPercent);
+    public static float TimerTextSize(float iconSize, float previewScale = 1) => MathF.Max(13 * previewScale, iconSize * .68f);
+    public static float ChargeTextSize(float iconSize, float previewScale = 1) => MathF.Max(10 * previewScale, iconSize * .42f);
     public static float TextOutlineWidth(float fontSize, float previewScale = 1) => MathF.Max(previewScale, fontSize / 24);
+
+    public static PartyCooldownNumberLayout FitNumber(float size, float previewScale, (Vector2 Min, Vector2 Max) ink,
+        bool isCharge, bool paired, int fontSizePercent = DefaultFontPercent)
+    {
+        var pad = MathF.Min(size * .05f, MathF.Max(.6f * previewScale, size / 32f));
+        // A recharging action can show two numbers. Keep their backgrounds and outlines apart.
+        var bandHeight = paired ? (isCharge ? size * .38f : size * .62f - pad) : size;
+        var target = isCharge ? ChargeTextSize(size, previewScale) : TimerTextSize(size, previewScale);
+        var inkSize = Vector2.Max(ink.Max - ink.Min, new Vector2(.001f));
+        var limit = MathF.Min((size - 2 * pad) / inkSize.X, (bandHeight - 2 * pad) / inkSize.Y);
+        var baseline = MathF.Min(target, limit);
+        var fontSize = MathF.Min(limit, baseline * (FontPercent(fontSizePercent) / 100f));
+        var extent = inkSize * fontSize + new Vector2(2 * pad);
+        var min = isCharge ? new Vector2(size) - extent : (new Vector2(size, bandHeight) - extent) * .5f;
+        return new(min, min + extent, min + new Vector2(pad) - ink.Min * fontSize,
+            fontSize, MathF.Min(pad, TextOutlineWidth(fontSize, previewScale)));
+    }
 
     public static int FindUniqueHudMember(ReadOnlySpan<PartyCooldownHudMember> members, int row)
     {

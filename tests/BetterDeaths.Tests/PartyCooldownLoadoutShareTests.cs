@@ -91,6 +91,39 @@ public sealed class PartyCooldownLoadoutShareTests
 
     // A released wire format must not drift just because both encoder and decoder were edited together.
     private const string CompactPaladin = "BDPC3:AQAAQEIAAEBAAACawgAAEEEAAMBBAABAQAAAAAAAAAAAARMCEes6DgEBAOFF1Tw=";
+    private const string FontSizePaladin = "BDPC4:AQAAQEIAAEBAAACawgAAEEEAAMBBAABAQAAAAAAAAAAAARMCEes6DgEBADLIj2dUQg==";
+
+    [Fact]
+    public void BothFontSizesRoundTripWithoutReinterpretingThePreviousFormat()
+    {
+        Assert.True(PartyCooldownLoadoutShareCodec.TryDecode(CompactPaladin, out var original, out _));
+        Assert.Null(original.Layout!.FontSizes);
+        original.Layout.FontSizes = new(50, 200);
+        Assert.Equal(FontSizePaladin, EncodeValid(original));
+        Assert.True(PartyCooldownLoadoutShareCodec.TryDecode(FontSizePaladin, out var decoded, out _));
+        Assert.Equal(original.Layout.FontSizes, decoded.Layout!.FontSizes);
+        Assert.Equal(FontSizePaladin, EncodeValid(decoded));
+        Assert.False(PartyCooldownLoadoutShareCodec.TryDecode("BDPC3:" + FontSizePaladin[6..], out _, out _));
+        Assert.False(PartyCooldownLoadoutShareCodec.TryDecode("BDPC4:" + CompactPaladin[6..], out _, out _));
+    }
+
+    [Theory]
+    [InlineData(49, 100, "Left")]
+    [InlineData(100, 201, "Right")]
+    public void OutOfRangeSharedFontSizeIsRejectedWithoutSaving(byte left, byte right, string side)
+    {
+        var payload = Convert.FromBase64String(FontSizePaladin[6..])[..^4];
+        (payload[^2], payload[^1]) = (left, right);
+        var live = PartyCooldownImportFixture.Original();
+        var before = JsonSerializer.Serialize(live);
+        Assert.False(live.TrySaveCooldownImport(SealPacked(payload, "BDPC4:"), 19, PartyCooldownImportFixture.Catalog(),
+            _ => Assert.Fail("Invalid layout must not save"), _ => Assert.Fail("Unexpected save failure"),
+            out _, out var error));
+        Assert.Equal("BD-CI-11", error.SupportCode);
+        Assert.Contains($"{side} font size", error.Reason);
+        Assert.Contains("%", error.Reason);
+        Assert.Equal(before, JsonSerializer.Serialize(live));
+    }
 
     [Fact]
     public void StableCompactFixtureImportsWithItsOriginalOrderAndRows()
@@ -187,8 +220,8 @@ public sealed class PartyCooldownLoadoutShareTests
         finally { Marshal.FreeCoTaskMem(original); }
     }
 
-    private static string SealPacked(byte[] payload) =>
-        "BDPC3:" + Convert.ToBase64String([.. payload, .. SHA256.HashData(payload)[..4]]);
+    private static string SealPacked(byte[] payload, string prefix = "BDPC3:") =>
+        prefix + Convert.ToBase64String([.. payload, .. SHA256.HashData(payload)[..4]]);
 
     [Fact]
     public void AcceptsLegacySelectionOnlyCodeWithoutChangingItsMeaning()

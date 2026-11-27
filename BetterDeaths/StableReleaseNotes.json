@@ -1,5 +1,38 @@
 [
   {
+    "Version": "1.0.0.75",
+    "Sections": [
+      {
+        "Title": "DMU Analyzer",
+        "Bullets": [
+          { "Text": "Fixed Big Kefka's purple K appearing on the wrong side during Black Hole. The marker now locks when each set's holes appear, so a later turn won't move it.", "Highlight": true },
+          { "Text": "Tether lines still show who actually took each tether, even when it was the wrong player. If the recording doesn't show enough to place Kefka, only the K is hidden." }
+        ]
+      },
+      {
+        "Title": "DMU Replay",
+        "Bullets": [
+          { "Text": "During Black Hole, the purple K now shows where Big Kefka was at the moment you're watching. It stays on the same wall side until the recording shows him turn, even within a tether set.", "Highlight": true },
+          { "Text": "During Stomp-a-Mole, Kefka stays on the platform. Each confirmed stomp shows a separate footfall where and when it landed." }
+        ]
+      },
+      {
+        "Title": "Party Cooldowns",
+        "Bullets": [
+          { "Text": "Countdown timers and charge counts are easier to read, with brighter numbers on a dark backing." },
+          { "Text": "Added a Font size slider beside Icon size in HUD > Party Cooldowns. Adjust the numbers from 50% to 200% without resizing the icons. Left and right layouts remember their own settings, and the preview shows the result.", "Highlight": true },
+          { "Text": "Cooldown exports now include both font sizes. Older codes still work and leave your font sizes unchanged." }
+        ]
+      },
+      {
+        "Title": "Party List",
+        "Bullets": [
+          { "Text": "Party Cooldowns and Food Check indicators now sit behind other Dalamud windows instead of drawing over them. Food Check tooltips no longer appear through a window covering the icon." }
+        ]
+      }
+    ]
+  },
+  {
     "Version": "1.0.0.74",
     "Sections": [
       {

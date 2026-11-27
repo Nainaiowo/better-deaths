@@ -3,6 +3,7 @@ namespace BetterDeaths.PartyCooldowns;
 public sealed record PartyCooldownPlacement
 {
     public float IconSize { get; set; } = 24;
+    public int FontSizePercent { get; set; } = PartyCooldownLayout.DefaultFontPercent;
     public float Spacing { get; set; } = 3;
     public float OffsetX { get; set; }
     public float OffsetY { get; set; }
@@ -10,11 +11,12 @@ public sealed record PartyCooldownPlacement
     internal bool Normalize()
     {
         var size = PartyCooldownLayout.IconSize(IconSize);
+        var font = PartyCooldownLayout.FontPercent(FontSizePercent);
         var spacing = PartyCooldownLayout.Gap(Spacing);
         var x = PartyCooldownLayout.Offset(OffsetX);
         var y = PartyCooldownLayout.Offset(OffsetY);
-        var changed = size != IconSize || spacing != Spacing || x != OffsetX || y != OffsetY;
-        (IconSize, Spacing, OffsetX, OffsetY) = (size, spacing, x, y);
+        var changed = size != IconSize || font != FontSizePercent || spacing != Spacing || x != OffsetX || y != OffsetY;
+        (IconSize, FontSizePercent, Spacing, OffsetX, OffsetY) = (size, font, spacing, x, y);
         return changed;
     }
 }
@@ -56,7 +58,7 @@ public sealed class PartyCooldownPlacements
     {
         var defaults = CreateDefault().Get(side);
         var placement = Get(side);
-        (placement.IconSize, placement.Spacing, placement.OffsetX, placement.OffsetY) =
-            (defaults.IconSize, defaults.Spacing, defaults.OffsetX, defaults.OffsetY);
+        (placement.IconSize, placement.FontSizePercent, placement.Spacing, placement.OffsetX, placement.OffsetY) =
+            (defaults.IconSize, defaults.FontSizePercent, defaults.Spacing, defaults.OffsetX, defaults.OffsetY);
     }
 }

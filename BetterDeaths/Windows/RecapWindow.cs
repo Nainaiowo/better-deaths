@@ -455,6 +455,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         DateTime ReplayStartAtUtc,
         IReadOnlyList<ReplayPositionTrack> PositionTracks,
         IReadOnlyList<ReplayMechanicSnapshot> Mechanics,
+        DmuKefkaReplayTrack KefkaTrack,
         float MinOffset,
         float MaxOffset);
 
@@ -1957,6 +1958,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             replayFrame.ActorStates,
             replayFrame.MarkerStates,
             replayFrame.MechanicStates,
+            replayDisplay.KefkaTrack.At(scrubSeconds),
             worldMarkers,
             replayFrame.WorldMarkerStates,
             pull.ReplayStatusHistoryCaptured ? ReplayMitigationTimeline.For(pull).At(selectedAtUtc, scrubSeconds) : mitigations,
@@ -8513,7 +8515,8 @@ public sealed partial class RecapWindow : Window, IDisposable
         var positionTracks = BuildReplayPositionTracks(positions);
         var mechanics = GetReplayMechanicsForDisplay(positions, markers, rawMechanics, replayModule, replayStartAtUtc, showEarlierMarkers);
         GetReplayTimeBounds(referenceAtUtc, minimumVisibleOffset, maximumVisibleOffset, positions, mechanics, worldMarkers, out var minOffset, out var maxOffset);
-        var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, positionTracks, mechanics, minOffset, maxOffset);
+        var kefka = DmuKefkaReplayTrack.Build(territoryId, positions, rawMechanics);
+        var updated = new ReplayStaticDisplayCache(key, replayStartAtUtc, positionTracks, mechanics, kefka, minOffset, maxOffset);
         replayStaticDisplayCacheByDeathId[idSuffix] = updated;
         replayFrameDisplayCacheByDeathId.Remove(idSuffix);
         return updated;
@@ -10327,6 +10330,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         IReadOnlyList<ReplayPositionSnapshot> actorStates,
         IReadOnlyList<ReplayMarkerSnapshot> markerStates,
         IReadOnlyList<ReplayMechanicSnapshot> mechanicStates,
+        KefkaReplayFrame kefka,
         IReadOnlyList<ReplayWorldMarkerSnapshot> allWorldMarkers,
         IReadOnlyList<ReplayWorldMarkerSnapshot> worldMarkerStates,
         IReadOnlyList<ReplayMitigationSnapshot> mitigations,
@@ -10476,6 +10480,7 @@ public sealed partial class RecapWindow : Window, IDisposable
         if (showTrails)
         {
             var visibleActorKeys = actorStates
+                .Where(actor => !kefka.Replaces(actor))
                 .Select(actor => actor.ActorKey)
                 .ToHashSet(StringComparer.Ordinal);
             DrawReplayTrails(drawList, focusDeath, positionTracks, visibleActorKeys, selectedAtUtc, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan);
@@ -10485,7 +10490,7 @@ public sealed partial class RecapWindow : Window, IDisposable
             .GroupBy(marker => marker.ActorKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<ReplayMarkerSnapshot>)group.ToList(), StringComparer.Ordinal);
         var actorScreenPositions = new List<ReplayActorScreenState>();
-        foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Enemy && !IsFocusedReplayActor(actor, focusedActorKey)))
+        foreach (var actor in actorStates.Where(actor => actor.ActorKind == ReplayActorKind.Enemy && !kefka.Replaces(actor) && !IsFocusedReplayActor(actor, focusedActorKey)))
         {
             markersByActor.TryGetValue(actor.ActorKey, out var markers);
             DrawReplayActor(drawList, focusDeath, actor, markers ?? [], allMarkers, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: false);
@@ -10498,12 +10503,13 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         var focusedActor = actorStates.FirstOrDefault(actor => IsFocusedReplayActor(actor, focusedActorKey));
-        if (focusedActor is not null)
+        if (focusedActor is not null && !kefka.Replaces(focusedActor))
         {
             markersByActor.TryGetValue(focusedActor.ActorKey, out var focusedMarkers);
             DrawReplayActor(drawList, focusDeath, focusedActor, focusedMarkers ?? [], allMarkers, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, actorScreenPositions, canvasInputHovered, replayModule, focused: true);
         }
 
+        DrawReplayKefka(drawList, kefka, canvasStart, canvasSize, minX, maxX, minZ, maxZ, zoom, pan, canvasInputHovered);
         ImGui.PopClipRect();
         DrawDeathReplayZoomOverlay(idSuffix, canvasStart, canvasSize);
         DrawReplayCanvasResizeHandleVisuals(drawList, canvasStart, canvasSize, resizeState);
@@ -10525,6 +10531,38 @@ public sealed partial class RecapWindow : Window, IDisposable
         }
 
         RestoreCursorAfterReplayCanvas(cursorStart, externalStatusPanelState);
+    }
+
+    private void DrawReplayKefka(ImDrawListPtr draw, KefkaReplayFrame frame, Vector2 start, Vector2 size,
+        float minX, float maxX, float minZ, float maxZ, float zoom, Vector2 pan, bool hovered)
+    {
+        Vector2 Screen(Vector2 p) => ReplayWorldPointToScreen(p.X, p.Y, start, size, minX, maxX, minZ, maxZ, zoom, pan);
+        if (frame.Body is { } body)
+        {
+            var point = Screen(body.Position);
+            const float radius = 10;
+            draw.AddCircleFilled(point, radius, ImGui.GetColorU32(new Vector4(.10f, .04f, .16f, .96f)), 24);
+            draw.AddCircle(point, radius, ImGui.GetColorU32(new Vector4(.78f, .36f, 1, 1)), 24, 2);
+            DrawWtfDigCenteredText(draw, point, "K", new Vector4(.92f, .8f, 1, 1), .82f);
+            if (hovered && IsReplayActorHovered(point, radius))
+                SetThemedTooltip(body.OnPlatform ? "Kefka on the platform" : "Big Kefka's wall position from his recorded facing");
+        }
+        if (frame.Footfall is { } impact)
+        {
+            var point = Screen(impact.Position);
+            var gold = new Vector4(1, .81f, .39f, 1);
+            draw.AddCircle(point, 11, ImGui.GetColorU32(new Vector4(.12f, .08f, .04f, .95f)), 24, 4);
+            draw.AddCircle(point, 11, ImGui.GetColorU32(gold), 24, 2);
+            using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
+            {
+                var icon = FontAwesomeIcon.ShoePrints.ToIconString();
+                var at = point - ImGui.CalcTextSize(icon) * .5f;
+                draw.AddText(at + Vector2.One, ImGui.GetColorU32(new Vector4(0, 0, 0, 1)), icon);
+                draw.AddText(at, ImGui.GetColorU32(gold), icon);
+            }
+            if (hovered && IsReplayActorHovered(point, 12))
+                SetThemedTooltip("Stomp-a-Mole: recorded footfall");
+        }
     }
 
     private float GetReplayCanvasSide(float availableWidth)

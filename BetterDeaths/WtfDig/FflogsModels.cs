@@ -73,7 +73,9 @@ internal sealed class FflogsResources
     public long? Mp { get; init; }
     public double X { get; init; }
     public double Y { get; init; }
-    public double Facing { get; init; }
+    public double Facing { get => field; init { field = value; HasFacing = true; } }
+    [JsonIgnore]
+    public bool HasFacing { get; private set; }
     public long? Absorb { get; init; }
 }
 

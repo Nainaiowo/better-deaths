@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 
 namespace BetterDeaths.PartyCooldowns;
 
-// BDPC3 stores the same settings as BDPC2, using real action IDs once per job.
+// BDPC4 extends the BDPC3 payload with two font percentages before the checksum.
 internal static class PartyCooldownCompactShare
 {
     private const int RowCountMask = 3;
@@ -43,13 +43,18 @@ internal static class PartyCooldownCompactShare
                         writer.Write((byte)selected.IndexOf(id));
             }
         }
+        if (layout.FontSizes is { } fonts)
+        {
+            writer.Write(checked((byte)fonts.LeftPercent));
+            writer.Write(checked((byte)fonts.RightPercent));
+        }
         Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
         SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length), digest);
         writer.Write(digest[..CheckBytes]);
         return Convert.ToBase64String(stream.GetBuffer(), 0, (int)stream.Length);
     }
 
-    public static bool TryDecode(byte[] bytes, out PartyCooldownLoadoutShareDocument document, out CooldownImportError error)
+    public static bool TryDecode(byte[] bytes, bool hasFontSizes, out PartyCooldownLoadoutShareDocument document, out CooldownImportError error)
     {
         document = new();
         error = new(CooldownImportProblem.Unreadable);
@@ -117,6 +122,8 @@ internal static class PartyCooldownCompactShare
             }
             parsed.Jobs.Add(job);
         }
+        if (hasFontSizes)
+            parsed.Layout.FontSizes = new(reader.ReadByte(), reader.ReadByte());
         if (stream.Position != stream.Length)
             return false;
         document = parsed;

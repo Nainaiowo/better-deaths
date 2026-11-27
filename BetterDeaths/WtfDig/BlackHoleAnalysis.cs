@@ -112,7 +112,8 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                 IncludeResources: true, CacheTtl: ttl), cancellationToken);
         var tetherEventsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, resolutionStart, mechanicEnd,
-                FilterExpression: "type='tether'", CacheTtl: ttl), cancellationToken);
+                FilterExpression: client is LocalPullEventSource ? "type='tether'" : "type='tether' or type='summon'",
+                CacheTtl: ttl), cancellationToken);
         var bossCastsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, anchor.Timestamp - 8_000, mechanicEnd, FflogsEventDataType.Casts,
                 FflogsHostilityType.Enemies, true,
@@ -134,22 +135,8 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
             .Where(actor => actor.SubType == "Boss" && actor.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
             .Select(actor => actor.Id)
             .ToHashSet();
-        var bossKefkaIds = BossIdsNamed("kefka");
-        var centerKefka = bossCasts
-            .Where(entry =>
-                entry.Type == "cast" &&
-                entry.SourceResources is not null &&
-                entry.SourceID is { } actorId &&
-                bossKefkaIds.Contains(actorId))
-            .Select(entry => new BossFacingSample(
-                entry.Timestamp,
-                entry.SourceResources!.Facing,
-                Math.Sqrt(
-                    Math.Pow(entry.SourceResources.X / 100 - center.X, 2) +
-                    Math.Pow(entry.SourceResources.Y / 100 - center.Y, 2))))
-            .Where(sample => sample.Distance <= 3)
-            .OrderBy(sample => sample.Time)
-            .ToArray();
+        var markerEvidence = client is LocalPullEventSource local ? local.BlackHoleMarkers :
+            BlackHoleMarkerEvidence.FromReport(BossIdsNamed("kefka"), bossCasts, tetherEvents, center);
         IReadOnlyList<BossPositionSample> BossSamples(HashSet<int> ids) => bossCasts
             .Where(entry => entry.SourceResources is not null && entry.SourceID is { } actorId && ids.Contains(actorId))
             .Select(entry => new BossPositionSample(
@@ -161,7 +148,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         var exdeathSamples = BossSamples(BossIdsNamed("exdeath"));
 
         var tetherByInstance = new Dictionary<int, List<TetherHolderSample>>();
-        foreach (var entry in tetherEvents.Where(entry => entry.TargetID is not null))
+        foreach (var entry in tetherEvents.Where(entry => entry.Type == "tether" && entry.TargetID is not null))
         {
             var instance = entry.SourceInstance ?? entry.SourceID ?? 0;
             if (!tetherByInstance.TryGetValue(instance, out var samples))
@@ -261,23 +248,15 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
             rounds.Add(new BlackHoleRound(fire.Time, setNumber, tetherNumber, [fire]));
         }
 
-        var setStarts = rounds.GroupBy(round => round.Set).ToDictionary(group => group.Key, group => group.First().Time);
-        var setNumbers = setStarts.Keys.OrderBy(value => value).ToArray();
-        var bigKefkaBySet = new Dictionary<int, Vector2>();
-        for (var index = 0; index < setNumbers.Length; index++)
+        var bigKefkaBySet = new Dictionary<int, Vector2?>();
+        var previousSetEnd = anchor.Timestamp - 8_000;
+        foreach (var set in rounds.GroupBy(r => r.Set))
         {
-            var set = setNumbers[index];
-            var low = index == 0 ? anchor.Timestamp - 8_000 : setStarts[setNumbers[index - 1]];
-            var high = setStarts[set];
-            var facing = centerKefka.LastOrDefault(sample => sample.Time >= low && sample.Time < high);
-            if (facing is null)
-            {
-                continue;
-            }
-
-            var heading = WtfDigAnalysisHelpers.FacingToRadians(facing.Facing);
-            var vector = new Vector2((float)Math.Sin(heading), (float)Math.Cos(heading));
-            bigKefkaBySet[set] = -vector * BigKefkaRadius;
+            var first = set.First();
+            var holes = first.Fires.Select(f => f.Event).Where(e => e.SourceID.HasValue)
+                .Select(e => new BlackHoleActor(e.SourceID!.Value, e.SourceInstance));
+            bigKefkaBySet[set.Key] = markerEvidence.AtFirstAppearance(holes, previousSetEnd, first.Time);
+            previousSetEnd = set.Last().Fires.Max(f => f.Time);
         }
 
         var soakedSoFar = new Dictionary<int, int>();
@@ -354,7 +333,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                 Math.Round((round.Time - fight.StartTime) / 1000),
                 beams,
                 states,
-                bigKefkaBySet.GetValueOrDefault(round.Set),
+                bigKefkaBySet[round.Set],
                 BossPositionAt(chaosSamples, round.Time),
                 BossPositionAt(exdeathSamples, round.Time)));
         }
@@ -443,7 +422,6 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         _ => $"{value}th",
     };
 
-    private sealed record BossFacingSample(double Time, double Facing, double Distance);
     private sealed record BossPositionSample(double Time, Vector2 Position);
     private sealed record TetherHolderSample(double Time, int ActorId);
     private sealed record BlackHoleFire(FflogsEvent Event, List<FflogsEvent> Hits)

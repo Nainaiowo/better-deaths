@@ -256,13 +256,16 @@ public sealed partial class Plugin
             return false;
         }
 
+        var left = Configuration.PartyCooldownPlacements!.Get(PartyCooldownSide.Left);
+        var right = Configuration.PartyCooldownPlacements.Get(PartyCooldownSide.Right);
         var document = new PartyCooldownLoadoutShareDocument
         {
             Layout = new PartyCooldownLoadoutShareLayout
             {
                 Side = Configuration.PartyCooldownSide,
-                Left = ToSharePlacement(Configuration.PartyCooldownPlacements!.Left!),
-                Right = ToSharePlacement(Configuration.PartyCooldownPlacements.Right!),
+                Left = ToSharePlacement(left),
+                Right = ToSharePlacement(right),
+                FontSizes = new(left.FontSizePercent, right.FontSizePercent),
             },
             Jobs = PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId).Select(job =>
             {

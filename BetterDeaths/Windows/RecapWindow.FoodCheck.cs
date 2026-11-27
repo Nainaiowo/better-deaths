@@ -203,8 +203,8 @@ public sealed partial class RecapWindow
 
         if (!stateVisible)
             return;
-        DrawPartyFoodStatus(draw, markerPosition, markerSize, displayState, row.Status);
-        if (ImGui.IsMouseHoveringRect(markerPosition, markerPosition + new Vector2(markerSize)))
+        DrawPartyFoodStatus(draw, markerPosition, markerSize, displayState);
+        if (ImGui.IsWindowHovered() && ImGui.IsMouseHoveringRect(markerPosition, markerPosition + new Vector2(markerSize)))
             ImGui.SetTooltip("Example only. Live timers come from the current party status.");
     }
 

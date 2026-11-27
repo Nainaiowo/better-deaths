@@ -109,6 +109,80 @@ public sealed class PartyCooldownPreviewLayoutTests
     }
 
     [Fact]
+    public void TimerAndChargeIncludingTheirOutlinesFitSeparatePartsOfTheIcon()
+    {
+        var timerInk = (Min: new Vector2(-.06f, .2f), Max: new Vector2(1.85f, .94f));
+        var chargeInk = (Min: new Vector2(.08f, .17f), Max: new Vector2(.6f, .92f));
+        foreach (var icon in new[] { 16f, 24f, 55f, 72f, 1440f })
+            foreach (var zoom in new[] { 1f, .35f, .001f })
+            {
+                var size = icon * zoom;
+                var timer = PartyCooldownLayout.FitNumber(size, zoom, timerInk, isCharge: false, paired: true);
+                var charge = PartyCooldownLayout.FitNumber(size, zoom, chargeInk, isCharge: true, paired: true);
+                AssertNumberFits(timer, timerInk, size);
+                AssertNumberFits(charge, chargeInk, size);
+                Assert.True(timer.Max.Y < charge.Min.Y);
+                Assert.Equal(size, charge.Max.X, 4);
+                Assert.Equal(size, charge.Max.Y, 4);
+                var live = PartyCooldownLayout.FitNumber(icon, 1, timerInk, isCharge: false, paired: true);
+                Assert.Equal(live.FontSize * zoom, timer.FontSize, 4);
+                Assert.True(Vector2.Distance(live.TextOrigin * zoom, timer.TextOrigin) < .001f);
+            }
+    }
+
+    [Fact]
+    public void UnpairedTimerUsesTheCenterAndAReadyChargeStaysInTheCorner()
+    {
+        const float size = 55;
+        var ink = (Min: new Vector2(.08f, .2f), Max: new Vector2(.72f, .9f));
+        var timer = PartyCooldownLayout.FitNumber(size, 1, ink, isCharge: false, paired: false);
+        var charge = PartyCooldownLayout.FitNumber(size, 1, ink, isCharge: true, paired: false);
+        Assert.Equal(PartyCooldownLayout.TimerTextSize(size), timer.FontSize);
+        Assert.Equal(new Vector2(size * .5f), (timer.Min + timer.Max) * .5f);
+        Assert.Equal(new Vector2(size), charge.Max);
+        Assert.True(charge.Min.X > size * .5f && charge.Min.Y > size * .5f);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FontSliderIsRelativeToTheFittedNumberAndStaysInsideTheIcon(bool isCharge)
+    {
+        var ink = (Min: new Vector2(.05f, .2f), Max: new Vector2(isCharge ? .65f : 1.85f, .94f));
+        foreach (var size in new[] { 16f, 24f, 55f, 1440f })
+        {
+            var baseline = PartyCooldownLayout.FitNumber(size, 1, ink, isCharge, paired: true);
+            var smaller = PartyCooldownLayout.FitNumber(size, 1, ink, isCharge, true, 50);
+            var largest = PartyCooldownLayout.FitNumber(size, 1, ink, isCharge, true, 200);
+            Assert.Equal(baseline, PartyCooldownLayout.FitNumber(size, 1, ink, isCharge, true, 100));
+            Assert.Equal(baseline.FontSize * .5f, smaller.FontSize, 4);
+            Assert.InRange(largest.FontSize, baseline.FontSize, baseline.FontSize * 2);
+            AssertNumberFits(largest, ink, size);
+            var preview = PartyCooldownLayout.FitNumber(size * .25f, .25f, ink, isCharge, true, 200);
+            Assert.Equal(largest.FontSize * .25f, preview.FontSize, 4);
+        }
+        var digit = (Vector2.Zero, new Vector2(.48f, .63f));
+        var normal = PartyCooldownLayout.FitNumber(55, 1, digit, isCharge, false);
+        Assert.Equal(normal.FontSize * 1.5f, PartyCooldownLayout.FitNumber(55, 1, digit, isCharge, false, 150).FontSize, 4);
+    }
+
+    private static void AssertNumberFits(PartyCooldownNumberLayout number, (Vector2 Min, Vector2 Max) ink, float size)
+    {
+        const float epsilon = .0005f;
+        Assert.True(number.FontSize > 0 && number.Outline > 0);
+        var inkMin = number.TextOrigin + ink.Min * number.FontSize - new Vector2(number.Outline);
+        var inkMax = number.TextOrigin + ink.Max * number.FontSize + new Vector2(number.Outline);
+        Assert.InRange(number.Min.X, -epsilon, size);
+        Assert.InRange(number.Min.Y, -epsilon, size);
+        Assert.InRange(number.Max.X, 0, size + epsilon);
+        Assert.InRange(number.Max.Y, 0, size + epsilon);
+        Assert.InRange(inkMin.X, number.Min.X - epsilon, number.Max.X);
+        Assert.InRange(inkMin.Y, number.Min.Y - epsilon, number.Max.Y);
+        Assert.InRange(inkMax.X, number.Min.X, number.Max.X + epsilon);
+        Assert.InRange(inkMax.Y, number.Min.Y, number.Max.Y + epsilon);
+    }
+
+    [Fact]
     public void CompactPreviewLayoutDoesNotAllocateManagedMemory()
     {
         var row = new PartyCooldownRow(1, 0, new(44, 0), new(164, 20), 1);

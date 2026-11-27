@@ -89,7 +89,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         FflogsReportSummary report,
         FflogsFight fight,
         IReadOnlyList<LocalEvent> events,
-        IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> analyzerAvailability)
+        IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> analyzerAvailability,
+        BlackHoleMarkerEvidence blackHoleMarkers)
     {
         Report = report;
         Fight = fight;
@@ -100,11 +101,14 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             .ToHashSet();
         actorNames = report.Actors.ToDictionary(actor => actor.Id, actor => actor.Name);
         AnalyzerAvailability = analyzerAvailability;
+        BlackHoleMarkers = blackHoleMarkers;
     }
 
     internal FflogsReportSummary Report { get; }
 
     internal FflogsFight Fight { get; }
+
+    internal BlackHoleMarkerEvidence BlackHoleMarkers { get; }
 
     internal IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> AnalyzerAvailability { get; }
 
@@ -228,6 +232,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private readonly Dictionary<int, ReplayPositionSnapshot[]> positionTracks = [];
         private readonly Dictionary<int, ReplayMechanicSnapshot[]> mechanicPositionTracks = [];
         private readonly List<KnownDamage> knownDamage = [];
+        private readonly Dictionary<BlackHoleActor, double> holeAppearances = [];
+        private readonly Dictionary<BlackHoleActor, double> observedKefkas = [];
 
         internal Builder(PullDeathSnapshot pull)
         {
@@ -277,7 +283,27 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                 report,
                 fight,
                 output.OrderBy(entry => entry.Event.Timestamp).ToArray(),
-                BuildAnalyzerAvailability());
+                BuildAnalyzerAvailability(),
+                BuildBlackHoleMarkers());
+        }
+
+        private BlackHoleMarkerEvidence BuildBlackHoleMarkers()
+        {
+            var tracks = new Dictionary<BlackHoleActor, BlackHoleBossPose[]>();
+            if (holeAppearances.Count != 0)
+            {
+                var start = holeAppearances.Values.Min() - BlackHoleMarkerEvidence.MaxPoseAgeMs;
+                var end = holeAppearances.Values.Max();
+                foreach (var boss in observedKefkas.Keys)
+                {
+                    if (!positionTracks.TryGetValue(boss.Id, out var positions)) continue;
+                    tracks[boss] = positions.Where(p => ToMilliseconds(p.PullElapsedSeconds) >= start &&
+                            ToMilliseconds(p.PullElapsedSeconds) <= end)
+                        .Select(p => new BlackHoleBossPose(ToMilliseconds(p.PullElapsedSeconds),
+                            new Vector2(p.X, p.Z) - WtfDigAnalysisHelpers.DefaultCenter, p.Rotation)).ToArray();
+                }
+            }
+            return new(holeAppearances, observedKefkas, tracks);
         }
 
         private IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> BuildAnalyzerAvailability()
@@ -550,7 +576,20 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
             {
                 if (IsPositionOnlyObject(mechanic))
                 {
+                    if (mechanic.RawEventId == 0x4C38 && MechanicSourceEntity(mechanic.SourceKey) != 0)
+                    {
+                        var hole = actors.GetMechanicSource(mechanic);
+                        holeAppearances.TryAdd(new(hole, hole), ToMilliseconds(mechanic.PullElapsedSeconds));
+                    }
                     continue;
+                }
+
+                // Only an identified caster, never a name match or the target of the action.
+                if (mechanic.RawEventId is 50167 or 47846 or 47847 &&
+                    mechanic.RawEventKind is "bossmod-cast" or "dmu-p3-slap-happy-predicted" &&
+                    actors.FindByEntity(MechanicSourceEntity(mechanic.SourceKey)) is { } caster)
+                {
+                    observedKefkas.TryAdd(new(caster, caster), ToMilliseconds(mechanic.PullElapsedSeconds));
                 }
 
                 if (IsForsakenCloneDrop(mechanic))

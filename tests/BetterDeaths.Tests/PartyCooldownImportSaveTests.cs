@@ -13,6 +13,8 @@ public sealed class PartyCooldownImportSaveTests
     [InlineData(2, true)]
     [InlineData(3, false)]
     [InlineData(3, true)]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
     public void FailedSaveKeepsThePlayersWholeOldSetup(int wireVersion, bool allJobs)
     {
         var live = Original();
@@ -58,9 +60,13 @@ public sealed class PartyCooldownImportSaveTests
     [InlineData(2, true)]
     [InlineData(3, false)]
     [InlineData(3, true)]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
     public void SuccessfulImportPublishesExactlyWhatWasSaved(int wireVersion, bool allJobs)
     {
         var live = Original();
+        live.PartyCooldownPlacements!.Left!.FontSizePercent = 135;
+        live.PartyCooldownPlacements.Right!.FontSizePercent = 60;
         var before = JsonSerializer.Serialize(live);
         var otherJob = live.PartyCooldownActions[21];
         string? persisted = null, duringSave = null;
@@ -76,6 +82,8 @@ public sealed class PartyCooldownImportSaveTests
         Assert.Equal(before, duringSave);
         Assert.Equal(persisted, JsonSerializer.Serialize(live));
         Assert.Equal(wireVersion != 1, included);
+        Assert.Equal(wireVersion == 4 ? 157 : 135, live.PartyCooldownPlacements!.Left!.FontSizePercent);
+        Assert.Equal(wireVersion == 4 ? 83 : 60, live.PartyCooldownPlacements.Right!.FontSizePercent);
         if (allJobs)
         {
             Assert.Equal(PartyCooldownCatalog.Jobs.Count, live.PartyCooldownActions.Count);
@@ -149,9 +157,12 @@ internal static class PartyCooldownImportFixture
                     Rows = job.Id == 19 ? [[], [17], []] : [[]],
                 }).ToList(),
         };
-        if (wireVersion == 3)
+        if (wireVersion == 4)
+            doc.Layout.FontSizes = new(157, 83);
+        if (wireVersion is 3 or 4)
         {
             Assert.True(PartyCooldownLoadoutShareCodec.TryEncode(doc, out var code, out var error), error);
+            Assert.StartsWith($"BDPC{wireVersion}:", code);
             return code;
         }
         var bytes = wireVersion == 2 ? JsonSerializer.SerializeToUtf8Bytes(doc, JsonSerializerOptions.Web) :

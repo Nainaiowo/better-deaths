@@ -8,13 +8,16 @@ namespace BetterDeaths.PartyCooldowns;
 public sealed class PartyCooldownImportUndo
 {
     public sealed record JobState(uint JobId, uint[] Actions, bool InheritsActions, uint[][]? Rows, bool RowsEnabled);
-    public sealed record LayoutState(PartyCooldownSide Side, PartyCooldownPlacements? Placements, PartyCooldownPlacement Legacy);
+    public sealed record LayoutState(PartyCooldownSide Side, PartyCooldownPlacements? Placements, PartyCooldownPlacement Legacy)
+    {
+        public bool IncludesFontSizes { get; init; }
+    }
 
     public JobState[] Jobs { get; init; } = [];
     public LayoutState? Layout { get; init; }
     internal uint? SingleJobId => Jobs is [{ } job] ? job.JobId : null;
 
-    internal static PartyCooldownImportUndo Capture(Configuration current, PartyCooldownCatalog catalog, uint? targetJobId, bool includeLayout) => new()
+    internal static PartyCooldownImportUndo Capture(Configuration current, PartyCooldownCatalog catalog, uint? targetJobId, PartyCooldownLoadoutShareLayout? layout) => new()
     {
         Jobs = PartyCooldownCatalog.Jobs.Where(job => targetJobId is null || job.Id == targetJobId).Select(job =>
         {
@@ -24,8 +27,9 @@ public sealed class PartyCooldownImportUndo
             return new JobState(job.Id, (actions ?? catalog.DefaultSelection(job.Id)).ToArray(),
                 actions is null, savedRows, rows?.Enabled ?? false);
         }).ToArray(),
-        Layout = includeLayout ? new(current.PartyCooldownSide, CopyPlacements(current.PartyCooldownPlacements),
-            current.GetLegacyCooldownPlacement()) : null,
+        Layout = layout is null ? null : new(current.PartyCooldownSide, CopyPlacements(current.PartyCooldownPlacements),
+            current.GetLegacyCooldownPlacement())
+        { IncludesFontSizes = layout.FontSizes is not null },
     };
 
     internal bool CanRestoreExactly(PartyCooldownCatalog catalog)
@@ -74,7 +78,16 @@ public sealed class PartyCooldownImportUndo
                 candidate.PartyCooldownActions[job.JobId] = [.. job.Actions];
         }
         if (Layout is { } previous)
-            candidate.SetCooldownPlacement(previous.Side, CopyPlacements(previous.Placements), previous.Legacy);
+        {
+            var restored = CopyPlacements(previous.Placements);
+            // Old imports never changed font size. Undo must not rewind a later slider edit.
+            if (!previous.IncludesFontSizes && restored is { Left: { } left, Right: { } right })
+            {
+                left.FontSizePercent = candidate.PartyCooldownPlacements?.Left?.FontSizePercent ?? left.FontSizePercent;
+                right.FontSizePercent = candidate.PartyCooldownPlacements?.Right?.FontSizePercent ?? right.FontSizePercent;
+            }
+            candidate.SetCooldownPlacement(previous.Side, restored, previous.Legacy);
+        }
     }
 
     private static bool ValidPlacement(PartyCooldownPlacement? value) => value is not null && !(value with { }).Normalize();

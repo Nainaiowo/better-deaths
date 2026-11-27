@@ -22,7 +22,11 @@ internal sealed class PartyCooldownLoadoutShareLayout
     public PartyCooldownSide Side { get; set; } = PartyCooldownSide.Left;
     public PartyCooldownLoadoutSharePlacement? Left { get; set; }
     public PartyCooldownLoadoutSharePlacement? Right { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PartyCooldownShareFontSizes? FontSizes { get; set; }
 }
+
+internal sealed record PartyCooldownShareFontSizes(int LeftPercent, int RightPercent);
 
 internal sealed class PartyCooldownLoadoutSharePlacement
 {
@@ -45,6 +49,7 @@ internal static class PartyCooldownLoadoutShareCodec
     public const int Version = 2;
     public const int MaximumCodeLength = 32 * 1024;
     private const int LegacyVersion = 1;
+    private const string FontSizePrefix = "BDPC4:";
     private const string CompactPrefix = "BDPC3:";
     private const string JsonPrefix = "BDPC2:";
     private const string LegacyPrefix = "BDPC1:";
@@ -63,8 +68,8 @@ internal static class PartyCooldownLoadoutShareCodec
             for (var i = type.Properties.Count - 1; i >= 0; i--)
             {
                 var field = type.Properties[i];
-                // BDPC1 exported only format, version, jobs, jobId, and selectedActionIds.
-                if (legacy && field.Name is "layout" or "rows" or "rowsEnabled")
+                // Font sizes only exist in the compact BDPC4 payload, never in the released JSON schemas.
+                if (field.Name == "fontSizes" || (legacy && field.Name is "layout" or "rows" or "rowsEnabled"))
                     type.Properties.RemoveAt(i);
                 else
                     field.IsRequired = true;
@@ -94,7 +99,8 @@ internal static class PartyCooldownLoadoutShareCodec
             return false;
         }
 
-        var encoded = CompactPrefix + PartyCooldownCompactShare.Encode(document);
+        var prefix = document.Layout!.FontSizes is null ? CompactPrefix : FontSizePrefix;
+        var encoded = prefix + PartyCooldownCompactShare.Encode(document);
         if (encoded.Length > MaximumCodeLength)
         {
             error = "The cooldown selection is too large to share.";
@@ -130,8 +136,9 @@ internal static class PartyCooldownLoadoutShareCodec
         }
 
         code = code.Trim();
-        var compact = code.StartsWith(CompactPrefix, StringComparison.Ordinal);
-        var (prefix, expectedVersion) = compact ? (CompactPrefix, Version)
+        var hasFontSizes = code.StartsWith(FontSizePrefix, StringComparison.Ordinal);
+        var compact = hasFontSizes || code.StartsWith(CompactPrefix, StringComparison.Ordinal);
+        var (prefix, expectedVersion) = compact ? (hasFontSizes ? FontSizePrefix : CompactPrefix, Version)
             : code.StartsWith(JsonPrefix, StringComparison.Ordinal) ? (JsonPrefix, Version)
             : code.StartsWith(LegacyPrefix, StringComparison.Ordinal)
                 ? (LegacyPrefix, LegacyVersion)
@@ -151,7 +158,7 @@ internal static class PartyCooldownLoadoutShareCodec
             PartyCooldownLoadoutShareDocument? parsed;
             if (compact)
             {
-                if (!PartyCooldownCompactShare.TryDecode(bytes, out parsed, out error))
+                if (!PartyCooldownCompactShare.TryDecode(bytes, hasFontSizes, out parsed, out error))
                     return false;
             }
             else
@@ -225,6 +232,10 @@ internal static class PartyCooldownLoadoutShareCodec
                 return false;
             }
             if (!ValidatePlacement(left, "Left", out error) || !ValidatePlacement(right, "Right", out error))
+                return false;
+            if (layout.FontSizes is { } fonts &&
+                (!InRange("Left", "font size", fonts.LeftPercent, PartyCooldownLayout.MinimumFontPercent, PartyCooldownLayout.MaximumFontPercent, out error, "%") ||
+                 !InRange("Right", "font size", fonts.RightPercent, PartyCooldownLayout.MinimumFontPercent, PartyCooldownLayout.MaximumFontPercent, out error, "%")))
                 return false;
         }
 
@@ -333,12 +344,12 @@ internal static class PartyCooldownLoadoutShareCodec
             && InRange(side, "vertical offset", placement.OffsetY, -PartyCooldownLayout.MaximumOffset, PartyCooldownLayout.MaximumOffset, out error);
     }
 
-    private static bool InRange(string side, string setting, float value, float min, float max, out CooldownImportError error)
+    private static bool InRange(string side, string setting, float value, float min, float max, out CooldownImportError error, string unit = " px")
     {
         error = default;
         if (float.IsFinite(value) && value >= min && value <= max)
             return true;
-        error = new(CooldownImportProblem.InvalidPlacement, $"{side} {setting}: {value:G} px. Allowed: {min} to {max} px.");
+        error = new(CooldownImportProblem.InvalidPlacement, $"{side} {setting}: {value:G}{unit}. Allowed: {min} to {max}{unit}.");
         return false;
     }
 }

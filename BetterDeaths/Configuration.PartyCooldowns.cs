@@ -36,12 +36,12 @@ public sealed partial class Configuration
         {
             var placements = new PartyCooldownPlacements
             {
-                Left = FromSharePlacement(layout.Left!),
-                Right = FromSharePlacement(layout.Right!),
+                Left = FromSharePlacement(layout.Left!, layout.FontSizes?.LeftPercent ?? PartyCooldownPlacements?.Left?.FontSizePercent),
+                Right = FromSharePlacement(layout.Right!, layout.FontSizes?.RightPercent ?? PartyCooldownPlacements?.Right?.FontSizePercent),
             };
             candidate.SetCooldownPlacement(layout.Side, placements, placements.Get(layout.Side));
         }
-        var undo = PartyCooldownImportUndo.Capture(this, catalog, targetJobId, layout is not null);
+        var undo = PartyCooldownImportUndo.Capture(this, catalog, targetJobId, layout);
         if (!undo.CanRestoreExactly(catalog))
         {
             error = new(CooldownImportProblem.BackupFailed);
@@ -125,9 +125,10 @@ public sealed partial class Configuration
             (legacy.IconSize, legacy.Spacing, legacy.OffsetX, legacy.OffsetY);
     }
 
-    private static PartyCooldownPlacement FromSharePlacement(PartyCooldownLoadoutSharePlacement placement) => new()
+    private static PartyCooldownPlacement FromSharePlacement(PartyCooldownLoadoutSharePlacement placement, int? fontSizePercent) => new()
     {
         IconSize = placement.IconSize,
+        FontSizePercent = fontSizePercent ?? PartyCooldownLayout.DefaultFontPercent,
         Spacing = placement.Spacing,
         OffsetX = placement.OffsetX,
         OffsetY = placement.OffsetY,
