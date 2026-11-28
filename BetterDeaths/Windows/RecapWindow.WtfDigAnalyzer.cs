@@ -1553,6 +1553,7 @@ public sealed partial class RecapWindow
             .ToDictionary(state => state.ActorId, state => state.Position!.Value);
         var origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##BlackHoleArena", new Vector2(size, size));
+        var arenaHovered = ImGui.IsItemHovered();
         ImGui.SetItemAllowOverlap();
         var drawList = ImGui.GetWindowDrawList();
         var end = origin + new Vector2(size, size);
@@ -1679,6 +1680,11 @@ public sealed partial class RecapWindow
         }
 
         ImGui.PopClipRect();
+        if (arenaHovered && tether.KefkaInferredFromSlapHappy && tether.BigKefka is { } inferred &&
+            Vector2.DistanceSquared(ImGui.GetMousePos(), ToScreen(inferred)) <= 14f * 14f)
+        {
+            ImGui.SetTooltip("Kefka's position is inferred from Slap Happy. The recording did not show when the first holes appeared.");
+        }
     }
 
     private static void DrawBlackHoleBossMarker(

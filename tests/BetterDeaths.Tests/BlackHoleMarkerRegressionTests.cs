@@ -50,6 +50,7 @@ public sealed class BlackHoleMarkerRegressionTests
             Assert.Single(set.Select(t => t.BigKefka).Distinct());
         foreach (var t in analysis.Tethers)
         {
+            Assert.False(t.KefkaInferredFromSlapHappy);
             Assert.True(t.BigKefka.HasValue);
             var marker = t.BigKefka.Value;
             Assert.InRange(marker.Length(), 24.99f, 25.01f);

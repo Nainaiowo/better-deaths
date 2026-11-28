@@ -53,6 +53,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private const string DamageMeterWidgetCommandName = "/bdm";
     private const string DamageMeterResetCommandName = "/bdr";
     private const string ReadyCheckCommandName = "/rc";
+    private const string FoodCheckCommandName = "/foodcheck";
     private const string BetterDeathsInternalName = "BetterDeaths";
     private const string LegacyDalamudRepositoryUrl = "https://raw.githubusercontent.com/Nainaiowo/IMakeSillyThings/refs/heads/main/repo.json";
     private const string PuniDalamudRepositoryUrl = "https://puni.sh/api/repository/nainai";
@@ -325,6 +326,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("BetterDeaths");
     private readonly bool readyCheckCommandRegistered;
+    private readonly bool foodCheckCommandRegistered;
     private readonly RecapWindow recapWindow;
     private readonly CurrentPullWidgetWindow currentPullWidgetWindow;
     private readonly DamageMeterWidgetWindow damageMeterWidgetWindow;
@@ -652,6 +654,12 @@ public sealed partial class Plugin : IDalamudPlugin
         });
         if (!readyCheckCommandRegistered)
             Log.Warning("Better Deaths could not register /rc because another command handler already uses it.");
+        foodCheckCommandRegistered = CommandManager.AddHandler(FoodCheckCommandName, new CommandInfo(OnFoodCheckCommand)
+        {
+            HelpMessage = "Post party members with missing or expiring Well Fed to party chat.",
+        });
+        if (!foodCheckCommandRegistered)
+            Log.Warning("Better Deaths could not register /foodcheck because another command handler already uses it.");
         actionEffectHook = GameInteropProvider.HookFromAddress<ActionEffectHandler.Delegates.Receive>(
             ActionEffectHandler.MemberFunctionPointers.Receive,
             OnReceiveActionEffect);
@@ -794,6 +802,8 @@ public sealed partial class Plugin : IDalamudPlugin
         ChatGui.RemoveChatLinkHandler(InstalledUpdateChatLinkHandlerId);
         if (readyCheckCommandRegistered)
             CommandManager.RemoveHandler(ReadyCheckCommandName);
+        if (foodCheckCommandRegistered)
+            CommandManager.RemoveHandler(FoodCheckCommandName);
         CommandManager.RemoveHandler(DamageMeterResetCommandName);
         CommandManager.RemoveHandler(DamageMeterWidgetCommandName);
         CommandManager.RemoveHandler(WidgetCommandName);

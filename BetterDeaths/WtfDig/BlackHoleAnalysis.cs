@@ -53,7 +53,8 @@ internal sealed record BlackHoleTether(
     IReadOnlyList<BlackHolePlayerState> States,
     Vector2? BigKefka,
     Vector2? Chaos,
-    Vector2? Exdeath);
+    Vector2? Exdeath,
+    bool KefkaInferredFromSlapHappy);
 internal sealed record BlackHoleAnalysis(
     FflogsFight Fight,
     Vector2 Center,
@@ -116,29 +117,34 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
             new FflogsEventQuery(report.Code, fight.Id, resolutionStart, mechanicEnd,
                 IncludeResources: true, FilterExpression: client is LocalPullEventSource ? "type='tether'" : "type='tether' or type='summon'",
                 CacheTtl: ttl), cancellationToken);
-        var bossCastsTask = client.FetchAllEventsAsync(
-            new FflogsEventQuery(report.Code, fight.Id, anchor.Timestamp - 8_000, mechanicEnd, FflogsEventDataType.Casts,
+        var localPull = client as LocalPullEventSource;
+        var bossEventsTask = client.FetchAllEventsAsync(
+            new FflogsEventQuery(report.Code, fight.Id, anchor.Timestamp - BlackHoleMarkerEvidence.OpeningLookbackMs, mechanicEnd,
+                localPull is null ? null : FflogsEventDataType.Casts,
                 FflogsHostilityType.Enemies, true,
-                FilterExpression: "source.name in ('Kefka', 'Chaos', 'Exdeath')", CacheTtl: ttl), cancellationToken);
+                FilterExpression: localPull is null
+                    ? "source.name = 'Kefka' or target.name = 'Kefka' or (type in ('begincast','cast') and source.name in ('Chaos','Exdeath'))"
+                    : "source.name in ('Kefka', 'Chaos', 'Exdeath')", CacheTtl: ttl), cancellationToken);
         var deathsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, resolutionStart, mechanicEnd, FflogsEventDataType.Deaths,
                 CacheTtl: ttl), cancellationToken);
-        await Task.WhenAll(debuffsTask, damageTask, firingsTask, friendlyCastsTask, tetherEventsTask, bossCastsTask, deathsTask)
+        await Task.WhenAll(debuffsTask, damageTask, firingsTask, friendlyCastsTask, tetherEventsTask, bossEventsTask, deathsTask)
             .ConfigureAwait(false);
         var debuffs = (await debuffsTask.ConfigureAwait(false)).OrderBy(entry => entry.Timestamp).ToArray();
         var damage = await damageTask.ConfigureAwait(false);
         var firings = await firingsTask.ConfigureAwait(false);
         var friendlyCasts = await friendlyCastsTask.ConfigureAwait(false);
         var tetherEvents = await tetherEventsTask.ConfigureAwait(false);
-        var bossCasts = await bossCastsTask.ConfigureAwait(false);
+        var bossEvents = await bossEventsTask.ConfigureAwait(false);
+        var bossCasts = localPull is null ? bossEvents.Where(e => e.Type is "cast" or "begincast").ToArray() : bossEvents;
         var deaths = await deathsTask.ConfigureAwait(false);
 
         HashSet<int> BossIdsNamed(string name) => report.Actors
             .Where(actor => actor.SubType == "Boss" && actor.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
             .Select(actor => actor.Id)
             .ToHashSet();
-        var markerEvidence = client is LocalPullEventSource local ? local.BlackHoleMarkers :
-            BlackHoleMarkerEvidence.FromReport(BossIdsNamed("kefka"), bossCasts, tetherEvents, center);
+        var kefkaIds = BossIdsNamed("kefka");
+        var markerEvidence = localPull?.BlackHoleMarkers ?? BlackHoleMarkerEvidence.FromReport(kefkaIds, bossCasts, tetherEvents, center);
         IReadOnlyList<BossPositionSample> BossSamples(HashSet<int> ids) => bossCasts
             .Where(entry => entry.SourceResources is not null && entry.SourceID is { } actorId && ids.Contains(actorId))
             .Select(entry => new BossPositionSample(
@@ -237,13 +243,32 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         }
 
         var bigKefkaBySet = new Dictionary<int, Vector2?>();
-        var previousSetEnd = anchor.Timestamp - 8_000;
+        var previousSetEnd = anchor.Timestamp - BlackHoleMarkerEvidence.OpeningLookbackMs;
+        var inferredOpening = false;
         foreach (var set in rounds.GroupBy(r => r.Set))
         {
             var first = set.First();
             var holes = first.Fires.Select(f => f.Event).Where(e => e.SourceID.HasValue)
-                .Select(e => new BlackHoleActor(e.SourceID!.Value, e.SourceInstance));
-            bigKefkaBySet[set.Key] = markerEvidence.AtFirstAppearance(holes, previousSetEnd, first.Time);
+                .Select(e => new BlackHoleActor(e.SourceID!.Value, e.SourceInstance)).ToArray();
+            Vector2? marker;
+            if (localPull is not null && set.Key == 1 && anchor.Type == "cast" &&
+                first.Time - anchor.Timestamp is >= 5000 and <= 10000)
+            {
+                // The holes that fire on tether two can already be visible before tether one fires.
+                var openingHoles = set.SelectMany(r => r.Fires).Select(f => f.Event).Where(e => e.SourceID.HasValue)
+                    .Select(e => new BlackHoleActor(e.SourceID!.Value, e.SourceInstance)).Distinct().ToArray();
+                marker = markerEvidence.AtLocalOpening(openingHoles, anchor, first.Time, out inferredOpening);
+            }
+            else
+            {
+                marker = markerEvidence.AtFirstAppearance(holes, previousSetEnd, first.Time);
+            }
+            if (marker is null && localPull is null && set.Key == 1 && first.Fires.Count == 1 && holes.Length == 1)
+            {
+                marker = markerEvidence.InferMissingOpeningSpawn(holes[0], anchor, first.Time, kefkaIds, bossEvents, tetherEvents, center);
+                inferredOpening = marker.HasValue;
+            }
+            bigKefkaBySet[set.Key] = marker;
             previousSetEnd = set.Last().Fires.Max(f => f.Time);
         }
 
@@ -347,7 +372,8 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                 states,
                 bigKefkaBySet[round.Set],
                 BossPositionAt(chaosSamples, round.Time),
-                BossPositionAt(exdeathSamples, round.Time)));
+                BossPositionAt(exdeathSamples, round.Time),
+                round.Set == 1 && inferredOpening));
         }
 
         return new BlackHoleAnalysis(fight, center, playerInfos, tethers);

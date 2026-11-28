@@ -108,11 +108,14 @@ Name Redaction helps with screenshots and shared display, but local saved pull f
 /bdw
 /bdm
 /bdr
+/foodcheck
 ```
 
 `/bdw` toggles the Death Window. `/bdm` toggles the DPS Meter widget without stopping capture or resetting the encounter.
 
 `/bdr` resets the active DPS meter encounter in the overworld, saving the result before starting fresh on the next damage. It is unavailable inside duties and does not delete saved encounters.
+
+`/foodcheck` posts missing and expiring Well Fed buffs to party chat using your **HUD > Food Check** warning threshold. It works with the markers off and says nothing when there are no warnings.
 
 ## Dalamud Repository
 

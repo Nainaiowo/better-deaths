@@ -4,6 +4,31 @@ namespace BetterDeaths.Tests;
 
 public sealed class FoodCheckFormatterTests
 {
+    [Fact]
+    public void PartyChatGroupsNamesInRosterOrderAndIncludesTheExactThreshold()
+    {
+        var lines = FoodCheckFormatter.PartyChatLines([
+            ("Cy Vale", new(true, 300)), ("Kai Sol", new(false, 0)), ("Jo Rey", new(true, 300.1f)),
+            ("Ari Dawn", new(true, 0)), ("Ren West", new(true, 1))], 5);
+        Assert.Equal(new[] { "No food: Kai Sol, Ari Dawn", "Food expiring soon: Cy Vale, Ren West" }, lines);
+    }
+
+    [Theory]
+    [InlineData(false, 0f, "No food: Kai Sol")]
+    [InlineData(true, 30f, "Food expiring soon: Kai Sol")]
+    public void PartyChatOmitsTheEmptyGroup(bool hasFood, float seconds, string expected)
+    {
+        Assert.Equal(expected, Assert.Single(FoodCheckFormatter.PartyChatLines([("Kai Sol", new(hasFood, seconds))], 1)));
+    }
+
+    [Fact]
+    public void PartyChatStaysSilentForEmptyHealthyOrUnreadableTimers()
+    {
+        Assert.Empty(FoodCheckFormatter.PartyChatLines([], 5));
+        Assert.Empty(FoodCheckFormatter.PartyChatLines([("Healthy", new(true, 361)), ("Unknown", new(true, float.NaN)),
+            ("Invalid", new(true, -1)), ("Unbounded", new(true, float.PositiveInfinity))], 6));
+    }
+
     [Theory]
     [InlineData(89.2f, "1:30")]
     [InlineData(3660.1f, "1:01:01")]

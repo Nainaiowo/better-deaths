@@ -8,6 +8,24 @@ internal static class FoodCheckFormatter
 {
     public const uint WellFedStatusId = 48;
 
+    public static IEnumerable<string> PartyChatLines(IEnumerable<(string Name, PartyFoodStatusSample Status)> members,
+        int warningMinutes)
+    {
+        var threshold = Math.Clamp(warningMinutes, 1, 60) * 60;
+        var missing = new List<string>();
+        var expiring = new List<string>();
+        foreach (var (name, status) in members)
+        {
+            if (!status.HasWellFed || status.RemainingSeconds == 0)
+                missing.Add(name);
+            else if (status.RemainingSeconds > 0 &&
+                FoodCheckIndicatorPolicy.Classify(true, true, status.RemainingSeconds, threshold) == FoodCheckIndicatorState.Expiring)
+                expiring.Add(name);
+        }
+        if (missing.Count > 0) yield return "No food: " + string.Join(", ", missing);
+        if (expiring.Count > 0) yield return "Food expiring soon: " + string.Join(", ", expiring);
+    }
+
     public static string FormatRemainingSeconds(float remainingTime)
     {
         if (!float.IsFinite(remainingTime) || remainingTime <= 0.0f)

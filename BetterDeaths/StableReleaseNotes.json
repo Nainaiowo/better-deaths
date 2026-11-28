@@ -1,5 +1,24 @@
 [
   {
+    "Version": "1.0.0.77",
+    "Sections": [
+      {
+        "Title": "DMU Analyzer",
+        "Bullets": [
+          { "Text": "Fixed Big Kefka's purple K sometimes appearing on the wrong side during the first Black Hole set in saved pulls. The Analyzer now uses the first hole it sees, so a later turn won't move Kefka on either tether map. This also applies when you reopen an older pull.", "Highlight": true },
+          { "Text": "If a saved pull or imported FFLogs report is missing the hole's appearance, the Analyzer can use Kefka's facing during Slap Happy. Hover over K to see when that was used. If the evidence conflicts, the marker stays hidden." }
+        ]
+      },
+      {
+        "Title": "Food Check",
+        "Bullets": [
+          { "Text": "Added /foodcheck. It posts No food: and Food expiring soon: in party chat with the names that need attention. Empty groups are skipped, and nothing is posted if everyone is ready.", "Highlight": true },
+          { "Text": "/foodcheck uses your Food Check warning time. You can adjust it and use the command even when party-list food icons are turned off." }
+        ]
+      }
+    ]
+  },
+  {
     "Version": "1.0.0.76",
     "Sections": [
       {

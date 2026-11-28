@@ -26,6 +26,13 @@ public sealed partial class RecapWindow
             plugin.SetPartyFoodStatusVisibility(visible);
         DrawSettingsTooltip("Add a food status marker beside visible party members. By default, status is sampled once per second only while you are out of combat inside an instance.");
 
+        var warningMinutes = configuration.PartyFoodWarningMinutes;
+        if (ImGui.SliderInt("Warn when at or under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min", ImGuiSliderFlags.AlwaysClamp))
+            configuration.PartyFoodWarningMinutes = warningMinutes;
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            foodCheckSavePending = true;
+        DrawSettingsTooltip("Used by the food markers and /foodcheck. The command posts missing and expiring food to party chat even when markers are off.");
+
         if (visible)
         {
             var showOutsideInstances = configuration.PartyFoodShowOutsideInstances;
@@ -34,13 +41,6 @@ public sealed partial class RecapWindow
             DrawSettingsTooltip("Also show food status in overworld areas. Checks still run only once per second and only while you are out of combat. Off keeps the default instance-only behavior.");
 
             ImGui.Spacing();
-            var warningMinutes = configuration.PartyFoodWarningMinutes;
-            if (ImGui.SliderInt("Warn when at or under##PartyFoodWarning", ref warningMinutes, 1, 60, "%d min", ImGuiSliderFlags.AlwaysClamp))
-                configuration.PartyFoodWarningMinutes = warningMinutes;
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                foodCheckSavePending = true;
-            DrawSettingsTooltip("Food at or below this remaining time is marked amber. Food above it stays healthy.");
-
             var warningsOnly = configuration.PartyFoodWarningsOnly;
             if (DrawThemedCheckbox("Only show warnings", ref warningsOnly))
             {

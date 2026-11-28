@@ -68,6 +68,61 @@ public sealed class DmuKefkaReplayTests
         Assert.All(set, t => Assert.True(t.BigKefka is { } point && Vector2.Distance(point, Direction("N") * 25) < .1f));
     }
 
+    [Theory]
+    [InlineData(0.25f, false, "W", "S")]
+    [InlineData(-0.25f, false, "S", "S")]
+    [InlineData(-0.25f, true, "W", "W")]
+    public async Task SetOneLocksAtSpawnWhileReplayFollowsOnlyTheRealTurn(
+        float turnOffset, bool turnCopy, string expectedMap, string expectedReplay)
+    {
+        var pull = ReadPull(2673, "BlackHole");
+        var fires = pull.ReplayMechanics.Where(m => m.RawEventKind == "dmu-p3-nothingness").OrderBy(m => m.PullElapsedSeconds).ToArray();
+        var fire = fires[0];
+        var secondFire = fires.First(m => m.PullElapsedSeconds > fire.PullElapsedSeconds + 2.5f).PullElapsedSeconds;
+        var hole = fire.SourceKey.Split(':')[1];
+        var spawn = pull.ReplayMechanics.Where(m => m.SourceKey == $"object:{hole}").Min(m => m.PullElapsedSeconds);
+        var cast = pull.ReplayMechanics.First(m => m.RawEventKind == "bossmod-cast" && m.RawEventId == 50167);
+        var id = Convert.ToUInt32(cast.SourceKey.Split(':')[1], 16);
+        var centered = pull.ReplayPositions.Where(p => p.ActorKind == ReplayActorKind.Enemy && p.ActorName == "Kefka" &&
+            p.SampleSource == ReplayPositionSampleSource.PeriodicEnemyObject && Vector2.Distance(new(p.X, p.Z), Center) <= 3);
+        var real = centered.Where(p => p.EntityId == id).MinBy(p => MathF.Abs(p.PullElapsedSeconds - spawn))!;
+        var copy = centered.Where(p => p.EntityId != id).MinBy(p => MathF.Abs(p.PullElapsedSeconds - spawn))!;
+
+        // Change only the two actors' poses around spawn. Keep the recorded hole, tethers, and casts.
+        var turn = spawn + turnOffset;
+        var moving = turnCopy ? copy : real;
+        ReplayPositionSnapshot Pose(ReplayPositionSnapshot actor, float t, float rotation) =>
+            actor with { PullElapsedSeconds = t, SeenAtUtc = real.SeenAtUtc.AddSeconds(t - real.PullElapsedSeconds), Rotation = rotation };
+        bool IsEither(ReplayPositionSnapshot p) => p.EntityId == real.EntityId || p.EntityId == copy.EntityId;
+        var poses = pull.ReplayPositions.Where(p => !IsEither(p) || MathF.Abs(p.PullElapsedSeconds - spawn) > 1)
+            .Select(p => IsEither(p) && p.PullElapsedSeconds > spawn + 1 && p.PullElapsedSeconds <= secondFire + 1
+                ? p with { Rotation = p.EntityId == moving.EntityId ? MathF.PI : MathF.PI / 2 } : p).ToList();
+        poses.Add(Pose(real, spawn - 1, MathF.PI / 2));
+        poses.Add(Pose(copy, spawn - 1, MathF.PI / 2));
+        poses.Add(Pose(moving, turn, MathF.PI));
+        var changed = pull with { ReplayPositions = poses.OrderBy(p => p.PullElapsedSeconds).ToArray() };
+
+        var source = LocalPullEventSource.Create(changed);
+        var analysis = await new BlackHoleAnalyzer(source).AnalyzeAsync(source.Report, source.Fight, default);
+        var set = analysis.Tethers.Where(t => t.Set == 1).ToArray();
+        Assert.Equal(new[] { 1, 2 }, set.Select(t => t.Tether));
+        Assert.All(set, t => Assert.True(t.BigKefka is { } p && Vector2.Distance(p, Direction(expectedMap) * 25) < .1f));
+
+        var replay = Build(changed);
+        AssertWall(turn - .05f, "W");
+        AssertWall(turn + .05f, expectedReplay);
+        AssertWall(spawn, expectedMap);
+        AssertWall(fire.PullElapsedSeconds, expectedReplay);
+        AssertWall(secondFire, expectedReplay);
+        void AssertWall(float time, string direction)
+        {
+            var body = Assert.IsType<KefkaReplayBody>(replay.At(time).Body);
+            Assert.Equal(id, body.EntityId);
+            Assert.False(body.OnPlatform);
+            Assert.True(Vector2.Distance(body.Position, Center + Direction(direction) * 20) < .1f);
+        }
+    }
+
     [Fact]
     public void MissingOrAmbiguousEvidenceDoesNotInventMovementsOrHits()
     {
@@ -86,6 +141,85 @@ public sealed class DmuKefkaReplayTests
         Assert.Null(ambiguous.At(684).Body);
         Assert.NotNull(ambiguous.At(705.65f).Footfall);
         Assert.Equal(default, Build(pull with { TerritoryId = 1 }).At(705.65f));
+    }
+
+    [Theory]
+    [InlineData("first firing hole seen late", "W", false)]
+    [InlineData("all objects seen late", "W", true)]
+    [InlineData("no object observations", "W", true)]
+    [InlineData("different facing on an action", "W", false)]
+    [InlineData("conflicting turn before tether", null, false)]
+    [InlineData("only a late tether", null, false)]
+    [InlineData("everything seen late", null, false)]
+    [InlineData("no object or slap", null, false)]
+    public async Task SavedOpeningUsesEvidenceAtTheHolesNotAtTheFirstBeam(string scenario, string? direction, bool inferred)
+    {
+        var pull = ReadPull(2673, "BlackHole");
+        var fire = pull.ReplayMechanics.First(m => m.RawEventKind == "dmu-p3-nothingness");
+        var hole = fire.SourceKey.Split(':')[1];
+        var start = pull.ReplayMechanics.First(m => m.SourceKey == $"object:{hole}").PullElapsedSeconds;
+        var cast = pull.ReplayMechanics.First(m => m.RawEventKind == "dmu-p3-slap-happy-predicted");
+        var boss = Convert.ToUInt32(cast.SourceKey.Split(':')[2], 16);
+        var reference = ReadPull(2673).ReplayPositions.Where(p => p.EntityId == boss &&
+            p.PullElapsedSeconds >= cast.PullElapsedSeconds - 3 && p.PullElapsedSeconds < fire.PullElapsedSeconds).ToArray();
+        Assert.NotEmpty(reference);
+        var turn = scenario == "conflicting turn before tether" ? start : start + .25f;
+        var poses = pull.ReplayPositions.Where(p => p.EntityId != boss || p.PullElapsedSeconds < cast.PullElapsedSeconds - 3 ||
+                p.PullElapsedSeconds >= fire.PullElapsedSeconds)
+            .Concat(reference.Select(p => p.PullElapsedSeconds >= turn ? p with { Rotation = MathF.PI } : p)).ToList();
+        if (scenario == "different facing on an action")
+            poses.Add(reference.Last(p => p.PullElapsedSeconds <= start) with
+                { PullElapsedSeconds = start, Rotation = MathF.PI, SampleSource = ReplayPositionSampleSource.ActionEffectTarget });
+
+        var mechanics = pull.ReplayMechanics.Where(m => !(scenario == "no object or slap" && m.RawEventId is 47846 or 47847))
+            .Where(m => !(m.RawEventKind == "object" && m.PullElapsedSeconds == start &&
+                scenario is "no object observations" or "conflicting turn before tether" or "only a late tether" or "no object or slap"))
+            .Select(m => (m.RawEventKind == "object" && m.PullElapsedSeconds == start &&
+                (scenario is "all objects seen late" or "everything seen late" || scenario == "first firing hole seen late" && m.SourceKey == $"object:{hole}")) ||
+                (scenario is "only a late tether" or "everything seen late" && m.RawEventKind == "black-hole-tether" && m.PullElapsedSeconds < start + 3)
+                ? m with { PullElapsedSeconds = start + 3 } : m).ToArray();
+        var source = LocalPullEventSource.Create(pull with { ReplayPositions = poses, ReplayMechanics = mechanics });
+        var result = await new BlackHoleAnalyzer(source).AnalyzeAsync(source.Report, source.Fight, default);
+        var opening = result.Tethers.Where(t => t.Set == 1).ToArray();
+        Assert.Equal(new[] { 1, 2 }, opening.Select(t => t.Tether));
+        Assert.All(opening, t =>
+        {
+            if (direction is null) Assert.Null(t.BigKefka);
+            else Assert.True(t.BigKefka is { } point && Vector2.Distance(point, Direction(direction) * 25) < .1f,
+                $"Expected {direction}, got {t.BigKefka}");
+            Assert.Equal(inferred, t.KefkaInferredFromSlapHappy);
+        });
+    }
+
+    [Theory]
+    [InlineData(2649, "S")]
+    [InlineData(2671, "NE")]
+    [InlineData(2673, "W")]
+    [InlineData(2674, "E")]
+    [InlineData(2675, "W")]
+    [InlineData(2681, "N")]
+    [InlineData(2683, "E")]
+    public async Task FirstSetKeepsItsRecordedDirectionEvenWithoutTheObjectSnapshots(int number, string compass)
+    {
+        var pull = ReadPull(number, "BlackHole");
+        var firstBeam = pull.ReplayMechanics.Where(m => m.RawEventKind == "dmu-p3-nothingness").Min(m => m.PullElapsedSeconds);
+        // The two anonymized excerpts of the same recording share entity IDs. Restore the original in-between body readings.
+        var poses = pull.ReplayPositions.Where(p => p.ActorKind != ReplayActorKind.Enemy || p.PullElapsedSeconds >= firstBeam)
+            .Concat(ReadPull(number).ReplayPositions.Where(p => p.ActorKind == ReplayActorKind.Enemy && p.PullElapsedSeconds < firstBeam)).ToArray();
+        var source = LocalPullEventSource.Create(pull with
+        {
+            ReplayPositions = poses,
+            ReplayMechanics = pull.ReplayMechanics.Where(m => m.RawEventKind != "object" || m.PullElapsedSeconds >= firstBeam).ToArray(),
+        });
+        var result = await new BlackHoleAnalyzer(source).AnalyzeAsync(source.Report, source.Fight, default);
+        var opening = result.Tethers.Where(t => t.Set == 1).ToArray();
+        Assert.Equal(2, opening.Length);
+        Assert.All(opening, t =>
+        {
+            Assert.True(t.KefkaInferredFromSlapHappy);
+            Assert.True(t.BigKefka is { } p && Vector2.Distance(p, Direction(compass) * 25) < .1f);
+        });
+        Assert.All(result.Tethers.Where(t => t.Set > 1), t => Assert.False(t.KefkaInferredFromSlapHappy));
     }
 
     private static readonly Vector2 Center = new(100, 100);

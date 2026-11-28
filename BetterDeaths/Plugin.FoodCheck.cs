@@ -1,4 +1,5 @@
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Statuses;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.DutyState;
@@ -64,6 +65,35 @@ public sealed partial class Plugin
     }
 
     internal PartyFoodStatusSnapshot PartyFoodSnapshot => Volatile.Read(ref partyFoodSnapshot);
+
+    private void OnFoodCheckCommand(string command, string args)
+    {
+        if (disposing || !ClientState.IsLoggedIn || ClientState.IsPvP || ObjectTable.LocalPlayer is null ||
+            Condition[ConditionFlag.BetweenAreas] || Condition[ConditionFlag.BetweenAreas51] || PartyList.Length < 2)
+            return;
+
+        try
+        {
+            var members = new List<(string Name, PartyFoodStatusSample Status)>(PartyList.Length);
+            var seen = new HashSet<uint>();
+            foreach (var member in PartyList)
+            {
+                var id = member.EntityId;
+                var name = member.Name.TextValue;
+                if (id is 0 or InvalidActorEntityId || member.GameObject is not IPlayerCharacter player ||
+                    player.EntityId != id || string.IsNullOrWhiteSpace(name) ||
+                    !string.Equals(player.Name.TextValue, name, StringComparison.OrdinalIgnoreCase) || !seen.Add(id))
+                    continue;
+                members.Add((name, ReadPartyFoodStatus(player.StatusList)));
+            }
+            foreach (var line in FoodCheckFormatter.PartyChatLines(members, Configuration.PartyFoodWarningMinutes))
+                QueueChat(DeathChatChannel.Party, line);
+        }
+        catch (Exception error)
+        {
+            Log.Warning(error, "Could not read the party for /foodcheck.");
+        }
+    }
 
     private bool CanPollPartyFoodStatus() => FoodCheckPollingPolicy.ShouldPoll(
         Configuration.ShowPartyFoodStatus,

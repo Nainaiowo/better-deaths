@@ -234,6 +234,8 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private readonly List<KnownDamage> knownDamage = [];
         private readonly Dictionary<BlackHoleActor, double> holeAppearances = [];
         private readonly Dictionary<BlackHoleActor, double> observedKefkas = [];
+        private readonly Dictionary<BlackHoleActor, double> firstHoleTethers = [];
+        private readonly HashSet<(BlackHoleActor Caster, double Time)> localSlaps = [];
 
         internal Builder(PullDeathSnapshot pull)
         {
@@ -290,20 +292,23 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
         private BlackHoleMarkerEvidence BuildBlackHoleMarkers()
         {
             var tracks = new Dictionary<BlackHoleActor, BlackHoleBossPose[]>();
-            if (holeAppearances.Count != 0)
+            if (holeAppearances.Count != 0 || firstHoleTethers.Count != 0)
             {
-                var start = holeAppearances.Values.Min() - BlackHoleMarkerEvidence.MaxPoseAgeMs;
-                var end = holeAppearances.Values.Max();
+                var observations = holeAppearances.Values.Concat(firstHoleTethers.Values);
+                var start = observations.Concat(localSlaps.Select(s => s.Time)).Min() - BlackHoleMarkerEvidence.MaxPoseAgeMs;
+                var end = observations.Max();
                 foreach (var boss in observedKefkas.Keys)
                 {
                     if (!positionTracks.TryGetValue(boss.Id, out var positions)) continue;
                     tracks[boss] = positions.Where(p => ToMilliseconds(p.PullElapsedSeconds) >= start &&
                             ToMilliseconds(p.PullElapsedSeconds) <= end)
                         .Select(p => new BlackHoleBossPose(ToMilliseconds(p.PullElapsedSeconds),
-                            new Vector2(p.X, p.Z) - WtfDigAnalysisHelpers.DefaultCenter, p.Rotation)).ToArray();
+                            new Vector2(p.X, p.Z) - WtfDigAnalysisHelpers.DefaultCenter, p.Rotation,
+                            p.ActorKind == ReplayActorKind.Enemy &&
+                            p.SampleSource is ReplayPositionSampleSource.PeriodicEnemyObject or ReplayPositionSampleSource.Unknown)).ToArray();
                 }
             }
-            return new(holeAppearances, observedKefkas, tracks);
+            return new(holeAppearances, observedKefkas, tracks, new(firstHoleTethers, localSlaps));
         }
 
         private IReadOnlyDictionary<string, WtfDigLocalAnalyzerAvailability> BuildAnalyzerAvailability()
@@ -589,7 +594,16 @@ internal sealed class LocalPullEventSource : IWtfDigEventSource
                     mechanic.RawEventKind is "bossmod-cast" or "dmu-p3-slap-happy-predicted" &&
                     actors.FindByEntity(MechanicSourceEntity(mechanic.SourceKey)) is { } caster)
                 {
-                    observedKefkas.TryAdd(new(caster, caster), ToMilliseconds(mechanic.PullElapsedSeconds));
+                    var actor = new BlackHoleActor(caster, caster);
+                    var time = ToMilliseconds(mechanic.PullElapsedSeconds);
+                    observedKefkas.TryAdd(actor, time);
+                    if (mechanic.RawEventId is 47846 or 47847) localSlaps.Add((actor, time));
+                }
+
+                if (mechanic is { RawEventKind: "black-hole-tether", RawEventId: 84, Shape: ReplayMechanicShape.Tether } &&
+                    actors.FindByEntity(MechanicSourceEntity(mechanic.SourceKey)) is { } tetherSource)
+                {
+                    firstHoleTethers.TryAdd(new(tetherSource, tetherSource), ToMilliseconds(mechanic.PullElapsedSeconds));
                 }
 
                 if (IsForsakenCloneDrop(mechanic))
