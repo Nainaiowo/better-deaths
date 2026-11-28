@@ -29,7 +29,8 @@ internal sealed record BlackHoleBeam(
     Vector2 Origin,
     double FacingRadians,
     int? TetherHolder,
-    IReadOnlyList<BlackHoleBeamHit> Hits);
+    IReadOnlyList<BlackHoleBeamHit> Hits,
+    IReadOnlySet<int> ContactActors);
 internal sealed record BlackHolePlayerState(
     int ActorId,
     NothingLevel Level,
@@ -38,6 +39,7 @@ internal sealed record BlackHolePlayerState(
     Vector2? Position,
     int HitsThisTether,
     bool TetherThisTether,
+    bool ClippedThisTether,
     int SoakCount,
     bool LethalThisTether,
     bool Dead,
@@ -100,7 +102,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         var resolutionStart = anchor.Timestamp - 2_000;
         var debuffsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, assignmentStart, mechanicEnd, FflogsEventDataType.Debuffs,
-                FilterExpression: DebuffFilter, CacheTtl: ttl), cancellationToken);
+                IncludeResources: true, FilterExpression: DebuffFilter, CacheTtl: ttl), cancellationToken);
         var damageTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, resolutionStart, mechanicEnd, FflogsEventDataType.DamageTaken,
                 AbilityId: NothingnessId, IncludeResources: true, CacheTtl: ttl), cancellationToken);
@@ -112,7 +114,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                 IncludeResources: true, CacheTtl: ttl), cancellationToken);
         var tetherEventsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, resolutionStart, mechanicEnd,
-                FilterExpression: client is LocalPullEventSource ? "type='tether'" : "type='tether' or type='summon'",
+                IncludeResources: true, FilterExpression: client is LocalPullEventSource ? "type='tether'" : "type='tether' or type='summon'",
                 CacheTtl: ttl), cancellationToken);
         var bossCastsTask = client.FetchAllEventsAsync(
             new FflogsEventQuery(report.Code, fight.Id, anchor.Timestamp - 8_000, mechanicEnd, FflogsEventDataType.Casts,
@@ -147,27 +149,11 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         var chaosSamples = BossSamples(BossIdsNamed("chaos"));
         var exdeathSamples = BossSamples(BossIdsNamed("exdeath"));
 
-        var tetherByInstance = new Dictionary<int, List<TetherHolderSample>>();
-        foreach (var entry in tetherEvents.Where(entry => entry.Type == "tether" && entry.TargetID is not null))
-        {
-            var instance = entry.SourceInstance ?? entry.SourceID ?? 0;
-            if (!tetherByInstance.TryGetValue(instance, out var samples))
-            {
-                samples = [];
-                tetherByInstance[instance] = samples;
-            }
-
-            samples.Add(new TetherHolderSample(entry.Timestamp, entry.TargetID!.Value));
-        }
-
-        foreach (var samples in tetherByInstance.Values)
-        {
-            samples.Sort((left, right) => left.Time.CompareTo(right.Time));
-        }
-
-        int? TetherHolderAt(int instance, double fireTime) => tetherByInstance.TryGetValue(instance, out var samples)
-            ? samples.Where(sample => sample.Time <= fireTime + 300).Select(sample => (int?)sample.ActorId).LastOrDefault()
-            : null;
+        var holderChanges = tetherEvents
+            .Where(entry => entry.Type == "tether" && entry.SourceID.HasValue &&
+                entry.TargetID is { } id && playerById.ContainsKey(id))
+            .OrderBy(entry => entry.Timestamp)
+            .ToLookup(entry => new BlackHoleActor(entry.SourceID!.Value, entry.SourceInstance));
         bool Has(int actorId, uint statusId) => debuffs.Any(entry =>
             entry.Type == "applydebuff" && entry.TargetID == actorId && entry.AbilityGameID == statusId);
         var playerInfos = players.Select(player =>
@@ -182,7 +168,9 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         }).ToArray();
 
         var positionSamples = WtfDigAnalysisHelpers.BuildSampleMap(damage, friendlyCasts);
-        Vector2? PositionAt(int actorId, double time) => WtfDigAnalysisHelpers.PositionAt(positionSamples, actorId, time, center);
+        var targetSamples = WtfDigAnalysisHelpers.BuildSampleMap(tetherEvents.Concat(debuffs), []);
+        Vector2? PositionAt(int actorId, double time) => WtfDigAnalysisHelpers.PositionAt(positionSamples, actorId, time, center)
+            ?? WtfDigAnalysisHelpers.PositionAt(targetSamples, actorId, time, center);
         var deadAt = WtfDigAnalysisHelpers.MakeDeadAt(positionSamples, deaths);
         var fires = new List<BlackHoleFire>();
         foreach (var firing in firings.Where(entry => entry.Type == "cast" && entry.AbilityGameID == NothingnessId)
@@ -195,7 +183,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
             }
         }
 
-        foreach (var hit in damage.Where(entry => entry.Type == "calculateddamage" && entry.AbilityGameID == NothingnessId)
+        foreach (var hit in damage.Where(entry => !entry.IsEstimated && entry.Type == "calculateddamage" && entry.AbilityGameID == NothingnessId)
                      .OrderBy(entry => entry.Timestamp))
         {
             var fire = fires
@@ -264,6 +252,21 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
         var tethers = new List<BlackHoleTether>();
         foreach (var round in rounds)
         {
+            // The first two contacts apply different statuses. Either can identify a hit without HP damage.
+            var contactStatuses = debuffs.Where(entry => entry.Type == "applydebuff" &&
+                entry.AbilityGameID is Unbecoming or MeanestExistence &&
+                entry.TargetID is { } id && playerById.ContainsKey(id) &&
+                round.Fires.Any(fire => fire.InStatusWindow(entry))).ToArray();
+            var contactsByFire = round.Fires.ToDictionary(fire => fire,
+                fire => fire.Hits.Where(hit => hit.TargetID is { } id && playerById.ContainsKey(id))
+                    .Select(hit => hit.TargetID!.Value).ToHashSet());
+            foreach (var status in contactStatuses)
+            {
+                var matches = round.Fires.Where(fire => fire.InStatusWindow(status) && SameSource(fire.Event, status)).ToArray();
+                if (matches.Length == 1)
+                    contactsByFire[matches[0]].Add(status.TargetID!.Value);
+            }
+
             var beams = round.Fires.Select(fire =>
             {
                 var sourceResources = fire.Event.SourceResources ??
@@ -276,9 +279,12 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                     .Select(entry => new BlackHoleBeamHit(entry.TargetID!.Value, entry.Amount ?? 0, (entry.Amount ?? 0) >= 1_000_000))
                     .ToArray();
                 var instance = fire.Event.SourceInstance ?? fire.Event.SourceID ?? 0;
-                var holder = TetherHolderAt(instance, fire.Time) ?? (beamHits.Length == 1 ? beamHits[0].ActorId : null);
+                var holder = fire.Event.SourceID is { } sourceId
+                    ? holderChanges[new BlackHoleActor(sourceId, fire.Event.SourceInstance)]
+                        .LastOrDefault(change => change.Timestamp <= fire.Time + 300)?.TargetID
+                    : null;
                 var target = holder is { } holderId ? PositionAt(holderId, round.Time) : null;
-                if (target is null)
+                if (target is null && sourceResources?.HasFacing != true)
                 {
                     target = beamHits
                         .Select(hit => PositionAt(hit.ActorId, round.Time))
@@ -291,10 +297,10 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
 
                 var facingRadians = target is { } targetPosition
                     ? Math.Atan2(targetPosition.X - origin.X, targetPosition.Y - origin.Y)
-                    : sourceResources is not null
+                    : sourceResources?.HasFacing == true
                         ? WtfDigAnalysisHelpers.FacingToRadians(sourceResources.Facing)
                         : 0;
-                return new BlackHoleBeam(instance, origin, facingRadians, holder, beamHits);
+                return new BlackHoleBeam(instance, origin, facingRadians, holder, beamHits, contactsByFire[fire]);
             }).ToArray();
 
             var snapshotTime = round.Time;
@@ -303,7 +309,12 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
             var holders = beams.Where(beam => beam.TetherHolder is not null).Select(beam => beam.TetherHolder!.Value).ToHashSet();
             var states = players.Select(player =>
             {
-                var hitsThisTether = beams.Sum(beam => beam.Hits.Count(hit => hit.ActorId == player.Id));
+                // A status with a missing/ambiguous orb still confirms contact for the round.
+                var distinctLevels = contactStatuses.Where(entry => entry.TargetID == player.Id)
+                    .Select(entry => entry.AbilityGameID).Distinct().Count();
+                var hitsThisTether = Math.Max(distinctLevels, beams.Count(beam => beam.ContactActors.Contains(player.Id)));
+                var clipped = beams.Any(beam => beam.TetherHolder is { } holder && holder != player.Id &&
+                    beam.ContactActors.Contains(player.Id));
                 var lethal = beams.Any(beam => beam.Hits.Any(hit => hit.ActorId == player.Id && hit.Lethal));
                 var soakCount = soakedSoFar.GetValueOrDefault(player.Id) + hitsThisTether;
                 soakedSoFar[player.Id] = soakCount;
@@ -320,6 +331,7 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
                     PositionAt(player.Id, snapshotTime),
                     hitsThisTether,
                     holders.Contains(player.Id),
+                    clipped,
                     soakCount,
                     lethal,
                     dead,
@@ -423,10 +435,10 @@ internal sealed class BlackHoleAnalyzer(IWtfDigEventSource client)
     };
 
     private sealed record BossPositionSample(double Time, Vector2 Position);
-    private sealed record TetherHolderSample(double Time, int ActorId);
     private sealed record BlackHoleFire(FflogsEvent Event, List<FflogsEvent> Hits)
     {
         internal double Time => Event.Timestamp;
+        internal bool InStatusWindow(FflogsEvent status) => status.Timestamp >= Time - 300 && status.Timestamp <= Time + 1500;
     }
     private sealed record BlackHoleRound(double Time, int Set, int Tether, List<BlackHoleFire> Fires);
 }

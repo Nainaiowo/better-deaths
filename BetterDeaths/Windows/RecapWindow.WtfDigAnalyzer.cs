@@ -1124,6 +1124,7 @@ public sealed partial class RecapWindow
             ("Primordial Crust", LeadUpGoldColor),
             ("Black hole", new Vector4(0.63f, 0.42f, 1.0f, 1.0f)),
             ("Tether holder", ModernTextColor),
+            ("Gold ring: clipped by another beam", LeadUpGoldColor),
         ]);
     }
 
@@ -1656,34 +1657,13 @@ public sealed partial class RecapWindow
         foreach (var beam in tether.Beams)
         {
             var beamOrigin = ToScreen(beam.Origin);
-            foreach (var hit in beam.Hits)
+            if (beam.TetherHolder is { } holder && positionById.TryGetValue(holder, out var holderPosition))
             {
-                if (!positionById.TryGetValue(hit.ActorId, out var position))
-                {
-                    continue;
-                }
-
-                var playerPosition = ToScreen(position);
-                if (hit.ActorId == beam.TetherHolder)
-                {
-                    drawList.AddLine(
-                        beamOrigin,
-                        playerPosition,
-                        ImGui.GetColorU32(hit.Lethal ? new Vector4(1.0f, 0.42f, 0.42f, 1.0f) : Vector4.One),
-                        2.5f);
-                }
-                else
-                {
-                    DrawWtfDigDashedLine(
-                        drawList,
-                        beamOrigin,
-                        playerPosition,
-                        new Vector4(0.54f, 0.58f, 0.65f, 0.33f),
-                        1.0f,
-                        3.0f,
-                        3.0f);
-                }
+                var lethal = beam.Hits.Any(hit => hit.ActorId == holder && hit.Lethal);
+                drawList.AddLine(beamOrigin, ToScreen(holderPosition),
+                    ImGui.GetColorU32(lethal ? new Vector4(1.0f, 0.42f, 0.42f, 1.0f) : Vector4.One), 2.5f);
             }
+
         }
 
         foreach (var state in tether.States.Where(state => state.Position is not null))
@@ -1725,11 +1705,10 @@ public sealed partial class RecapWindow
         BlackHolePlayerState state)
     {
         var alpha = state.Dead ? 0.50f : 1.0f;
-        if (state.HitsThisTether > 0)
+        if (state.TetherThisTether || state.HitsThisTether > 0)
         {
-            var emphasis = state.TetherThisTether
-                ? Vector4.One
-                : new Vector4(0.96f, 0.77f, 0.32f, 1.0f);
+            var emphasis = state.ClippedThisTether ? LeadUpGoldColor :
+                state.TetherThisTether ? Vector4.One : ModernMutedTextColor;
             drawList.AddCircle(point, 16.0f, ImGui.GetColorU32(emphasis with { W = alpha }), 28, 2.0f);
         }
 
@@ -3012,9 +2991,15 @@ public sealed partial class RecapWindow
         return nearHorizontalEdge && nearVerticalEdge;
     }
 
-    private static string FormatBlackHoleSoakLabel(BlackHolePlayerState state) => state.SoakCount == 0
-        ? "-"
-        : $"{state.SoakCount}{(state.HitsThisTether > 0 ? state.TetherThisTether ? " held" : " clipped" : string.Empty)}";
+    private static string FormatBlackHoleSoakLabel(BlackHolePlayerState state)
+    {
+        var count = state.SoakCount == 0 ? "-" : state.SoakCount.ToString(CultureInfo.InvariantCulture);
+        if (state.TetherThisTether)
+            return state.ClippedThisTether ? $"{count} held + clipped" : $"{count} held";
+        if (state.ClippedThisTether)
+            return $"{count} clipped";
+        return state.HitsThisTether > 0 ? $"{count} hit" : count;
+    }
 
     private static string FormatBlackHoleStateLabel(BlackHolePlayerState state) => state.Level switch
     {

@@ -882,8 +882,7 @@ public sealed partial class RecapWindow
         string value, bool isCharge, bool paired)
     {
         var layout = PartyCooldownLayout.FitNumber(size, previewScale, GetPartyCooldownNumberInk(value), isCharge, paired, fontSizePercent);
-        draw.AddRectFilled(position + layout.Min, position + layout.Max, 0xE6101010);
-        DrawOutlinedPartyCooldownText(draw, position + layout.TextOrigin, value, layout.FontSize, layout.Outline, onDarkBacking: true);
+        DrawOutlinedPartyCooldownText(draw, position + layout.TextOrigin, value, layout.FontSize, layout.Outline, emphasizeNumber: true);
     }
 
     private unsafe (Vector2 Min, Vector2 Max) GetPartyCooldownNumberInk(string value)
@@ -987,15 +986,15 @@ public sealed partial class RecapWindow
     }
 
     private void DrawOutlinedPartyCooldownText(ImDrawListPtr draw, Vector2 position, string value, float fontSize, float outline,
-        bool onDarkBacking = false)
+        bool emphasizeNumber = false)
     {
         for (var y = -1; y <= 1; y++)
             for (var x = -1; x <= 1; x++)
-                if ((x != 0 || y != 0) && (!onDarkBacking || x == 0 || y == 0))
+                if ((x != 0 || y != 0) && (!emphasizeNumber || x == 0 || y == 0))
                     draw.AddText(partyCooldownDrawFont, fontSize, position + new Vector2(x, y) * outline, 0xFF000000, value);
         draw.AddText(partyCooldownDrawFont, fontSize, position, 0xFFFFFFFF, value);
-        // On a dark backing four outline strokes suffice. Reinforce the white edges without widening the glyph.
-        if (onDarkBacking)
+        // Reinforce the white number without widening the glyph.
+        if (emphasizeNumber)
             draw.AddText(partyCooldownDrawFont, fontSize, position, 0xFFFFFFFF, value);
     }
 }

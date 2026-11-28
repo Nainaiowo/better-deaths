@@ -1,5 +1,23 @@
 [
   {
+    "Version": "1.0.0.76",
+    "Sections": [
+      {
+        "Title": "DMU Analyzer",
+        "Bullets": [
+          { "Text": "Fixed missing Black Hole tether lines. The map now draws the line to the recorded holder even when the beam applied a debuff without dealing damage.", "Highlight": true },
+          { "Text": "Players caught in someone else's beam are marked as clipped, not drawn as tether holders. If the holder wasn't recorded, the Analyzer leaves the line out rather than guessing." }
+        ]
+      },
+      {
+        "Title": "Party Cooldowns",
+        "Bullets": [
+          { "Text": "Removed the black rectangle behind timers and charge counts in the party list and preview. The bright numbers, thin outline, and font size setting are unchanged." }
+        ]
+      }
+    ]
+  },
+  {
     "Version": "1.0.0.75",
     "Sections": [
       {

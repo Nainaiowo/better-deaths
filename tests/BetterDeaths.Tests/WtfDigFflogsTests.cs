@@ -533,6 +533,63 @@ public sealed class WtfDigFflogsTests
     }
 
     [Fact]
+    public async Task BlackHole_ClippedPlayerNeverBecomesTetherHolder()
+    {
+        var original = CreateLocalBlackHolePull();
+        var blast = original.ReplayMechanics.First(m => m.RawEventKind == "black-hole-blast");
+        var holderTether = original.ReplayMechanics.First(m => m.Shape == ReplayMechanicShape.Tether);
+        var players = original.ReplayPositions.Take(2).ToArray();
+        var shots = Enumerable.Range(0, 3).Select(index => blast with
+        {
+            SeenAtUtc = blast.SeenAtUtc.AddSeconds(index * 5),
+            PullElapsedSeconds = blast.PullElapsedSeconds + index * 5,
+            SourceKey = $"dmu-p3-nothingness:40000011:{index}",
+            RawEventKind = "dmu-p3-nothingness",
+            RawState = 0x40000011,
+        }).ToArray();
+        var earlyHits = shots.Take(2).SelectMany((shot, index) => players.Select(player =>
+            new ReplayDebuffSnapshot(shot.SeenAtUtc, shot.PullElapsedSeconds, player.ActorKey, player.ActorName,
+                player.PartyIndex, player.ClassJobId, player.ClassJobName,
+                new StatusSnapshot((uint)(5452 + index), "Nothingness status", 0, 0x40000011, 0, 30), true))).ToArray();
+        var lethalClip = blast with
+        {
+            SeenAtUtc = shots[2].SeenAtUtc, PullElapsedSeconds = shots[2].PullElapsedSeconds,
+            SourceKey = "black-hole-blast:40000011:member-2", RawState = 9_945_230,
+        };
+        foreach (var hasRecordedHolder in new[] { true, false })
+        {
+            var mechanics = original.ReplayMechanics.Where(m => m.RawEventKind == "object")
+                .Concat(shots).Append(lethalClip).ToList();
+            if (hasRecordedHolder)
+                mechanics.Add(holderTether);
+            var source = LocalPullEventSource.Create(original with { ReplayMechanics = mechanics, ReplayDebuffs = earlyHits });
+            var analysis = await new BlackHoleAnalyzer(source).AnalyzeAsync(source.Report, source.Fight, default);
+            var holder = analysis.Players.Single(p => p.Name == players[0].ActorName).ActorId;
+            var bystander = analysis.Players.Single(p => p.Name == players[1].ActorName).ActorId;
+            Assert.Equal(3, analysis.Tethers.Count);
+            foreach (var round in analysis.Tethers)
+            {
+                var beam = Assert.Single(round.Beams);
+                var clipped = round.States.Single(s => s.ActorId == bystander);
+                Assert.Equal(hasRecordedHolder ? (int?)holder : null, beam.TetherHolder);
+                Assert.Contains(bystander, beam.ContactActors);
+                Assert.False(clipped.TetherThisTether);
+                Assert.Equal(hasRecordedHolder, clipped.ClippedThisTether);
+                Assert.Equal(1, clipped.HitsThisTether);
+                Assert.Equal(round.Tether, clipped.SoakCount);
+                if (round.Tether < 3)
+                    Assert.Empty(beam.Hits);
+                else
+                {
+                    Assert.Equal(bystander, Assert.Single(beam.Hits).ActorId);
+                    Assert.True(clipped.LethalThisTether);
+                    Assert.Equal(0, round.States.Single(s => s.ActorId == holder).HitsThisTether);
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task LocalPull_BlackHoleShowsFiredBeamsWithoutRecordedDamage()
     {
         var original = CreateLocalBlackHolePull();
